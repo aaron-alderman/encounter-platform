@@ -1,0 +1,70 @@
+{
+  "protocol": "sourcery/platform-repository-boundaries/1",
+  "status": "bootstrap-inert",
+  "repository": "sourcerytech/sourcery-platform",
+  "packages": [
+    {
+      "name": "@sourcerytech/sourcery-kernel",
+      "path": "packages/kernel",
+      "owns": [
+        "typed effect adapters",
+        "exact machine observations",
+        "effect receipts"
+      ],
+      "refuses": [
+        "platform policy",
+        "authority inference",
+        "selection defaults",
+        "application logic"
+      ]
+    },
+    {
+      "name": "@sourcerytech/sourcery-platform",
+      "path": "packages/platform",
+      "dependsOn": [
+        "@sourcerytech/sourcery-kernel",
+        "@sourcerytech/expression-algebra"
+      ],
+      "owns": [
+        "object and provenance semantics",
+        "workspace and package lifecycle",
+        "qualification, admission, activation and serving semantics",
+        "authority, custody, recovery and retirement laws"
+      ]
+    },
+    {
+      "name": "@sourcerytech/sourcery-shell",
+      "path": "packages/shell",
+      "dependsOn": [
+        "@sourcerytech/sourcery-platform",
+        "@sourcerytech/sourcery-kernel",
+        "@sourcerytech/expression-algebra"
+      ],
+      "owns": [
+        "MCP and session state-machine composition",
+        "human capability and refusal projection",
+        "hold, stop and return semantics",
+        "reflection-driven auto-UI composition"
+      ],
+      "refuses": [
+        "platform authority",
+        "application-domain policy",
+        "parallel scheduling"
+      ]
+    }
+  ],
+  "dependencyDirection": [
+    "accepted-shared-mechanisms -> kernel",
+    "kernel -> platform",
+    "kernel + platform -> shell"
+  ],
+  "splitPredicate": "Split an internal package only after an independently governed release, admission, custody or consumer lifecycle is evidenced.",
+  "authority": {
+    "grantsReceiving": false,
+    "grantsMergeBeyondBootstrap": false,
+    "grantsPublication": false,
+    "grantsActivation": false,
+    "grantsProductionChange": false
+  }
+}
+

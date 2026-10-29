@@ -1,0 +1,8 @@
+{
+  "name": "@sourcerytech/sourcery-shell",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Inert package boundary for algebraic Sourcery shell and MCP surface composition"
+}
+

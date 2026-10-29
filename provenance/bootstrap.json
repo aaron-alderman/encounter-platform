@@ -1,0 +1,51 @@
+{
+  "protocol": "sourcery/platform-bootstrap-provenance/1",
+  "status": "bootstrap-inert",
+  "derivedFrom": {
+    "repository": "grand-theory",
+    "commit": "773111f12013cb67814c0105e05548ed1e3abd92",
+    "path": "corpus/programmes/sourcery-platform-replacement/repository-boundary-review-v1.json",
+    "sha256": "30c7cc02f1d09e26d04f7f0588bb8b4c590ee0a287ecdc2b120debacc0ff554d"
+  },
+  "templeEvidence": [
+    {
+      "laneId": "integration/main",
+      "snapshotId": "4082f461-ed20-498c-bc4a-747c6d1b4239",
+      "path": "programme/platform-symmetry-executable-identity-20261028/common-reduction-seam-contract.json",
+      "sha256": "48ad9857c63d7b8e776d80a71293e4a1edb8bcfa13bdfbea0b651840aa0a489a",
+      "scope": "read-only exact source observation"
+    },
+    {
+      "laneId": "task/bounded-discovery-runtime-composition-20261029",
+      "snapshotId": "dcbcd4d6-6fa8-4563-adcc-fe58857090b8",
+      "path": "programme/bounded-discovery-runtime-composition-20261029/runtime-composition-closure-common-algebra.json",
+      "sha256": "cfa63e17843e06009c70f2bc42581c04efb30b76d940e2d3856a937af9ae10af",
+      "scope": "qualified inactive evidence; not received or activated"
+    }
+  ],
+  "acceptedGitDependencies": [
+    {
+      "repository": "sourcerytech/claimipedia-core",
+      "commit": "a5845d2f9bc51e0bad0aed800b64dc7421856645",
+      "version": "0.7.0"
+    },
+    {
+      "repository": "sourcerytech/qualification-runner",
+      "commit": "233d9d19368ca7145a589fe4cf91158134861bcb",
+      "version": "0.3.0"
+    },
+    {
+      "repository": "sourcerytech/git-receiving",
+      "commit": "0c32c96a2adb837970348e50368b545a7e95b889",
+      "version": "0.5.1"
+    }
+  ],
+  "contents": "Boundary documents and empty package manifests only; no executable source.",
+  "authority": {
+    "grantsReceiving": false,
+    "grantsAdoption": false,
+    "grantsActivation": false,
+    "grantsProductionChange": false
+  }
+}
+

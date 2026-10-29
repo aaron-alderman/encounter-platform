@@ -1,0 +1,15 @@
+{
+  "name": "@sourcerytech/sourcery-platform-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/kernel",
+    "packages/platform",
+    "packages/shell"
+  ]
+}
+
