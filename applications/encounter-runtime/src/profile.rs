@@ -55,8 +55,10 @@ impl Profile {
             || bootstrap.one("bootstrap", "limit")? != "20000000"
         { return Err(fail("unsupported bootstrap")); }
         let mut meter = Meter::new(20_000_000);
-        pinned(&applications.join("encounter-work-boards/bootstrap/foundation.rel"),
-            bootstrap.one("bootstrap", "referenceFoundationSha256")?)?;
+        let foundation = crate::application::read_foundation_manifest(&applications.join("encounter-work-boards"))?;
+        if hash(&foundation) != bootstrap.one("bootstrap", "referenceFoundationSha256")? {
+            return Err(fail("reference foundation manifest differs from its pin"));
+        }
         let ports_text = fs::read_to_string(contained(&root, bootstrap.one("bootstrap", "ports")?)?)?;
         let ports = Facts::parse(&ports_text)?;
         if ports.one("ports", "version")? != "encounter/ports/1" {

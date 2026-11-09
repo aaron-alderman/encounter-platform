@@ -1,7 +1,7 @@
 'use strict';
 // Run the same mounted file observations through the JS host mechanism.
 const { createHash } = require('node:crypto');
-const { mountAttachments } = require('../../encounter-claimipedia/bootstrap/attachment.cjs');
+const { mountAttachments } = require('../../../shared/node/attachment.cjs');
 const [root, input] = process.argv.slice(2);
 const read = mountAttachments(root);
 const observations = JSON.parse(input).map(descriptor => {

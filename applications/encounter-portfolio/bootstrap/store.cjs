@@ -1,25 +1,3 @@
 'use strict';
-// Generic atomic revision/document storage. No domain, review or recovery policy.
-const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{DatabaseSync}=require('node:sqlite'),rel=require('./rel-values.cjs');
-function openStore(directory,{fault=()=>{},profile='native-revision/1'}={}){
- fs.mkdirSync(directory,{recursive:true});const db=new DatabaseSync(path.join(directory,'workspace.sqlite'));
- try{db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000; CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS revisions(id INTEGER PRIMARY KEY,parent INTEGER NOT NULL,operation_id TEXT NOT NULL UNIQUE,source_hash TEXT NOT NULL,reason TEXT NOT NULL,target TEXT NOT NULL,goal TEXT NOT NULL,source TEXT NOT NULL,description TEXT NOT NULL,created TEXT NOT NULL,basis TEXT NOT NULL,profile TEXT NOT NULL); CREATE TABLE IF NOT EXISTS documents(revision INTEGER NOT NULL REFERENCES revisions(id),path TEXT NOT NULL,text TEXT NOT NULL,PRIMARY KEY(revision,path)); CREATE TRIGGER IF NOT EXISTS revisions_immutable_update BEFORE UPDATE ON revisions BEGIN SELECT RAISE(ABORT,\'Immutable revision\'); END; CREATE TRIGGER IF NOT EXISTS revisions_immutable_delete BEFORE DELETE ON revisions BEGIN SELECT RAISE(ABORT,\'Immutable revision\'); END; CREATE TRIGGER IF NOT EXISTS documents_immutable_update BEFORE UPDATE ON documents BEGIN SELECT RAISE(ABORT,\'Immutable document\'); END; CREATE TRIGGER IF NOT EXISTS documents_immutable_delete BEFORE DELETE ON documents BEGIN SELECT RAISE(ABORT,\'Immutable document\'); END;');
- if(!db.prepare('PRAGMA table_info(revisions)').all().some(c=>c.name==='basis'))throw Error('Pre-release store contract: retain its evidence and choose a fresh workspace; no implicit migration occurred');const bound=db.prepare("SELECT value FROM metadata WHERE key='profile'").get();if(bound&&bound.value!==profile)throw Error('Store profile differs; explicit migration is required');if(!bound)db.prepare("INSERT INTO metadata VALUES('profile',?)").run(profile);
- }catch(error){db.close();throw error;}
- const head=()=>db.prepare('SELECT COALESCE(MAX(id),0) AS id FROM revisions').get().id;
- const operation=operationId=>{const row=db.prepare('SELECT id AS revision,parent AS base,operation_id AS operationId,source_hash AS sourceHash,basis,profile,reason,target,goal,source,description FROM revisions WHERE operation_id=?').get(operationId);return row?{...row}:null;};
- function snapshot(revision=head()){if(!Number.isSafeInteger(revision)||revision<0)throw Error('Invalid revision coordinate');if(revision!==0&&!db.prepare('SELECT id FROM revisions WHERE id=?').get(revision))throw Error('Missing revision');return{revision,documents:db.prepare('SELECT path,text FROM documents WHERE revision=? ORDER BY path').all(revision).map(r=>({...r}))};}
- function cas(input){
-  const {base,operationId,documents,reason,target,goal,source,description}=input;
-  if(input.profile!==profile||typeof input.basis!=='string'||!input.basis.length)throw Error('Storage context/basis differs from its binding');
-  if(!Number.isSafeInteger(base)||base<0||typeof operationId!=='string'||!Array.isArray(documents))throw Error('Invalid storage envelope');
-  const paths=new Set();for(const doc of documents){if(typeof doc.path!=='string'||typeof doc.text!=='string'||paths.has(doc.path))throw Error('Invalid/duplicate document');paths.add(doc.path);if(Buffer.byteLength(doc.text)>1048576)throw Error('Document exceeds mechanical byte bound');}
-  const canonical=[...documents].sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0),sourceHash=crypto.createHash('sha256').update(rel.encode(canonical)).digest('hex');
-  db.exec('BEGIN IMMEDIATE');let committed=false;
-  try{const prior=operation(operationId);if(prior){if(prior.sourceHash!==sourceHash||prior.base!==base||['basis','profile','reason','target','goal','source','description'].some(key=>prior[key]!==input[key]))throw Error('Operation identity reused for different bytes or metadata');db.exec('ROLLBACK');return prior;}if(head()!==base)throw Error('Compare-and-swap conflict');
-   const revision=base+1;db.prepare('INSERT INTO revisions VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run(revision,base,operationId,sourceHash,reason,target,goal,source,description,new Date().toISOString(),input.basis,profile);const insert=db.prepare('INSERT INTO documents VALUES(?,?,?)');for(const doc of canonical)insert.run(revision,doc.path,doc.text);fault('before-commit');db.exec('COMMIT');committed=true;fault('after-commit');return operation(operationId);
-  }catch(error){if(!committed)db.exec('ROLLBACK');throw error;}
- }
- return{snapshot,operation,cas,history:()=>db.prepare('SELECT id AS revision,parent,operation_id AS operationId,source_hash AS sourceHash,basis,profile,reason,target,goal,source,description,created FROM revisions ORDER BY id DESC').all().map(r=>({...r})),close:()=>db.close()};
-}
-module.exports={openStore};
+
+module.exports = require('../../../shared/node/store.cjs');

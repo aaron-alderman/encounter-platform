@@ -34,7 +34,7 @@ async function run() {
       common: rel.parse(read(path.join(root, 'bootstrap/bootstrap.rel'))),
       profile: rel.parse(read(path.join(root, 'profiles/workgarden.rel'))),
       fixture: rel.parse(read(path.join(root, 'fixtures/workgarden.rel'))),
-      foundationHash: digest(read(path.join(bootstrap, 'foundation.rel'))),
+      foundationHash: require(path.join(bootstrap, 'source-policy-machine.cjs')).loadSourcePolicyDescriptor().declaration,
     }),
     'reference.module': ({ file }) => {
       const text = read(path.join(applications, file));

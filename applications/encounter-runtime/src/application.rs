@@ -59,6 +59,88 @@ fn read_disk(root: &Path, relative: &str, extension: &str, limit: usize) -> Resu
     Ok((path, text))
 }
 
+const FOUNDATION_MANIFEST: &str = "bootstrap/foundation.rel";
+const SHARED_FOUNDATION_MARKER: &str =
+    "(\"foundation\", \"layout\", \"encounter-platform/shared-foundation/1\")\n";
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FileScope { Application, Module, Foundation }
+
+fn foundation_root(root: &Path) -> Result<PathBuf> {
+    let (manifest, text) = read_disk(root, FOUNDATION_MANIFEST, "rel", 2_000_000)?;
+    if text != SHARED_FOUNDATION_MARKER { return Ok(root.to_owned()); }
+    if manifest != root.join(FOUNDATION_MANIFEST) {
+        return Err(fail("shared foundation marker link refused"));
+    }
+    shared_root(root, "foundation")
+}
+
+fn shared_root(root: &Path, component: &str) -> Result<PathBuf> {
+    let applications = root.parent()
+        .filter(|parent| parent.file_name().is_some_and(|name| name == "applications"))
+        .ok_or_else(|| fail(format!("shared {component} requires platform application layout")))?;
+    let shared = applications.parent().ok_or_else(|| fail("missing platform root"))?
+        .join("shared").join(component);
+    if shared.canonicalize()? != shared || !shared.is_dir() {
+        return Err(fail(format!("shared {component} root link refused")));
+    }
+    Ok(shared)
+}
+
+fn selected_module_root(root: &Path, component: &str) -> Result<PathBuf> {
+    let relative = format!("bootstrap/{component}.rel");
+    match fs::symlink_metadata(root.join(&relative)) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(root.to_owned()),
+        Err(error) => return Err(error.into()),
+        Ok(_) => {}
+    }
+    let (selector, text) = read_disk(root, &relative, "rel", 2_000_000)?;
+    let marker = format!("(\"{component}\", \"layout\", \"encounter-platform/shared-{component}/1\")\n");
+    if selector != root.join(&relative) || text != marker {
+        return Err(fail(format!("invalid shared {component} selector")));
+    }
+    shared_root(root, component)
+}
+
+fn is_rendering_module(relative: &str) -> bool {
+    relative.strip_prefix("algebra/html/").or_else(|| relative.strip_prefix("algebra/css/"))
+        .is_some_and(|file| !file.is_empty() && !file.contains('/'))
+}
+
+fn disk_reader(root: &Path) -> impl FnMut(&str, &str, usize, FileScope) -> Result<(PathBuf, String)> + '_ {
+    let mut foundation = None;
+    let mut rendering = None;
+    let mut authoring = None;
+    move |relative, extension, limit, scope| {
+        let (base, component) = match scope {
+            FileScope::Foundation => {
+                if foundation.is_none() { foundation = Some(foundation_root(root)?); }
+                (foundation.as_deref().expect("resolved foundation root"), "foundation")
+            }
+            FileScope::Module if is_rendering_module(relative) => {
+                if rendering.is_none() { rendering = Some(selected_module_root(root, "rendering")?); }
+                (rendering.as_deref().expect("resolved rendering root"), "rendering")
+            }
+            FileScope::Module if matches!(relative, "source/actions.encounter" | "source/application.encounter" |
+                "source/commands.encounter" | "source/types.encounter" | "source/ui.encounter") => {
+                if authoring.is_none() { authoring = Some(selected_module_root(root, "authoring")?); }
+                (authoring.as_deref().expect("resolved authoring root"), "authoring")
+            }
+            _ => (root, "application"),
+        };
+        let file = read_disk(base, relative, extension, limit)?;
+        if base != root && file.0 != base.join(relative) {
+            return Err(fail(format!("shared {component} source link refused")));
+        }
+        Ok(file)
+    }
+}
+
+pub(crate) fn read_foundation_manifest(root: &Path) -> Result<String> {
+    let root = root.canonicalize()?;
+    Ok(disk_reader(&root)(FOUNDATION_MANIFEST, "rel", 2_000_000, FileScope::Foundation)?.1)
+}
+
 fn dataset(path: &str, text: &str, format: Option<&str>, pin: Option<&str>) -> Result<Dataset> {
     let digest = rel::hash(text);
     let format = format.unwrap_or("typed-rel");
@@ -76,30 +158,34 @@ fn dataset(path: &str, text: &str, format: Option<&str>, pin: Option<&str>) -> R
 impl Application {
     pub fn load(root: &Path, declaration: &str) -> Result<Self> {
         let root = root.canonicalize()?;
-        Self::from_files(declaration, |path, extension, limit| read_disk(&root, path, extension, limit))
+        Self::from_files(declaration, disk_reader(&root))
     }
 
     pub fn capture(root: &Path, declaration: &str) -> Result<(Self, BTreeMap<String, String>)> {
         let root = root.canonicalize()?;
-        let mut files = BTreeMap::<String, (PathBuf, String)>::new();
-        let application = Self::from_files(declaration, |path, extension, limit| {
-            if let Some((resolved, text)) = files.get(path) {
+        let mut files = BTreeMap::<String, ((PathBuf, String), FileScope)>::new();
+        let mut read = disk_reader(&root);
+        let application = Self::from_files(declaration, |path, extension, limit, scope| {
+            if let Some((file, previous_scope)) = files.get(path) {
                 validate_path(path, extension)?;
-                if text.len() > limit { return Err(fail("application file size limit")); }
-                return Ok((resolved.clone(), text.clone()));
+                if file.1.len() > limit { return Err(fail("application file size limit")); }
+                if *previous_scope != scope && read(path, extension, limit, scope)? != *file {
+                    return Err(fail("image path resolves to different application and foundation files"));
+                }
+                return Ok(file.clone());
             }
-            let file = read_disk(&root, path, extension, limit)?;
-            files.insert(path.to_owned(), file.clone());
+            let file = read(path, extension, limit, scope)?;
+            files.insert(path.to_owned(), (file.clone(), scope));
             Ok(file)
         })?;
-        Ok((application, files.into_iter().map(|(name, (_, text))| (name, text)).collect()))
+        Ok((application, files.into_iter().map(|(name, ((_, text), _))| (name, text)).collect()))
     }
 
     pub(crate) fn from_files(
         declaration: &str,
-        mut read: impl FnMut(&str, &str, usize) -> Result<(PathBuf, String)>,
+        mut read: impl FnMut(&str, &str, usize, FileScope) -> Result<(PathBuf, String)>,
     ) -> Result<Self> {
-        let (_, declaration) = read(declaration, "rel", 2_000_000)?;
+        let (_, declaration) = read(declaration, "rel", 2_000_000, FileScope::Application)?;
         let facts = Facts::parse(&declaration)?;
         let app = "application";
         if optional(&facts, app, "contract")?.unwrap_or("encounter/application-declaration/1")
@@ -117,7 +203,7 @@ impl Application {
         let mut sources = Vec::new();
         let mut catalogue = Vec::new();
         for module in modules {
-            let (path, source) = read(module, "encounter", 2_000_000)?;
+            let (path, source) = read(module, "encounter", 2_000_000, FileScope::Module)?;
             if !paths.insert(path) { return Err(fail("duplicate resolved application module")); }
             catalogue.push(json!({"path":module,"text":source}));
             sources.push(source);
@@ -127,7 +213,7 @@ impl Application {
         let format = optional(&facts, app, "dataFormat")?;
         let pin = optional(&facts, app, "dataSha256")?;
         if let Some(path) = default {
-            let (_, text) = read(path, "rel", 32_000_000)?;
+            let (_, text) = read(path, "rel", 32_000_000, FileScope::Application)?;
             datasets.insert(String::new(), dataset(path, &text, format, pin)?);
         } else if format.is_some() || pin.is_some() {
             return Err(fail("default data format and pin require a data source"));
@@ -140,7 +226,7 @@ impl Application {
             }
             let subject = format!("data.{name}");
             let path = facts.one(&subject, "source")?;
-            let (_, text) = read(path, "rel", 32_000_000)?;
+            let (_, text) = read(path, "rel", 32_000_000, FileScope::Application)?;
             let value = dataset(path, &text, optional(&facts, &subject, "format")?,
                 optional(&facts, &subject, "sha256")?)?;
             datasets.insert(name.to_owned(), value);
@@ -157,10 +243,13 @@ impl Application {
         }
         let grants: BTreeSet<String> = facts.values(app, "grant").into_iter().map(str::to_owned).collect();
         if grants.contains("source.catalogue") {
-            let (_, manifest) = read("bootstrap/foundation.rel", "rel", 2_000_000)?;
+            let (_, manifest) = read(FOUNDATION_MANIFEST, "rel", 2_000_000, FileScope::Foundation)?;
             let manifest = Facts::parse(&manifest)?;
+            if !manifest.values("foundation", "layout").is_empty() {
+                return Err(fail("unresolved foundation layout"));
+            }
             for module in manifest.values("foundation", "module") {
-                let (path, source) = read(module, "encounter", 2_000_000)?;
+                let (path, source) = read(module, "encounter", 2_000_000, FileScope::Foundation)?;
                 if !paths.insert(path) { return Err(fail("duplicate resolved catalogue module")); }
                 if rel::hash(&source) != manifest.one(module, "sha256")? {
                     return Err(fail(format!("source pin mismatch at {module}")));

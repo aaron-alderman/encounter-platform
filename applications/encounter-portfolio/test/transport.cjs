@@ -14,7 +14,10 @@ const { createBrowserTransport } = require('./browser-transport.cjs');
 
 const root = path.resolve(__dirname, '..');
 const value = { ...valuePorts(), ...computationalPorts() };
-const localRead = file => fs.readFileSync(path.join(root, file), 'utf8');
+const { readApplicationModules } = require('../../../shared/node/application-modules.cjs');
+const authoringSources = new Map(readApplicationModules(root, ['source/types.encounter', 'source/actions.encounter'])
+  .map(({ file, text }) => [file, text]));
+const localRead = file => authoringSources.get(file) ?? fs.readFileSync(path.join(root, file), 'utf8');
 
 function faultAt(cut, interrupt) {
   let fired = false;

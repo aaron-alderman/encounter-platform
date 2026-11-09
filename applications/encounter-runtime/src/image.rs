@@ -86,7 +86,7 @@ pub fn load(path: &Path, expected: &str) -> Result<LoadedImage> {
     let declaration = string(&image, "declaration")?;
     let files = image["files"].as_object().ok_or_else(|| fail("missing application image files"))?;
     let mut used = BTreeSet::new();
-    let app = Application::from_files(declaration, |path, extension, limit| {
+    let app = Application::from_files(declaration, |path, extension, limit, _scope| {
         validate_path(path, extension)?;
         let entry = files.get(path).ok_or_else(|| fail(format!("missing image file {path}")))?;
         if entry.as_object().is_none_or(|fields| fields.len() != 2) {
