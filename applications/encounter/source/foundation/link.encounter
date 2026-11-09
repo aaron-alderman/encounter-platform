@@ -1,0 +1,69 @@
+process-module "temple/surface-process-module/1"
+
+process foundation.link:
+  fold $eventInput.modules as module; linked starts { queries = {}; names = list() }:
+    port record.entries { value = $module.queries } → entries
+    fold $entries as entry; linked starts $linked:
+      let name = at($entry, 0)
+      assert not(includes($linked.names, $name))
+        otherwise "LINK: Duplicate Encounter programme."
+      port record.put { record = $linked.queries; key = $name; value = at($entry, 1) } → queries
+      yield { queries = $queries; names = append($linked.names, list($name)) } → linked
+    yield $linked → linked
+  let queries = $linked.queries
+  let included = $queries
+  when not(eq($eventInput.selected, null)):
+    assert eq($eventInput.roots, null)
+      otherwise "LINK: Choose roots or exact selection."
+    assert isArray($eventInput.selected)
+      otherwise "LINK: Explicit query list required."
+    assert count($eventInput.selected)
+      otherwise "LINK: Empty query selection."
+    assert eq(count($eventInput.selected), count(distinct($eventInput.selected)))
+      otherwise "LINK: Duplicate query selection."
+    fold $eventInput.selected as name; selected starts list():
+      assert includes($linked.names, $name)
+        otherwise "LINK: Unknown selected query."
+      yield append($selected, list(list($name, at($queries, $name)))) → selected
+    port record.fromEntries { entries = $selected } → included
+  when not(eq($eventInput.roots, null)):
+    assert isArray($eventInput.roots)
+      otherwise "LINK: Roots must be a list."
+    assert count($eventInput.roots)
+      otherwise "LINK: Empty roots."
+    let allQueries = $queries
+    let allNames = $linked.names
+    fold $eventInput.roots as root; visited starts list():
+      port kernel.invoke { query = "foundation.visit"; input = { name = $root; visited = $visited } } → visited
+      yield $visited → visited
+    port record.fromEntries { entries = map($visited, "name", list($name, at($queries, $name))) } → included
+  let result = { queries = $included }
+
+process foundation.visit:
+  let name = $eventInput.name
+  let visited = $eventInput.visited
+  assert includes($allNames, $name)
+    otherwise "LINK: Unresolved Encounter query."
+  when not(includes($visited, $name)):
+    let visited = append($visited, list($name))
+    port kernel.invoke { query = "foundation.dependencies"; input = { programme = at($allQueries, $name); visited = $visited } } → visited
+  let result = $visited
+
+process foundation.dependencies:
+  fold $eventInput.programme as statement; visited starts $eventInput.visited:
+    when at($statement, "call"):
+      port kernel.invoke { query = "foundation.visit"; input = { name = $statement.call; visited = $visited } } → visited
+    when includes(list("kernel.invoke", "encounter.source"), at($statement, "port")):
+      let name = at($statement.args, "query")
+      port value.describe { value = $name } → type
+      when eq($type.type, "string"):
+        port text.slice { value = $name; start = 0; end = 1 } → first
+        when not(eq($first, at(" $", 1))):
+          port kernel.invoke { query = "foundation.visit"; input = { name = $name; visited = $visited } } → visited
+    port record.entries { value = $statement } → fields
+    fold $fields as field; visited starts $visited:
+      when includes(list("then", "steps", "try", "catch"), at($field, 0)):
+        port kernel.invoke { query = "foundation.dependencies"; input = { programme = at($field, 1); visited = $visited } } → visited
+      yield $visited → visited
+    yield $visited → visited
+  let result = $visited

@@ -1,0 +1,16 @@
+[package]
+name = "encounter"
+version = "0.1.7"
+edition = "2024"
+publish = false
+
+[features]
+test-faults = []
+
+[dependencies]
+temple3 = { path = "../../research/temple3/implementations/rust" }
+serde_json = "1.0"
+sha2 = "0.10"
+hex = "0.4"
+getrandom = "0.2"
+libc = "0.2"

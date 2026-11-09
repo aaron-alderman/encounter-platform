@@ -1,0 +1,24 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process admit.effects.programme:
+  fold $programme as statement; visited starts $visited:
+    when at($statement, "port"):
+      assert includes($grants, $statement.port)
+        otherwise "TEMPLE-S017: Undeclared host effect. Correct the authored programme or review an explicit grant; do not widen permissions to bypass this check."
+    when at($statement, "call"):
+      when not(includes($visited, $statement.call)):
+        let visited = append($visited, list($statement.call))
+        let programme = at($target.queries, $statement.call)
+        call admit.effects.programme
+    port record.entries { value = $statement } → fields
+    let keys = map($fields, "entry", at($entry, 0))
+    port record.entries { value = $profile.statements } → forms
+    fold $forms as form; visited starts $visited:
+      when includes($keys, at($form, 0)):
+        fold at(at($form, 1), "programmes") as field; visited starts $visited:
+          let programme = at($statement, $field)
+          call admit.effects.programme
+          yield $visited → visited
+      yield $visited → visited
+    yield $visited → visited

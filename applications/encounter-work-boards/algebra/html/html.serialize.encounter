@@ -1,0 +1,75 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process html.serialize:
+  port value.describe { value = $input } → kind
+  let result = ""
+  when and(not(eq($input, null)), not(eq($input, false)), not(eq($kind.type, "undefined"))):
+    when $kind.array:
+      fold $input as part; rendered starts "":
+        let input = $part
+        call html.serialize
+        yield concat($rendered, $result) → result
+    when and(not($kind.array), not(eq($kind.type, "object"))):
+      call html.escape
+    when and(not($kind.array), eq($kind.type, "object")):
+      let element = $input
+      let tag = at($element, "tag")
+      port text.matches { value = $tag; pattern = "^[a-zA-Z][a-zA-Z0-9-]*$" } → valid
+      assert $valid
+        otherwise "Invalid HTML tag"
+      port record.entries { value = or(at($element, "attrs"), {  }) } → attributes
+      fold $attributes as attribute; attributesText starts "":
+        let key = at($attribute, 0)
+        let value = at($attribute, 1)
+        let attributeText = ""
+        when and(not(eq($value, null)), not(eq($value, false)), not(eq($value, at({  }, "absent")))):
+          port text.matches { value = $key; pattern = "^[a-zA-Z_:][a-zA-Z0-9_:.-]*$" } → valid
+          assert $valid
+            otherwise "Invalid HTML attribute"
+          port text.matches { value = $key; pattern = "^on"; flags = "i" } → eventHandler
+          assert not($eventHandler)
+            otherwise "Invalid HTML attribute"
+          when includes(list("href", "src", "action"), $key):
+            port value.string { value = $value } → url
+            port text.matches { value = $url; pattern = "^\\s*(javascript|data):"; flags = "i" } → unsafe
+            assert not($unsafe)
+              otherwise "Unsafe URL"
+          let input = if(eq($value, true), "", $value)
+          call html.escape
+          let attributeText = concat(" ", $key, "=\"", $result, "\"")
+        yield concat($attributesText, $attributeText) → attributesText
+      let void = includes(
+        list(
+          "area",
+          "base",
+          "br",
+          "col",
+          "embed",
+          "hr",
+          "img",
+          "input",
+          "link",
+          "meta",
+          "source",
+          "track",
+          "wbr"
+        ),
+        $tag
+      )
+      let childrenText = ""
+      when not($void):
+        fold list(or(at($element, "children"), list())) as child; ignored starts "":
+          let input = $child
+          when eq($tag, "style"):
+            call html.cssText
+          when not(eq($tag, "style")):
+            call html.serialize
+          yield $result → childrenText
+      let result = concat(
+        "<",
+        $tag,
+        $attributesText,
+        ">",
+        if($void, "", concat($childrenText, "</", $tag, ">"))
+      )

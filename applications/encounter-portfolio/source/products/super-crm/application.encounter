@@ -1,0 +1,95 @@
+process-module "temple/surface-process-module/1"
+
+process product.empty:
+  let result = { accounts = list(); cases = list() }
+
+process crm.stages:
+  let result = list("Intake", "In delivery", "Resolved")
+
+process product.change:
+  let command = $eventInput
+  let fields = $command.fields
+  let accounts = $command.state.accounts
+  let cases = $command.state.cases
+  let id = $command.id
+  let notice = ""
+  assert includes(list("account", "case", "update"), $fields.action)
+    otherwise "Choose an available CRM action."
+  when eq($fields.action, "account"):
+    port kernel.invoke { query = "portfolio.text"; input = { text = $fields.name; limit = 120 } } → name
+    port kernel.invoke { query = "portfolio.text"; input = { text = $fields.contact; limit = 160 } } → contact
+    assert not(some($accounts, "account", eq($account.name, $name)))
+      otherwise "An account with that name already exists."
+    let accounts = append(list({ id = $id; name = $name; contact = $contact }), $accounts)
+    let notice = "Account added."
+  when eq($fields.action, "case"):
+    let account = at(filter($accounts, "account", eq($account.id, $fields.account)), 0)
+    assert $account
+      otherwise "Choose an existing customer account."
+    port kernel.invoke { query = "portfolio.text"; input = { text = $fields.title; limit = 150 } } → title
+    port kernel.invoke { query = "portfolio.text"; input = { text = $fields.owner; limit = 120 } } → owner
+    let cases = append(list({ id = $id; account = $account.id; title = $title; owner = $owner; stage = "Intake"; activity = list() }), $cases)
+    let notice = "Customer case opened."
+  when eq($fields.action, "update"):
+    let id = $fields.target
+    let current = at(filter($cases, "entry", eq($entry.id, $id)), 0)
+    assert $current
+      otherwise "Choose an existing customer case."
+    port kernel.invoke { query = "crm.stages" } → stages
+    assert includes($stages, $fields.stage)
+      otherwise "Choose a customer case stage."
+    port kernel.invoke { query = "portfolio.text"; input = { text = $fields.owner; limit = 120 } } → owner
+    port kernel.invoke { query = "portfolio.text"; input = { text = $fields.note; limit = 500 } } → note
+    let event = { from = $current.stage; to = $fields.stage; owner = $owner; note = $note }
+    let updated = { id = $current.id; account = $current.account; title = $current.title; owner = $owner; stage = $fields.stage; activity = append(list($event), $current.activity) }
+    let cases = map($cases, "entry", if(eq($entry.id, $id), $updated, $entry))
+    let notice = "Case updated and activity recorded."
+  let result = { state = { accounts = $accounts; cases = $cases }; target = $id; notice = $notice }
+
+process crm.card:
+  let card = $eventInput
+  let entry = $card.entry
+  let statuses = map($card.stages, "stage", { value = $stage; label = $stage })
+  let inputs = list(
+    { name = "owner"; label = "Case owner"; type = "text"; maxlength = 120; value = $entry.owner; required = true },
+    { name = "stage"; label = "Case stage"; labelId = concat("case-stage-", $entry.id); type = "select"; options = $statuses; value = $entry.stage },
+    { name = "note"; label = "Activity note"; type = "textarea"; maxlength = 500; required = true }
+  )
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $card.screen; inputs = $inputs; action = "update"; target = $entry.id; button = "Save case update" } } → form
+  let activity = map($entry.activity, "event", { tag = "li"; attrs = {}; children = list(concat($event.from, " → ", $event.to, " · ", $event.owner, " · ", $event.note)) })
+  let heading = concat("case-", $entry.id)
+  let result = { tag = "article"; attrs = { "aria-labelledby" = $heading }; children = list(
+    { tag = "h3"; attrs = { id = $heading }; children = list($entry.title) },
+    { tag = "p"; attrs = {}; children = list(concat($entry.stage, " · ", $entry.owner)) },
+    $form,
+    { tag = "ul"; attrs = { "aria-label" = "Case activity" }; children = $activity }
+  ) }
+
+process product.view:
+  let screen = $eventInput
+  let inputs = list(
+    { name = "name"; label = "Account name"; type = "text"; maxlength = 120; required = true },
+    { name = "contact"; label = "Primary contact"; type = "text"; maxlength = 160; required = true }
+  )
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = $inputs; action = "account"; button = "Add account" } } → addAccount
+  let accounts = $screen.state.accounts
+  let opening = list()
+  when count($accounts):
+    let options = map($accounts, "account", { value = $account.id; label = $account.name })
+    let inputs = list(
+      { name = "account"; label = "Customer account"; labelId = "case-account-label"; type = "select"; options = $options; required = true },
+      { name = "title"; label = "Case title"; type = "text"; maxlength = 150; required = true },
+      { name = "owner"; label = "New case owner"; type = "text"; maxlength = 120; required = true }
+    )
+    port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = $inputs; action = "case"; button = "Open case" } } → form
+    let opening = list($form)
+  port kernel.invoke { query = "crm.stages" } → stages
+  fold $accounts as account; cards starts list():
+    let cases = filter($screen.state.cases, "entry", eq($entry.account, $account.id))
+    fold $cases as entry; caseCards starts list():
+      port kernel.invoke { query = "crm.card"; input = { screen = $screen; entry = $entry; stages = $stages } } → caseCard
+      yield append($caseCards, list($caseCard)) → caseCards
+    let content = append(list({ tag = "p"; attrs = {}; children = list(concat("Primary contact: ", $account.contact)) }), $caseCards)
+    port kernel.invoke { query = "portfolio.section"; input = { title = $account.name; content = $content } } → card
+    yield append($cards, list($card)) → cards
+  let result = { title = "Super CRM"; summary = "See each customer account, its delivery cases, and the activity behind each update."; content = append(list($addAccount), append($opening, $cards)) }

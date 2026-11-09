@@ -1,0 +1,7 @@
+("web", "entry", "web.board")
+("web", "grant", "kernel.invoke")
+("web", "grant", "record.entries")
+("web", "module", "encounter-work-boards/source/products/shared/work-ui.encounter")
+("encounter-work-boards/source/products/shared/work-ui.encounter", "sha256", "bfc2c19b3c0a4053ddb9eb372d681ba47c02db5a08210365a57c41f73aad0b99")
+("web", "module", "encounter-runtime/source/workgarden-web.encounter")
+("encounter-runtime/source/workgarden-web.encounter", "sha256", "10a7956e50672a0742eceb32acf968b17e325e4cb8ff8db7303741ff9d00266f")

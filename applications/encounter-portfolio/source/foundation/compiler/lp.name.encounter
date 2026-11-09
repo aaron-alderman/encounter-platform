@@ -1,0 +1,24 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lp.name:
+  port text.matches {
+    value = at($eventInput, "text");
+    pattern = if(
+      at($eventInput, "qualified"),
+      "^[A-Za-z_][A-Za-z0-9_-]*(?:\\.[A-Za-z_][A-Za-z0-9_-]*)*$",
+      "^[A-Za-z_][A-Za-z0-9_]*$"
+    )
+  } → valid
+  port text.split { value = at($eventInput, "text"); pattern = "\\." } → segments
+  let bad = some($segments, "segment", includes(at($lpPolicy, "forbidden"), $segment))
+  when not(and($valid, not($bad))):
+    port kernel.invoke {
+      query = "lp.fail";
+      input = {
+        code = "PROC-TEXT-NAME";
+        summary = "Invalid or reserved source name.";
+        token = at($eventInput, "token")
+      }
+    } → unused
+  let result = at($eventInput, "text")

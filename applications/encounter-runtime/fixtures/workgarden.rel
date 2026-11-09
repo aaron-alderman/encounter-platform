@@ -1,0 +1,7 @@
+("add", "title", "  Café 🌱  ")
+("add", "expectedTitle", "Café 🌱")
+("add", "operation", "fixture-add")
+("refused", "title", "   ")
+("refused", "operation", "fixture-blank")
+("changed", "title", "Different title")
+("changed", "operation", "fixture-changed")

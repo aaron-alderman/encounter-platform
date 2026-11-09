@@ -1,0 +1,3 @@
+.local/
+verification/*-failure-*.png
+verification/ui-failure-*.png

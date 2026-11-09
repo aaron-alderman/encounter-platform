@@ -1,0 +1,121 @@
+process-module "temple/surface-process-module/1"
+
+process test.reconcile:
+  port transfer.verify {} → status
+  assert eq($status, 0)
+    otherwise "The original transfer must match its checksum inventory."
+  let release = "claimipedia-full-corpus-v1.0.0.rel"
+  port transfer.compareBytes { source = concat("sourcery-applications/", $release); output = concat("corpus/", $release) } → corpus
+  assert $corpus.same
+    otherwise "The pinned release must preserve the original corpus bytes."
+  port test.report { text = "ok - verified transfer inventory and byte identity of the pinned v1.0.0 release" } → _
+  each list("frontier-claims.rel", "frontier-research-arms.rel") as file:
+    port transfer.legacy { file = $file } → original
+    assert eq($original.verification.pass, true)
+      otherwise "The retained legacy validator must accept its export."
+    port transfer.data { file = $file } → converted
+    port transfer.equal { left = $converted; right = $original.value } → same
+    assert $same
+      otherwise "The typed REL export must preserve every legacy field and ordered row."
+    port test.report { text = concat("ok - ", $file, " matches every field and row in the verified legacy export") } → _
+  port transfer.facts { file = "transfer-records.rel" } → catalogue
+  port transfer.facts { file = "application.rel" } → declaration
+  each filter($catalogue, "row", eq($row.p, "dataset")) as dataset:
+    let source = at(filter($catalogue, "row", and(eq($row.s, $dataset.s), eq($row.p, "sourcePath"))), 0)
+    let subject = concat("data.", $dataset.o)
+    let output = at(filter($declaration, "row", and(eq($row.s, $subject), eq($row.p, "source"))), 0)
+    port transfer.compareBytes { source = $source.o; output = $output.o } → observed
+    port transfer.parse { text = $observed.text } → facts
+    assert and($observed.same, count(filter($facts, "row", eq($row.s, $dataset.s))))
+      otherwise "Every transfer record must preserve its bytes and record coordinate."
+    port test.report { text = concat("ok - ", $dataset.s, " retains its source bytes and record coordinate") } → _
+  port transfer.inbox {} → inbox
+  port text.split { value = $inbox; pattern = "\\r?\\n" } → lines
+  fold $lines as line; rows starts list():
+    port text.trim { value = $line } → row
+    port text.matches { value = $row; pattern = "^//" } → comment
+    when and($row, not($comment)):
+      port text.matches { value = $row; pattern = "^\\(.*\\)$" } → tuple
+      assert $tuple
+        otherwise "Each legacy inbox row must be a tuple."
+      port text.slice { value = $row; start = 1; end = add(count($row), -1) } → atomsText
+      port transfer.json { text = concat("[", $atomsText, "]") } → atoms
+      assert eq(count($atoms), 4)
+        otherwise "Each inbox tuple must retain all four fields."
+      let record = { s = at($atoms, 0); p = at($atoms, 1); o = at($atoms, 2); pol = at($atoms, 3) }
+      let rows = append($rows, list($record))
+    yield $rows → rows
+  port transfer.data { file = "research-inbox.rel" } → converted
+  port transfer.equal { left = $converted; right = $rows } → same
+  assert $same
+    otherwise "The inbox must retain every tuple in order, including its legacy observed polarity."
+  port test.report { text = "ok - research inbox retains all 2,268 ordered tuples, including the legacy observed polarity" } → _
+  let inboxRows = $rows
+  call reconcile.evidence
+
+process reconcile.evidence:
+  port transfer.manifest {} → manifest
+  port transfer.facts { file = "evidence-links.rel" } → links
+  let linkedPaths = map($links, "link", $link.o)
+  let cohorts = list(
+    list("other/random-thoughts/physics/", "Physics corpus"),
+    list("sourcery-applications/applications/claimipedia/research/evidence/", "Research evidence"),
+    list("sourcery-applications/applications/claimipedia/docs/evidence/", "Documentary evidence"),
+    list("applications/claimipedia/research/", "Additional Claimipedia research")
+  )
+  fold $manifest as line; selected starts list():
+    port text.matches { value = $line; pattern = "^[0-9a-f]{64}  .+$" } → valid
+    assert $valid
+      otherwise "Each inventory line must name a digest and original file."
+    port text.slice { value = $line; start = 0; end = 64 } → sha256
+    port text.slice { value = $line; start = 66; end = count($line) } → source
+    fold $cohorts as cohort; collection starts null:
+      port text.indexOf { value = $source; search = at($cohort, 0) } → position
+      yield if(and(not($collection), eq($position, 0)), at($cohort, 1), $collection) → collection
+    let linked = includes($linkedPaths, $source)
+    let record = { source = $source; sha256 = $sha256; collection = or($collection, "Research receipts"); linked = $linked }
+    yield if(or($collection, $linked), append($selected, list($record)), $selected) → selected
+  port transfer.data { file = "evidence-library.rel" } → index
+  port transfer.data { file = "evidence-texts.rel" } → texts
+  assert and(eq(count($index), 2296), eq(count($index), count($selected)))
+    otherwise "The evidence library must index all 2,296 selected transfer coordinates."
+  let indexedPaths = map($index, "row", $row.path)
+  fold $indexedPaths as source; seen starts list():
+    assert not(includes($seen, $source))
+      otherwise "An evidence coordinate must appear only once."
+    yield append($seen, list($source)) → seen
+  let initial = { position = 0; linkedIds = list() }
+  fold $selected as record; state starts $initial:
+    let row = at($index, $state.position)
+    port digest.sha256 { text = $record.source } → digest
+    let id = concat("evidence.", $digest)
+    let linkedText = if($record.linked, at($texts, $id), null)
+    port transfer.artifact { source = $record.source; linkedText = $linkedText } → artifact
+    let expected = { id = $id; path = $record.source; title = $artifact.title; sha256 = $record.sha256; bytes = $artifact.bytes; collection = $record.collection }
+    port transfer.equal { left = $row; right = $expected } → same
+    assert and($same, or(not($record.linked), $artifact.same))
+      otherwise "Each evidence row and linked text must match the verified transfer."
+    let linkedIds = if($record.linked, append($state.linkedIds, list($id)), $state.linkedIds)
+    yield { position = add($state.position, 1); linkedIds = $linkedIds } → state
+  port record.entries { value = $texts } → entries
+  assert eq(count($entries), count($state.linkedIds))
+    otherwise "The linked text inventory must cover exactly the linked evidence IDs."
+  each $entries as entry:
+    assert includes($state.linkedIds, at($entry, 0))
+      otherwise "Every retained evidence text must have a declared link."
+  port transfer.facts { file = "spin23-pathway.rel" } → checkpoint
+  each $links as link:
+    assert and(eq($link.p, "artifact"), includes($indexedPaths, $link.o))
+      otherwise "Each artifact link must target an indexed source."
+    when eq($link.s, "checkpoint.physics.spin23.SRP10-SRP12"):
+      assert count(filter($checkpoint, "row", and(eq($row.s, $link.s), eq($row.o, $link.o))))
+        otherwise "The checkpoint link must preserve its transferred coordinate."
+    when not(eq($link.s, "checkpoint.physics.spin23.SRP10-SRP12")):
+      let routes = filter($inboxRows, "row", and(eq($row.s, $link.s), eq($row.p, "route")))
+      fold $routes as route; matched starts false:
+        port text.matches { value = $route.o; pattern = "/prospective-neutrino-preregistration$" } → prospective
+        yield or($matched, $prospective) → matched
+      port text.matches { value = $link.o; pattern = "prospective-neutrino-preregistration\\.(?:json|md)$" } → source
+      assert and(eq($link.s, "researchResult.RIO-022-W3"), $matched, $source)
+        otherwise "The prospective research result must retain its original route and linked source."
+  port test.report { text = "ok - all 2,296 evidence coordinates and four linked source texts match the verified transfer" } → _

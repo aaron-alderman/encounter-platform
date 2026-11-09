@@ -1,0 +1,380 @@
+process-module "temple/surface-process-module/1"
+
+process workflow.inventory:
+  let workflows = list("workgarden", "claimipedia", "encounter", "harborboard", "foundry-mine-to-port", "industrial-systems-optimizer", "outcome-value-navigator", "relationship-navigator", "sourcery-desktop", "super-crm", "timesheet", "tradie", "world")
+
+process workflow.run:
+  let workflowState = null
+  when eq($app, "workgarden"):
+    call workflow.workgarden
+  when eq($app, "claimipedia"):
+    call workflow.claimipedia
+  when eq($app, "encounter"):
+    call workflow.encounter
+  when eq($app, "harborboard"):
+    call workflow.harborboard
+  when eq($app, "foundry-mine-to-port"):
+    call workflow.foundry
+  when eq($app, "industrial-systems-optimizer"):
+    call workflow.optimizer
+  when eq($app, "outcome-value-navigator"):
+    call workflow.outcome
+  when eq($app, "relationship-navigator"):
+    call workflow.relationship
+  when eq($app, "sourcery-desktop"):
+    call workflow.desktop
+  when eq($app, "super-crm"):
+    call workflow.crm
+  when eq($app, "timesheet"):
+    call workflow.timesheet
+  when eq($app, "tradie"):
+    call workflow.tradie
+  when eq($app, "world"):
+    call workflow.world
+
+process workflow.sees:
+  let locator = list({ text = $text })
+  let property = "count"
+  let expected = 1
+  call release.expect
+
+process workflow.press:
+  let locator = list({ role = "button"; name = $button })
+  call release.click
+
+process workflow.submit:
+  each $fields as field:
+    port release.fill { label = at($field, 0); value = at($field, 1) } → _
+  call workflow.press
+
+process workflow.select:
+  let locator = list({ label = $label })
+  port release.act { locator = $locator; action = "select"; value = $choice } → _
+
+process workflow.addItem:
+  let button = "Add work item"
+  let fields = list(list("New work item", $title))
+  call workflow.submit
+
+process workflow.draft:
+  let button = "Save draft revision"
+  let fields = list(list("Draft statement", $statement), list("Revision reason", $reason))
+  call workflow.submit
+  let text = concat("Draft version ", $draftVersion, " saved.")
+  call workflow.sees
+
+process workflow.review:
+  let form = list({ css = "form"; has = list({ role = "heading"; name = $heading; hidden = true }) })
+  port release.observe { locator = $form; property = "visible" } → visible
+  when not($visible):
+    let locator = append($form, list({ css = "xpath=ancestor::details[1]/summary" }))
+    port release.act { locator = $locator; action = "click" } → _
+  let prompts = list(list("Why this change?", "Exercise the upgrade through visible authoring controls."), list("What exactly changes?", $target), list("What should it help achieve?", "Keep a field journal."))
+  each append($fields, $prompts) as field:
+    let locator = append($form, list({ label = at($field, 0) }))
+    port release.act { locator = $locator; action = "fill"; value = at($field, 1) } → _
+  let locator = append($form, list({ role = "button"; name = "Review one change" }))
+  call release.click
+  let button = "Accept this change"
+  call workflow.press
+  let locator = list({ role = "status" })
+  port release.observe { locator = $locator; property = "text" } → statusText
+  port text.matches { value = $statusText; pattern = concat("^Saved revision ", $revisionNumber, "\\b") } → saved
+  assert $saved
+    otherwise "Acceptance must report the expected saved revision."
+
+process workflow.defineType:
+  let heading = "Define a kind of thing"
+  let fields = list(list("Type identity", $target), list("Type name", $typeName))
+  call workflow.review
+
+process workflow.workgarden:
+  when eq($phase, "seed"):
+    each list("Prepare seedlings", "Water plot") as title:
+      call workflow.addItem
+    let locator = list({ role = "listitem"; contains = "Prepare seedlings" }, { role = "button"; name = "Complete" })
+    call release.click
+  when eq($phase, "verify"):
+    let locator = list({ role = "listitem" }, { role = "heading" })
+    let property = "list"
+    let expected = list("Prepare seedlings", "Water plot")
+    call release.expect
+    let text = "Completed"
+    call workflow.sees
+  when eq($phase, "change"):
+    let button = "Reopen"
+    call workflow.press
+    let text = "Work item reopened."
+    call workflow.sees
+
+process workflow.claimipedia:
+  when eq($phase, "seed"):
+    let statement = "First upgrade fixture draft."
+    let reason = "Retain the original draft."
+    let draftVersion = 2
+    call workflow.draft
+    let statement = "Accepted upgrade fixture claim."
+    let reason = "Retain the revised wording."
+    let draftVersion = 3
+    call workflow.draft
+    let button = "Accept draft locally"
+    call workflow.press
+    let statement = "Pending upgrade fixture draft."
+    let reason = "Retain the pending draft."
+    let draftVersion = 4
+    call workflow.draft
+  when eq($phase, "verify"):
+    each list("Local working version 3 · Accepted upgrade fixture claim.", "Released version 1 · claimVersion.riverNitrate.1", "Status: superseded") as text:
+      call workflow.sees
+    let locator = list({ label = "Draft statement" })
+    let property = "value"
+    let expected = "Pending upgrade fixture draft."
+    call release.expect
+  when eq($phase, "change"):
+    let button = "Discard draft"
+    call workflow.press
+    each list("Status: discarded", "Local working version 3 · Accepted upgrade fixture claim.") as text:
+      call workflow.sees
+
+process workflow.encounter:
+  when eq($phase, "seed"):
+    let heading = "What would you like to make?"
+    let fields = list(list("I want to… because…", "Keep a field journal"))
+    let target = "Journal intent"
+    let revisionNumber = 1
+    call workflow.review
+    let target = "TrailNote"
+    let typeName = "Trail note"
+    let revisionNumber = 2
+    call workflow.defineType
+  when eq($phase, "verify"):
+    let locator = list({ role = "link"; name = "History" })
+    call release.click
+    each list(1, 2) as revisionNumber:
+      let locator = list({ role = "heading"; name = concat("Revision ", $revisionNumber) })
+      let property = "count"
+      let expected = 1
+      call release.expect
+    let locator = list({ role = "link"; name = "Your work" })
+    call release.click
+    let locator = list({ role = "link"; name = "Trail note" })
+    let property = "count"
+    let expected = 1
+    call release.expect
+  when eq($phase, "change"):
+    let target = "WeatherNote"
+    let typeName = "Weather note"
+    let revisionNumber = 3
+    call workflow.defineType
+    let locator = list({ role = "link"; name = "Weather note" })
+    let property = "count"
+    let expected = 1
+    call release.expect
+
+process workflow.harborboard:
+  when eq($phase, "seed"):
+    let button = "Add epic"
+    let fields = list(list("New epic", "Spring launch"))
+    call workflow.submit
+    let title = "Publish guide"
+    call workflow.addItem
+  when eq($phase, "verify"):
+    let locator = list({ role = "listitem" }, { text = "Spring launch" })
+    let property = "count"
+    let expected = 1
+    call release.expect
+    let text = "Publish guide"
+    call workflow.sees
+  when eq($phase, "change"):
+    let title = "Review guide"
+    call workflow.addItem
+    let locator = list({ role = "heading"; name = "Review guide" })
+    let property = "count"
+    let expected = 1
+    call release.expect
+
+process workflow.scenario:
+  let label = "Scenario"
+  call workflow.select
+  call workflow.press
+
+process workflow.foundry:
+  let button = "Run scenario"
+  when eq($phase, "seed"):
+    call workflow.press
+    let choice = "rail-disruption"
+    call workflow.scenario
+  when eq($phase, "verify"):
+    each list("Throughput: 65 t/h", "Recovery: 5 h") as text:
+      call workflow.sees
+  when eq($phase, "change"):
+    let choice = "port-expansion"
+    call workflow.scenario
+    let text = "Throughput: 95 t/h"
+    call workflow.sees
+
+process workflow.optimizer:
+  let button = "Compare scenario"
+  when eq($phase, "seed"):
+    let fields = list(list("Scenario name", "Available rail capacity"))
+    call workflow.submit
+    let fields = list(list("Scenario name", "Demand-limited"), list("Saleable demand (t/h)", "80"))
+    call workflow.submit
+  when eq($phase, "verify"):
+    let text = "Throughput: 80 → 80 t/h"
+    call workflow.sees
+  when eq($phase, "change"):
+    let fields = list(list("Scenario name", "New demand limit"), list("Saleable demand (t/h)", "70"))
+    call workflow.submit
+    let text = "Throughput: 70 → 70 t/h"
+    call workflow.sees
+
+process workflow.outcome:
+  when eq($phase, "seed"):
+    let button = "Open outcome case"
+    let fields = list(list("Case name", "Recover saleable mill output"), list("Desired outcome", "Recover output safely."))
+    call workflow.submit
+    let button = "Record evidence"
+    let fields = list(list("Evidence source", "Training trial shift log"), list("Evidence note", "The mill operated at capacity."))
+    call workflow.submit
+  when eq($phase, "verify"):
+    let text = "Mill is the binding constraint · Supported by recorded observations"
+    call workflow.sees
+  when eq($phase, "change"):
+    let label = "Evidence hypothesis"
+    let choice = "demand"
+    call workflow.select
+    let button = "Record evidence"
+    let fields = list(list("Evidence source", "Training shipment ledger"), list("Evidence note", "Additional tonnes were accepted."))
+    call workflow.submit
+    let text = "Incremental output can be sold and delivered · Supported by recorded observations"
+    call workflow.sees
+
+process workflow.relationship:
+  when eq($phase, "seed"):
+    let button = "Open repair process"
+    let fields = list(list("Process name", "Practice repair"), list("Repair aim", "Listen and make a workable offer."))
+    call workflow.submit
+    let locator = list({ label = "Your recovery code" })
+    port release.observe { locator = $locator; property = "value" } → recovery
+    port text.matches { value = $recovery; pattern = "^[a-f0-9]{64}$" } → issued
+    assert $issued
+      otherwise "The repair process must issue a recovery code."
+    let button = "Save private account"
+    let fields = list(list("Your private account", "First private account."))
+    call workflow.submit
+    let workflowState = $recovery
+  when eq($phase, "verify"):
+    let button = "Enter with code"
+    let fields = list(list("Access or invitation code", $browserState))
+    call workflow.submit
+    let text = "First private account."
+    call workflow.sees
+  when eq($phase, "change"):
+    let button = "Save private account"
+    let fields = list(list("Your private account", "Second private account."))
+    call workflow.submit
+    each list("First private account.", "Second private account.") as text:
+      call workflow.sees
+
+process workflow.desktop:
+  when eq($phase, "seed"):
+    let button = "Record claim"
+    let fields = list(list("Claim statement", "A training claim."), list("Scope", "Local test"))
+    call workflow.submit
+    let locator = list({ text = "Edit, add evidence or withdraw" })
+    port release.act { locator = $locator; action = "click" } → _
+    let button = "Add evidence"
+    let fields = list(list("Evidence reference", "Training receipt 1"), list("Evidence note", "Original record retained"))
+    call workflow.submit
+  when eq($phase, "verify"):
+    each list("Version 1 · Active", "Version 2 · Active") as text:
+      call workflow.sees
+  when eq($phase, "change"):
+    let locator = list({ text = "Edit, add evidence or withdraw" })
+    port release.act { locator = $locator; action = "click" } → _
+    let button = "Withdraw claim"
+    let fields = list(list("Withdrawal reason", "The claim needs further review"))
+    call workflow.submit
+    let text = "Version 3 · Withdrawn"
+    call workflow.sees
+
+process workflow.crm:
+  when eq($phase, "seed"):
+    let button = "Add account"
+    let fields = list(list("Account name", "Example Co"), list("Primary contact", "Casey"))
+    call workflow.submit
+    let button = "Open case"
+    let fields = list(list("Case title", "Site onboarding"), list("New case owner", "Rowan"))
+    call workflow.submit
+  when eq($phase, "verify"):
+    each list("Primary contact: Casey", "Site onboarding") as text:
+      call workflow.sees
+  when eq($phase, "change"):
+    let label = "Case stage"
+    let choice = "In delivery"
+    call workflow.select
+    let button = "Save case update"
+    let fields = list(list("Activity note", "Scoping visit booked"))
+    call workflow.submit
+    let text = "Intake → In delivery · Rowan · Scoping visit booked"
+    call workflow.sees
+
+process workflow.timesheet:
+  when eq($phase, "seed"):
+    let button = "Log time"
+    let fields = list(list("Person", "Alex"), list("Project", "Stocktake"), list("Work date", "2026-11-09"), list("Hours", "7.25"), list("Work note", "Counted stock"))
+    call workflow.submit
+    let button = "Submit entry"
+    call workflow.press
+  when eq($phase, "verify"):
+    let text = "Alex · 2026-11-09 · 7.25 h · Submitted"
+    call workflow.sees
+  when eq($phase, "change"):
+    let button = "Approve entry"
+    call workflow.press
+    let text = "Approved total: 7.25 h"
+    call workflow.sees
+
+process workflow.tradie:
+  when eq($phase, "seed"):
+    let button = "Record enquiry"
+    let fields = list(list("Customer", "Demo customer"), list("Job site", "Workshop"), list("Work requested", "Repair the latch"))
+    call workflow.submit
+    let button = "Claim enquiry"
+    let fields = list(list("Operator", "Jordan"))
+    call workflow.submit
+  when eq($phase, "verify"):
+    let enquiry = list({ role = "article"; name = "Demo customer" })
+    let locator = append($enquiry, list({ css = "p" }, { text = "Claimed · Jordan" }))
+    let property = "count"
+    let expected = 1
+    call release.expect
+    let locator = append($enquiry, list({ text = "Enquiry history" }))
+    port release.act { locator = $locator; action = "click" } → _
+    let locator = append($enquiry, list({ role = "listitem" }, { text = "Claimed · Jordan" }))
+    call release.expect
+  when eq($phase, "change"):
+    let button = "Escalate enquiry"
+    let fields = list(list("Escalation reason", "Awaiting a replacement part"))
+    call workflow.submit
+    let text = "Escalated · Jordan"
+    call workflow.sees
+
+process workflow.world:
+  let button = "Run development scenario"
+  when eq($phase, "seed"):
+    call workflow.press
+    let choice = "scenario.world.no-data-governance"
+    call workflow.scenario
+  when eq($phase, "verify"):
+    let text = "11 / 12 capabilities realized after 40 epochs"
+    call workflow.sees
+  when eq($phase, "change"):
+    let label = "Scenario"
+    let choice = "scenario.world.baseline"
+    call workflow.select
+    let fields = list(list("Epochs", "39"))
+    call workflow.submit
+    let text = "12 / 12 capabilities realized after 39 epochs"
+    call workflow.sees

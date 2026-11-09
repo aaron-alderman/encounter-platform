@@ -1,0 +1,96 @@
+process-module "temple/surface-process-module/1"
+
+process test.portfolio.optimizer:
+  port browser.open { declaration = "products/industrial-systems-optimizer/application.rel"; width = 390; height = 844 } → opened
+  assert eq($opened.status, 200)
+    otherwise "The optimizer did not open."
+  let page = $opened.page
+  let field = "Scenario name"
+  let value = "Available rail capacity"
+  call portfolio.test.fill
+  let button = "Compare scenario"
+  call portfolio.test.submit
+  let text = "Throughput: 90 → 105 t/h"
+  call portfolio.test.sees
+  let text = "Binding: Rail"
+  call portfolio.test.sees
+  let field = "Scenario name"
+  let value = "Demand-limited"
+  call portfolio.test.fill
+  let field = "Saleable demand (t/h)"
+  let value = "80"
+  call portfolio.test.fill
+  let button = "Compare scenario"
+  call portfolio.test.submit
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  let text = "Throughput: 80 → 80 t/h"
+  call portfolio.test.sees
+  let text = "Baseline selected; no build step improves this objective within the limits."
+  call portfolio.test.sees
+
+process test.portfolio.outcome:
+  port browser.open { declaration = "products/outcome-value-navigator/application.rel"; width = 390; height = 844 } → opened
+  assert eq($opened.status, 200)
+    otherwise "Outcome Value Navigator did not open."
+  let page = $opened.page
+  let field = "Case name"
+  let value = "Recover saleable mill output"
+  call portfolio.test.fill
+  let field = "Desired outcome"
+  let value = "Recover output while keeping maintenance work safe."
+  call portfolio.test.fill
+  let button = "Open outcome case"
+  call portfolio.test.submit
+  let text = "Value withheld pending reported measurements and evidence."
+  call portfolio.test.sees
+  each list(list("Evidence source", "Training trial shift log"), list("Evidence note", "A downstream queue stayed empty while the mill operated at capacity.")) as field:
+    port browser.act { page = $page; locator = list({ label = at($field, 0) }); action = "fill"; value = at($field, 1) } → _
+  let button = "Record evidence"
+  call portfolio.test.submit
+  let text = "Mill is the binding constraint · Supported by recorded observations"
+  call portfolio.test.sees
+  let text = "Incremental output can be sold and delivered · Observation needed"
+  call portfolio.test.sees
+  each list(list("Observed saleable tonnes", "10"), list("Contribution per tonne", "5"), list("Intervention cost", "20"), list("Measurement source", "Training shipment ledger"), list("Affected-party outcome", "No additional shift work.")) as field:
+    port browser.act { page = $page; locator = list({ label = at($field, 0) }); action = "fill"; value = at($field, 1) } → _
+  let button = "Record measured outcome"
+  call portfolio.test.submit
+  port browser.observe { page = $page; locator = list({ role = "alert" }); property = "count" } → refusal
+  assert eq($refusal, 1)
+    otherwise "Outcome value was allowed without recorded demand evidence."
+  port browser.act { page = $page; locator = list({ label = "Evidence hypothesis" }); action = "select"; value = "demand" } → _
+  each list(list("Evidence source", "Training shipment ledger"), list("Evidence note", "The additional on-spec tonnes were accepted.")) as field:
+    port browser.act { page = $page; locator = list({ label = at($field, 0) }); action = "fill"; value = at($field, 1) } → _
+  let button = "Record evidence"
+  call portfolio.test.submit
+  each list(list("Observed saleable tonnes", "10"), list("Contribution per tonne", "5"), list("Intervention cost", "20"), list("Measurement source", "Training shipment ledger"), list("Affected-party outcome", "No additional shift work.")) as field:
+    port browser.act { page = $page; locator = list({ label = at($field, 0) }); action = "fill"; value = at($field, 1) } → _
+  let button = "Record measured outcome"
+  call portfolio.test.submit
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  let text = "Reported net contribution: 30 · 10 t · source Training shipment ledger · No additional shift work."
+  call portfolio.test.sees
+
+process test.portfolio.world:
+  port browser.open { declaration = "products/world/application.rel"; width = 390; height = 844 } → opened
+  assert eq($opened.status, 200)
+    otherwise "World did not open."
+  let page = $opened.page
+  let button = "Run development scenario"
+  call portfolio.test.submit
+  let text = "12 / 12 capabilities realized after 40 epochs"
+  call portfolio.test.sees
+  let text = "Bounded modern LLM training and inference · realized at epoch 38"
+  call portfolio.test.sees
+  port browser.act { page = $page; locator = list({ label = "Scenario" }); action = "select"; value = "scenario.world.no-data-governance" } → _
+  call portfolio.test.submit
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  let text = "11 / 12 capabilities realized after 40 epochs"
+  call portfolio.test.sees
+  let text = "Governed data stock: 6"
+  call portfolio.test.sees
+  let text = "Bounded modern LLM training and inference · blocked"
+  call portfolio.test.sees

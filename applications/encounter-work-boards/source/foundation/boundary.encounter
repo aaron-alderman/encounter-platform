@@ -1,0 +1,144 @@
+process-module "temple/surface-process-module/1"
+
+process foundation.sourceIdentity:
+  let file = $eventInput.file
+  port value.describe { value = $file } → kind
+  assert eq($kind.type, "string")
+    otherwise "Encounter source identity required."
+  port text.matches { value = $file; pattern = "\\.encounter$" } → suffix
+  port text.matches { value = $file; pattern = "(^/|\\\\|:|\\.\\.|^(?:\\.local-|\\.migration-|dist/|verify-build/|\\.build/))" } → unsafe
+  assert and($suffix, not($unsafe))
+    otherwise "Encounter source identity required."
+  let result = true
+
+process foundation.sourceBounds:
+  port value.describe { value = $eventInput.text } → textKind
+  port value.describe { value = $eventInput.file } → fileKind
+  assert and(eq($textKind.type, "string"), eq($fileKind.type, "string"))
+    otherwise "COMPILER: Actual source text and identity required."
+  port number.calculate { operation = "lessEqual"; values = list(count($eventInput.text), 160000) } → textBounded
+  port number.calculate { operation = "lessEqual"; values = list(count($eventInput.file), 4096) } → fileBounded
+  assert and($textBounded, $fileBounded)
+    otherwise "COMPILER: Source bounds exceeded before native hashing."
+  let result = true
+
+process foundation.configuration:
+  let result = { runtimeLimit = 20000000; factIndexer = "facts.index"; dynamicFile = "dynamic/programme.encounter"; expressionFile = "dynamic/expression.encounter"; regex = { "text.matches" = "matches"; "text.split" = "split"; "text.replace" = "replace"; "text.match" = "match"; "text.matchAll" = "matchAll" } }
+
+process foundation.regexBudget:
+  let arguments = $eventInput.arguments
+  when eq($eventInput.operation, "matches"):
+    port value.string { value = at($arguments, "value") } → value
+    port record.put { record = $arguments; key = "value"; value = $value } → arguments
+  port value.describe { value = $arguments.value } → valueKind
+  port value.describe { value = $arguments.pattern } → patternKind
+  assert and(eq($valueKind.type, "string"), eq($patternKind.type, "string"))
+    otherwise "REGEXP: Data text required."
+  port text.slice { value = $arguments.value; start = 0; end = 64000000 } → boundedValue
+  port text.slice { value = $arguments.pattern; start = 0; end = 4096 } → boundedPattern
+  assert and(eq($boundedValue, $arguments.value), eq($boundedPattern, $arguments.pattern))
+    otherwise "REGEXP: Native input bound exceeded."
+  let result = { milliseconds = 1000; arguments = $arguments }
+
+process foundation.selectProfile:
+  port record.entries { value = $eventInput.profiles } → entries
+  assert some($entries, "entry", eq(at($entry, 0), $eventInput.name))
+    otherwise "Invalid admission profile."
+  let result = at($eventInput.profiles, $eventInput.name)
+
+process foundation.entry:
+  port record.entries { value = $eventInput.queries } → queries
+  assert some($queries, "query", eq(at($query, 0), $eventInput.entry))
+    otherwise "ADMISSION: Missing child entry."
+  let result = true
+
+process foundation.expressionText:
+  port value.describe { value = $eventInput.text } → kind
+  assert eq($kind.type, "string")
+    otherwise "Actual Encounter text is required."
+  let result = concat("process-module \"temple/surface-process-module/1\"\nprocess expression:\n  let result = ", $eventInput.text, "\n")
+
+process foundation.indexGrants:
+  let result = filter(list("value.describe", "value.freeze", "record.entries", "record.fromEntries", "record.put", "record.get"), "name", includes($eventInput.available, $name))
+
+process foundation.indexResult:
+  assert and($eventInput.value.objects, $eventInput.value.subjects, eq($eventInput.value.factCount, $eventInput.count))
+    otherwise "Invalid Encounter fact index result."
+  let result = true
+
+process foundation.checkLimit:
+  let limit = $eventInput.limit
+  port value.describe { value = $limit } → kind
+  assert $kind.finite
+    otherwise "ADMISSION: Finite execution limit required."
+  port number.calculate { operation = "floor"; values = list($limit) } → integer
+  port number.calculate { operation = "lessEqual"; values = list(1, $limit) } → positive
+  port number.calculate { operation = "lessEqual"; values = list($limit, 20000000) } → bounded
+  assert and(eq($integer, $limit), $positive, $bounded)
+    otherwise "ADMISSION: Invalid execution limit."
+  let result = true
+
+process foundation.hydrate:
+  call foundation.sourceIdentity
+  call foundation.compile
+  let compilation = $result
+  assert $compilation.ok
+    otherwise "Encounter compilation refused."
+  port rel.encode { value = $compilation.surface; kind = "EncounterHydration" } → document
+  port rel.decode { text = $document; kind = "EncounterHydration" } → surface
+  port digest.sha256 { text = $eventInput.text } → sourceHash
+  port digest.sha256 { text = $document } → hydrationHash
+  let result = { surface = $surface; rel = $document; sourceSha256 = $sourceHash; hydrationSha256 = $hydrationHash; inspection = { module = $compilation.surface; origins = $compilation.origins; sourceHash = $sourceHash } }
+
+process foundation.profiles:
+  let profiles = $eventInput.profiles
+  port value.describe { value = $profiles } → kind
+  assert and($kind.plain, not($kind.array), not($kind.null))
+    otherwise "Effect profiles must be a REL record."
+  port record.entries { value = $profiles } → entries
+  each $entries as entry:
+    let names = at($entry, 1)
+    assert isArray($names)
+      otherwise "ADMISSION: Grant list required."
+    assert eq(count($names), count(distinct($names)))
+      otherwise "ADMISSION: Duplicate grant."
+    each $names as name:
+      assert not(includes(list("kernel.execute", "kernel.evaluate", "json.parse", "json.stringify"), $name))
+        otherwise "ADMISSION: Unavailable or forbidden effect grant."
+      assert includes($eventInput.available, $name)
+        otherwise "ADMISSION: Unavailable or forbidden effect grant."
+  let result = true
+
+process foundation.bindings:
+  let value = $eventInput.value
+  port value.describe { value = $value } → kind
+  assert and($kind.plain, not($kind.array), not($kind.null))
+    otherwise "Bindings must be a data record."
+  port record.entries { value = $value } → entries
+  each $entries as entry:
+    let binding = at($entry, 0)
+    call admit.binding
+  let result = true
+
+process foundation.bridgeArguments:
+  let method = $eventInput.method
+  let arguments = $eventInput.arguments
+  let fields = if(eq($method, "encounter.evaluate"), list("text", "bindings"), list("text", "entry", "input", "bindings"))
+  port record.entries { value = $arguments } → entries
+  assert every($entries, "entry", includes($fields, at($entry, 0)))
+    otherwise "Raw models and grant maps are forbidden."
+  port value.describe { value = at($arguments, "text") } → kind
+  assert eq($kind.type, "string")
+    otherwise "Actual Encounter text is required."
+  let result = true
+
+process foundation.expressionImage:
+  port record.entries { value = $eventInput.queries } → entries
+  assert eq(count($entries), 1)
+    otherwise "One Encounter expression is required."
+  let steps = at($eventInput.queries, "expression")
+  assert eq(count($steps), 1)
+    otherwise "One Encounter expression is required."
+  assert eq(at(at($steps, 0), "let"), "result")
+    otherwise "One Encounter expression is required."
+  let result = true

@@ -1,0 +1,22 @@
+process-module "temple/surface-process-module/1"
+
+process web.release:
+  let request = $eventInput
+  port kernel.invoke { query = "claimipedia.catalogue" } → catalogue
+  let id = at($request.fields, "claim")
+  let selected = at(filter($catalogue.claims, "claim", eq($claim.id, $id)), 0)
+  let content = list()
+  when not($selected):
+    port kernel.invoke { query = "claimipedia.search"; input = { fields = $request.fields; catalogue = $catalogue; state = { revisions = list() } } } → content
+  when $selected:
+    port kernel.invoke { query = "claimipedia.releasedHistory"; input = { facts = $catalogue.facts; claim = $selected } } → history
+    let back = { tag = "a"; attrs = { href = "/" }; children = list("Back to claim search") }
+    let heading = { tag = "h2"; attrs = {}; children = list($selected.id) }
+    let content = list($back, $heading, $history)
+  when and($id, not($selected)):
+    let content = append(list({ tag = "p"; attrs = { role = "alert" }; children = list("No released claim has that identifier.") }), $content)
+  let head = { tag = "head"; attrs = {}; children = list({ tag = "meta"; attrs = { charset = "utf-8" }; children = list() }, { tag = "meta"; attrs = { name = "viewport"; content = "width=device-width, initial-scale=1" }; children = list() }, { tag = "title"; attrs = {}; children = list("Claimipedia · Encounter") }) }
+  let heading = { tag = "h1"; attrs = {}; children = list("Claimipedia") }
+  let summary = { tag = "p"; attrs = {}; children = list(concat("Pinned release v1.0.0 · ", count($catalogue.claims), " released claims")) }
+  let main = { tag = "main"; attrs = {}; children = append(list($heading, $summary), $content) }
+  let result = { tag = "html"; attrs = { lang = "en" }; children = list($head, { tag = "body"; attrs = {}; children = list($main) }) }

@@ -1,0 +1,277 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lp.extended:
+  let i = $eventInput.i
+  let origins = $eventInput.origins
+  let pointer = $eventInput.pointer
+  let level = $eventInput.level
+  let begin = $eventInput.begin
+  let kind = $eventInput.kind
+  when eq($kind, "call"):
+    port kernel.invoke {
+      query = "lp.binding";
+      input = {
+        i = $i;
+        pointer = concat($pointer, "/", "call");
+        qualified = true;
+        origins = $origins
+      }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let callee = $parsed.value
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "\n" } } → i
+    let value = { call = $callee }
+  when eq($kind, "assert"):
+    port kernel.invoke {
+      query = "lp.expression";
+      input = { i = $i; pointer = concat($pointer, "/", "assert"); depth = 1; origins = $origins }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let condition = $parsed.value
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "\n" } } → i
+    when not(eq(at(at($lpTokens, $i), "indent"), add($begin.indent, 2))):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-LAYOUT";
+          summary = "Otherwise must be indented exactly two spaces.";
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "otherwise" } } → i
+    port kernel.invoke {
+      query = "lp.expression";
+      input = { i = $i; pointer = concat($pointer, "/", "message"); depth = 1; origins = $origins }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let message = $parsed.value
+    port value.describe { value = $message } → messageType
+    when not(eq($messageType.type, "string")):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-SYNTAX";
+          summary = "Assertion message must be text.";
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "\n" } } → i
+    let value = { assert = $condition; message = $message }
+  when eq($kind, "fold"):
+    port kernel.invoke {
+      query = "lp.expression";
+      input = { i = $i; pointer = concat($pointer, "/", "fold"); depth = 1; origins = $origins }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let items = $parsed.value
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "as" } } → i
+    port kernel.invoke {
+      query = "lp.binding";
+      input = { i = $i; pointer = concat($pointer, "/", "as"); qualified = false; origins = $origins }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let itemName = $parsed.value
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = ";" } } → i
+    port kernel.invoke {
+      query = "lp.binding";
+      input = {
+        i = $i;
+        pointer = concat($pointer, "/", "accumulator");
+        qualified = false;
+        origins = $origins
+      }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let accName = $parsed.value
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "starts" } } → i
+    port kernel.invoke {
+      query = "lp.expression";
+      input = { i = $i; pointer = concat($pointer, "/", "initial"); depth = 1; origins = $origins }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let initial = $parsed.value
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = ":" } } → i
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "\n" } } → i
+    port kernel.invoke {
+      query = "lp.programme";
+      input = {
+        i = $i;
+        pointer = concat($pointer, "/", "steps");
+        level = add($level, 1);
+        indent = add($begin.indent, 2);
+        origins = $origins;
+        statements = list();
+        stops = list("yield")
+      }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let body = $parsed.value
+    when not(eq(at(at($lpTokens, $i), "indent"), add($begin.indent, 2))):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-LAYOUT";
+          summary = "Yield must belong to its fold suite.";
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "yield" } } → i
+    port kernel.invoke {
+      query = "lp.expression";
+      input = { i = $i; pointer = concat($pointer, "/", "yield"); depth = 1; origins = $origins }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let yieldValue = $parsed.value
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "→" } } → i
+    port kernel.invoke {
+      query = "lp.binding";
+      input = {
+        i = $i;
+        pointer = concat($pointer, "/", "into");
+        qualified = false;
+        origins = $origins
+      }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let into = $parsed.value
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "\n" } } → i
+    let value = {
+      fold = $items;
+      as = $itemName;
+      accumulator = $accName;
+      initial = $initial;
+      steps = $body;
+      yield = $yieldValue;
+      into = $into
+    }
+  when eq($kind, "try"):
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = ":" } } → i
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "\n" } } → i
+    port kernel.invoke {
+      query = "lp.programme";
+      input = {
+        i = $i;
+        pointer = concat($pointer, "/", "try");
+        level = add($level, 1);
+        indent = add($begin.indent, 2);
+        origins = $origins;
+        statements = list();
+        stops = list()
+      }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let tryBody = $parsed.value
+    when eq(count($tryBody), 0):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-LAYOUT";
+          summary = "A statement suite must not be empty.";
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    when not(eq(at(at($lpTokens, $i), "indent"), $begin.indent)):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-LAYOUT";
+          summary = "Catch must align with its try.";
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "catch" } } → i
+    port kernel.invoke {
+      query = "lp.binding";
+      input = {
+        i = $i;
+        pointer = concat($pointer, "/", "error");
+        qualified = false;
+        origins = $origins
+      }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let errorName = $parsed.value
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = ":" } } → i
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "\n" } } → i
+    port kernel.invoke {
+      query = "lp.programme";
+      input = {
+        i = $i;
+        pointer = concat($pointer, "/", "catch");
+        level = add($level, 1);
+        indent = add($begin.indent, 2);
+        origins = $origins;
+        statements = list();
+        stops = list()
+      }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let catchBody = $parsed.value
+    when and(eq(count($catchBody), 0), not(eq(at($lpPolicy, "allowEmptyCatch"), true))):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-LAYOUT";
+          summary = "A statement suite must not be empty.";
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let value = { try = $tryBody; error = $errorName; catch = $catchBody }
+  when eq($kind, "each"):
+    port kernel.invoke {
+      query = "lp.expression";
+      input = { i = $i; pointer = concat($pointer, "/each"); depth = 1; origins = $origins }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let items = $parsed.value
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "as" } } → i
+    port kernel.invoke {
+      query = "lp.binding";
+      input = { i = $i; pointer = concat($pointer, "/", "as"); qualified = false; origins = $origins }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let itemName = $parsed.value
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = ":" } } → i
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "\n" } } → i
+    port kernel.invoke {
+      query = "lp.programme";
+      input = {
+        i = $i;
+        pointer = concat($pointer, "/", "steps");
+        level = add($level, 1);
+        indent = add($begin.indent, 2);
+        origins = $origins;
+        statements = list();
+        stops = list()
+      }
+    } → parsed
+    let i = $parsed.i
+    let origins = $parsed.origins
+    let body = $parsed.value
+    when eq(count($body), 0):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-LAYOUT";
+          summary = "An each suite must not be empty.";
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let value = { each = $items; as = $itemName; steps = $body }
+  let result = { i = $i; value = $value; origins = $origins }

@@ -1,0 +1,94 @@
+process-module "temple/surface-process-module/1"
+
+process industrial.options:
+  let result = list(
+    { id = "monitor"; title = "External monitor trial"; requires = list(); cost = 2; duration = 1; information = 8; feed = 0; mill = 0; rail = 0 },
+    { id = "recovery"; title = "Recover mill operating time"; requires = list("monitor"); cost = 4; duration = 1; information = 3; feed = 0; mill = 20; rail = 0 },
+    { id = "rail"; title = "Expand rail transfer capacity"; requires = list(); cost = 6; duration = 2; information = 2; feed = 0; mill = 0; rail = 25 },
+    { id = "feed"; title = "Improve mine feed capacity"; requires = list(); cost = 5; duration = 1; information = 2; feed = 15; mill = 0; rail = 0 }
+  )
+
+process industrial.evaluate:
+  let caseInput = $eventInput
+  let units = $caseInput.units
+  let ids = map($units, "unit", $unit.id)
+  let dependencySafe = every($units, "unit", every($unit.requires, "required", includes($ids, $required)))
+  fold $units as unit; totals starts { cost = 0; duration = 0; information = 0; feed = 120; mill = 90; rail = 105 }:
+    yield { cost = add($totals.cost, $unit.cost); duration = add($totals.duration, $unit.duration); information = add($totals.information, $unit.information); feed = add($totals.feed, $unit.feed); mill = add($totals.mill, $unit.mill); rail = add($totals.rail, $unit.rail) } → totals
+  port number.calculate { operation = "lessEqual"; values = list($totals.cost, $caseInput.budget) } → affordable
+  port number.calculate { operation = "lessEqual"; values = list($totals.duration, $caseInput.horizon) } → fits
+  let constraints = list({ title = "Mine feed"; capacity = $totals.feed }, { title = "Mill"; capacity = $totals.mill }, { title = "Rail"; capacity = $totals.rail }, { title = "Saleable demand"; capacity = $caseInput.demand })
+  port number.calculate { operation = "min"; values = map($constraints, "constraint", $constraint.capacity) } → throughput
+  let binding = map(filter($constraints, "constraint", eq($constraint.capacity, $throughput)), "constraint", $constraint.title)
+  let result = { feasible = and($dependencySafe, $affordable, $fits); units = $units; cost = $totals.cost; duration = $totals.duration; information = $totals.information; throughput = $throughput; binding = $binding }
+
+process industrial.optimize:
+  let constraints = $eventInput
+  port kernel.invoke { query = "industrial.options" } → options
+  # Enumerate all subsets. The declared list is in dependency order.
+  fold $options as option; subsets starts list(list()):
+    yield append($subsets, map($subsets, "subset", append($subset, list($option)))) → subsets
+  port kernel.invoke { query = "industrial.evaluate"; input = { units = list(); demand = $constraints.demand; horizon = $constraints.horizon; budget = $constraints.budget } } → baseline
+  fold $subsets as subset; best starts $baseline:
+    port kernel.invoke { query = "industrial.evaluate"; input = { units = $subset; demand = $constraints.demand; horizon = $constraints.horizon; budget = $constraints.budget } } → candidate
+    let measure = if(eq($constraints.objective, "throughput"), $candidate.throughput, $candidate.information)
+    let incumbent = if(eq($constraints.objective, "throughput"), $best.throughput, $best.information)
+    port number.calculate { operation = "greater"; values = list($measure, $incumbent) } → improves
+    port number.calculate { operation = "less"; values = list($candidate.cost, $best.cost) } → cheaper
+    let wins = and($candidate.feasible, or($improves, and(eq($measure, $incumbent), $cheaper)))
+    yield if($wins, $candidate, $best) → best
+  let result = { baseline = $baseline; chosen = $best; assessed = count($subsets) }
+
+process product.empty:
+  let result = { cases = list() }
+
+process product.change:
+  let command = $eventInput
+  let fields = $command.fields
+  assert eq($fields.action, "compare")
+    otherwise "Choose Compare scenario."
+  assert includes(list("throughput", "information"), $fields.objective)
+    otherwise "Choose a declared objective."
+  port kernel.invoke { query = "portfolio.text"; input = { text = $fields.name; limit = 120 } } → name
+  port kernel.invoke { query = "portfolio.number"; input = { text = $fields.demand; min = 1; max = 500; integer = true } } → demand
+  port kernel.invoke { query = "portfolio.number"; input = { text = $fields.budget; min = 0; max = 30; integer = true } } → budget
+  port kernel.invoke { query = "portfolio.number"; input = { text = $fields.horizon; min = 1; max = 6; integer = true } } → horizon
+  let assumptions = { demand = $demand; horizon = $horizon; budget = $budget; objective = $fields.objective }
+  port kernel.invoke { query = "industrial.optimize"; input = $assumptions } → comparison
+  let entry = { name = $name; assumptions = $assumptions; comparison = $comparison }
+  let result = { state = { cases = append(list($entry), $command.state.cases) }; target = $command.id; notice = "Scenario comparison saved." }
+
+process industrial.card:
+  let entry = $eventInput
+  let comparison = $entry.comparison
+  let chosen = $comparison.chosen
+  port text.join { values = $chosen.binding; separator = ", " } → binding
+  let plan = map($chosen.units, "unit", { tag = "li"; attrs = {}; children = list(concat($unit.title, " · ", $unit.cost, " budget points · ", $unit.duration, " step(s)")) })
+  let sequence = if(count($plan), { tag = "ol"; attrs = {}; children = $plan }, { tag = "p"; attrs = {}; children = list("Baseline selected; no build step improves this objective within the limits.") })
+  let result = { tag = "article"; attrs = {}; children = list(
+    { tag = "h3"; attrs = {}; children = list($entry.name) },
+    { tag = "p"; attrs = {}; children = list(concat("Objective: ", $entry.assumptions.objective, " · ", $entry.assumptions.horizon, " steps · budget ", $entry.assumptions.budget, " · demand ", $entry.assumptions.demand, " t/h")) },
+    { tag = "p"; attrs = {}; children = list(concat("Throughput: ", $comparison.baseline.throughput, " → ", $chosen.throughput, " t/h")) },
+    { tag = "p"; attrs = {}; children = list(concat("Binding: ", $binding)) },
+    { tag = "p"; attrs = {}; children = list(concat("Information score: ", $chosen.information, " · cost ", $chosen.cost, " · ", $comparison.assessed, " candidate subsets assessed")) },
+    $sequence
+  ) }
+
+process product.view:
+  let screen = $eventInput
+  let objectives = list({ value = "throughput"; label = "Throughput" }, { value = "information"; label = "Information from trials" })
+  let inputs = list(
+    { name = "name"; label = "Scenario name"; type = "text"; maxlength = 120; required = true },
+    { name = "objective"; label = "Objective"; labelId = "industrial-objective"; type = "select"; options = $objectives; value = "throughput" },
+    { name = "demand"; label = "Saleable demand (t/h)"; type = "number"; value = 120; min = 1; max = 500; required = true },
+    { name = "budget"; label = "Budget points"; type = "number"; value = 10; min = 0; max = 30; required = true },
+    { name = "horizon"; label = "Planning steps"; type = "number"; value = 3; min = 1; max = 6; required = true }
+  )
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = $inputs; action = "compare"; button = "Compare scenario" } } → form
+  port kernel.invoke { query = "portfolio.recent"; input = { rows = $screen.state.cases; limit = 10 } } → recent
+  fold $recent as entry; cards starts list():
+    port kernel.invoke { query = "industrial.card"; input = $entry } → card
+    yield append($cards, list($card)) → cards
+  port kernel.invoke { query = "portfolio.section"; input = { title = "Build Next comparisons"; content = $cards } } → history
+  let boundary = { tag = "p"; attrs = {}; children = list("Worked Pilbara scenario. Capacities, costs and information scores are illustrative assumptions. Financial returns remain unassessed.") }
+  let result = { title = "Industrial Systems Optimizer"; summary = "Compare dependency-aware build sequences against a finite budget, horizon and demand."; content = list($boundary, $form, $history) }

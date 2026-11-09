@@ -1,0 +1,72 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process html.inspect:
+  let parents = list()
+  call html.observe
+  let nodes = $result.nodes
+  let ids = map(filter($nodes, "n", at($n.attrs, "id")), "n", at($n.attrs, "id"))
+  fold $ids as id; duplicates starts { seen = list(); repeated = list() }:
+    yield {
+    seen = append($duplicates.seen, list($id));
+    repeated = if(
+      includes($duplicates.seen, $id),
+      append($duplicates.repeated, list($id)),
+      $duplicates.repeated
+    )
+  } → duplicates
+  let controls = filter($nodes, "n", includes(list("button", "input", "select", "textarea"), $n.tag))
+  fold $controls as control; unnamed starts []:
+    let attrs = $control.attrs
+    let named = or(
+      eq(at($attrs, "type"), "hidden"),
+      $control.wrapped,
+      and(eq($control.tag, "button"), $control.named),
+      and(
+        at($attrs, "id"),
+        some(
+          $nodes,
+          "label",
+          and(
+            eq($label.tag, "label"),
+            $label.named,
+            eq(at($label.attrs, "for"), at($attrs, "id"))
+          )
+        )
+      )
+    )
+    when at($attrs, "aria-label"):
+      port text.trim { value = at($attrs, "aria-label") } → label
+      let named = or($named, $label)
+    when at($attrs, "aria-labelledby"):
+      port text.split { value = at($attrs, "aria-labelledby"); pattern = "\\s+" } → labelIds
+      let named = or(
+        $named,
+        every(
+          $labelIds,
+          "id",
+          some($nodes, "label", and(eq(at($label.attrs, "id"), $id), $label.named))
+        )
+      )
+    yield if($named, $unnamed, append($unnamed, list($control.tag))) → unnamed
+  let result = {
+    main = count(filter($nodes, "n", eq($n.tag, "main")));
+    h1 = count(filter($nodes, "n", eq($n.tag, "h1")));
+    ids = $ids;
+    duplicateIds = $duplicates.repeated;
+    links = map(
+      filter($nodes, "n", and(eq($n.tag, "a"), at($n.attrs, "href"))),
+      "n",
+      at($n.attrs, "href")
+    );
+    unnamed = $unnamed;
+    navigation = map(
+      filter($nodes, "n", and(eq($n.tag, "nav"), eq(at($n.attrs, "id"), "site-nav"))),
+      "nav",
+      map(
+        filter($nodes, "link", and(eq($link.tag, "a"), includes($link.parents, "site-nav"))),
+        "link",
+        { href = at($link.attrs, "href"); label = $link.text }
+      )
+    )
+  }

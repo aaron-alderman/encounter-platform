@@ -1,0 +1,16 @@
+process-module "temple/surface-process-module/1"
+
+process web.board:
+  let view = $eventInput
+  let add = { tag = "p"; attrs = {}; children = list("This board is full.") }
+  when $view.canAdd:
+    port kernel.invoke { query = "work.addForm"; input = { csrf = $view.csrf; revision = $view.basis } } → add
+  let rows = map($view.items, "item", { tag = "li"; attrs = {}; children = list($item.title) })
+  let content = list($add, { tag = "ul"; attrs = {}; children = $rows })
+  let head = { tag = "head"; attrs = {}; children = list({ tag = "meta"; attrs = { charset = "utf-8" }; children = list() }, { tag = "meta"; attrs = { name = "viewport"; content = "width=device-width, initial-scale=1" }; children = list() }, { tag = "title"; attrs = {}; children = list("Workgarden") }) }
+  let role = if($view.error, "alert", "status")
+  let feedback = if(eq($view.notice, ""), null, { tag = "p"; attrs = { role = $role }; children = list($view.notice) })
+  let heading = { tag = "h1"; attrs = {}; children = list("Workgarden") }
+  let section = { tag = "section"; attrs = {}; children = list({ tag = "h2"; attrs = {}; children = list("Work items") }, $content) }
+  let main = { tag = "main"; attrs = {}; children = list($heading, $feedback, $section) }
+  let result = { tag = "html"; attrs = { lang = "en" }; children = list($head, { tag = "body"; attrs = {}; children = list($main) }) }

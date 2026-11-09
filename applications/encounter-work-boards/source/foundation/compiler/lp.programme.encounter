@@ -1,0 +1,63 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lp.programme:
+  let i = at($eventInput, "i")
+  let pointer = at($eventInput, "pointer")
+  let level = at($eventInput, "level")
+  let indent = at($eventInput, "indent")
+  let origins = at($eventInput, "origins")
+  let statements = at($eventInput, "statements")
+  when not(includes(range(64), $level)):
+    port kernel.invoke {
+      query = "lp.fail";
+      input = {
+        code = "PROC-TEXT-LIMIT";
+        summary = "Suite nesting exceeds 64.";
+        token = at($lpTokens, $i)
+      }
+    } → unused
+  let dedent = includes(range($indent), add(at(at($lpTokens, $i), "indent"), 1))
+  let done = or(
+    eq(at(at($lpTokens, $i), "text"), "<eof>"),
+    $dedent,
+    includes(or(at($eventInput, "stops"), list()), at(at($lpTokens, $i), "text"))
+  )
+  when not($done):
+    when not(eq(at(at($lpTokens, $i), "indent"), $indent)):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-LAYOUT";
+          summary = "Suites add exactly two spaces.";
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    port kernel.invoke {
+      query = "lp.statement";
+      input = {
+        i = $i;
+        pointer = concat($pointer, "/", count($statements));
+        level = $level;
+        origins = $origins
+      }
+    } → parsed
+    let i = at($parsed, "i")
+    let origins = at($parsed, "origins")
+    let statements = append($statements, list(at($parsed, "value")))
+    port kernel.invoke {
+      query = "lp.programme";
+      input = {
+        i = $i;
+        pointer = $pointer;
+        level = $level;
+        indent = $indent;
+        origins = $origins;
+        statements = $statements;
+        stops = or(at($eventInput, "stops"), list())
+      }
+    } → parsed
+    let i = at($parsed, "i")
+    let origins = at($parsed, "origins")
+    let statements = at($parsed, "value")
+  let result = { i = $i; value = $statements; origins = $origins }

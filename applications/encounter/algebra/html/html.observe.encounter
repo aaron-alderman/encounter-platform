@@ -1,0 +1,56 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process html.observe:
+  port value.describe { value = $input } → kind
+  let result = { nodes = list(); text = "" }
+  when and(not(eq($input, null)), not(eq($input, false)), not(eq($kind.type, "undefined"))):
+    when $kind.array:
+      fold $input as part; observed starts { nodes = list(); text = "" }:
+        let input = $part
+        call html.observe
+        yield {
+        nodes = append($observed.nodes, $result.nodes);
+        text = concat($observed.text, $result.text)
+      } → result
+    when and(not($kind.array), not(eq($kind.type, "object"))):
+      port value.string { value = $input } → string
+      let result = { nodes = list(); text = $string }
+    when and(not($kind.array), eq($kind.type, "object")):
+      let element = $input
+      let attrs = or(at($element, "attrs"), {  })
+      let tag = at($element, "tag")
+      fold list(or(at($element, "children"), list())) as child; ignored starts null:
+        let input = $child
+        let parents = append($parents, if(at($attrs, "id"), list(at($attrs, "id")), list()))
+        call html.observe
+        yield $result → children
+      port text.trim { value = $children.text } → trimmed
+      let label = and(eq($tag, "label"), not(eq($trimmed, "")))
+      let result = {
+        text = $children.text;
+        nodes = append(
+          list(
+            {
+              tag = $tag;
+              attrs = $attrs;
+              text = $children.text;
+              named = not(eq($trimmed, ""));
+              parents = $parents;
+              wrapped = false
+            }
+          ),
+          map(
+            $children.nodes,
+            "n",
+            {
+              tag = $n.tag;
+              attrs = $n.attrs;
+              text = $n.text;
+              named = $n.named;
+              parents = $n.parents;
+              wrapped = or($label, $n.wrapped)
+            }
+          )
+        )
+      }

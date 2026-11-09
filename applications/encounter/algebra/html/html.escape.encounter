@@ -1,0 +1,9 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process html.escape:
+  port value.string { value = $input } → escaped
+  port text.replaceAll { value = $escaped; search = "&"; replacement = "&amp;" } → htmlEscape1
+  port text.replaceAll { value = $htmlEscape1; search = "<"; replacement = "&lt;" } → htmlEscape2
+  port text.replaceAll { value = $htmlEscape2; search = ">"; replacement = "&gt;" } → htmlEscape3
+  port text.replaceAll { value = $htmlEscape3; search = "\""; replacement = "&quot;" } → result

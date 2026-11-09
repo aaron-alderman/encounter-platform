@@ -1,0 +1,114 @@
+process-module "temple/surface-process-module/1"
+
+process product.empty:
+  let result = { processes = list() }
+
+process relationship.issue:
+  let request = $eventInput
+  port digest.sha256 { text = concat("relationship/", $request.role, "/", $request.nonce) } → code
+  port digest.sha256 { text = $code } → hash
+  let result = { code = $code; hash = $hash }
+
+process relationship.create:
+  let command = $eventInput
+  port kernel.invoke { query = "portfolio.text"; input = { text = $command.fields.name; limit = 120 } } → name
+  port kernel.invoke { query = "portfolio.text"; input = { text = $command.fields.aim; limit = 800 } } → aim
+  port kernel.invoke { query = "relationship.issue"; input = { role = "A"; nonce = $command.id } } → access
+  port kernel.invoke { query = "relationship.issue"; input = { role = "invite"; nonce = $command.id } } → invite
+  let entry = { id = $command.id; name = $name; aim = $aim; access = { A = $access.hash; B = "" }; invitation = $invite.hash; accounts = { A = list(); B = list() }; offers = list(); status = "Open"; returnVotes = list(); pauseBy = "" }
+  let session = { processId = $entry.id; actor = "A"; code = $access.code; invitation = $invite.code }
+  let result = { state = { processes = append(list($entry), $command.state.processes) }; session = $session; target = $entry.id; notice = "Repair process opened." }
+
+process relationship.join:
+  let command = $eventInput
+  port kernel.invoke { query = "portfolio.text"; input = { text = $command.fields.code; limit = 64 } } → code
+  port text.matches { value = $code; pattern = "^[a-f0-9]{64}$" } → valid
+  assert $valid
+    otherwise "Enter a valid access or invitation code."
+  port digest.sha256 { text = $code } → hash
+  let processes = $command.state.processes
+  let entry = at(filter($processes, "entry", or(eq($entry.invitation, $hash), eq($entry.access.A, $hash), eq($entry.access.B, $hash))), 0)
+  assert $entry
+    otherwise "This access or invitation code is unavailable."
+  let enrolling = eq($entry.invitation, $hash)
+  let actor = if(eq($entry.access.A, $hash), "A", "B")
+  let session = { processId = $entry.id; actor = $actor; code = ""; invitation = "" }
+  when $enrolling:
+    port kernel.invoke { query = "relationship.issue"; input = { role = "B"; nonce = $command.id } } → access
+    port record.put { record = $entry; key = "access"; value = { A = $entry.access.A; B = $access.hash } } → updated
+    port record.put { record = $updated; key = "invitation"; value = "" } → updated
+    let processes = map($processes, "entry", if(eq($entry.id, $updated.id), $updated, $entry))
+    let session = { processId = $entry.id; actor = "B"; code = $access.code; invitation = "" }
+  let result = { state = { processes = $processes }; persist = $enrolling; session = $session; target = $entry.id; notice = "Repair process opened." }
+
+process relationship.change:
+  let command = $eventInput
+  let fields = $command.fields
+  let processes = $command.state.processes
+  let actor = at($command.session, "actor")
+  let id = at($command.session, "processId")
+  let entry = at(filter($processes, "entry", eq($entry.id, $id)), 0)
+  assert and($entry, includes(list("A", "B"), $actor))
+    otherwise "Open your repair process with your own access code first."
+  let action = $fields.action
+  assert includes(list("reflect", "offer", "accept", "decline", "pause", "return", "safety"), $action)
+    otherwise "Choose an available repair action."
+  let updated = $entry
+  let notice = ""
+  when eq($action, "reflect"):
+    port kernel.invoke { query = "portfolio.text"; input = { text = $fields.text; limit = 1600 } } → note
+    port record.put { record = $entry.accounts; key = $actor; value = append(list($note), at($entry.accounts, $actor)) } → accounts
+    port record.put { record = $entry; key = "accounts"; value = $accounts } → updated
+    let notice = "Private account saved."
+  when includes(list("offer", "accept", "decline"), $action):
+    assert eq($entry.status, "Open")
+      otherwise "Shared offers are paused."
+    let offers = $entry.offers
+    when eq($action, "offer"):
+      assert $entry.access.B
+        otherwise "Wait for the second participant to join."
+      port kernel.invoke { query = "portfolio.text"; input = { text = $fields.text; limit = 1000 } } → note
+      let offers = append(list({ id = $command.id; actor = $actor; note = $note; status = "Offered" }), $offers)
+      let notice = "Shared offer recorded."
+    when not(eq($action, "offer")):
+      let offer = at(filter($offers, "offer", eq($offer.id, $fields.target)), 0)
+      assert $offer
+        otherwise "Choose a shared offer."
+      assert and(not(eq($offer.actor, $actor)), eq($offer.status, "Offered"))
+        otherwise "Only the other participant can respond to a pending offer."
+      port record.put { record = $offer; key = "status"; value = if(eq($action, "accept"), "Accepted", "Declined") } → decision
+      let offers = map($offers, "offer", if(eq($offer.id, $decision.id), $decision, $offer))
+      let notice = concat("Offer ", $decision.status, ".")
+    port record.put { record = $entry; key = "offers"; value = $offers } → updated
+  when includes(list("pause", "safety"), $action):
+    assert if(eq($action, "pause"), eq($entry.status, "Open"), not(eq($entry.status, "Safety pause")))
+      otherwise "The process is already paused."
+    let status = if(eq($action, "pause"), "Paused", "Safety pause")
+    port record.put { record = $entry; key = "status"; value = $status } → updated
+    port record.put { record = $updated; key = "pauseBy"; value = $actor } → updated
+    port record.put { record = $updated; key = "returnVotes"; value = list() } → updated
+    let notice = concat($status, " set by Participant ", $actor, ".")
+  when eq($action, "return"):
+    assert eq($entry.status, "Paused")
+      otherwise "Only an ordinary pause can return by consent."
+    let votes = distinct(append($entry.returnVotes, list($actor)))
+    let resumed = eq(count($votes), 2)
+    port record.put { record = $entry; key = "returnVotes"; value = if($resumed, list(), $votes) } → updated
+    port record.put { record = $updated; key = "status"; value = if($resumed, "Open", "Paused") } → updated
+    port record.put { record = $updated; key = "pauseBy"; value = if($resumed, "", $entry.pauseBy) } → updated
+    let notice = if($resumed, "Both participants agreed to return.", "Return recorded. Awaiting the other participant.")
+  let processes = map($processes, "entry", if(eq($entry.id, $id), $updated, $entry))
+  let result = { state = { processes = $processes }; target = $id; notice = $notice }
+
+process product.change:
+  let command = $eventInput
+  let action = $command.fields.action
+  let result = null
+  when eq($action, "create"):
+    port kernel.invoke { query = "relationship.create"; input = $command } → result
+  when eq($action, "join"):
+    port kernel.invoke { query = "relationship.join"; input = $command } → result
+  when eq($action, "leave"):
+    let result = { state = $command.state; persist = false; session = {}; target = ""; notice = "You left the process in this browser." }
+  when not(includes(list("create", "join", "leave"), $action)):
+    port kernel.invoke { query = "relationship.change"; input = $command } → result

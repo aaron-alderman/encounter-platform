@@ -1,0 +1,60 @@
+process-module "temple/surface-process-module/1"
+
+process harbor.card:
+  let view = $eventInput
+  let item = $view.item
+  let board = $view.board
+  let itemField = { tag = "input"; attrs = { type = "hidden"; name = "item"; value = $item.id }; children = list() }
+  let states = map($view.statuses, "status", { tag = "option"; attrs = { value = $status; selected = eq($status, $item.status) }; children = list($status) })
+  let epicOptions = append(list({ tag = "option"; attrs = { value = ""; selected = eq($item.epic, "") }; children = list("No epic") }), map($board.state.epics, "epic", { tag = "option"; attrs = { value = $epic.id; selected = eq($item.epic, $epic.id) }; children = list($epic.title) }))
+  let statusLabel = concat("status-label-", $item.id)
+  let epicLabel = concat("epic-label-", $item.id)
+  let statusField = { tag = "label"; attrs = {}; children = list({ tag = "span"; attrs = { id = $statusLabel }; children = list("Status") }, { tag = "select"; attrs = { name = "status"; "aria-labelledby" = $statusLabel }; children = $states }) }
+  let epicField = { tag = "label"; attrs = {}; children = list({ tag = "span"; attrs = { id = $epicLabel }; children = list("Epic") }, { tag = "select"; attrs = { name = "epic"; "aria-labelledby" = $epicLabel }; children = $epicOptions }) }
+  port kernel.invoke { query = "work.form"; input = { csrf = $board.csrf; revision = $board.revision; action = "plan"; fields = list($itemField, $statusField, $epicField); button = "Save plan"; style = "inline" } } → plan
+  let blockers = filter($board.state.items, "other", includes($item.dependencies, $other.id))
+  let incomplete = filter($blockers, "other", not(eq($other.status, "Done")))
+  fold $blockers as blocker; dependencies starts list():
+    let blockerField = { tag = "input"; attrs = { type = "hidden"; name = "blocker"; value = $blocker.id }; children = list() }
+    port kernel.invoke { query = "work.form"; input = { csrf = $board.csrf; revision = $board.revision; action = "remove-dependency"; fields = list($itemField, $blockerField); button = concat("Remove dependency: ", $blocker.title); style = "inline" } } → remove
+    yield append($dependencies, list($remove)) → dependencies
+  let candidates = filter($board.state.items, "other", and(not(eq($other.id, $item.id)), not(includes($item.dependencies, $other.id))))
+  when count($candidates):
+    let options = append(list({ tag = "option"; attrs = { value = "" }; children = list("Choose a work item") }), map($candidates, "candidate", { tag = "option"; attrs = { value = $candidate.id }; children = list($candidate.title) }))
+    let blockerLabel = concat("blocker-label-", $item.id)
+    let blockerSelect = { tag = "label"; attrs = {}; children = list({ tag = "span"; attrs = { id = $blockerLabel }; children = list("Depends on") }, { tag = "select"; attrs = { name = "blocker"; "aria-labelledby" = $blockerLabel; required = true }; children = $options }) }
+    port kernel.invoke { query = "work.form"; input = { csrf = $board.csrf; revision = $board.revision; action = "add-dependency"; fields = list($itemField, $blockerSelect); button = "Add dependency"; style = "inline" } } → add
+    let dependencies = append($dependencies, list($add))
+  let epic = at(filter($board.state.epics, "epic", eq($epic.id, $item.epic)), 0)
+  let summary = if($epic, concat("Epic: ", $epic.title), "No epic")
+  let readiness = list()
+  when count($blockers):
+    port text.join { values = map($blockers, "blocker", $blocker.title); separator = ", " } → names
+    let readiness = list({ tag = "p"; attrs = { class = "quiet" }; children = list(concat("Depends on: ", $names)) })
+  when count($incomplete):
+    port text.join { values = map($incomplete, "blocker", $blocker.title); separator = ", " } → names
+    let readiness = append($readiness, list({ tag = "p"; attrs = { class = "error" }; children = list(concat("Blocked by: ", $names)) }))
+  let heading = concat("item-", $item.id)
+  let details = { tag = "details"; attrs = {}; children = append(list({ tag = "summary"; attrs = {}; children = list("Edit plan and dependencies") }, $plan), $dependencies) }
+  let content = append(list({ tag = "h3"; attrs = { id = $heading }; children = list($item.title) }, { tag = "p"; attrs = { class = "quiet" }; children = list($summary) }), $readiness)
+  let result = { tag = "article"; attrs = { "aria-labelledby" = $heading; class = if(eq($item.status, "Done"), "done", "") }; children = append($content, list($details)) }
+
+process product.view:
+  let board = $eventInput
+  port kernel.invoke { query = "harbor.statuses" } → statuses
+  port kernel.invoke { query = "work.addForm"; input = $board } → addItem
+  let epicInput = { tag = "label"; attrs = {}; children = list("New epic", { tag = "input"; attrs = { name = "title"; required = true; maxlength = 200 }; children = list() }) }
+  port kernel.invoke { query = "work.form"; input = { csrf = $board.csrf; revision = $board.revision; action = "add-epic"; fields = list($epicInput); button = "Add epic"; style = "entry" } } → addEpic
+  let epicRows = map($board.state.epics, "epic", { tag = "li"; attrs = {}; children = list($epic.title) })
+  let epicList = if(count($epicRows), { tag = "ul"; attrs = {}; children = $epicRows }, { tag = "p"; attrs = { class = "quiet" }; children = list("No epics yet.") })
+  let epics = { tag = "section"; attrs = {}; children = list({ tag = "h2"; attrs = {}; children = list("Epics") }, $addEpic, $epicList) }
+  fold $statuses as status; columns starts list():
+    fold filter($board.state.items, "item", eq($item.status, $status)) as item; cards starts list():
+      port kernel.invoke { query = "harbor.card"; input = { board = $board; item = $item; statuses = $statuses } } → card
+      yield append($cards, list($card)) → cards
+    let children = if(count($cards), $cards, list({ tag = "p"; attrs = { class = "quiet" }; children = list("No work items.") }))
+    let heading = concat("status-", count($columns))
+    let column = { tag = "section"; attrs = { "aria-labelledby" = $heading }; children = append(list({ tag = "h2"; attrs = { id = $heading }; children = list($status) }), $children) }
+    yield append($columns, list($column)) → columns
+  let content = list($addItem, { tag = "div"; attrs = { class = "board" }; children = $columns }, $epics)
+  let result = { title = "Harborboard"; summary = "Plan work by state, group it into epics, and see what is blocked."; content = $content }

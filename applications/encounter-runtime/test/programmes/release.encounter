@@ -1,0 +1,392 @@
+process-module "temple/surface-process-module/1"
+
+process release.catalogue:
+  port release.catalogue {} → catalogue
+  port text.trim { value = $catalogue.text } → text
+  port text.split { value = $text; pattern = "\n" } → lines
+  each $lines as line:
+    port text.matches { value = $line; pattern = "^\\(\"[a-z0-9-]+\", \"[a-z0-9-]+\", \"[a-z0-9/.-]+\"\\)$" } → tuple
+    assert $tuple
+      otherwise "Invalid release application tuple."
+  port release.rel { text = $text } → apps
+  let names = map($apps, "app", $app.s)
+  call workflow.inventory
+  let missing = filter($workflows, "name", not(includes($names, $name)))
+  assert and(eq(count($names), count($workflows)), eq(count($missing), 0))
+    otherwise "The release catalogue and upgrade workflow inventory must agree."
+
+process release.fields:
+  port text.trim { value = $extracted.manifest } → text
+  port text.split { value = $text; pattern = "\n" } → lines
+  each $lines as line:
+    port text.matches { value = $line; pattern = "^\\(\"[^\"]+\", \"[^\"]+\", \"[^\"]+\"\\)$" } → tuple
+    assert $tuple
+      otherwise "Invalid release manifest tuple."
+  port release.rel { text = $text } → rows
+  fold $rows as row; fields starts {}:
+    let key = concat($row.s, "/", $row.p)
+    assert not(at($fields, $key))
+      otherwise "Duplicate release manifest field."
+    port record.put { record = $fields; key = $key; value = $row.o } → fields
+    yield $fields → fields
+
+process release.install:
+  port release.archive { release = $release } → archive
+  port text.split { value = $archive.checksum; pattern = "\\s+" } → checksum
+  assert eq($checksum, list($archive.digest, $archive.name))
+    otherwise "The archive bytes and filename must match its published checksum."
+  port release.extract { release = $release } → extracted
+  call release.fields
+  let runtimePin = at($fields, "bin/encounter/sha256")
+  let version = at($fields, "release/version")
+  port text.matches { value = $version; pattern = "^[0-9]+\\.[0-9]+\\.[0-9]+$" } → validVersion
+  assert and($validVersion, eq(at($fields, "release/format"), "encounter/release/1"), eq(at($fields, "release/platform"), "linux-x86_64"), eq(at($fields, "release/runtime"), "bin/encounter"), eq($extracted.runtimePin, $runtimePin))
+    otherwise "The release manifest must identify the exact installed runtime bytes."
+  port release.version { release = $release } → runtimeVersion
+  assert eq($runtimeVersion, concat("encounter ", $version))
+    otherwise "The installed runtime must report its declared version."
+  each list("spec/platform.rel", "spec/application-ports.rel") as relative:
+    let pin = at($fields, concat($relative, "/sha256"))
+    when $pin:
+      port release.fileHash { release = $release; relative = $relative } → digest
+      assert eq($digest, $pin)
+        otherwise "A declared platform specification must match its release pin."
+  fold $apps as application; images starts {}:
+    let app = $application.s
+    let selected = null
+    when and(eq($version, "0.1.1"), not(includes($originalApps, $app))):
+      port release.buildImage { release = $release; app = $app; project = $application.p; declaration = $application.o } → selected
+    when not($selected):
+      let relative = concat("images/", $app, ".rel")
+      assert eq(at($fields, concat($app, "/image")), $relative)
+        otherwise "The release must select its packaged application image."
+      let selected = { file = concat($release, "/", $relative); pin = at($fields, concat($app, "/sha256")) }
+    port release.image { file = $selected.file } → observed
+    each list($selected.pin, $observed.basis, $observed.programmeSha256) as digest:
+      port text.matches { value = $digest; pattern = "^[a-f0-9]{64}$" } → valid
+      assert $valid
+        otherwise "Application image identities must be SHA-256 digests."
+    assert and(eq($observed.digest, $selected.pin), eq($observed.runtimeSha256, $runtimePin))
+      otherwise "Image bytes must match their pin and bind the installed runtime."
+    let image = { file = $selected.file; pin = $selected.pin; basis = $observed.basis; programmeSha256 = $observed.programmeSha256 }
+    port record.put { record = $images; key = $app; value = $image } → images
+    yield $images → images
+  let installed = { release = $release; runtimePin = $runtimePin; images = $images; version = $version }
+
+process release.serve:
+  let image = at($installed.images, $app)
+  port release.serve { release = $installed.release; image = $image; directory = $directory } → line
+  port text.matches { value = $line; pattern = "^Encounter http://127\\.0\\.0\\.1:[0-9]+$" } → ready
+  assert $ready
+    otherwise "The installed release must expose a loopback listener."
+
+process release.stop:
+  port release.stop {} → exit
+  assert eq($exit, list(0, null))
+    otherwise "The installed server must exit cleanly and checkpoint its database."
+
+process release.open:
+  port release.open { route = $route } → status
+  assert eq($status, 200)
+    otherwise "The released page must open successfully."
+
+process release.click:
+  port release.click { locator = $locator } → status
+  assert eq($status, 200)
+    otherwise "The released form or link must return a successful response."
+
+process release.expect:
+  port release.observe { locator = $locator; property = $property } → observed
+  assert eq($observed, $expected)
+    otherwise "The released page differs from the expected observation."
+
+process release.store:
+  port release.store { directory = $directory } → store
+  assert eq($store.integrity, "ok")
+    otherwise "The restored SQLite store must pass integrity_check."
+
+process release.append:
+  let revisions = count($before.revisions)
+  let documents = count($before.documents)
+  let head = if(eq($revisions, 0), 0, at(at($before.revisions, add($revisions, -1)), "id"))
+  port text.slice { value = $after.revisions; start = 0; end = $revisions } → retainedRevisions
+  port text.slice { value = $after.documents; start = 0; end = $documents } → retainedDocuments
+  let last = at($after.revisions, $revisions)
+  assert and(eq($after.metadata, $before.metadata), eq($retainedRevisions, $before.revisions), eq($retainedDocuments, $before.documents), eq(count($after.revisions), add($revisions, 1)), eq($last.id, add($head, 1)), eq($last.parent, $head))
+    otherwise "The upgrade must preserve all metadata and rows and append exactly one revision."
+  assert count(filter($after.documents, "row", eq($row.revision, add($head, 1))))
+    otherwise "The appended revision must have persisted documents."
+
+process release.fresh:
+  let installed = $upgrade
+  let directory = concat("fresh-", $app)
+  call release.serve
+  let route = "/"
+  call release.open
+  let name = if(eq($app, "workgarden"), "Workgarden", "Claimipedia · Encounter development")
+  let locator = list({ role = "heading"; name = $name })
+  let property = "count"
+  let expected = 1
+  call release.expect
+  when eq($app, "claimipedia"):
+    port release.fill { label = "Search claims"; value = "clm_01_RIVER_NITRATE" } → _
+    let locator = list({ role = "button"; name = "Search" })
+    call release.click
+    let locator = list({ role = "link"; name = "clm_01_RIVER_NITRATE" })
+    call release.expect
+  when eq($app, "workgarden"):
+    let locator = list({ role = "button"; name = "Add work item"; exact = false })
+    call release.expect
+  call release.stop
+  call release.store
+  assert eq($store.revisions, list())
+    otherwise "A fresh release must serve without creating revisions."
+  port test.report { text = concat("ok - clean ", $upgrade.version, " install serves ", $app, " from the packaged image") } → _
+
+process release.upgrade:
+  let oldImage = at($baseline.images, $app)
+  let newImage = at($upgrade.images, $app)
+  let updatedClaimipedia = and($eventInput.claimipediaUpdate, eq($app, "claimipedia"))
+  when $updatedClaimipedia:
+    assert not(eq($newImage.basis, $oldImage.basis))
+      otherwise "A Claimipedia successor rehearsal must compare different application bases."
+  when not($updatedClaimipedia):
+    assert and(eq($newImage.basis, $oldImage.basis), eq($newImage.programmeSha256, $oldImage.programmeSha256))
+      otherwise "Application sources and compiled instructions must agree across runtimes."
+  port test.report { text = concat("Checking ", $app) } → _
+  let installed = $baseline
+  let original = concat("baseline-store-", $app)
+  let directory = $original
+  let route = if(eq($app, "claimipedia"), "/?claim=clm_01_RIVER_NITRATE", "/")
+  call release.serve
+  call release.open
+  let phase = "seed"
+  call workflow.run
+  let browserState = $workflowState
+  call release.stop
+  call release.store
+  let before = $store
+  let revisions = if(eq($app, "workgarden"), 3, if(eq($app, "claimipedia"), 4, 2))
+  assert and(eq(count($before.revisions), $revisions), count($before.documents))
+    otherwise "The baseline workflow must create its expected revisions and documents."
+  port release.storeHash { directory = $original } → originalHash
+  port release.walSize { directory = $original } → walSize
+  assert eq($walSize, 0)
+    otherwise "The baseline server must checkpoint before its database is copied."
+  let directory = concat("upgraded-", $app)
+  port release.copy { from = $original; to = $directory } → _
+  let installed = $upgrade
+  call release.serve
+  call release.open
+  call release.store
+  assert eq($store, $before)
+    otherwise "Upgraded startup must preserve all stored history and documents."
+  let phase = "verify"
+  call workflow.run
+  call release.store
+  assert eq($store, $before)
+    otherwise "Viewing retained data must leave history intact."
+  let phase = "change"
+  call workflow.run
+  call release.stop
+  call release.store
+  let after = $store
+  call release.append
+  let installed = $baseline
+  call release.serve
+  call release.open
+  call release.store
+  assert eq($store, $after)
+    otherwise "The older runtime must reopen the new revision without changing history."
+  call release.stop
+  port release.storeHash { directory = $original } → currentHash
+  assert eq($currentHash, $originalHash)
+    otherwise "The baseline database bytes must survive the upgrade rehearsal."
+  port test.report { text = concat("ok - ", $app, " ", $baseline.version, " → ", $upgrade.version, " keeps ", $revisions, " revisions; the older runtime reopens revision ", add($revisions, 1)) } → _
+
+process release.frontier:
+  let route = "/?collection=frontier&q=FC-IT3-01"
+  call release.open
+  let locator = list({ role = "link"; name = "FC-IT3-01" })
+  call release.click
+  let locator = list({ text = "Current warrant: plausible-mathematical-programme" })
+  let property = "count"
+  let expected = 1
+  call release.expect
+
+process release.warrant:
+  let locator = list({ label = "Current warrant" })
+  let property = "value"
+  port release.observe { locator = $locator; property = $property } → warrant
+
+process release.saveFrontier:
+  port release.fill { label = "Current warrant"; value = $marker } → _
+  port release.fill { label = "Revision reason"; value = "Disposable runtime rehearsal." } → _
+  let locator = list({ role = "button"; name = "Save assessment revision" })
+  call release.click
+  let locator = list({ role = "status" })
+  let property = "text"
+  let expected = "Local Frontier assessment revision saved."
+  call release.expect
+
+process release.corpus:
+  let route = "/?claim=clm_01_RIVER_NITRATE"
+  call release.open
+  let locator = list({ text = "Released version 1 · claimVersion.riverNitrate.1" })
+  let property = "count"
+  let expected = 1
+  call release.expect
+  let locator = list({ role = "list"; name = "Released evidence" }, { role = "listitem" })
+  let expected = 4
+  call release.expect
+  each list("Research arms", "FRA-01 · Information → geometry → symmetry") as name:
+    let locator = list({ role = "link"; name = $name })
+    call release.click
+  let locator = list({ text = "hold · Geometry is recovered but signature or algebra is underidentified." })
+  let expected = 1
+  call release.expect
+  let locator = list({ role = "link"; name = "Frontier references" })
+  call release.click
+  let locator = list({ text = "102 references" })
+  call release.expect
+
+process release.noteTarget:
+  let route = $checkpoint
+  when $eventInput.evidenceLibrary:
+    let route = "/?collection=checkpoints&checkpoint=checkpoint.physics.spin23.SRP10-SRP12"
+  call release.open
+  when $eventInput.evidenceLibrary:
+    let locator = list({ role = "link"; name = "external-selector-and-invariant-robustness.md" })
+    call release.click
+    let locator = list({ text = "SHA-256: fac5148faebe4a379dc53ff209cfaa98b7cd3f8c2858855eacb9cff0fb21fd48" })
+    let property = "count"
+    let expected = 1
+    call release.expect
+
+process release.snapshot:
+  let app = "claimipedia"
+  let backup = "claimipedia-backup"
+  let directory = $backup
+  port release.backup { directory = $directory } → _
+  call release.store
+  let original = $store
+  let originalCount = count($original.revisions)
+  port release.storeHash { directory = $directory } → backupPin
+  let directory = "claimipedia-restored"
+  port release.copy { from = $backup; to = $directory } → _
+  let installed = $upgrade
+  call release.serve
+  call release.store
+  assert eq($store, $original)
+    otherwise "The upgrade must start with an exact copy of the backup."
+  call release.corpus
+  call release.frontier
+  call release.warrant
+  let originalWarrant = $warrant
+  let marker = concat("Runtime rehearsal change on ", $upgrade.version, ".")
+  assert not(eq($originalWarrant, $marker))
+    otherwise "The upgrade marker must change the previous warrant."
+  call release.saveFrontier
+  call release.stop
+  call release.store
+  let before = $original
+  let after = $store
+  call release.append
+  let note = "A local research note from the successor image."
+  let checkpoint = "/?collection=checkpoints&checkpoint=checkpoint.claimipedia.spin23.SRP8"
+  when $eventInput.claimipediaUpdate:
+    call release.serve
+    call release.noteTarget
+    port release.fill { label = "Local research note"; value = $note } → _
+    port release.fill { label = "Revision reason"; value = "Rehearse the successor application." } → _
+    let locator = list({ role = "button"; name = "Save local note" })
+    call release.click
+    let locator = list({ role = "status" })
+    let property = "text"
+    let expected = "Local checkpoint note saved."
+    call release.expect
+    call release.stop
+    call release.store
+    let before = $after
+    let after = $store
+    call release.append
+  let installed = $baseline
+  call release.serve
+  call release.frontier
+  call release.store
+  assert eq($store, $after)
+    otherwise "Rolling the executable back must preserve all upgraded writes."
+  call release.warrant
+  assert eq($warrant, $marker)
+    otherwise "The rolled-back browser must display the upgraded warrant."
+  let marker = concat("Runtime rehearsal change after rollback to ", $baseline.version, ".")
+  call release.saveFrontier
+  call release.stop
+  call release.store
+  let before = $after
+  let after = $store
+  call release.append
+  when $eventInput.claimipediaUpdate:
+    let installed = $upgrade
+    call release.serve
+    call release.noteTarget
+    let locator = list({ label = "Local research note" })
+    let property = "value"
+    let expected = $note
+    call release.expect
+    call release.store
+    assert eq($store, $after)
+      otherwise "The successor note and all rollback writes must remain intact."
+    call release.stop
+    let target = if($eventInput.evidenceLibrary, "evidence note", "checkpoint note")
+    port test.report { text = concat("ok - the old application image saved a Frontier revision and preserved the successor ", $target) } → _
+  let installed = $baseline
+  let directory = "claimipedia-point-in-time"
+  port release.copy { from = $backup; to = $directory } → _
+  call release.serve
+  call release.frontier
+  call release.warrant
+  call release.store
+  assert and(eq($warrant, $originalWarrant), eq($store, $original))
+    otherwise "Restoring the original backup must recover its original warrant and data."
+  call release.stop
+  port release.storeHash { directory = $backup } → restoredPin
+  assert eq($restoredPin, $backupPin)
+    otherwise "Rehearsal must preserve the original backup bytes."
+  port test.report { text = concat("ok - actual Claimipedia snapshot (", $originalCount, " initial revisions), backup restore, ", $upgrade.version, " save and ", $baseline.version, " rollback with writes retained") } → _
+
+process test.release:
+  call release.catalogue
+  let originalApps = list("workgarden", "claimipedia")
+  let release = "baseline"
+  call release.install
+  let baseline = $installed
+  let release = "upgrade"
+  call release.install
+  let upgrade = $installed
+  assert and(not(eq($baseline.version, $upgrade.version)), not(eq($baseline.runtimePin, $upgrade.runtimePin)))
+    otherwise "The rehearsal must compare distinct runtime binaries."
+  let supplemental = add(count($apps), -2)
+  when eq($baseline.version, "0.1.1"):
+    port test.report { text = concat("0.1.1 baseline uses its two shipped images and ", $supplemental, " supplemental images built with its archived binary.") } → _
+  let image = $baseline.images.workgarden
+  port release.cross { release = $release; image = $image; directory = "crossed" } → crossed
+  assert and(eq($crossed.status, 1), includes($crossed.error, "runtime pin differs"), eq($crossed.exists, false))
+    otherwise "A crossed runtime/image pin must refuse before creating a store."
+  port release.launch { width = 390; height = 844 } → _
+  each $originalApps as app:
+    call release.fresh
+  fold $apps as application; failures starts list():
+    let app = $application.s
+    try:
+      call release.upgrade
+    catch error:
+      port release.stop {} → _
+      let failures = append($failures, list($app))
+      port test.report { text = concat("Failed upgrade for ", $app, ": ", $error.message) } → _
+    yield $failures → failures
+  assert eq($failures, list())
+    otherwise "All application upgrades must pass."
+  when $eventInput.hasSnapshot:
+    call release.snapshot
+  let result = true

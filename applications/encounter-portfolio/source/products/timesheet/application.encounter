@@ -1,0 +1,134 @@
+process-module "temple/surface-process-module/1"
+
+process product.empty:
+  let result = { entries = list() }
+
+process timesheet.date:
+  let date = $eventInput
+  port text.matches { value = if($date, $date, ""); pattern = "^[1-9][0-9]{3}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$" } → valid
+  assert $valid
+    otherwise "Enter a valid work date."
+  port text.slice { value = $date; start = 0; end = 4 } → yearText
+  port text.slice { value = $date; start = 5; end = 7 } → monthText
+  port text.slice { value = $date; start = 8; end = 10 } → dayText
+  port scalar.read { text = $yearText } → year
+  port number.calculate { operation = "subtract"; values = list($monthText, 1) } → month
+  port number.calculate { operation = "remainder"; values = list($year, 4) } → quarter
+  port number.calculate { operation = "remainder"; values = list($year, 100) } → century
+  port number.calculate { operation = "remainder"; values = list($year, 400) } → cycle
+  let leap = and(eq($quarter, 0), or(not(eq($century, 0)), eq($cycle, 0)))
+  let lengths = list(31, if($leap, 29, 28), 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+  port number.calculate { operation = "lessEqual"; values = list($dayText, at($lengths, $month)) } → withinMonth
+  assert $withinMonth
+    otherwise "Enter a valid work date."
+  let result = $date
+
+process timesheet.hours:
+  let entries = $eventInput
+  fold $entries as entry; total starts 0:
+    yield add($total, $entry.hundredths) → total
+  let result = $total
+
+process timesheet.entry:
+  let request = $eventInput
+  let fields = $request.fields
+  port kernel.invoke { query = "portfolio.text"; input = { text = $fields.person; limit = 100 } } → person
+  port kernel.invoke { query = "portfolio.text"; input = { text = $fields.project; limit = 120 } } → project
+  port kernel.invoke { query = "timesheet.date"; input = $fields.date } → date
+  port kernel.invoke { query = "portfolio.text"; input = { text = $fields.note; limit = 400; optional = true } } → note
+  port text.matches { value = if($fields.hours, $fields.hours, ""); pattern = "^[0-9]{1,2}([.][0-9]{1,2})?$" } → precision
+  assert $precision
+    otherwise "Enter hours with at most two decimal places."
+  port kernel.invoke { query = "portfolio.number"; input = { text = $fields.hours; min = 0.01; max = 24; integer = false } } → hours
+  port number.calculate { operation = "multiply"; values = list($hours, 100) } → scaled
+  port number.calculate { operation = "round"; values = list($scaled) } → hundredths
+  let sameDay = filter($request.entries, "entry", and(not(eq($entry.id, $request.id)), eq($entry.person, $person), eq($entry.date, $date)))
+  port kernel.invoke { query = "timesheet.hours"; input = $sameDay } → existing
+  port number.calculate { operation = "lessEqual"; values = list(add($existing, $hundredths), 2400) } → allowed
+  assert $allowed
+    otherwise "A person cannot log more than 24 hours on one work date."
+  let result = { id = $request.id; person = $person; project = $project; date = $date; hundredths = $hundredths; note = $note; status = "Draft" }
+
+process timesheet.actions:
+  let result = list(
+    { from = "Draft"; action = "submit"; to = "Submitted"; label = "Submit entry" },
+    { from = "Submitted"; action = "return"; to = "Draft"; label = "Return to draft" },
+    { from = "Submitted"; action = "approve"; to = "Approved"; label = "Approve entry" }
+  )
+
+process product.change:
+  let command = $eventInput
+  let fields = $command.fields
+  let entries = $command.state.entries
+  let id = $command.id
+  let notice = "Time entry saved."
+  when eq($fields.action, "add"):
+    port kernel.invoke { query = "timesheet.entry"; input = { fields = $fields; entries = $entries; id = $id } } → entry
+    let entries = append(list($entry), $entries)
+  when not(eq($fields.action, "add")):
+    let id = $fields.target
+    let current = at(filter($entries, "entry", eq($entry.id, $id)), 0)
+    assert $current
+      otherwise "Choose a saved time entry."
+    let updated = $current
+    when eq($fields.action, "edit"):
+      assert eq($current.status, "Draft")
+        otherwise "Only a draft can be corrected."
+      port kernel.invoke { query = "timesheet.entry"; input = { fields = $fields; entries = $entries; id = $id } } → updated
+    when not(eq($fields.action, "edit")):
+      port kernel.invoke { query = "timesheet.actions" } → actions
+      let step = at(filter($actions, "step", and(eq($step.from, $current.status), eq($step.action, $fields.action))), 0)
+      assert $step
+        otherwise "That review action is unavailable for this entry."
+      port record.put { record = $current; key = "status"; value = $step.to } → updated
+      let notice = concat("Time entry moved to ", $step.to, ".")
+    let entries = map($entries, "entry", if(eq($entry.id, $id), $updated, $entry))
+  let result = { state = { entries = $entries }; target = $id; notice = $notice }
+
+process timesheet.form:
+  let form = $eventInput
+  let entry = $form.entry
+  let hours = ""
+  when $entry:
+    port number.calculate { operation = "divide"; values = list($entry.hundredths, 100) } → hours
+  let inputs = list(
+    { name = "person"; label = "Person"; type = "text"; required = true; maxlength = 100; value = if($entry, $entry.person, "") },
+    { name = "project"; label = "Project"; type = "text"; required = true; maxlength = 120; value = if($entry, $entry.project, "") },
+    { name = "date"; label = "Work date"; type = "date"; required = true; value = if($entry, $entry.date, "") },
+    { name = "hours"; label = "Hours"; type = "number"; min = 0.01; max = 24; step = 0.01; required = true; value = $hours },
+    { name = "note"; label = "Work note"; type = "textarea"; maxlength = 400; value = if($entry, $entry.note, "") }
+  )
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $form.screen; inputs = $inputs; action = if($entry, "edit", "add"); target = if($entry, $entry.id, ""); button = if($entry, "Save correction", "Log time") } } → result
+
+process timesheet.card:
+  let card = $eventInput
+  let entry = $card.entry
+  let steps = filter($card.actions, "step", eq($step.from, $entry.status))
+  fold $steps as step; controls starts list():
+    port kernel.invoke { query = "portfolio.form"; input = { screen = $card.screen; target = $entry.id; inputs = list(); action = $step.action; button = $step.label } } → control
+    yield append($controls, list($control)) → controls
+  when eq($entry.status, "Draft"):
+    port kernel.invoke { query = "timesheet.form"; input = { screen = $card.screen; entry = $entry } } → edit
+    let controls = append($controls, list({ tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list("Correct draft") }, $edit) }))
+  port number.calculate { operation = "divide"; values = list($entry.hundredths, 100) } → hours
+  let heading = concat("time-", $entry.id)
+  let result = { tag = "article"; attrs = { "aria-labelledby" = $heading }; children = append(list(
+    { tag = "h3"; attrs = { id = $heading }; children = list($entry.project) },
+    { tag = "p"; attrs = {}; children = list(concat($entry.person, " · ", $entry.date, " · ", $hours, " h · ", $entry.status)) },
+    { tag = "p"; attrs = {}; children = list($entry.note) }
+  ), $controls) }
+
+process product.view:
+  let screen = $eventInput
+  let entries = $screen.state.entries
+  port kernel.invoke { query = "timesheet.form"; input = { screen = $screen; entry = null } } → form
+  port kernel.invoke { query = "timesheet.hours"; input = filter($entries, "entry", eq($entry.status, "Approved")) } → approved
+  port number.calculate { operation = "divide"; values = list($approved, 100) } → hours
+  let review = { tag = "p"; attrs = {}; children = list(concat("Approved total: ", $hours, " h")) }
+  port kernel.invoke { query = "timesheet.actions" } → actions
+  port kernel.invoke { query = "portfolio.recent"; input = { rows = $entries; limit = 25 } } → recent
+  fold $recent as entry; cards starts list():
+    port kernel.invoke { query = "timesheet.card"; input = { screen = $screen; entry = $entry; actions = $actions } } → card
+    yield append($cards, list($card)) → cards
+  port kernel.invoke { query = "portfolio.section"; input = { title = "Recent time entries"; content = append(list($review), $cards) } } → history
+  let result = { title = "Timesheet"; summary = "Record and review time by person, project and work date in this private workspace."; content = list($form, $history) }

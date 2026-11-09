@@ -1,0 +1,121 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lp.definitions:
+  let i = at($eventInput, "i")
+  let origins = at($eventInput, "origins")
+  let definitions = at($eventInput, "definitions")
+  let names = at($eventInput, "names")
+  let done = eq(at(at($lpTokens, $i), "text"), "<eof>")
+  when not($done):
+    when not(eq(at(at($lpTokens, $i), "indent"), 0)):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-LAYOUT";
+          summary = "Process declarations start at column one.";
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let begin = at($lpTokens, $i)
+    when not(eq(at(at($lpTokens, $i), "text"), "process")):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-SYNTAX";
+          summary = concat("Expected ", "process", ".");
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let i = add($i, 1)
+    port kernel.invoke { query = "lp.gap"; input = { left = $begin; right = at($lpTokens, $i) } } → gap
+    let nameToken = at($lpTokens, $i)
+    port kernel.invoke {
+      query = "lp.name";
+      input = { text = at(at($lpTokens, $i), "text"); qualified = true; token = at($lpTokens, $i) }
+    } → name
+    when not(not(includes($names, $name))):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-DUPLICATE";
+          summary = "Duplicate process declaration.";
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let names = append($names, list($name))
+    let i = add($i, 1)
+    when not(eq(at(at($lpTokens, $i), "text"), ":")):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-SYNTAX";
+          summary = concat("Expected ", ":", ".");
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let i = add($i, 1)
+    when not(eq(at(at($lpTokens, $i), "text"), "\n")):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-SYNTAX";
+          summary = concat("Expected ", "\n", ".");
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let i = add($i, 1)
+    port kernel.invoke {
+      query = "lp.origin";
+      input = {
+        pointer = concat("/queries/", $name);
+        kind = "process";
+        start = at($nameToken, "start");
+        end = at($nameToken, "end");
+        token = $nameToken
+      }
+    } → origin
+    let origins = append($origins, list($origin))
+    port kernel.invoke {
+      query = "lp.programme";
+      input = {
+        i = $i;
+        pointer = concat("/queries/", $name);
+        level = 1;
+        indent = 2;
+        origins = $origins;
+        statements = list()
+      }
+    } → parsed
+    let i = at($parsed, "i")
+    let origins = at($parsed, "origins")
+    when not(not(eq(count(at($parsed, "value")), 0))):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-LAYOUT";
+          summary = "A process suite must not be empty.";
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let definitions = append($definitions, list(list($name, at($parsed, "value"))))
+    port kernel.invoke {
+      query = "lp.origin";
+      input = {
+        pointer = concat("/queries/", $name);
+        kind = "process-definition";
+        start = $begin.start;
+        end = at(at($lpTokens, add($i, -1)), "end");
+        token = $begin
+      }
+    } → definitionOrigin
+    let origins = append($origins, list($definitionOrigin))
+    port kernel.invoke {
+      query = "lp.definitions";
+      input = { i = $i; origins = $origins; definitions = $definitions; names = $names }
+    } → parsed
+    let i = at($parsed, "i")
+    let origins = at($parsed, "origins")
+    let definitions = at($parsed, "definitions")
+  port record.fromEntries { entries = $definitions } → queries
+  let result = { i = $i; definitions = $definitions; value = $queries; origins = $origins }

@@ -1,0 +1,13 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process admit.binding:
+  port value.describe { value = $binding } → bindingKind
+  assert eq($bindingKind.type, "string")
+    otherwise "TEMPLE-S001: Binding must be a string identifier. Correct the authored source."
+  port text.matches { value = $binding; pattern = "^[A-Za-z_][A-Za-z0-9_]*$" } → valid
+  assert and(
+    $valid,
+    not(includes(list("__proto__", "prototype", "constructor", "model"), $binding))
+  )
+    otherwise "TEMPLE-S001: Invalid binding. Use a safe lexical identifier; correct the authored source."

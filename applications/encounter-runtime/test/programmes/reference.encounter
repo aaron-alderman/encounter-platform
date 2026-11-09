@@ -1,0 +1,50 @@
+process-module "temple/surface-process-module/1"
+
+process reference.values:
+  let selected = filter($facts, "fact", and(eq($fact.s, $subject), eq($fact.p, $predicate), eq($fact.pol, "is")))
+  let values = map($selected, "fact", $fact.o)
+
+process test.reference:
+  port reference.inputs {} → source
+  let facts = $source.common
+  let subject = "bootstrap"
+  let predicate = "referenceFoundationSha256"
+  call reference.values
+  assert eq($source.foundationHash, at($values, 0))
+    otherwise "reference foundation pin mismatch"
+  let facts = $source.profile
+  let subject = "profile"
+  let predicate = "entry"
+  call reference.values
+  let entry = at($values, 0)
+  let predicate = "grant"
+  call reference.values
+  let grants = $values
+  let predicate = "module"
+  call reference.values
+  let files = $values
+  each $files as file:
+    let subject = $file
+    let predicate = "sha256"
+    call reference.values
+    port reference.module { file = $file } → digest
+    assert eq($digest, at($values, 0))
+      otherwise "reference module pin mismatch"
+  port reference.admit { entry = $entry; grants = $grants; files = $files } → _
+  let facts = $source.fixture
+  let predicate = "title"
+  let subject = "add"
+  call reference.values
+  let title = at($values, 0)
+  port reference.change { state = { items = list() }; fields = { action = "add"; title = $title }; id = "todo.1" } → acceptedChange
+  let item = at($acceptedChange.state.items, 0)
+  let refusal = null
+  let subject = "refused"
+  call reference.values
+  let title = at($values, 0)
+  try:
+    port reference.change { state = { items = list() }; fields = { action = "add"; title = $title }; id = "todo.1" } → _
+  catch error:
+    let refusal = $error.message
+  port reference.replay { item = $item } → replay
+  let result = { item = $item; refusal = $refusal; delta = $replay.delta; accepted = $replay.accepted; rejected = $replay.rejected }

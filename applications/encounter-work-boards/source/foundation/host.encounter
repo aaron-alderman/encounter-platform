@@ -1,0 +1,219 @@
+# Local publication and runtime declaration policy. Native code performs only
+# the resulting bounded filesystem, codec, hashing and packaging operations.
+process-module "temple/surface-process-module/1"
+
+process host.path:
+  let value = $eventInput.value
+  port value.describe { value = $value } → kind
+  assert and(eq($kind.type, "string"), count($value))
+    otherwise "HOST: Relative path required."
+  port text.matches { value = $value; pattern = "(^/|[\\\\:<>\"|?*\\u0000-\\u001f])" } → unsafe
+  assert not($unsafe)
+    otherwise "HOST: Unsafe local path."
+  port text.split { value = $value; pattern = "/" } → parts
+  each $parts as part:
+    port text.lowerCase { value = $part } → lower
+    port text.matches { value = $part; pattern = "[. ]$|^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$)"; flags = "i" } → alias
+    assert and(not(includes(list("", ".", "..", ".git"), $lower)), not($alias))
+      otherwise "HOST: Path alias refused."
+  let result = $value
+
+process host.declaration:
+  let facts = $eventInput.facts
+  let allowed = list("module", "query", "entry", "grant", "input", "output", "factSource", "resource", "profileSource", "requireZeroJson", "origin")
+  let local = filter($facts, "fact", eq($fact.s, "local"))
+  let inputs = map(filter($local, "fact", eq($fact.p, "input")), "fact", $fact.o)
+  each $inputs as input:
+    port kernel.invoke { query = "host.path"; input = { value = $input } } → _
+    port text.matches { value = $input; pattern = "^(?:\\.local-|\\.migration-|dist(?:/|$)|verify-build(?:/|$)|\\.build(?:/|$)|node_modules(?:/|$)|retired-build-helpers(?:/|$))"; flags = "i" } → retired
+    assert not($retired)
+      otherwise "HOST: Generated outputs and retired code cannot be authoring inputs."
+  let resources = map(filter($local, "fact", eq($fact.p, "resource")), "fact", $fact.o)
+  fold $facts as fact; grouped starts {}:
+    port record.get { record = $grouped; key = $fact.s } → previous
+    port record.put { record = $grouped; key = $fact.s; value = append(or($previous, list()), list($fact)) } → grouped
+    yield $grouped → grouped
+  each $facts as fact:
+    assert eq($fact.pol, "is")
+      otherwise "HOST: Only positive declarations."
+    assert if(eq($fact.s, "local"), includes($allowed, $fact.p), and(includes($resources, $fact.s), includes(list("path", "source", "kind"), $fact.p)))
+      otherwise "HOST: Unknown declaration."
+  fold $resources as id; aliases starts {}:
+    let cells = at($grouped, $id)
+    let paths = map(filter($cells, "fact", eq($fact.p, "path")), "fact", $fact.o)
+    let sources = map(filter($cells, "fact", eq($fact.p, "source")), "fact", $fact.o)
+    let kinds = map(filter($cells, "fact", eq($fact.p, "kind")), "fact", $fact.o)
+    assert and(eq(count($paths), 1), eq(count($sources), 1), eq(count($kinds), 1))
+      otherwise "HOST: Resource cardinality."
+    let name = at($paths, 0)
+    let source = at($sources, 0)
+    let kind = at($kinds, 0)
+    port kernel.invoke { query = "host.path"; input = { value = $name } } → _
+    port kernel.invoke { query = "host.path"; input = { value = $source } } → _
+    assert and(not(at($aliases, $name)), includes(list("behaviour", "value", "facts", "asset"), $kind))
+      otherwise "HOST: Invalid resource."
+    when eq($kind, "behaviour"):
+      port kernel.invoke { query = "foundation.sourceIdentity"; input = { file = $name } } → _
+      port kernel.invoke { query = "foundation.sourceIdentity"; input = { file = $source } } → _
+    when includes(list("value", "facts"), $kind):
+      port text.matches { value = $name; pattern = "\\.rel$" } → nameREL
+      port text.matches { value = $source; pattern = "\\.rel$" } → sourceREL
+      assert and($nameREL, $sourceREL)
+        otherwise "HOST: Static content must be REL."
+    port record.put { record = $aliases; key = $name; value = { source = $source; kind = $kind } } → aliases
+    yield $aliases → aliases
+  let entries = map(filter($local, "fact", eq($fact.p, "entry")), "fact", $fact.o)
+  assert and(count($entries), eq(count($entries), count(distinct($entries))))
+    otherwise "HOST: Distinct entry phases required."
+  port number.calculate { operation = "lessEqual"; values = list(count($entries), 32) } → bounded
+  assert $bounded
+    otherwise "HOST: Entry phase bound."
+  let outputs = map(filter($local, "fact", eq($fact.p, "output")), "fact", $fact.o)
+  assert eq(count($outputs), 1)
+    otherwise "HOST: One local output required."
+  let output = at($outputs, 0)
+  port kernel.invoke { query = "host.path"; input = { value = $output } } → _
+  port text.matches { value = $output; pattern = "^\\.local-[^/]+$" } → isolated
+  assert $isolated
+    otherwise "HOST: Fresh isolated local output required."
+  let zeros = filter($local, "fact", eq($fact.p, "requireZeroJson"))
+  assert and(eq(count($zeros), 1), eq(at(at($zeros, 0), "o"), "true"))
+    otherwise "HOST: Zero JSON gate is mandatory."
+  let modules = map(filter($local, "fact", eq($fact.p, "module")), "fact", $fact.o)
+  each $modules as file:
+    port kernel.invoke { query = "foundation.sourceIdentity"; input = { file = $file } } → _
+    when at($aliases, $file):
+      assert eq(at(at($aliases, $file), "kind"), "behaviour")
+        otherwise "HOST: Behaviour source required."
+  let factSources = map(filter($local, "fact", eq($fact.p, "factSource")), "fact", $fact.o)
+  each $factSources as file:
+    port kernel.invoke { query = "host.relPath"; input = { value = $file } } → _
+  let origins = map(filter($local, "fact", eq($fact.p, "origin")), "fact", $fact.o)
+  assert includes(list(0, 1), count($origins))
+    otherwise "HOST: At most one origin."
+  let origin = if(count($origins), at($origins, 0), "https://publication.invalid")
+  port url.observe { value = $origin; base = "https://publication.invalid/" } → observed
+  assert includes(list("http:", "https:"), $observed.protocol)
+    otherwise "HOST: HTTP publication origin required."
+  let result = { aliases = $aliases; output = $output; entries = $entries; modules = $modules; factSources = $factSources; origin = $observed.origin }
+  let profiles = map(filter($local, "fact", eq($fact.p, "profileSource")), "fact", $fact.o)
+  assert includes(list(0, 1), count($profiles))
+    otherwise "HOST: At most one profile source."
+  let profileSource = null
+  when count($profiles):
+    let profileSource = at($profiles, 0)
+    assert eq(at(at($aliases, $profileSource), "kind"), "value")
+      otherwise "HOST: Runtime profiles must be declared REL values."
+  port record.put { record = $result; key = "profileSource"; value = $profileSource } → result
+
+process host.relPath:
+  port kernel.invoke { query = "host.path"; input = $eventInput } → _
+  port text.matches { value = $eventInput.value; pattern = "\\.rel$" } → rel
+  assert $rel
+    otherwise "HOST: Only REL declarations and static facts."
+  let result = true
+
+process host.input:
+  port kernel.invoke { query = "host.path"; input = { value = $eventInput.name } } → _
+  fold $eventInput.inputs as input; matched starts false:
+    port text.slice { value = $eventInput.name; start = 0; end = count($input) } → prefix
+    yield or($matched, eq($eventInput.name, $input), and(eq($prefix, $input), eq(at($eventInput.name, count($input)), "/"))) → matched
+  assert $matched
+    otherwise "HOST: Undeclared input."
+  let result = true
+
+process host.bytes:
+  port number.calculate { operation = "lessEqual"; values = list($eventInput.bytes, 64000000) } → bounded
+  assert $bounded
+    otherwise "HOST: Input/output byte bound."
+  let result = true
+
+process host.inventory:
+  port text.matches { value = $eventInput.name; pattern = "\\.json$"; flags = "i" } → json
+  assert not($json)
+    otherwise "HOST: JSON file remains in publication closure."
+  let result = true
+
+process host.factOwner:
+  assert or(eq($eventInput.previous, null), eq($eventInput.previous, $eventInput.current))
+    otherwise "HOST: Overlapping static fact ownership."
+  let result = true
+
+process host.classify:
+  let name = $eventInput.name
+  port text.matches { value = $name; pattern = "\\.rel$" } → rel
+  port text.matches { value = $name; pattern = "\\.(?:html|svg|xml)$"; flags = "i" } → markup
+  port text.matches { value = $name; pattern = "\\.(?:svg|xml)$"; flags = "i" } → xml
+  port text.matches { value = $name; pattern = "\\.values\\.rel$" } → value
+  let result = { rel = $rel; markup = $markup; xml = $xml; value = $value }
+
+process host.static:
+  let text = $eventInput.text
+  port value.describe { value = $text } → kind
+  assert eq($kind.type, "string")
+    otherwise "HOST: Static REL text or declared reference required."
+  port text.trim { value = $text } → trimmed
+  port text.matches { value = $trimmed; pattern = "^(?:\\(|//|\")|^(?:true|false|null|-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)$" } → literal
+  let result = { literal = $literal }
+  when not($literal):
+    port text.split { value = $text; pattern = "#" } → parts
+    assert includes(list(1, 2), count($parts))
+      otherwise "HOST: Invalid static reference."
+    let file = at($parts, 0)
+    port kernel.invoke { query = "host.relPath"; input = { value = $file } } → _
+    assert at($eventInput.resources, $file)
+      otherwise "HOST: Undeclared static REL resource."
+    let result = { literal = false; file = $file; fragment = if(eq(count($parts), 2), at($parts, 1), null) }
+
+process host.fragment:
+  let fragment = $eventInput.fragment
+  port record.entries { value = $eventInput.value } → entries
+  assert some($entries, "entry", eq(at($entry, 0), $fragment))
+    otherwise "HOST: Missing typed REL value."
+  let result = at($eventInput.value, $fragment)
+
+process host.asset:
+  port url.observe { value = $eventInput.url; base = $eventInput.base } → target
+  port url.observe { value = $eventInput.base; base = $eventInput.base } → original
+  assert and(eq($target.origin, $original.origin), not($target.search))
+    otherwise "HOST: Undeclared static asset origin."
+  let result = concat($target.path, $target.fragment)
+
+process host.output:
+  port kernel.invoke { query = "host.path"; input = { value = $eventInput.name } } → _
+  port number.calculate { operation = "lessEqual"; values = list($eventInput.bytes, 64000000) } → bounded
+  assert $bounded
+    otherwise "HOST: Output byte bound."
+  port text.matches { value = $eventInput.name; pattern = "\\.(?:m?js|cjs)$"; flags = "i" } → executable
+  port text.matches { value = $eventInput.name; pattern = "\\.(?:rel|encounter|html|css|txt|md|xml|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|mp4|webm|vtt|pdf)$|(?:^|/)(?:CNAME|\\.nojekyll)$"; flags = "i" } → passive
+  assert if($executable, $eventInput.issuedRuntime, $passive)
+    otherwise "HOST: Unadmitted output type or executable artifact."
+  let result = true
+
+process host.runtime:
+  assert eq($eventInput.mode, "browser")
+    otherwise "HOST: Unqualified runtime mode."
+  port kernel.invoke { query = "foundation.checkLimit"; input = { limit = $eventInput.budget } } → _
+  let profileName = or($eventInput.grantProfile, $eventInput.mode)
+  port kernel.invoke { query = "foundation.selectProfile"; input = { profiles = $eventInput.profiles; name = $profileName } } → grants
+  assert and(isArray($eventInput.queries), includes($eventInput.queries, $eventInput.entry))
+    otherwise "HOST: Runtime entry must be declared."
+  let facts = filter($eventInput.facts, "fact", includes($eventInput.factSubjects, $fact.s))
+  let roots = $eventInput.queries
+  when and(count($facts), not(includes($roots, "facts.index"))):
+    let roots = append($roots, list("facts.index"))
+  let result = { profile = $profileName; grants = $grants; roots = $roots; facts = $facts }
+
+process foundation.observe:
+  call foundation.compile
+  let compilation = $result
+  assert $compilation.ok
+    otherwise "Encounter observation refused."
+  port digest.sha256 { text = $eventInput.text } → sourceHash
+  fold $compilation.origins as origin; origins starts list():
+    port text.slice { value = $eventInput.text; start = $origin.start; end = $origin.end } → lexeme
+    port digest.sha256 { text = $lexeme } → lexemeHash
+    port record.put { record = $origin; key = "sourceHash"; value = $sourceHash } → origin
+    port record.put { record = $origin; key = "lexemeSha256"; value = $lexemeHash } → origin
+    yield append($origins, list($origin)) → origins
+  let result = { module = $compilation.surface; origins = $origins; sourceHash = $sourceHash }

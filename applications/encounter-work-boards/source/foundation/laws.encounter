@@ -1,0 +1,37 @@
+# Compiler laws are authored here. External REL tables are display/application
+# data, never the operative compiler's policy input.
+process-module "temple/surface-process-module/1"
+
+process foundation.laws:
+  let a0 = { arg = 0 }
+  let a1 = { arg = 1 }
+  let a2 = { arg = 2 }
+  let found = { ref = "found" }
+  let accumulated = { ref = "result" }
+  let indexed = { ref = "indexed" }
+  let cardinality = list("raise", list("concat", "Fact cardinality: ", $a0, ".", $a1))
+  let single = list("if", list("eq", list("count", $found), 1), list("at", $found, 0), $cardinality)
+  let result = {
+    protocol = "temple/derived-expression-definitions/1";
+    referenceSigil = at(" $", 1);
+    sourceRefs = list("@sourcerytech/expression-algebra:operations/let.mjs", "@sourcerytech/expression-algebra:operations/fold.mjs", "@sourcerytech/expression-algebra:operations/raise.mjs", "claimipedia-core:components/process-interpreter/src/surface-process-state-operators.mjs", "claimipedia-core:components/process-interpreter/src/surface-process-collection-operators.mjs");
+    scope = "Lowering laws for admitted dense JSON arrays and string-valued REL facts. Core membership and equality semantics remain native. Non-array map/filter/some/every inputs refuse.";
+    statementFields = { programmes = list("steps", "then", "try", "catch"); expressions = list("value", "assert", "when", "each", "fold", "initial", "yield", "args") };
+    operators = {
+      record = { arity = 1; body = $a0 };
+      not = { arity = 1; body = list("if", $a0, false, true) };
+      has = { arity = 3; body = list("includes", list("objects", $a0, $a1), $a2) };
+      map = { arity = 3; body = list("if", list("isArray", $a0), list("fold", $a0, $a1, { bind = "result" }, list("list"), list("append", $accumulated, list("list", $a2))), list("raise", "map requires an array")) };
+      filter = { arity = 3; body = list("if", list("isArray", $a0), list("fold", $a0, $a1, { bind = "result" }, list("list"), list("if", $a2, list("append", $accumulated, list("list", { refArg = 1 })), $accumulated)), list("raise", "filter requires an array")) };
+      some = { arity = 3; body = list("if", list("isArray", $a0), list("fold", $a0, $a1, { bind = "result" }, false, list("if", $accumulated, true, list("if", $a2, true, false))), list("raise", "some requires an array")) };
+      every = { arity = 3; body = list("if", list("isArray", $a0), list("fold", $a0, $a1, { bind = "result" }, true, list("if", $accumulated, list("if", $a2, true, false), false)), list("raise", "every requires an array")) };
+      one = { arity = 2; body = list("let", { bind = "found" }, list("objects", $a0, $a1), $single) };
+      optional = { arity = 2; body = list("let", { bind = "found" }, list("objects", $a0, $a1), list("if", list("eq", list("count", $found), 0), null, $single)) };
+      and = { minimumArity = 0; body = { foldArgs = { initial = true; item = "test"; accumulator = "rest"; body = list("if", { term = "test" }, { term = "rest" }, false) } } };
+      or = { minimumArity = 0; body = list("fold", { arguments = true }, { bind = "value" }, { bind = "result" }, null, list("if", $accumulated, $accumulated, list("if", { ref = "value" }, { ref = "value" }, null))) };
+      objects = { arity = 2; body = list("let", { bind = "indexed" }, list("at", list("at", list("at", concat(at(" $", 1), "factIndex"), "objects"), $a0), $a1), list("if", $indexed, list("append", $indexed, list("list")), list("list"))) };
+      subjects = { arity = 2; body = list("let", { bind = "indexed" }, list("at", list("at", list("at", concat(at(" $", 1), "factIndex"), "subjects"), $a0), $a1), list("if", $indexed, list("append", $indexed, list("list")), list("list"))) }
+    }
+  }
+  port rel.encode { value = $result; kind = "CompilerLaws" } → document
+  port rel.decode { text = $document; kind = "CompilerLaws" } → result

@@ -1,0 +1,22 @@
+process-module "temple/surface-process-module/1"
+process probe.values:
+  let original = { value = 0 }
+  port record.put { record = $original; key = "value"; value = 0.01 } → updated
+  port digest.sha256 { text = "abc" } → digest
+  port rel.encode { value = $updated; kind = "StaticValue" } → encoded
+  port rel.decode { text = $encoded; kind = "StaticValue" } → decoded
+  port text.trim { value = "  Café 🌱  " } → trimmed
+  port text.indexOf { value = $trimmed; search = "🌱" } → index
+  let result = { old = $original.value; decoded = $decoded.value; trimmed = $trimmed; index = $index; new = $updated.value; digest = $digest; empty = or(); found = some(list(0, 0.01), "n", eq($n, $updated.value)); absent = some(list(), "n", true); pick = or(false, "", "first", "second"); allFalse = or(false, "") }
+
+process probe.numeric:
+  port number.calculate { operation = "divide"; values = list(725, 100) } → hours
+  port number.calculate { operation = "subtract"; values = list("02", 1) } → month
+  port number.calculate { operation = "round"; values = list(-1.5) } → rounded
+  port number.calculate { operation = "lessEqual"; values = list("not a number", 2) } → comparison
+  let refusal = null
+  try:
+    port number.calculate { operation = "divide"; values = list(1, 0) } → ignored
+  catch error:
+    let refusal = $error.message
+  let result = { hours = $hours; month = $month; rounded = $rounded; comparison = $comparison; refusal = $refusal }

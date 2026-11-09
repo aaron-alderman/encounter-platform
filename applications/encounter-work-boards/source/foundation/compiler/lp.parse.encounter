@@ -1,0 +1,25 @@
+process-module "temple/surface-process-module/1"
+
+process lp.parse:
+  let i = 0
+  let origins = list()
+  assert eq(at(at($lpTokens, $i), "indent"), 0)
+    otherwise "ENCOUNTER: Header starts at column one."
+  port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "process-module" } } → i
+  port kernel.invoke { query = "lp.decode"; input = { token = at($lpTokens, $i) } } → protocol
+  assert eq($protocol, "temple/surface-process-module/1")
+    otherwise "ENCOUNTER: Unsupported process module."
+  let i = add($i, 1)
+  port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "\n" } } → i
+  when eq(at(at($lpTokens, $i), "text"), "profile"):
+    let i = add($i, 1)
+    port kernel.invoke { query = "lp.decode"; input = { token = at($lpTokens, $i) } } → profileName
+    port value.describe { value = $profileName } → kind
+    assert eq($kind.type, "string")
+      otherwise "ENCOUNTER: Profile metadata must be text."
+    let i = add($i, 1)
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "\n" } } → i
+  port kernel.invoke { query = "lp.definitions"; input = { i = $i; origins = $origins; definitions = list(); names = list() } } → parsed
+  assert count($parsed.definitions)
+    otherwise "ENCOUNTER: At least one process is required."
+  let result = { surface = { protocol = $protocol; queries = $parsed.value }; origins = $parsed.origins }

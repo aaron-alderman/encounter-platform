@@ -1,0 +1,43 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process admit.programme:
+  assert isArray($programme)
+    otherwise "TEMPLE-S010: Process must be an array."
+  each $programme as statement:
+    port value.describe { value = $statement } → shape
+    assert and($shape.plain, $shape.dataOnly)
+      otherwise "TEMPLE-S011: Statement must be an own-data record."
+    port record.entries { value = $profile.statements } → forms
+    port record.entries { value = $statement } → fields
+    let keys = map($fields, "entry", at($entry, 0))
+    let kinds = filter($forms, "form", includes($keys, at($form, 0)))
+    assert eq(count($kinds), 1)
+      otherwise "TEMPLE-S012: Unknown or ambiguous statement. Use one declared statement kind."
+    let form = at(at($kinds, 0), 0)
+    let schema = at(at($kinds, 0), 1)
+    assert and(
+      eq(count($keys), count($schema.fields)),
+      every($keys, "key", includes($schema.fields, $key))
+    )
+      otherwise "TEMPLE-S013: Unknown or missing statement field. Correct the authored statement before effects."
+    each $schema.bindings as field:
+      let binding = at($statement, $field)
+      call admit.binding
+    each $schema.strings as field:
+      port value.describe { value = at($statement, $field) } → fieldKind
+      assert eq($fieldKind.type, "string")
+        otherwise "TEMPLE-S014: Statement name or message must be a string."
+    when eq($form, "fold"):
+      assert not(eq($statement.as, $statement.accumulator))
+        otherwise "TEMPLE-S009: Fold bindings must be distinct."
+    when eq($form, "call"):
+      port record.entries { value = $target.queries } → queries
+      assert some($queries, "entry", eq(at($entry, 0), $statement.call))
+        otherwise "TEMPLE-S015: Unknown process target. Declare it in this module closure."
+    each $schema.expressions as field:
+      let expression = at($statement, $field)
+      call admit.expression
+    each $schema.programmes as field:
+      let programme = at($statement, $field)
+      call admit.programme

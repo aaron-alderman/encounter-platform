@@ -1,0 +1,64 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lp.arguments:
+  let i = at($eventInput, "i")
+  let pointer = at($eventInput, "pointer")
+  let depth = at($eventInput, "depth")
+  let origins = at($eventInput, "origins")
+  let args = at($eventInput, "args")
+  let op = at($eventInput, "op")
+  let done = eq(at(at($lpTokens, $i), "text"), ")")
+  when $done:
+    let i = add($i, 1)
+  when not($done):
+    port kernel.invoke {
+      query = "lp.expression";
+      input = {
+        i = $i;
+        pointer = concat($pointer, "/", add(count($args), 1));
+        depth = add($depth, 1);
+        origins = $origins
+      }
+    } → parsed
+    let i = at($parsed, "i")
+    let origins = at($parsed, "origins")
+    let args = append($args, list(at($parsed, "value")))
+    when eq(at(at($lpTokens, $i), "text"), ","):
+      let i = add($i, 1)
+      when not(not(eq(at(at($lpTokens, $i), "text"), ")"))):
+        port kernel.invoke {
+          query = "lp.fail";
+          input = {
+            code = "PROC-TEXT-SYNTAX";
+            summary = "Trailing argument separator.";
+            token = at($lpTokens, $i)
+          }
+        } → unused
+      port kernel.invoke {
+        query = "lp.arguments";
+        input = {
+          i = $i;
+          pointer = $pointer;
+          depth = $depth;
+          origins = $origins;
+          args = $args;
+          op = $op
+        }
+      } → parsed
+      let i = at($parsed, "i")
+      let origins = at($parsed, "origins")
+      let args = at($parsed, "args")
+      let done = true
+  when not($done):
+    when not(eq(at(at($lpTokens, $i), "text"), ")")):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-SYNTAX";
+          summary = concat("Expected ", ")", ".");
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let i = add($i, 1)
+  let result = { i = $i; value = append(list($op), $args); args = $args; origins = $origins }

@@ -1,0 +1,3 @@
+# Source/admission/provenance identities bind exact bytes, including newlines.
+# Preserve selected bytes on Windows and other checkout platforms.
+* -text

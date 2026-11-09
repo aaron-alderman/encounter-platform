@@ -1,0 +1,51 @@
+process-module "temple/surface-process-module/1"
+
+process portfolio.load:
+  let snapshot = $eventInput
+  let result = null
+  when eq($snapshot.revision, 0):
+    port kernel.invoke { query = "product.empty" } → result
+  when not(eq($snapshot.revision, 0)):
+    let document = at($snapshot.documents, 0)
+    assert and(eq(count($snapshot.documents), 1), eq($document.path, "state.rel"))
+      otherwise "The saved application state is missing."
+    port rel.decode { text = $document.text; kind = "ProductState" } → result
+
+process app.newSession:
+  let result = {}
+
+process app.request:
+  let request = $eventInput
+  assert eq($request.path, "/")
+    otherwise "Open the application at /."
+  let snapshot = $request.snapshot
+  let session = $request.session
+  port kernel.invoke { query = "portfolio.load"; input = $snapshot } → state
+  let notice = ""
+  let error = false
+  when eq($request.method, "POST"):
+    try:
+      port scalar.read { text = $request.fields.base } → base
+      assert eq($base, $snapshot.revision)
+        otherwise "This view is out of date. Review the current state and try again."
+      port kernel.invoke { query = "product.change"; input = { state = $state; fields = $request.fields; id = $request.nonce; session = $session } } → change
+      when not(eq(at($change, "persist"), false)):
+        port rel.encode { value = $change.state; kind = "ProductState" } → data
+        let receipt = null
+        try:
+          port storage.cas { base = $base; operationId = $request.nonce; profile = $request.profile; basis = $request.basis; documents = list({ path = "state.rel"; text = $data }); reason = $change.notice; target = $change.target; goal = "Record an application change"; source = "products"; description = $change.notice } → receipt
+        catch fault:
+          port storage.operation { operationId = $request.nonce } → receipt
+          assert $receipt
+            otherwise "The change could not be saved. Review the current state and try again."
+      when at($change, "session"):
+        let session = $change.session
+      let notice = $change.notice
+    catch fault:
+      let notice = $fault.message
+      let error = true
+    port storage.snapshot {} → snapshot
+    port kernel.invoke { query = "portfolio.load"; input = $snapshot } → state
+  port kernel.invoke { query = "product.view"; input = { state = $state; csrf = $request.csrf; revision = $snapshot.revision; session = $session } } → page
+  port kernel.invoke { query = "work.page"; input = { page = $page; notice = $notice; error = $error } } → html
+  let result = { session = $session; html = $html }

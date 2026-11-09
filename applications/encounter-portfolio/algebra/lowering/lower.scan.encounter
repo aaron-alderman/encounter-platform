@@ -1,0 +1,31 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lower.scan:
+  port value.describe { value = $input } → kind
+  let result = []
+  when eq($kind.type, "string"):
+    port text.split { value = $input; pattern = "[^A-Za-z0-9_-]+" } → result
+  when $kind.array:
+    fold $input as part; tokens starts []:
+      let input = $part
+      fold list(null) as callFrame; frameResult starts null:
+        call lower.scan
+        yield $result → result
+      yield append($tokens, $result) → result
+  when if(
+    eq($kind.type, "object"),
+    if(
+      if($kind.array, false, true),
+      if(if(eq($input, null), false, true), true, false),
+      false
+    ),
+    false
+  ):
+    port record.entries { value = $input } → entries
+    fold $entries as entry; tokens starts []:
+      let input = $entry
+      fold list(null) as callFrame; frameResult starts null:
+        call lower.scan
+        yield $result → result
+      yield append($tokens, $result) → result

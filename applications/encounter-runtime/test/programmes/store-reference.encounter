@@ -1,0 +1,37 @@
+process-module "temple/surface-process-module/1"
+
+process store.refuses:
+  let errorMessage = ""
+  try:
+    port store.cas { change = $change } → _
+  catch error:
+    let errorMessage = $error.message
+  port text.matches { value = $errorMessage; pattern = $pattern; flags = "i" } → refused
+  assert $refused
+    otherwise "The independent store must reject the invalid compare-and-swap."
+
+process test.store:
+  let original = $eventInput
+  port store.operation { id = $original.operationId } → first
+  port store.cas { change = $original } → retry
+  assert and(eq($first.revision, 1), eq($retry, $first))
+    otherwise "Reopening the Rust store must retain the first revision and its exact retry receipt."
+  port record.put { record = $original; key = "reason"; value = "Changed operation" } → change
+  let pattern = "identity reused"
+  call store.refuses
+  port record.put { record = $original; key = "operationId"; value = "stale-js" } → change
+  let pattern = "compare-and-swap"
+  call store.refuses
+  port store.operation { id = "stale-js" } → stale
+  port store.snapshot {} → snapshot
+  assert and(eq($stale, null), eq($snapshot, { revision = 1; documents = $original.documents }))
+    otherwise "The refusals must leave the operation ledger and documents unchanged."
+  port record.put { record = $original; key = "base"; value = $first.revision } → change
+  port record.put { record = $change; key = "operationId"; value = "from-js" } → change
+  let documents = list({ path = "one.rel"; text = "Written from JS after reopening Rust history" })
+  port record.put { record = $change; key = "documents"; value = $documents } → change
+  port store.cas { change = $change } → receipt
+  port store.cas { change = $change } → retry
+  assert and(eq($receipt.revision, 2), eq($receipt, $retry))
+    otherwise "The JavaScript write must append exactly one revision and retry with the same receipt."
+  let result = { change = $change; receipt = $receipt }

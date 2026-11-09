@@ -1,0 +1,123 @@
+process-module "temple/surface-process-module/1"
+
+process test.portfolio.desktop:
+  port browser.open { declaration = "products/sourcery-desktop/application.rel"; width = 390; height = 844 } → opened
+  assert eq($opened.status, 200)
+    otherwise "The desktop browser workspace did not open."
+  let page = $opened.page
+  let field = "Claim statement"
+  let value = "A training claim."
+  call portfolio.test.fill
+  let field = "Scope"
+  let value = "Local test"
+  call portfolio.test.fill
+  let button = "Record claim"
+  call portfolio.test.submit
+  let disclosure = list({ text = "Edit, add evidence or withdraw" })
+  port browser.act { page = $page; locator = $disclosure; action = "click" } → _
+  let field = "Evidence reference"
+  let value = "Training receipt 1"
+  call portfolio.test.fill
+  let field = "Evidence note"
+  let value = "Original record retained"
+  call portfolio.test.fill
+  let button = "Add evidence"
+  call portfolio.test.submit
+  port browser.act { page = $page; locator = $disclosure; action = "click" } → _
+  port browser.act { page = $page; locator = list({ role = "article"; name = "A training claim." }, { label = "Claim statement" }); action = "fill"; value = "A revised training claim." } → _
+  let field = "Revision reason"
+  let value = "Clarify the claim."
+  call portfolio.test.fill
+  let button = "Save revision"
+  call portfolio.test.submit
+  port browser.act { page = $page; locator = $disclosure; action = "click" } → _
+  let field = "Withdrawal reason"
+  let value = "The claim needs further review"
+  call portfolio.test.fill
+  let button = "Withdraw claim"
+  call portfolio.test.submit
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  let text = "Scope: Local test · Withdrawn"
+  call portfolio.test.sees
+  let text = "Version 1 · Active"
+  call portfolio.test.sees
+  let text = "Version 4 · Withdrawn"
+  call portfolio.test.sees
+  port browser.act { page = $page; locator = list({ text = "Export complete history as REL" }); action = "click" } → _
+  port browser.observe { page = $page; locator = list({ label = "Copyable REL" }); property = "value" } → exported
+  port text.matches { value = $exported; pattern = "Training receipt 1" } → retained
+  assert $retained
+    otherwise "The REL export omitted the retained evidence."
+  port browser.observe { page = $page; property = "overflow" } → overflow
+  assert not($overflow)
+    otherwise "The open export must fit at phone width."
+
+process test.portfolio.relationship:
+  port browser.open { declaration = "products/relationship-navigator/application.rel"; width = 390; height = 844 } → opened
+  assert eq($opened.status, 200)
+    otherwise "Relationship Navigator did not open."
+  let page = $opened.page
+  let field = "Process name"
+  let value = "Practice repair"
+  call portfolio.test.fill
+  let field = "Repair aim"
+  let value = "Listen and make a workable offer."
+  call portfolio.test.fill
+  let button = "Open repair process"
+  call portfolio.test.submit
+  port browser.observe { page = $page; locator = list({ label = "One-time invitation for Participant B" }); property = "value" } → invitation
+  port browser.observe { page = $page; locator = list({ label = "Your recovery code" }); property = "value" } → recovery
+  let first = $page
+  let field = "Your private account"
+  let value = "An account only Participant A should see."
+  call portfolio.test.fill
+  let button = "Save private account"
+  call portfolio.test.submit
+  port browser.page { browser = $opened.browser; independent = true } → openedSecond
+  let second = $openedSecond.page
+  let page = $second
+  let field = "Access or invitation code"
+  let value = $invitation
+  call portfolio.test.fill
+  let button = "Enter with code"
+  call portfolio.test.submit
+  let text = "You are Participant B. Open for shared offers."
+  call portfolio.test.sees
+  port browser.observe { page = $page; locator = list({ text = "An account only Participant A should see." }); property = "count" } → privateCount
+  assert eq($privateCount, 0)
+    otherwise "Participant B received Participant A’s private account."
+  let field = "Shared offer"
+  let value = "Set aside time to listen."
+  call portfolio.test.fill
+  let button = "Make shared offer"
+  call portfolio.test.submit
+  let page = $first
+  port browser.act { page = $page; action = "navigate"; value = "/" } → _
+  let text = "Set aside time to listen."
+  call portfolio.test.sees
+  let button = "Accept offer"
+  call portfolio.test.submit
+  let text = "Participant B · Accepted"
+  call portfolio.test.sees
+  let button = "Pause process"
+  call portfolio.test.submit
+  let button = "Consent to return"
+  call portfolio.test.submit
+  let text = "You are Participant A. Paused by Participant A."
+  call portfolio.test.sees
+  let page = $second
+  port browser.act { page = $page; action = "navigate"; value = "/" } → _
+  let button = "Consent to return"
+  call portfolio.test.submit
+  let text = "Both participants agreed to return."
+  call portfolio.test.sees
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  let field = "Access or invitation code"
+  let value = $recovery
+  call portfolio.test.fill
+  let button = "Enter with code"
+  call portfolio.test.submit
+  let text = "An account only Participant A should see."
+  call portfolio.test.sees

@@ -1,0 +1,137 @@
+process-module "temple/surface-process-module/1"
+
+process outcome.hypotheses:
+  let result = list(
+    { value = "mill"; label = "Mill is the binding constraint" },
+    { value = "demand"; label = "Incremental output can be sold and delivered" },
+    { value = "reliability"; label = "Avoidable downtime limits mill throughput" },
+    { value = "upstream"; label = "Upstream feed is the binding constraint" },
+    { value = "downstream"; label = "Downstream capacity is the binding constraint" }
+  )
+
+process outcome.evidenceState:
+  let observations = filter($eventInput.rows, "entry", and(eq($entry.hypothesis, $eventInput.hypothesis), eq($entry.kind, "Observation")))
+  let support = some($observations, "entry", eq($entry.polarity, "Supports"))
+  let challenge = some($observations, "entry", eq($entry.polarity, "Challenges"))
+  let result = if(and($support, $challenge), "Mixed observations", if($support, "Supported by recorded observations", if($challenge, "Challenged by recorded observations", "Observation needed")))
+
+process product.empty:
+  let result = { cases = list() }
+
+process product.change:
+  let command = $eventInput
+  let fields = $command.fields
+  let cases = $command.state.cases
+  let id = $command.id
+  let notice = "Outcome case opened."
+  assert includes(list("case", "evidence", "trial", "value"), $fields.action)
+    otherwise "Choose a navigator action."
+  when eq($fields.action, "case"):
+    port kernel.invoke { query = "portfolio.text"; input = { text = $fields.name; limit = 120 } } → name
+    port kernel.invoke { query = "portfolio.text"; input = { text = $fields.desired; limit = 800 } } → desired
+    let cases = append(list({ id = $id; name = $name; desired = $desired; evidence = list(); trials = list(); values = list() }), $cases)
+  when not(eq($fields.action, "case")):
+    let id = $fields.target
+    let entry = at(filter($cases, "entry", eq($entry.id, $id)), 0)
+    assert $entry
+      otherwise "Choose a saved outcome case."
+    let updated = $entry
+    when includes(list("evidence", "trial"), $fields.action):
+      port kernel.invoke { query = "outcome.hypotheses" } → hypotheses
+      assert some($hypotheses, "hypothesis", eq($hypothesis.value, $fields.hypothesis))
+        otherwise "Choose a declared hypothesis."
+    when eq($fields.action, "evidence"):
+      assert and(includes(list("Observation", "Inference"), $fields.kind), includes(list("Supports", "Challenges", "Context"), $fields.polarity))
+        otherwise "Classify the evidence and its relation to the hypothesis."
+      port kernel.invoke { query = "portfolio.text"; input = { text = $fields.source; limit = 240 } } → provenance
+      port kernel.invoke { query = "portfolio.text"; input = { text = $fields.note; limit = 1000 } } → note
+      let evidence = { id = $command.id; hypothesis = $fields.hypothesis; kind = $fields.kind; polarity = $fields.polarity; provenance = $provenance; note = $note }
+      port record.put { record = $entry; key = "evidence"; value = append(list($evidence), $entry.evidence) } → updated
+      let notice = "Evidence recorded."
+    when eq($fields.action, "trial"):
+      port kernel.invoke { query = "portfolio.text"; input = { text = $fields.note; limit = 800 } } → note
+      port kernel.invoke { query = "portfolio.text"; input = { text = $fields.owner; limit = 120 } } → owner
+      port kernel.invoke { query = "portfolio.text"; input = { text = $fields.stop; limit = 400 } } → stop
+      let links = map(filter($entry.evidence, "evidence", eq($evidence.hypothesis, $fields.hypothesis)), "evidence", $evidence.id)
+      let trial = { hypothesis = $fields.hypothesis; note = $note; owner = $owner; stop = $stop; evidence = $links }
+      port record.put { record = $entry; key = "trials"; value = append(list($trial), $entry.trials) } → updated
+      let notice = "Experiment proposal recorded."
+    when eq($fields.action, "value"):
+      port kernel.invoke { query = "outcome.evidenceState"; input = { rows = $entry.evidence; hypothesis = "mill" } } → mill
+      port kernel.invoke { query = "outcome.evidenceState"; input = { rows = $entry.evidence; hypothesis = "demand" } } → demand
+      assert and(eq($mill, "Supported by recorded observations"), eq($demand, "Supported by recorded observations"))
+        otherwise "Record supporting observations for the binding mill constraint and saleable demand before calculating value."
+      port kernel.invoke { query = "portfolio.number"; input = { text = $fields.tonnes; min = 0; max = 10000000; integer = false } } → tonnes
+      port kernel.invoke { query = "portfolio.number"; input = { text = $fields.contribution; min = 0; max = 1000000; integer = false } } → contribution
+      port kernel.invoke { query = "portfolio.number"; input = { text = $fields.cost; min = 0; max = 100000000; integer = false } } → cost
+      port kernel.invoke { query = "portfolio.text"; input = { text = $fields.source; limit = 240 } } → provenance
+      port kernel.invoke { query = "portfolio.text"; input = { text = $fields.impact; limit = 800 } } → impact
+      port number.calculate { operation = "multiply"; values = list($tonnes, $contribution) } → gross
+      port number.calculate { operation = "subtract"; values = list($gross, $cost) } → net
+      let assessment = { tonnes = $tonnes; contribution = $contribution; cost = $cost; net = $net; provenance = $provenance; impact = $impact }
+      port record.put { record = $entry; key = "values"; value = append(list($assessment), $entry.values) } → updated
+      let notice = "Reported outcome value recorded."
+    let cases = map($cases, "entry", if(eq($entry.id, $id), $updated, $entry))
+  let result = { state = { cases = $cases }; target = $id; notice = $notice }
+
+process outcome.card:
+  let card = $eventInput
+  let entry = $card.entry
+  let screen = $card.screen
+  let hypotheses = $card.hypotheses
+  fold $hypotheses as hypothesis; diagnoses starts list():
+    port kernel.invoke { query = "outcome.evidenceState"; input = { rows = $entry.evidence; hypothesis = $hypothesis.value } } → assessment
+    yield append($diagnoses, list({ tag = "li"; attrs = {}; children = list(concat($hypothesis.label, " · ", $assessment)) })) → diagnoses
+  let hypothesis = { name = "hypothesis"; label = "Evidence hypothesis"; labelId = concat("evidence-hypothesis-", $entry.id); type = "select"; options = $hypotheses }
+  let kinds = map(list("Observation", "Inference"), "kind", { value = $kind; label = $kind })
+  let stances = map(list("Supports", "Challenges", "Context"), "stance", { value = $stance; label = $stance })
+  let inputs = list(
+    $hypothesis,
+    { name = "kind"; label = "Evidence type"; labelId = concat("evidence-kind-", $entry.id); type = "select"; options = $kinds },
+    { name = "polarity"; label = "Evidence relation"; labelId = concat("evidence-relation-", $entry.id); type = "select"; options = $stances },
+    { name = "source"; label = "Evidence source"; type = "text"; maxlength = 240; required = true },
+    { name = "note"; label = "Evidence note"; type = "textarea"; maxlength = 1000; required = true }
+  )
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = $inputs; target = $entry.id; action = "evidence"; button = "Record evidence" } } → evidenceForm
+  let inputs = list(
+    { name = "hypothesis"; label = "Experiment hypothesis"; labelId = concat("trial-hypothesis-", $entry.id); type = "select"; options = $hypotheses },
+    { name = "note"; label = "Reversible experiment"; type = "textarea"; maxlength = 800; required = true },
+    { name = "owner"; label = "Accountable owner"; type = "text"; maxlength = 120; required = true },
+    { name = "stop"; label = "Stop condition"; type = "text"; maxlength = 400; required = true }
+  )
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = $inputs; target = $entry.id; action = "trial"; button = "Save experiment proposal" } } → trialForm
+  let inputs = list(
+    { name = "tonnes"; label = "Observed saleable tonnes"; type = "number"; min = 0; max = 10000000; step = 0.0001; required = true },
+    { name = "contribution"; label = "Contribution per tonne"; type = "number"; min = 0; max = 1000000; step = 0.0001; required = true },
+    { name = "cost"; label = "Intervention cost"; type = "number"; min = 0; max = 100000000; step = 0.0001; required = true },
+    { name = "source"; label = "Measurement source"; type = "text"; maxlength = 240; required = true },
+    { name = "impact"; label = "Affected-party outcome"; type = "textarea"; maxlength = 800; required = true }
+  )
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = $inputs; target = $entry.id; action = "value"; button = "Record measured outcome" } } → valueForm
+  let evidence = map($entry.evidence, "row", { tag = "li"; attrs = {}; children = list(concat($row.kind, " · ", $row.polarity, " · ", $row.provenance, " · ", $row.note)) })
+  let trials = map($entry.trials, "row", { tag = "li"; attrs = {}; children = list(concat("Proposal · ", $row.note, " · owner ", $row.owner, " · stop if ", $row.stop, " · ", count($row.evidence), " evidence links")) })
+  let values = map($entry.values, "row", { tag = "li"; attrs = {}; children = list(concat("Reported net contribution: ", $row.net, " · ", $row.tonnes, " t · source ", $row.provenance, " · ", $row.impact)) })
+  let reading = if(count($values), { tag = "ul"; attrs = {}; children = $values }, { tag = "p"; attrs = {}; children = list("Value withheld pending reported measurements and evidence.") })
+  let heading = concat("outcome-", $entry.id)
+  let result = { tag = "article"; attrs = { "aria-labelledby" = $heading }; children = list(
+    { tag = "h3"; attrs = { id = $heading }; children = list($entry.name) },
+    { tag = "p"; attrs = {}; children = list($entry.desired) },
+    { tag = "ul"; attrs = { "aria-label" = "Hypothesis assessments" }; children = $diagnoses },
+    $evidenceForm, { tag = "ul"; attrs = {}; children = $evidence },
+    $trialForm, { tag = "ul"; attrs = {}; children = $trials },
+    $valueForm, $reading
+  ) }
+
+process product.view:
+  let screen = $eventInput
+  let inputs = list(
+    { name = "name"; label = "Case name"; type = "text"; maxlength = 120; required = true },
+    { name = "desired"; label = "Desired outcome"; type = "textarea"; maxlength = 800; required = true }
+  )
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = $inputs; action = "case"; button = "Open outcome case" } } → form
+  port kernel.invoke { query = "outcome.hypotheses" } → hypotheses
+  port kernel.invoke { query = "portfolio.recent"; input = { rows = $screen.state.cases; limit = 12 } } → recent
+  fold $recent as entry; cards starts list():
+    port kernel.invoke { query = "outcome.card"; input = { screen = $screen; entry = $entry; hypotheses = $hypotheses } } → card
+    yield append($cards, list($card)) → cards
+  let result = { title = "Outcome Value Navigator"; summary = "Trace an outcome from a possible binding constraint through evidence, a reversible trial and reported value."; content = append(list($form), $cards) }

@@ -1,0 +1,73 @@
+process-module "temple/surface-process-module/1"
+
+process harbor.statuses:
+  let result = list("Backlog", "In progress", "Done")
+
+process product.empty:
+  let result = { items = list(); epics = list() }
+
+process harbor.dependency:
+  let edge = $eventInput
+  let selected = $edge.item
+  let blocker = $edge.blocker
+  let dependencies = $selected.dependencies
+  when eq($edge.action, "remove-dependency"):
+    assert includes($dependencies, $blocker)
+      otherwise "Choose a dependency already on this item."
+    let dependencies = filter($dependencies, "id", not(eq($id, $blocker)))
+  when eq($edge.action, "add-dependency"):
+    assert not(eq($selected.id, $blocker))
+      otherwise "A work item cannot depend on itself."
+    assert not(includes($dependencies, $blocker))
+      otherwise "This dependency is already on the item."
+    port kernel.invoke { query = "work.item"; input = { items = $edge.items; id = $blocker } } → existing
+    # An acyclic graph with N items has no path of N edges.
+    fold $edge.items as round; walk starts { visited = list(); frontier = list($existing.id) }:
+      let next = $walk
+      when count($walk.frontier):
+        assert not(includes($walk.frontier, $selected.id))
+          otherwise "That dependency would create a cycle."
+        let visited = append($walk.visited, $walk.frontier)
+        fold filter($edge.items, "node", includes($walk.frontier, $node.id)) as node; neighbors starts list():
+          yield append($neighbors, $node.dependencies) → neighbors
+        let next = { visited = $visited; frontier = distinct(filter($neighbors, "id", not(includes($visited, $id)))) }
+      yield $next → walk
+    let dependencies = append($dependencies, list($blocker))
+  port record.put { record = $selected; key = "dependencies"; value = $dependencies } → result
+
+process product.change:
+  let command = $eventInput
+  let fields = $command.fields
+  let items = $command.state.items
+  let epics = $command.state.epics
+  let action = $fields.action
+  assert includes(list("add", "add-epic", "plan", "add-dependency", "remove-dependency"), $action)
+    otherwise "Choose a Harborboard action."
+  let notice = ""
+  let target = $command.id
+  when eq($action, "add"):
+    port kernel.invoke { query = "work.label"; input = { text = $fields.title; limit = 500 } } → title
+    port kernel.invoke { query = "harbor.statuses" } → statuses
+    let items = append($items, list({ id = $target; title = $title; status = at($statuses, 0); epic = ""; dependencies = list() }))
+    let notice = "Work item added."
+  when eq($action, "add-epic"):
+    port kernel.invoke { query = "work.label"; input = { text = $fields.title; limit = 200 } } → title
+    let epics = append($epics, list({ id = $target; title = $title }))
+    let notice = "Epic added."
+  when includes(list("plan", "add-dependency", "remove-dependency"), $action):
+    let target = $fields.item
+    port kernel.invoke { query = "work.item"; input = { items = $items; id = $target } } → selected
+    let changed = $selected
+    when eq($action, "plan"):
+      port kernel.invoke { query = "harbor.statuses" } → statuses
+      assert includes($statuses, $fields.status)
+        otherwise "Choose a planning state."
+      assert or(eq($fields.epic, ""), some($epics, "epic", eq($epic.id, $fields.epic)))
+        otherwise "Choose an existing epic or No epic."
+      let changed = { id = $selected.id; title = $selected.title; status = $fields.status; epic = $fields.epic; dependencies = $selected.dependencies }
+      let notice = "Plan updated."
+    when includes(list("add-dependency", "remove-dependency"), $action):
+      port kernel.invoke { query = "harbor.dependency"; input = { action = $action; items = $items; item = $selected; blocker = $fields.blocker } } → changed
+      let notice = if(eq($action, "add-dependency"), "Dependency added.", "Dependency removed.")
+    let items = map($items, "item", if(eq($item.id, $target), $changed, $item))
+  let result = { state = { items = $items; epics = $epics }; notice = $notice; target = $target }

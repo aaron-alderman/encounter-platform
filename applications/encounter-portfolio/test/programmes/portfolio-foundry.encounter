@@ -1,0 +1,47 @@
+process-module "temple/surface-process-module/1"
+
+process portfolio.test.submit:
+  let locator = list({ role = "button"; name = $button })
+  port browser.act { page = $page; locator = $locator; action = "click"; event = "navigation" } → navigation
+  assert eq($navigation.status, 200)
+    otherwise "The application must accept the visible form through its ordinary HTTP route."
+
+process test.portfolio.foundry:
+  port browser.open { declaration = "products/foundry-mine-to-port/application.rel"; width = 390; height = 844 } → opened
+  assert eq($opened.status, 200)
+    otherwise "The Foundry preview did not open."
+  let page = $opened.page
+  let button = "Run scenario"
+  call portfolio.test.submit
+  port browser.observe { page = $page; locator = list({ text = "Throughput: 90 t/h" }); property = "count" } → baseline
+  assert eq($baseline, 1)
+    otherwise "Seed 1 must reproduce the legacy 90 t/h baseline."
+  port browser.act { page = $page; locator = list({ label = "Scenario" }); action = "select"; value = "rail-disruption" } → _
+  call portfolio.test.submit
+  port browser.observe { page = $page; locator = list({ text = "Throughput: 65 t/h" }); property = "count" } → disturbed
+  port browser.observe { page = $page; locator = list({ text = "Recovery: 5 h" }); property = "count" } → recovery
+  assert and(eq($disturbed, 1), eq($recovery, 1))
+    otherwise "The rail disturbance must preserve legacy throughput and recovery."
+  port browser.act { page = $page; locator = list({ label = "Scenario" }); action = "select"; value = "port-expansion" } → _
+  call portfolio.test.submit
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  port browser.observe { page = $page; locator = list({ text = "Throughput: 95 t/h" }); property = "count" } → expansion
+  port browser.observe { page = $page; locator = list({ text = "Bottleneck: Marine departure" }); property = "count" } → migration
+  port browser.observe { page = $page; property = "overflow" } → overflow
+  assert and(eq($expansion, 1), eq($migration, 1), not($overflow))
+    otherwise "Port expansion must move the bottleneck to marine departure and survive a cold reopen."
+
+process test.portfolio.parallel-previews:
+  port browser.open { declaration = "products/foundry-mine-to-port/application.rel" } → foundry
+  port browser.open { declaration = "products/tradie/application.rel" } → tradie
+  port browser.observe { page = $tradie.page; property = "origin" } → otherOrigin
+  port browser.page { browser = $foundry.browser; route = $otherOrigin } → otherTab
+  assert eq($otherTab.status, 200)
+    otherwise "The second application must open in the first preview’s browser context."
+  let page = $foundry.page
+  let button = "Run scenario"
+  call portfolio.test.submit
+  port browser.observe { page = $page; locator = list({ text = "Throughput: 90 t/h" }); property = "count" } → saved
+  assert eq($saved, 1)
+    otherwise "Opening another app must preserve the first app’s session."

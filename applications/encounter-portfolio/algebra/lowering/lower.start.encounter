@@ -1,0 +1,55 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lower.start:
+  assert eq($definitions.protocol, "temple/derived-expression-definitions/1")
+    otherwise "Unknown expression definition protocol"
+  port record.entries { value = $definitions.operators } → rules
+  each $rules as ruleEntry:
+    let ruleName = at($ruleEntry, 0)
+    let rule = at($ruleEntry, 1)
+    assert if(
+      if(includes($primitives, $ruleName), false, true),
+      if(
+        if(includes(list("__proto__", "prototype", "constructor"), $ruleName), false, true),
+        true,
+        false
+      ),
+      false
+    )
+      otherwise "Invalid or shadowing operator definition [TEMPLE-L004]. Boundary: primitive ownership and operator names. Use a valid distinct derived name; do not replace a seed primitive with a second definition. Rerun the isolated bootstrap proof."
+    let arity = at($rule, "arity")
+    port value.describe { value = $arity } → arityKind
+    let declaredArity = if(eq($arityKind.type, "number"), $arity, at($rule, "minimumArity"))
+    port value.describe { value = $declaredArity } → declaredKind
+    assert if(eq($declaredKind.type, "number"), includes(range(64), add($declaredArity, 1)), false)
+      otherwise "Invalid operator arity declaration"
+    port value.describe { value = at($rule, "body") } → bodyKind
+    assert if(eq($bodyKind.type, "undefined"), false, true)
+      otherwise "Missing operator body [TEMPLE-L005]. Boundary: executable derived law. Supply the authored lowering body; do not restore a retired implementation module. Rerun the isolated bootstrap proof."
+  let originalInput = $input
+  fold list(list($input, $definitions)) as invokeInput; invokeAcc starts null:
+    let input = $invokeInput
+    fold list(null) as callFrame; frameResult starts null:
+      call lower.scan
+      yield $result → result
+    yield $result → names
+  let context = { used = distinct($names); serial = 0; locals = {  } }
+  let ancestry = []
+  assert includes(list("expression", "programme", "model"), $mode)
+    otherwise "Unknown lowering mode"
+  when eq($mode, "expression"):
+    let input = $originalInput
+    fold list(null) as callFrame; frameResult starts null:
+      call lower.expression
+      yield $result → result
+  when eq($mode, "programme"):
+    let input = $originalInput
+    fold list(null) as callFrame; frameResult starts null:
+      call lower.programme
+      yield $result → result
+  when eq($mode, "model"):
+    let input = $originalInput
+    fold list(null) as callFrame; frameResult starts null:
+      call lower.model
+      yield $result → result

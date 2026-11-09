@@ -1,0 +1,638 @@
+process-module "temple/surface-process-module/1"
+
+process browser.serve:
+  port browser.serve { application = or(at($host, "application"), null); project = or(at($host, "project"), null); declaration = or(at($host, "declaration"), null); directory = or(at($host, "directory"), null) } → line
+  port text.matches { value = $line; pattern = "^Encounter http://127\\.0\\.0\\.1:[0-9]+$" } → listening
+  assert $listening
+    otherwise "Rust must report its loopback listener."
+
+process browser.open:
+  port browser.open { name = $page } → status
+  assert eq($status, 200)
+    otherwise "The application page must open successfully."
+
+process browser.fill:
+  port browser.act { name = $page; locator = list({ label = $field }); action = "fill"; value = $value } → _
+
+process browser.act:
+  port browser.act { name = $page; locator = $locator; action = $action; value = $value; navigate = true } → status
+
+process browser.click:
+  let action = "click"
+  let value = null
+  call browser.act
+  assert eq($status, 200)
+    otherwise "Browser navigation must return 200."
+
+process browser.submit:
+  let locator = list({ role = "button"; name = $button; exact = $exact })
+  call browser.click
+
+process browser.observe:
+  port browser.observe { name = $page; locator = $locator; property = $property } → observed
+
+process browser.expect:
+  call browser.observe
+  assert eq($observed, $expected)
+    otherwise "The browser observation differs from the expected result."
+
+process browser.sees:
+  let locator = list({ text = $text; exact = $exact })
+  let property = "count"
+  let expected = 1
+  call browser.expect
+
+process browser.status:
+  let locator = list({ role = "status" })
+  let property = "text"
+  call browser.expect
+
+process browser.alert:
+  let locator = list({ role = "alert" })
+  let property = "text"
+  call browser.observe
+  port text.matches { value = $observed; pattern = $pattern } → matched
+  assert $matched
+    otherwise "The browser must expose the expected refusal."
+
+process browser.listed:
+  let locator = list({ role = "listitem" })
+  let property = "list"
+  call browser.expect
+
+process browser.addPilot:
+  let field = "New work item"
+  let value = concat("  ", $item, "  ")
+  call browser.fill
+  let locator = list({ role = "button"; name = "Add work item"; exact = false })
+  let action = "press"
+  let value = "Enter"
+  call browser.act
+  assert eq($status, 200)
+    otherwise "Keyboard Add must succeed."
+  let expected = "Work item added."
+  call browser.status
+
+process browser.pilot:
+  let directory = "journal"
+  let host = { directory = $directory }
+  call browser.serve
+  let page = "current"
+  call browser.open
+  let field = "New work item"
+  let value = "   "
+  call browser.fill
+  let locator = list({ role = "button"; name = "Add work item"; exact = false })
+  let action = "click"
+  let value = null
+  call browser.act
+  assert eq($status, 422)
+    otherwise "Blank input must receive a 422 refusal."
+  let pattern = "nonblank name"
+  call browser.alert
+  port journal.read { directory = $directory } → records
+  assert eq($records, list())
+    otherwise "A blank submission must leave the journal empty."
+  let titles = list("Café 🌱 <work>", "Second item", "Third item", "Fourth item", "Fifth item", "Sixth item", "Seventh item", "Eighth item")
+  let first = at($titles, 0)
+  let second = at($titles, 1)
+  let item = $first
+  call browser.addPilot
+  let page = "stale"
+  call browser.open
+  let expected = list($first)
+  call browser.listed
+  let page = "current"
+  let item = $second
+  call browser.addPilot
+  let expected = list($first, $second)
+  call browser.listed
+  port journal.read { directory = $directory } → beforeStale
+  let page = "stale"
+  let field = "New work item"
+  let value = "A stale submission"
+  call browser.fill
+  let locator = list({ role = "button"; name = "Add work item"; exact = false })
+  let action = "click"
+  call browser.act
+  assert eq($status, 409)
+    otherwise "The stale tab must receive a conflict."
+  let pattern = "out of date"
+  call browser.alert
+  let expected = list($first, $second)
+  call browser.listed
+  port journal.read { directory = $directory } → afterStale
+  assert eq($afterStale, $beforeStale)
+    otherwise "A stale submission must leave the journal unchanged."
+  let page = "current"
+  each list("Third item", "Fourth item", "Fifth item", "Sixth item", "Seventh item", "Eighth item") as item:
+    call browser.addPilot
+  let expected = $titles
+  call browser.listed
+  call browser.fullPilot
+  let exact = false
+  let text = "This board is full."
+  call browser.sees
+  port journal.read { directory = $directory } → records
+  let genesis = at($records, 0)
+  let templeId = $genesis.entry.signed.payload.templeId
+  port journal.replay { records = $records; templeId = $templeId } → replay
+  let initial = { index = 0; items = list() }
+  fold $titles as title; state starts $initial:
+    let index = add($state.index, 1)
+    let item = { id = concat("todo.", $index); title = $title }
+    yield { index = $index; items = append($state.items, list($item)) } → indexed
+  assert and(eq(count($records), add(count($titles), 1)), eq($replay.sequence, concat("", count($titles))), eq(count($replay.purposes), count($titles)), eq($replay.items, $indexed.items))
+    otherwise "Independent replay must retain every work item in order."
+  each $replay.purposes as purpose:
+    assert eq($purpose, "finalized-witness")
+      otherwise "Each accepted work item must have a finalized witness."
+  port journal.submit { directory = $directory; base = $replay.head; operation = "ninth"; title = "Ninth item" } → ninth
+  assert and(eq($ninth.status, 1), eq($ninth.error, "board-capacity"))
+    otherwise "The ninth Add must refuse at the board capacity."
+  port journal.read { directory = $directory } → latest
+  assert eq($latest, $records)
+    otherwise "The capacity refusal must leave the journal unchanged."
+  port browser.stop {} → _
+  call browser.serve
+  let page = "reopened"
+  call browser.open
+  let expected = $titles
+  call browser.listed
+  call browser.fullPilot
+  port journal.read { directory = $directory } → latest
+  assert eq($latest, $records)
+    otherwise "Cold restart must retain the exact signed journal."
+  port test.report { text = "ok - eight browser Adds survive restart in order; stale tab and blank title write no records" } → _
+
+process browser.fullPilot:
+  let locator = list({ role = "button"; name = "Add work item"; exact = false })
+  let property = "count"
+  let expected = 0
+  call browser.expect
+
+process browser.claimipedia:
+  let host = { application = "claimipedia" }
+  call browser.serve
+  let page = "claims"
+  call browser.open
+  let exact = false
+  each list("Pinned release v1.0.0 · 122 released claims", "122 matches · showing 18") as text:
+    call browser.sees
+  let field = "Search claims"
+  let value = "  NORTH RIVER RESTORATION REDUCED MEAN NITRATE  "
+  call browser.fill
+  let locator = list({ role = "button"; name = "Search"; exact = false })
+  let action = "press"
+  let value = "Enter"
+  call browser.act
+  assert eq($status, 200)
+    otherwise "Search must return a successful response."
+  let locator = list({ role = "list"; name = "Claim search results"; exact = false }, { role = "listitem" })
+  let property = "count"
+  let expected = 1
+  call browser.expect
+  let locator = list({ role = "list"; name = "Claim search results"; exact = false }, { role = "link"; name = "clm_01_RIVER_NITRATE"; exact = false })
+  call browser.click
+  each list("Released version 1 · claimVersion.riverNitrate.1", "North River monitoring sites; calendar year 2025") as text:
+    call browser.sees
+  let locator = list({ role = "link"; name = "Back to claim search"; exact = false })
+  call browser.click
+  let field = "Search claims"
+  let value = "absent <script> query"
+  call browser.fill
+  let button = "Search"
+  call browser.submit
+  let text = "0 matches · showing 0"
+  call browser.sees
+  let locator = list({ label = "Search claims"; exact = false })
+  let property = "value"
+  let expected = "absent <script> query"
+  call browser.expect
+  port browser.request { method = "POST"; route = ""; form = { action = "revise" } } → response
+  assert eq($response.status, 405)
+    otherwise "The pinned release must refuse writes."
+  call browser.fits
+  port test.report { text = "ok - same executable searches the pinned Claimipedia release, opens history and refuses writes" } → _
+
+process browser.fits:
+  let locator = list()
+  let property = "overflow"
+  let expected = false
+  call browser.expect
+
+process browser.workgarden:
+  let directory = "sqlite-workgarden"
+  let host = { project = "encounter-work-boards"; declaration = "products/workgarden/application.rel"; directory = $directory }
+  call browser.serve
+  let page = "full"
+  call browser.open
+  let locator = list({ role = "heading"; name = "Workgarden"; exact = false })
+  let property = "count"
+  let expected = 1
+  call browser.expect
+  port browser.request { method = "GET"; route = "/styles.css" } → css
+  port text.matches { value = $css.type; pattern = "^text/css" } → stylesheet
+  assert and(eq($css.status, 200), $stylesheet)
+    otherwise "Declared Workgarden must serve its stylesheet."
+  let title = "SQLite Café 🌱 <work>"
+  let field = "New work item"
+  let value = $title
+  call browser.fill
+  let button = "Add work item"
+  let exact = false
+  call browser.submit
+  let expected = "Work item added."
+  call browser.status
+  let locator = list({ role = "heading"; name = $title; exact = false })
+  let property = "count"
+  let expected = 1
+  call browser.expect
+  let page = "old"
+  call browser.open
+  let page = "full"
+  let button = "Complete"
+  let exact = true
+  call browser.submit
+  let expected = "Work item completed."
+  call browser.status
+  let page = "old"
+  let field = "New work item"
+  let value = "Stale SQLite submission"
+  call browser.fill
+  let locator = list({ role = "button"; name = "Add work item"; exact = false })
+  let action = "click"
+  let value = null
+  call browser.act
+  let pattern = "out of date"
+  call browser.alert
+  let locator = list({ role = "heading"; name = "Stale SQLite submission"; exact = false })
+  let property = "count"
+  let expected = 0
+  call browser.expect
+  let locator = list({ role = "button"; name = "Reopen"; exact = false })
+  let expected = 1
+  call browser.expect
+  port browser.stop {} → _
+  port store.read { directory = $directory; revision = 2; document = "work-items.rel" } → stored
+  let item = at($stored.state.items, 0)
+  assert and(eq($stored.revisions, list(list(1, 0), list(2, 1))), eq($item.title, $title), eq($item.completed, true))
+    otherwise "SQLite must retain exactly the accepted Add and Complete revisions."
+  call browser.serve
+  let page = "recovered"
+  call browser.open
+  let locator = list({ role = "heading"; name = $title; exact = false })
+  let property = "count"
+  let expected = 1
+  call browser.expect
+  let locator = list({ role = "button"; name = "Reopen"; exact = false })
+  call browser.expect
+  let button = "Reopen"
+  let exact = false
+  call browser.submit
+  let expected = "Work item reopened."
+  call browser.status
+  let locator = list({ role = "button"; name = "Complete" })
+  let property = "count"
+  let expected = 1
+  call browser.expect
+  port test.report { text = "ok - full declared Workgarden adds, completes, rejects a stale form, restarts and reopens via SQLite" } → _
+
+process browser.harborEdit:
+  let card = list({ role = "article"; name = $title })
+  let locator = append($card, list({ text = "Edit plan and dependencies" }))
+  port browser.act { name = $page; locator = $locator; action = "click" } → _
+
+process browser.harborSelect:
+  let locator = append($card, list({ label = $field }))
+  port browser.act { name = $page; locator = $locator; action = "select"; value = $choice; byLabel = true } → _
+
+process browser.harborPlan:
+  call browser.harborEdit
+  let field = "Status"
+  let choice = $planStatus
+  call browser.harborSelect
+  when $epic:
+    let field = "Epic"
+    let choice = $epic
+    call browser.harborSelect
+  let locator = append($card, list({ role = "button"; name = "Save plan" }))
+  call browser.click
+
+process browser.harborDependency:
+  call browser.harborEdit
+  let field = "Depends on"
+  let choice = $dependency
+  call browser.harborSelect
+  let locator = append($card, list({ role = "button"; name = "Add dependency" }))
+  call browser.click
+
+process browser.harborCardText:
+  let locator = list({ role = "article"; name = $title }, { text = $text; exact = false })
+  let property = "count"
+  call browser.expect
+
+process browser.harbor:
+  let directory = "sqlite-harborboard"
+  let host = { project = "encounter-work-boards"; declaration = "products/harborboard/application.rel"; directory = $directory }
+  call browser.serve
+  let page = "harbor"
+  call browser.open
+  let locator = list()
+  let property = "title"
+  let expected = "Harborboard"
+  call browser.expect
+  let exact = true
+  let field = "New epic"
+  let value = "Spring launch"
+  call browser.fill
+  let button = "Add epic"
+  call browser.submit
+  each list("Publish guide", "Review guide", "Draft guide") as value:
+    let field = "New work item"
+    call browser.fill
+    let button = "Add work item"
+    let exact = false
+    call browser.submit
+  let title = "Publish guide"
+  let planStatus = "In progress"
+  let epic = "Spring launch"
+  call browser.harborPlan
+  let locator = list({ role = "region"; name = "In progress"; exact = false }, { role = "article"; name = "Publish guide"; exact = false })
+  let property = "count"
+  let expected = 1
+  call browser.expect
+  let text = "Epic: Spring launch"
+  call browser.harborCardText
+  let dependency = "Review guide"
+  call browser.harborDependency
+  let title = "Review guide"
+  let dependency = "Draft guide"
+  call browser.harborDependency
+  let title = "Publish guide"
+  let text = "Blocked by: Review guide"
+  call browser.harborCardText
+  let title = "Draft guide"
+  let dependency = "Publish guide"
+  call browser.harborDependency
+  let pattern = "create a cycle"
+  call browser.alert
+  let text = "Depends on: Publish guide"
+  let expected = 0
+  call browser.harborCardText
+  let title = "Review guide"
+  let planStatus = "Done"
+  let epic = null
+  call browser.harborPlan
+  let title = "Publish guide"
+  let text = "Blocked by: Review guide"
+  call browser.harborCardText
+  port browser.stop {} → _
+  port store.read { directory = $directory } → stored
+  assert eq(count($stored.revisions), 8)
+    otherwise "Harborboard must record exactly eight accepted revisions."
+  call browser.serve
+  call browser.open
+  let expected = 1
+  each list("Depends on: Review guide", "Epic: Spring launch") as text:
+    call browser.harborCardText
+  let locator = list({ role = "region"; name = "Done"; exact = false }, { role = "article"; name = "Review guide"; exact = false })
+  let property = "count"
+  call browser.expect
+  call browser.harborEdit
+  let locator = append($card, list({ role = "button"; name = "Remove dependency: Review guide" }))
+  call browser.click
+  let text = "Depends on: Review guide"
+  let expected = 0
+  call browser.harborCardText
+  call browser.fits
+  port test.report { text = "ok - declared Harborboard saves epics, plans and dependencies, refuses cycles, and restores the board" } → _
+
+process browser.timeFields:
+  each list(list("Person", "Alex"), list("Project", "Stocktake"), list("Work date", "2000-02-29"), list("Hours", $hours)) as input:
+    let field = at($input, 0)
+    let value = at($input, 1)
+    call browser.fill
+
+process browser.timesheet:
+  let directory = "sqlite-timesheet"
+  let host = { project = "encounter-portfolio"; declaration = "products/timesheet/application.rel"; directory = $directory }
+  call browser.serve
+  let page = "timesheet"
+  call browser.open
+  let locator = list()
+  let property = "title"
+  let expected = "Timesheet"
+  call browser.expect
+  # Exercise the server's calendar validation through the form's session coordinates.
+  let locator = list({ role = "button"; name = "Log time"; exact = false }, { css = "xpath=ancestor::form" })
+  let property = "fields"
+  call browser.observe
+  let form = $observed
+  fold list(list("person", "Alex"), list("project", "Stocktake"), list("date", "1900-02-29"), list("hours", "7.25"), list("note", "")) as field; form starts $form:
+    port record.put { record = $form; key = at($field, 0); value = at($field, 1) } → form
+    yield $form → form
+  port browser.request { method = "POST"; route = ""; form = $form; sameOrigin = true } → refused
+  assert and(eq($refused.status, 200), includes($refused.text, "Enter a valid work date"))
+    otherwise "The invalid date must be refused by the application's calendar check."
+  let hours = "7.25"
+  call browser.timeFields
+  let exact = true
+  let button = "Log time"
+  call browser.submit
+  let text = "Alex · 2000-02-29 · 7.25 h · Draft"
+  call browser.sees
+  let button = "Submit entry"
+  call browser.submit
+  let text = "Alex · 2000-02-29 · 7.25 h · Submitted"
+  call browser.sees
+  let button = "Approve entry"
+  call browser.submit
+  let text = "Approved total: 7.25 h"
+  call browser.sees
+  let hours = "20"
+  call browser.timeFields
+  let button = "Log time"
+  call browser.submit
+  let pattern = "cannot log more than 24 hours"
+  call browser.alert
+  let text = "Approved total: 7.25 h"
+  call browser.sees
+  port browser.stop {} → _
+  port store.read { directory = $directory } → stored
+  assert eq(count($stored.revisions), 3)
+    otherwise "Timesheet must retain only the three successful transitions."
+  call browser.serve
+  call browser.open
+  each list("Alex · 2000-02-29 · 7.25 h · Approved", "Approved total: 7.25 h") as text:
+    call browser.sees
+  port test.report { text = "ok - declared Timesheet validates dates and daily totals, logs and approves fractional hours, and survives restart" } → _
+
+process browser.revision:
+  let locator = list({ css = ".revision" })
+  let property = "text"
+  call browser.observe
+  port text.matches { value = $observed; pattern = "revision [0-9]+" } → present
+  assert $present
+    otherwise "The workspace must display its revision."
+  port text.split { value = $observed; pattern = "revision " } → parts
+  let displayed = at($parts, 1)
+  port text.split { value = $displayed; pattern = "[^0-9]+" } → digits
+  let revision = at($digits, 0)
+
+process browser.authorNavigate:
+  let locator = list({ role = "navigation"; name = "Workspace"; exact = false }, { role = "link"; name = $section })
+  call browser.click
+
+process browser.prepare:
+  let form = list({ css = "form"; has = list({ role = "heading"; name = $heading; hidden = true }) })
+  let locator = $form
+  let property = "count"
+  let expected = 1
+  call browser.expect
+  let property = "visible"
+  call browser.observe
+  when not($observed):
+    let locator = append($form, list({ css = "xpath=ancestor::details[1]/summary" }))
+    port browser.act { name = $page; locator = $locator; action = "click" } → _
+  let prompts = list(list("Why this change?", "Verify one reviewed authoring change"), list("What exactly changes?", $target), list("What should it help achieve?", "Publish a small field journal"))
+  each append($fields, $prompts) as input:
+    let locator = append($form, list({ label = at($input, 0) }))
+    let property = "tag"
+    call browser.observe
+    let action = if(eq($observed, "SELECT"), "select", "fill")
+    port browser.act { name = $page; locator = $locator; action = $action; value = at($input, 1) } → _
+  let locator = append($form, list({ role = "button"; name = "Review one change" }))
+  call browser.click
+
+process browser.save:
+  call browser.revision
+  let before = $revision
+  call browser.prepare
+  let locator = list({ role = "heading"; name = "Review one change" })
+  let property = "count"
+  let expected = 1
+  call browser.expect
+  call browser.revision
+  assert eq($revision, $before)
+    otherwise "Previewing one change must leave the revision unchanged."
+  let locator = list({ role = "button"; name = "Accept this change" })
+  call browser.click
+  call browser.revision
+  assert eq($revision, concat("", $next))
+    otherwise "Acceptance must advance exactly one revision."
+
+process browser.projection:
+  let locator = list({ css = "[data-projection=journalRow] td" })
+  let property = "text"
+  let expected = "Along the river · field journal"
+  call browser.expect
+
+process browser.authoring:
+  let directory = "sqlite-authoring"
+  let host = { project = "encounter"; declaration = "bootstrap/application.rel"; directory = $directory }
+  call browser.serve
+  let page = "author"
+  call browser.open
+  let locator = list()
+  let property = "title"
+  let expected = "Encounter — your work"
+  call browser.expect
+  call browser.revision
+  assert eq($revision, "0")
+    otherwise "The authoring workspace must open at revision zero."
+  let heading = "What would you like to make?"
+  let fields = list(list("I want to… because…", "Keep a field journal"))
+  let target = "Journal intent"
+  let next = 1
+  call browser.save
+  let heading = "Define a kind of thing"
+  let fields = list(list("Type identity", "TrailNote"), list("Type name", "Trail note"))
+  let target = "Type TrailNote"
+  let next = 2
+  call browser.save
+  let locator = list({ role = "link"; name = "Trail note" })
+  call browser.click
+  let heading = "Add one field"
+  let fields = list(list("Field identity", "Title"), list("Field name", "Title"), list("Value type", "Text"), list("Reference target type (Reference only)", ""))
+  let target = "TrailNote.Title"
+  let next = 3
+  call browser.save
+  let heading = "Create a thing"
+  let fields = list(list("Thing identity", "dawn"), list("Thing name", "Dawn walk"), list("Type", "TrailNote"), list("Role alias (blank for unaliased)", ""), list("Initial values document", "Title = \"Along the river\"\r\n"))
+  let target = "Thing dawn"
+  let next = 4
+  call browser.save
+  let section = "Actions"
+  call browser.authorNavigate
+  let module = "process-module \"temple/surface-process-module/1\"\nprocess run:\n"
+  let fields = list(list("Action identity", "Annotate"), list("Action name", "Annotate title"), list("Input type", "Text"), list("Output type", "Text"))
+  let base = $fields
+  call browser.revision
+  let before = $revision
+  let heading = "Create an action"
+  let fields = append($base, list(list("Encounter source", concat($module, "  let result = 42\n"))))
+  let target = "Invalid action"
+  call browser.prepare
+  let locator = list({ role = "status" })
+  let property = "text"
+  call browser.observe
+  assert includes($observed, "inferred result")
+    otherwise "A result of the wrong type must fail review."
+  let locator = list({ role = "button"; name = "Accept this change"; exact = false })
+  let property = "count"
+  let expected = 0
+  call browser.expect
+  call browser.revision
+  assert eq($revision, $before)
+    otherwise "Invalid action review must leave history unchanged."
+  let fields = append($base, list(list("Encounter source", concat($module, "  let result = concat($eventInput, \" · field journal\")\n"))))
+  let target = "Action Annotate"
+  let next = 5
+  call browser.save
+  let section = "Projections"
+  call browser.authorNavigate
+  let heading = "Create a projection"
+  let fields = list(list("Projection identity", "journalRow"), list("Source thing", "dawn"), list("Exact role alias (blank selects unaliased)", ""), list("Source field identity", "Title"), list("Representation", "row"), list("Optional action", "Annotate"))
+  let target = "Projection journalRow"
+  let next = 6
+  call browser.save
+  call browser.projection
+  let section = "Source"
+  call browser.authorNavigate
+  each list("actions/Annotate.encounter", "source/foundation/compiler/entry.encounter") as file:
+    let locator = list({ css = "summary"; contains = $file })
+    let property = "count"
+    let expected = 1
+    call browser.expect
+  let section = "History"
+  call browser.authorNavigate
+  let locator = list({ role = "heading"; name = "Revision 6" })
+  let property = "count"
+  let expected = 1
+  call browser.expect
+  port browser.stop {} → _
+  call browser.serve
+  call browser.open
+  call browser.revision
+  assert eq($revision, "6")
+    otherwise "Cold restart must restore revision six."
+  let section = "Projections"
+  call browser.authorNavigate
+  call browser.projection
+  port test.report { text = "ok - authoring reviews typed source, refuses an invalid action, executes a valid action, and restores history" } → _
+
+process test.browser:
+  port browser.launch { width = 390; height = 844 } → _
+  call browser.pilot
+  port browser.stop {} → _
+  call browser.claimipedia
+  port browser.stop {} → _
+  call browser.workgarden
+  port browser.stop {} → _
+  call browser.harbor
+  port browser.stop {} → _
+  call browser.timesheet
+  port browser.stop {} → _
+  call browser.authoring
+  let result = true

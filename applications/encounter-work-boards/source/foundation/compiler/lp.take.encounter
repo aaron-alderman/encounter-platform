@@ -1,0 +1,15 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lp.take:
+  let i = $eventInput.i
+  when not(eq(at(at($lpTokens, $i), "text"), $eventInput.expected)):
+    port kernel.invoke {
+      query = "lp.fail";
+      input = {
+        code = "PROC-TEXT-SYNTAX";
+        summary = concat("Expected ", $eventInput.expected, ".");
+        token = at($lpTokens, $i)
+      }
+    } → unused
+  let result = add($i, 1)

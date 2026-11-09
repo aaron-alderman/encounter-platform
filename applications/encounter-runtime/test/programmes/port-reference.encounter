@@ -1,0 +1,31 @@
+process-module "temple/surface-process-module/1"
+
+process ports.fields:
+  let fields = map(filter($contract.application, "row", and(eq($row.s, "application"), eq($row.p, $field))), "row", $row.o)
+
+process test.ports:
+  port reference.contracts {} → contract
+  let declaration = at(filter($contract.platform, "row", and(eq($row.s, "platform"), eq($row.p, "declaration"))), 0)
+  let expectedPorts = at(filter($contract.platform, "row", and(eq($row.s, "platform"), eq($row.p, "ports"))), 0)
+  let portVersion = at(filter($contract.ports, "row", and(eq($row.s, "ports"), eq($row.p, "version"))), 0)
+  let field = "contract"
+  call ports.fields
+  assert and(eq($fields, list($declaration.o)), eq($portVersion.o, $expectedPorts.o))
+    otherwise "The shared application and port fixtures must bind the declared platform contract."
+  let field = "grant"
+  call ports.fields
+  let grants = $fields
+  each $grants as grant:
+    each list("input", "output", "effect", "semantics") as field:
+      let rows = filter($contract.ports, "row", and(eq($row.s, $grant), eq($row.p, $field)))
+      assert eq(count($rows), 1)
+        otherwise "Each granted mechanism must have one complete port declaration."
+  let field = "module"
+  call ports.fields
+  let modules = $fields
+  let field = "entry"
+  call ports.fields
+  port reference.admit { grants = $grants; modules = $modules; entries = $fields } → _
+  port reference.probe { entry = "probe.values" } → values
+  port reference.probe { entry = "probe.numeric" } → numeric
+  let result = { values = $values; numeric = $numeric }

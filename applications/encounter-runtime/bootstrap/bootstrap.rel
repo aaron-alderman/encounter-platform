@@ -1,0 +1,7 @@
+// Common bootstrap for the first bounded native command profile.
+("bootstrap", "version", "encounter/bootstrap/1")
+("bootstrap", "executionProfile", "encounter/source-command/1")
+("bootstrap", "meter", "shared-source-and-evaluation-steps/1")
+("bootstrap", "limit", "20000000")
+("bootstrap", "ports", "bootstrap/ports.rel")
+("bootstrap", "referenceFoundationSha256", "87d1806a85d35b415651fc115a1c6c1498c8988436f5b04046335732ce92558b")

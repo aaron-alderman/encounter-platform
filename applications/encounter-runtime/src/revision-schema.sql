@@ -1,0 +1,15 @@
+PRAGMA journal_mode=WAL;
+PRAGMA synchronous=FULL;
+PRAGMA foreign_keys=ON;
+PRAGMA busy_timeout=3000;
+CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS revisions(id INTEGER PRIMARY KEY,parent INTEGER NOT NULL,operation_id TEXT NOT NULL UNIQUE,source_hash TEXT NOT NULL,reason TEXT NOT NULL,target TEXT NOT NULL,goal TEXT NOT NULL,source TEXT NOT NULL,description TEXT NOT NULL,created TEXT NOT NULL,basis TEXT NOT NULL,profile TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS documents(revision INTEGER NOT NULL REFERENCES revisions(id),path TEXT NOT NULL,text TEXT NOT NULL,PRIMARY KEY(revision,path));
+CREATE TRIGGER IF NOT EXISTS revisions_immutable_update BEFORE UPDATE ON revisions BEGIN SELECT RAISE(ABORT,'Immutable revision');
+END;
+CREATE TRIGGER IF NOT EXISTS revisions_immutable_delete BEFORE DELETE ON revisions BEGIN SELECT RAISE(ABORT,'Immutable revision');
+END;
+CREATE TRIGGER IF NOT EXISTS documents_immutable_update BEFORE UPDATE ON documents BEGIN SELECT RAISE(ABORT,'Immutable document');
+END;
+CREATE TRIGGER IF NOT EXISTS documents_immutable_delete BEFORE DELETE ON documents BEGIN SELECT RAISE(ABORT,'Immutable document');
+END;

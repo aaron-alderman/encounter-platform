@@ -1,0 +1,110 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lp.fields:
+  let i = at($eventInput, "i")
+  let pointer = at($eventInput, "pointer")
+  let depth = at($eventInput, "depth")
+  let origins = at($eventInput, "origins")
+  let entries = at($eventInput, "entries")
+  let keys = at($eventInput, "keys")
+  let done = eq(at(at($lpTokens, $i), "text"), "}")
+  when $done:
+    let i = add($i, 1)
+  when not($done):
+    let begin = at($lpTokens, $i)
+    let key = at(at($lpTokens, $i), "text")
+    port text.matches { value = $key; pattern = "^\"" } → quoted
+    when $quoted:
+      port kernel.invoke { query = "lp.decode"; input = { token = $begin } } → key
+    when not($quoted):
+      port kernel.invoke { query = "lp.name"; input = { text = $key; qualified = false; token = $begin } } → key
+    when not(not(includes(at($lpPolicy, "forbidden"), $key))):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = { code = "PROC-TEXT-NAME"; summary = "Reserved record key."; token = at($lpTokens, $i) }
+      } → unused
+    when not(not(includes($keys, $key))):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-DUPLICATE";
+          summary = "Duplicate decoded record key.";
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let keys = append($keys, list($key))
+    port text.replaceAll { value = $key; search = "~"; replacement = "~0" } → escaped
+    port text.replaceAll { value = $escaped; search = "/"; replacement = "~1" } → escaped
+    let fieldPointer = concat($pointer, "/", $escaped)
+    port kernel.invoke {
+      query = "lp.origin";
+      input = {
+        pointer = $fieldPointer;
+        kind = "key";
+        start = at($begin, "start");
+        end = at($begin, "end");
+        token = $begin
+      }
+    } → origin
+    let origins = append($origins, list($origin))
+    let i = add($i, 1)
+    port kernel.invoke { query = "lp.gap"; input = { left = $begin; right = at($lpTokens, $i) } } → gap
+    let equal = at($lpTokens, $i)
+    when not(eq(at(at($lpTokens, $i), "text"), "=")):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-SYNTAX";
+          summary = concat("Expected ", "=", ".");
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let i = add($i, 1)
+    port kernel.invoke { query = "lp.gap"; input = { left = $equal; right = at($lpTokens, $i) } } → gap
+    port kernel.invoke {
+      query = "lp.expression";
+      input = { i = $i; pointer = $fieldPointer; depth = add($depth, 1); origins = $origins }
+    } → parsed
+    let i = at($parsed, "i")
+    let origins = at($parsed, "origins")
+    let entries = append($entries, list(list($key, at($parsed, "value"))))
+    when eq(at(at($lpTokens, $i), "text"), ";"):
+      let i = add($i, 1)
+      when not(not(eq(at(at($lpTokens, $i), "text"), "}"))):
+        port kernel.invoke {
+          query = "lp.fail";
+          input = {
+            code = "PROC-TEXT-SYNTAX";
+            summary = "Trailing record separator.";
+            token = at($lpTokens, $i)
+          }
+        } → unused
+      port kernel.invoke {
+        query = "lp.fields";
+        input = {
+          i = $i;
+          pointer = $pointer;
+          depth = $depth;
+          origins = $origins;
+          entries = $entries;
+          keys = $keys
+        }
+      } → parsed
+      let i = at($parsed, "i")
+      let origins = at($parsed, "origins")
+      let entries = at($parsed, "entries")
+      let done = true
+  when not($done):
+    when not(eq(at(at($lpTokens, $i), "text"), "}")):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-SYNTAX";
+          summary = concat("Expected ", "}", ".");
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let i = add($i, 1)
+  port record.fromEntries { entries = $entries } → value
+  let result = { i = $i; value = $value; entries = $entries; origins = $origins }

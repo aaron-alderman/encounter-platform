@@ -1,0 +1,11 @@
+// Existing pinned verification dependency reused as a syntax observation mechanism.
+// CommonJS .js files and LICENSE copied byte-for-byte; no package manifests,
+// source maps, installation, application code or callback source is accepted.
+("vendor.parse5", "version", "7.3.0")
+("vendor.parse5", "origin", "node_modules/parse5/dist/cjs")
+("vendor.parse5", "installed", "bootstrap/vendor/node_modules/parse5")
+("vendor.entities", "version", "6.0.1")
+("vendor.entities", "origin", "node_modules/entities/dist/commonjs")
+("vendor.entities", "installed", "bootstrap/vendor/node_modules/entities")
+("vendor.closure", "authority", "Supplied generic HTML tokenizer/parser only; never application composition or programme admission")
+("vendor.closure", "identity", "Each loaded file is hashed into the local foundation receipt; copies were compared byte-for-byte against local pinned source files in the same session")
