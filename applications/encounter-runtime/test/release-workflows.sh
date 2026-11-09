@@ -32,7 +32,9 @@ run() {
   (cd -- "$applications/$app" && "$@") || status=1
 }
 run encounter-portfolio node test/run.cjs
-run encounter-claimipedia node test/run.cjs
+if grep -Fqx '("claimipedia", "image", "images/claimipedia.rel")' "$ENCOUNTER_RUST_RELEASE/release.rel"; then
+  run encounter-claimipedia node test/run.cjs
+fi
 run encounter-work-boards node --test test/work-boards.test.cjs
 run encounter node test/ui-only.cjs
 run encounter node test/second-domain.cjs

@@ -166,27 +166,32 @@ and Claimipedia pilot profiles continue to use narrower entry sets.
 
 ## Package and verify a Linux release
 
-From this directory, with the aaron-dev Rust toolchain loaded:
+From this directory in a fresh platform checkout, with the aaron-dev Rust and
+browser profiles loaded, stage the Temple3 input before building. On aaron-dev
+`TEMPLE3_SOURCE` is the workspace's `projects/research/temple3` intake. The
+staging script copies the files listed in `temple3.sha256`, checks their hashes,
+and only then installs them at the path used by Cargo and the Node reference
+tests.
 
 ```bash
+./stage-temple3.sh "$TEMPLE3_SOURCE"
 cargo build --locked --offline --release
-./package-release.sh 0.1.6 target/release/encounter ../../../builds/encounter-releases
+./package-release.sh 0.1.7 target/release/encounter "$RELEASE_DIRECTORY"
 ```
 
 The archive has a versioned directory, a Rust executable, compiled images for
-all 13 applications in `release-applications.rel`, and `release.rel` with their
-SHA-256 pins. Releases starting with 0.1.3 include the pinned REL platform
-and application port specifications. The separate archive checksum can be checked with `sha256sum -c` in the output
-directory. The extracted README gives the image-serving command. The package
-uses the host's x86-64 Linux system libraries, including `libsqlite3.so.0`.
+all 12 applications in `release-applications-platform.rel`, and `release.rel`
+with their SHA-256 pins. Releases starting with 0.1.3 include the pinned REL
+platform and application port specifications. Check the separate archive
+checksum with `sha256sum -c` in the output directory. The extracted README gives
+the image-serving command. The package uses the host's x86-64 Linux system
+libraries, including `libsqlite3.so.0`.
 
-With the browser profile loaded, run the existing workflows against a fresh
-archive extraction and disposable stores:
+Run the existing workflows against a fresh extraction and disposable stores:
 
 ```bash
 cargo build --locked --offline --release --features test-faults --target-dir target/fault-tests
-releases=../../../builds/encounter-releases
-test/release-workflows.sh "$releases/encounter-0.1.6-linux-x86_64.tar.gz" target/fault-tests/release/encounter
+test/release-workflows.sh "$RELEASE_DIRECTORY/encounter-0.1.7-linux-x86_64.tar.gz" target/fault-tests/release/encounter
 ```
 
 The browser transport starts the extracted executable with each packaged
@@ -194,7 +199,7 @@ image and its manifest pin. Restarts reuse the same packaged image. The
 reconciliation scenario runs separately with the supplied fault-test binary
 and a matching image built for it.
 
-Run the 0.1.1 to 0.1.2 browser upgrade check for all 13 applications:
+Use the historical 13-app archives and matching external Claimipedia source for the 0.1.1 to 0.1.2 browser upgrade check. That harness reads the retained aggregate catalogue `release-applications.rel`:
 
 ```bash
 releases=../../../builds/encounter-releases

@@ -1,13 +1,13 @@
 # Encounter platform
 
-This private source baseline records four packages from aaron-dev: Encounter Authoring, Work Boards, Portfolio and the Rust runtime. The first commit records the selected server bytes. The earlier upstream history was not available in these source roots.
+This source baseline records four packages from aaron-dev: Encounter Authoring, Work Boards, Portfolio and the Rust runtime. The first commit records the selected server bytes. The earlier upstream history was not available in these source roots.
 
 Package paths under `applications/` retain the sibling layout used by the release catalogue and browser transport. Each package owns its existing application declaration and verification assertions. The included vendor files are measured foundation inputs.
 
 ## Dependencies and qualification
 
-- Build the Rust runtime against the separately supplied Temple3 source at `research/temple3/`, pinned for this baseline to `a78ee5ce96c7e05eed28e05ef9456e39892032db`. On aaron-dev use the existing offline Rust and Node/browser profiles.
-- Claimipedia is a separate application. The retained runtime source includes integration profiles and tests for it. The historical aggregate catalogue requires an external Claimipedia checkout. The platform-only qualification omitted its single catalogue row in a disposable copy and checked the resulting 12-app archive. The Rust attachment comparison now uses the shared Node attachment reader in `shared/node/attachment.cjs`. Its bytes match the Claimipedia host mechanism used to qualify the baseline. Claimipedia retains its own copy because its host basis hashes that file.
+- Stage the exact Temple3 input with `applications/encounter-runtime/stage-temple3.sh TEMPLE3_SOURCE`. The SHA-256 lock records the Rust library, model and pilot evidence from `a78ee5ce96c7e05eed28e05ef9456e39892032db`. The staging command verifies every file and supplies the existing Cargo path at `research/temple3/`. Use the tested offline Rust and Node/browser profiles on aaron-dev.
+- The [standalone Linux release](applications/encounter-runtime/README.md#package-and-verify-a-linux-release) uses the checked-in 12-app platform catalogue. The separate 13-app catalogue remains available to the historical upgrade harness. Claimipedia has its own source and release boundary.
 - The three Node app bootstraps use the REL codec and isolated regex mechanism under `shared/node/`. Each app retains its own lazy regex worker and queue. The Node hosts measure both bootstrap entry files and shared implementations. This changes the host basis. Prepare new reviews on the new basis when changing versions.
 - The compiler front door and policy machine implementation also live in `shared/node/`. Each bootstrap supplies its own foundation path, seed mechanisms, observation ports and regex service. Policy machine caches are app-local. Hosts measure both the local adapters and the shared implementations.
 - The Node app bootstraps use the shared SQLite revision store in `shared/node/store.cjs`. Hosts measure both the local entry file and the shared implementation. The store implementation retains the existing SQLite schema and revision protocol.

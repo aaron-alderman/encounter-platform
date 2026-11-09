@@ -197,7 +197,7 @@ fn check_shared_ports(root: &Path) -> Result<()> {
         check(supports_port(name), "a specified port must have a Rust implementation")?;
         for field in ["output", "effect", "semantics"] { ports.one(name, field)?; }
     }
-    let catalog = Facts::read(&root.join("release-applications.rel"))?;
+    let catalog = Facts::read(&root.join("release-applications-platform.rel"))?;
     let applications = root.parent().ok_or_else(|| fail("missing applications root"))?;
     let mut grants = BTreeSet::new();
     for [_, package, declaration] in catalog.0 {

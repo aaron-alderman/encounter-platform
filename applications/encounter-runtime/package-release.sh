@@ -56,7 +56,7 @@ while IFS= read -r row; do
   pin=$("$package/bin/encounter" build "$source_root" "$declaration" "$package/$image")
   [[ $pin =~ ^[a-f0-9]{64}$ ]]
   printf '("%s", "image", "%s")\n("%s", "sha256", "%s")\n' "$app" "$image" "$app" "$pin" >> "$package/release.rel"
-done < "$runtime/release-applications.rel"
+done < "$runtime/release-applications-platform.rel"
 if [[ -d "$package/spec" ]]; then
   for path in spec/platform.rel spec/application-ports.rel; do
     pin=$(sha256sum "$package/$path" | cut -d' ' -f1)
