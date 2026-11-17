@@ -1,0 +1,28 @@
+[Unit]
+Description=Aster Codex private Encounter chat reader
+After=network.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+ExecStart=/srv/encounter-apps/aster-codex/current/encounter aster-codex /home/ubuntu/.codex /home/ubuntu/workspaces/aaron-active/dev/dev-20261108-a/projects 24411 /etc/aster-codex/config.json
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow=localhost
+MemoryMax=384M
+TasksMax=16
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
