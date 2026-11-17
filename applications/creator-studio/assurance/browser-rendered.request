@@ -1,0 +1,888 @@
+{
+  "observation": "Final build 2288b6da654cd6f72e0ae336172cd034b15e27c9e3c8bd8be532df36018e027e; actual 320 CSS-pixel viewport, 303-pixel document; roomy text enabled; 12 perspectives",
+  "samples": [
+    {
+      "background": [
+        255,
+        255,
+        255
+      ],
+      "foreground": [
+        32,
+        91,
+        80
+      ],
+      "label": "Inspect · Skip to work",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        239,
+        241,
+        233
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Inspect · c",
+      "minimum": 3
+    },
+    {
+      "background": [
+        239,
+        241,
+        233
+      ],
+      "foreground": [
+        138,
+        96,
+        60
+      ],
+      "label": "Inspect · ✳",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        239,
+        241,
+        233
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Inspect · Creator",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        248
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Inspect · SELECT",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        217,
+        232,
+        219
+      ],
+      "foreground": [
+        23,
+        62,
+        48
+      ],
+      "label": "Inspect · Inspect",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        252,
+        253,
+        247
+      ],
+      "foreground": [
+        23,
+        62,
+        48
+      ],
+      "label": "Inspect · I",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        252,
+        253,
+        247
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Inspect · ✳",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        239,
+        241,
+        233
+      ],
+      "foreground": [
+        59,
+        102,
+        86
+      ],
+      "label": "Inspect · About this practice ↗",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        249
+      ],
+      "foreground": [
+        82,
+        110,
+        97
+      ],
+      "label": "Inspect · YOUR WORKSPACE",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        249
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Inspect · Northbank learning programme",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        238,
+        244,
+        236
+      ],
+      "foreground": [
+        54,
+        93,
+        72
+      ],
+      "label": "Inspect · Version 0 · 0 draft changes",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        251
+      ],
+      "foreground": [
+        37,
+        78,
+        66
+      ],
+      "label": "Inspect · Export project",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        35,
+        102,
+        86
+      ],
+      "foreground": [
+        255,
+        255,
+        255
+      ],
+      "label": "Inspect · Save version",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        246,
+        245,
+        240
+      ],
+      "foreground": [
+        82,
+        110,
+        97
+      ],
+      "label": "Inspect · A SHARED PROJECT · YOUR PERSPECTIVE",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        246,
+        245,
+        240
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Inspect · Inspect the work",
+      "minimum": 3
+    },
+    {
+      "background": [
+        246,
+        245,
+        240
+      ],
+      "foreground": [
+        83,
+        103,
+        98
+      ],
+      "label": "Inspect · Follow the source, generated Encounter views, exact identities and the",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        238,
+        243,
+        233
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Inspect · Saved data was retained but not activated: CS-HISTORY: A retained rece",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        246,
+        245,
+        240
+      ],
+      "foreground": [
+        79,
+        104,
+        87
+      ],
+      "label": "Overview · A MAINTAINED BODY OF WORK",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        246,
+        245,
+        240
+      ],
+      "foreground": [
+        83,
+        105,
+        81
+      ],
+      "label": "Overview · Working perspectives",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        253,
+        246
+      ],
+      "foreground": [
+        78,
+        103,
+        88
+      ],
+      "label": "Standards · Inspect",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        246,
+        245,
+        240
+      ],
+      "foreground": [
+        76,
+        104,
+        83
+      ],
+      "label": "Overview · →",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        231,
+        239,
+        223
+      ],
+      "foreground": [
+        37,
+        79,
+        60
+      ],
+      "label": "Overview · D",
+      "minimum": 3
+    },
+    {
+      "background": [
+        246,
+        245,
+        240
+      ],
+      "foreground": [
+        84,
+        117,
+        92
+      ],
+      "label": "Overview · ↗",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        246,
+        245,
+        240
+      ],
+      "foreground": [
+        84,
+        103,
+        94
+      ],
+      "label": "Overview · Write with maintained meaning. A change to a named value can travel th",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        227,
+        236,
+        242
+      ],
+      "foreground": [
+        40,
+        84,
+        109
+      ],
+      "label": "Overview · Σ",
+      "minimum": 3
+    },
+    {
+      "background": [
+        242,
+        230,
+        213
+      ],
+      "foreground": [
+        128,
+        86,
+        59
+      ],
+      "label": "Overview · M",
+      "minimum": 3
+    },
+    {
+      "background": [
+        255,
+        254,
+        251
+      ],
+      "foreground": [
+        82,
+        110,
+        97
+      ],
+      "label": "Exchange · MIX AND MATCH",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        251
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Exchange · Bring another person's method.",
+      "minimum": 3
+    },
+    {
+      "background": [
+        249,
+        251,
+        244
+      ],
+      "foreground": [
+        82,
+        109,
+        88
+      ],
+      "label": "Standards · No discussion here yet. A question or a faithful disagreement is usefu",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        251
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Exchange · Versioned method packet",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        255,
+        255
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Exchange · TEXTAREA",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        251
+      ],
+      "foreground": [
+        83,
+        103,
+        98
+      ],
+      "label": "Inspect · Generated view definitions are not a second source authority. All sour",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        253,
+        249
+      ],
+      "foreground": [
+        97,
+        115,
+        96
+      ],
+      "label": "Documents · Programme proposal · DRAFT PERSPECTIVE",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        253,
+        249
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Documents · A programme people can use",
+      "minimum": 3
+    },
+    {
+      "background": [
+        255,
+        253,
+        249
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Documents · Prepared for Northbank Learning. Our purpose: A practical programme th",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        253,
+        249
+      ],
+      "foreground": [
+        86,
+        112,
+        91
+      ],
+      "label": "Documents · 7 maintained bindings · proposal",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        239,
+        243,
+        234
+      ],
+      "foreground": [
+        78,
+        102,
+        86
+      ],
+      "label": "Tables & Models · Meaning",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        251
+      ],
+      "foreground": [
+        36,
+        93,
+        74
+      ],
+      "label": "Tables & Models · Participants",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        245,
+        246,
+        237
+      ],
+      "foreground": [
+        36,
+        93,
+        74
+      ],
+      "label": "Tables & Models · Materials",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        245,
+        246,
+        237
+      ],
+      "foreground": [
+        83,
+        103,
+        98
+      ],
+      "label": "Tables & Models · materials",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        245,
+        246,
+        237
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Tables & Models · 1,200",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        232,
+        241,
+        229
+      ],
+      "foreground": [
+        36,
+        93,
+        74
+      ],
+      "label": "Tables & Models · Programme budget",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        232,
+        241,
+        229
+      ],
+      "foreground": [
+        83,
+        103,
+        98
+      ],
+      "label": "Tables & Models · total",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        232,
+        241,
+        229
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Tables & Models · 4,200",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        251
+      ],
+      "foreground": [
+        86,
+        112,
+        91
+      ],
+      "label": "Inspect · Managed project source · inert own-data",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        237,
+        244,
+        237
+      ],
+      "foreground": [
+        37,
+        78,
+        66
+      ],
+      "label": "Presentations · Inspect meaning",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        251
+      ],
+      "foreground": [
+        82,
+        109,
+        86
+      ],
+      "label": "Presentations · 1 / 4 · Client briefing",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        241,
+        246,
+        237
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Presentations · 1. A useful first step",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        251
+      ],
+      "foreground": [
+        59,
+        102,
+        86
+      ],
+      "label": "Review · Version 0 · Project created ↗",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        252,
+        253,
+        248
+      ],
+      "foreground": [
+        84,
+        110,
+        90
+      ],
+      "label": "Media · 00:00:00.000 · 8 seconds",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        252,
+        253,
+        248
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Media · An invitation",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        252,
+        253,
+        248
+      ],
+      "foreground": [
+        59,
+        102,
+        86
+      ],
+      "label": "Media · ↑ Earlier",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        249
+      ],
+      "foreground": [
+        84,
+        115,
+        89
+      ],
+      "label": "Workflows · 1",
+      "minimum": 3
+    },
+    {
+      "background": [
+        255,
+        254,
+        249
+      ],
+      "foreground": [
+        92,
+        109,
+        95
+      ],
+      "label": "Workflows · documents · inspect · purpose",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        249
+      ],
+      "foreground": [
+        59,
+        102,
+        86
+      ],
+      "label": "Library · Open project →",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        249
+      ],
+      "foreground": [
+        24,
+        62,
+        56
+      ],
+      "label": "Library · Northbank learning programme",
+      "minimum": 3
+    },
+    {
+      "background": [
+        255,
+        254,
+        249
+      ],
+      "foreground": [
+        83,
+        103,
+        98
+      ],
+      "label": "Library · project_1 · source and versions retained in this browser",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        251
+      ],
+      "foreground": [
+        76,
+        104,
+        83
+      ],
+      "label": "Standards · →",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        246,
+        245,
+        240
+      ],
+      "foreground": [
+        53,
+        95,
+        72
+      ],
+      "label": "Exchange · Terms and scope",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        237,
+        242,
+        233
+      ],
+      "foreground": [
+        37,
+        75,
+        57
+      ],
+      "label": "Inspect · {\n  \"protocol\": \"usewords/workspace/1\",\n  \"definitions\": [\n    \"constr",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        251
+      ],
+      "foreground": [
+        53,
+        95,
+        72
+      ],
+      "label": "Inspect · Exact application process owners",
+      "minimum": 4.5
+    },
+    {
+      "background": [
+        255,
+        254,
+        251
+      ],
+      "foreground": [
+        32,
+        91,
+        80
+      ],
+      "label": "Inspect · Shared semantics and validation",
+      "minimum": 4.5
+    }
+  ],
+  "documentOverflow": false
+}

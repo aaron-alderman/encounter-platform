@@ -1,0 +1,1612 @@
+{
+  "protocol": "temple/surface-process-module/1",
+  "queries": {
+    "ec.prepare": [
+      {
+        "let": "ecInputs",
+        "value": "$eventInput"
+      },
+      {
+        "port": "text.replaceAll",
+        "args": {
+          "value": "$ecInputs.codeText",
+          "search": "\r\n",
+          "replacement": "\n"
+        },
+        "into": "ecNormalCode"
+      },
+      {
+        "port": "record.put",
+        "args": {
+          "record": "$ecInputs",
+          "key": "codeText",
+          "value": "$ecNormalCode"
+        },
+        "into": "ecInputs"
+      },
+      {
+        "let": "ecAllFacts",
+        "value": [
+          "list"
+        ]
+      },
+      {
+        "fold": [
+          "list",
+          {
+            "file": "source/experiment/contracts.rel",
+            "text": "$ecInputs.contractText"
+          },
+          {
+            "file": "source/experiment/story.rel",
+            "text": "$ecInputs.factText"
+          }
+        ],
+        "as": "ecDocument",
+        "accumulator": "ecAllFacts",
+        "initial": [
+          "list"
+        ],
+        "steps": [
+          {
+            "let": "file",
+            "value": "$ecDocument.file"
+          },
+          {
+            "let": "text",
+            "value": "$ecDocument.text"
+          },
+          {
+            "call": "source.rel"
+          },
+          {
+            "assert": "$result.ok",
+            "message": "EC-F001: The REL source could not be read. Correct its tuple syntax before trying again."
+          }
+        ],
+        "yield": [
+          "append",
+          "$ecAllFacts",
+          "$result.facts"
+        ],
+        "into": "ecAllFacts"
+      },
+      {
+        "assert": [
+          "every",
+          "$ecAllFacts",
+          "ecF",
+          [
+            "eq",
+            "$ecF.pol",
+            "is"
+          ]
+        ],
+        "message": "EC-F002: This positive-fact profile does not interpret negative assertions."
+      },
+      {
+        "let": "input",
+        "value": "$ecAllFacts"
+      },
+      {
+        "call": "facts.index"
+      },
+      {
+        "let": "factIndex",
+        "value": "$result"
+      },
+      {
+        "let": "file",
+        "value": "source/experiment/story.encounter"
+      },
+      {
+        "let": "text",
+        "value": "$ecInputs.codeText"
+      },
+      {
+        "call": "ec.compile"
+      },
+      {
+        "let": "ecCompilation",
+        "value": "$result"
+      },
+      {
+        "when": [
+          "not",
+          "$ecCompilation.ok"
+        ],
+        "then": [
+          {
+            "port": "json.stringify",
+            "args": {
+              "value": "$ecCompilation.diagnostic"
+            },
+            "into": "ecFailure"
+          },
+          {
+            "let": "result",
+            "value": [
+              "raise",
+              [
+                "concat",
+                "EC-COMPILE: ",
+                "$ecFailure"
+              ]
+            ]
+          }
+        ]
+      },
+      {
+        "let": "codePlan",
+        "value": "$ecCompilation.plan"
+      },
+      {
+        "let": "definitions",
+        "value": "$ecInputs.definitions"
+      },
+      {
+        "let": "primitives",
+        "value": "$ecInputs.primitives"
+      },
+      {
+        "let": "mode",
+        "value": "model"
+      },
+      {
+        "let": "input",
+        "value": {
+          "queries": "$ecCompilation.module.queries"
+        }
+      },
+      {
+        "call": "lower.start"
+      },
+      {
+        "let": "ecLowered",
+        "value": "$result.value"
+      },
+      {
+        "port": "record.entries",
+        "args": {
+          "value": "$model.queries"
+        },
+        "into": "ecRuntimeQueries"
+      },
+      {
+        "port": "record.entries",
+        "args": {
+          "value": "$ecLowered.queries"
+        },
+        "into": "ecEmittedQueries"
+      },
+      {
+        "port": "record.fromEntries",
+        "args": {
+          "entries": [
+            "append",
+            [
+              "filter",
+              "$ecRuntimeQueries",
+              "ecEntry",
+              [
+                "includes",
+                [
+                  "list",
+                  "ec.schema",
+                  "ec.slot",
+                  "ec.scalar",
+                  "ec.check",
+                  "ec.referenceType",
+                  "ec.fact",
+                  "ec.reference",
+                  "ec.argument"
+                ],
+                [
+                  "at",
+                  "$ecEntry",
+                  0
+                ]
+              ]
+            ],
+            "$ecEmittedQueries"
+          ]
+        },
+        "into": "ecCandidateQueries"
+      },
+      {
+        "let": "codeModel",
+        "value": {
+          "entry": [
+            "at",
+            [
+              "map",
+              "$codePlan.views",
+              "ecV",
+              "$ecV.entry"
+            ],
+            0
+          ],
+          "queries": "$ecCandidateQueries"
+        }
+      },
+      {
+        "let": "target",
+        "value": "$codeModel"
+      },
+      {
+        "let": "profile",
+        "value": "$ecInputs.profile"
+      },
+      {
+        "call": "admit.model"
+      },
+      {
+        "let": "grants",
+        "value": [
+          "list",
+          "value.describe",
+          "record.entries",
+          "record.put",
+          "record.get",
+          "text.matches",
+          "text.split",
+          "kernel.invoke",
+          "kernel.execute"
+        ]
+      },
+      {
+        "port": "record.entries",
+        "args": {
+          "value": "$codeModel.queries"
+        },
+        "into": "ecEntries"
+      },
+      {
+        "each": "$ecEntries",
+        "as": "ecEntryPair",
+        "steps": [
+          {
+            "let": "target",
+            "value": {
+              "entry": [
+                "at",
+                "$ecEntryPair",
+                0
+              ],
+              "queries": "$codeModel.queries"
+            }
+          },
+          {
+            "call": "admit.effects"
+          }
+        ]
+      },
+      {
+        "each": [
+          "distinct",
+          [
+            "map",
+            "$ecAllFacts",
+            "ecF",
+            "$ecF.s"
+          ]
+        ],
+        "as": "ecFact",
+        "steps": [
+          {
+            "let": "ecMembership",
+            "value": [
+              "objects",
+              "$ecFact",
+              "isa"
+            ]
+          },
+          {
+            "assert": [
+              "eq",
+              [
+                "count",
+                "$ecMembership"
+              ],
+              1
+            ],
+            "message": "EC-F003: Each fact identity in this profile needs exactly one declared type. Multiple participations require a later explicit alias profile."
+          },
+          {
+            "when": [
+              "and",
+              [
+                "eq",
+                [
+                  "count",
+                  "$ecMembership"
+                ],
+                1
+              ],
+              [
+                "not",
+                [
+                  "includes",
+                  [
+                    "list",
+                    "Slot",
+                    "Interface"
+                  ],
+                  [
+                    "at",
+                    "$ecMembership",
+                    0
+                  ]
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.fact",
+                  "input": {
+                    "id": "$ecFact",
+                    "type": [
+                      "at",
+                      "$ecMembership",
+                      0
+                    ]
+                  }
+                },
+                "into": "_"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "plan": "$codePlan",
+          "model": "$codeModel",
+          "factIndex": "$factIndex",
+          "facts": "$ecAllFacts",
+          "inputs": "$ecInputs"
+        }
+      }
+    ],
+    "ec.resolve": [
+      {
+        "let": "ecView",
+        "value": [
+          "at",
+          [
+            "filter",
+            "$codePlan.views",
+            "ecV",
+            [
+              "eq",
+              "$ecV.id",
+              "$eventInput.view"
+            ]
+          ],
+          0
+        ]
+      },
+      {
+        "assert": "$ecView",
+        "message": "EC-C011: This view is not declared in the current module."
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.reference",
+          "input": {
+            "id": "$ecView.id",
+            "type": "$ecView.type"
+          }
+        },
+        "into": "ecBase"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.fact",
+          "input": {
+            "id": "$ecView.source",
+            "type": "$ecView.sourceType"
+          }
+        },
+        "into": "ecSource"
+      },
+      {
+        "let": "bindings",
+        "value": {
+          "source": "$ecSource"
+        }
+      },
+      {
+        "let": "ecEffective",
+        "value": "$ecBase.values"
+      },
+      {
+        "let": "ecEffectiveEdits",
+        "value": "$ecView.edits"
+      },
+      {
+        "let": "ecEffectiveShow",
+        "value": "$ecView.show"
+      },
+      {
+        "let": "ecContribution",
+        "value": null
+      },
+      {
+        "when": "$eventInput.context",
+        "then": [
+          {
+            "let": "ecContributions",
+            "value": [
+              "filter",
+              "$ecView.contexts",
+              "ecO",
+              [
+                "eq",
+                "$ecO.id",
+                "$eventInput.context"
+              ]
+            ]
+          },
+          {
+            "assert": [
+              "eq",
+              [
+                "count",
+                "$ecContributions"
+              ],
+              1
+            ],
+            "message": "EC-C012: A context must have exactly one explicit contribution; there is no hidden precedence."
+          },
+          {
+            "let": "ecContribution",
+            "value": [
+              "at",
+              "$ecContributions",
+              0
+            ]
+          },
+          {
+            "fold": "$ecContribution.fields.fields",
+            "as": "ecField",
+            "accumulator": "ecEffective",
+            "initial": "$ecEffective",
+            "steps": [
+              {
+                "port": "kernel.evaluate",
+                "args": {
+                  "expression": "$ecField.expression.expression",
+                  "bindings": {
+                    "bindings": "$bindings",
+                    "codePlan": "$codePlan"
+                  }
+                },
+                "into": "ecOverlayValue"
+              },
+              {
+                "port": "record.put",
+                "args": {
+                  "record": "$ecEffective",
+                  "key": "$ecField.name",
+                  "value": "$ecOverlayValue"
+                },
+                "into": "ecEffective"
+              }
+            ],
+            "yield": "$ecEffective",
+            "into": "ecEffective"
+          },
+          {
+            "let": "ecEffectiveEdits",
+            "value": [
+              "append",
+              [
+                "filter",
+                "$ecEffectiveEdits",
+                "ecE",
+                [
+                  "not",
+                  [
+                    "some",
+                    "$ecContribution.fields.fields",
+                    "ecF",
+                    [
+                      "eq",
+                      "$ecF.name",
+                      "$ecE.field"
+                    ]
+                  ]
+                ]
+              ],
+              "$ecContribution.edits"
+            ]
+          },
+          {
+            "let": "ecEffectiveShow",
+            "value": "$ecContribution.show"
+          }
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.check",
+          "input": {
+            "type": "$ecView.type",
+            "values": "$ecEffective"
+          }
+        },
+        "into": "_"
+      },
+      {
+        "assert": "$ecEffectiveShow",
+        "message": "EC-C013: Select a representation for this view/context."
+      },
+      {
+        "let": "ecRepresentation",
+        "value": [
+          "at",
+          [
+            "filter",
+            "$codePlan.representations",
+            "ecR",
+            [
+              "eq",
+              "$ecR.id",
+              "$ecEffectiveShow.representation"
+            ]
+          ],
+          0
+        ]
+      },
+      {
+        "let": "ecArguments",
+        "value": {}
+      },
+      {
+        "port": "record.put",
+        "args": {
+          "record": "$ecArguments",
+          "key": [
+            "at",
+            [
+              "at",
+              "$ecRepresentation.given",
+              0
+            ],
+            "name"
+          ],
+          "value": {
+            "id": "$ecView.id",
+            "type": "$ecView.type",
+            "values": "$ecEffective"
+          }
+        },
+        "into": "ecArguments"
+      },
+      {
+        "fold": "$ecEffectiveShow.parameters",
+        "as": "ecParameter",
+        "accumulator": "ecArguments",
+        "initial": "$ecArguments",
+        "steps": [
+          {
+            "port": "kernel.evaluate",
+            "args": {
+              "expression": "$ecParameter.expression.expression",
+              "bindings": {
+                "bindings": "$bindings",
+                "codePlan": "$codePlan"
+              }
+            },
+            "into": "ecParameterValue"
+          },
+          {
+            "port": "record.put",
+            "args": {
+              "record": "$ecArguments",
+              "key": "$ecParameter.name",
+              "value": "$ecParameterValue"
+            },
+            "into": "ecArguments"
+          }
+        ],
+        "yield": "$ecArguments",
+        "into": "ecArguments"
+      },
+      {
+        "port": "kernel.execute",
+        "args": {
+          "model": "$codeModel",
+          "entry": "$ecRepresentation.entry",
+          "input": "$ecArguments"
+        },
+        "into": "ecOutput"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.safeTree",
+          "input": {
+            "tree": "$ecOutput.tree"
+          }
+        },
+        "into": "_"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.events",
+          "input": {
+            "events": "$ecOutput.events",
+            "tree": "$ecOutput.tree"
+          }
+        },
+        "into": "_"
+      },
+      {
+        "let": "result",
+        "value": {
+          "view": "$ecView.id",
+          "source": "$ecView.source",
+          "type": "$ecView.type",
+          "values": "$ecEffective",
+          "base": "$ecBase.values",
+          "edits": "$ecEffectiveEdits",
+          "show": "$ecEffectiveShow",
+          "contribution": "$ecContribution",
+          "output": "$ecOutput"
+        }
+      }
+    ],
+    "ec.safeTree": [
+      {
+        "let": "ecTree",
+        "value": "$eventInput.tree"
+      },
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$ecTree"
+        },
+        "into": "ecTreeKind"
+      },
+      {
+        "when": [
+          "eq",
+          "$ecTreeKind.type",
+          "object"
+        ],
+        "then": [
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$ecTree"
+            },
+            "into": "ecTreeFields"
+          },
+          {
+            "assert": [
+              "every",
+              "$ecTreeFields",
+              "ecF",
+              [
+                "includes",
+                [
+                  "list",
+                  "tag",
+                  "attrs",
+                  "children"
+                ],
+                [
+                  "at",
+                  "$ecF",
+                  0
+                ]
+              ]
+            ],
+            "message": "EC-D006: This element contains an undeclared presentation field."
+          },
+          {
+            "assert": [
+              "and",
+              "$ecTreeKind.plain",
+              [
+                "not",
+                "$ecTreeKind.array"
+              ]
+            ],
+            "message": "EC-D001: A rendered element must be a plain record."
+          },
+          {
+            "assert": [
+              "includes",
+              [
+                "list",
+                "a",
+                "article",
+                "h2",
+                "p",
+                "table",
+                "tbody",
+                "tr",
+                "td",
+                "button"
+              ],
+              "$ecTree.tag"
+            ],
+            "message": "EC-D002: This experiment does not grant that HTML element."
+          },
+          {
+            "port": "record.entries",
+            "args": {
+              "value": [
+                "or",
+                [
+                  "at",
+                  "$ecTree",
+                  "attrs"
+                ],
+                {}
+              ]
+            },
+            "into": "ecAttrs"
+          },
+          {
+            "each": "$ecAttrs",
+            "as": "ecAttr",
+            "steps": [
+              {
+                "assert": [
+                  "includes",
+                  [
+                    "list",
+                    "id",
+                    "href",
+                    "class",
+                    "type"
+                  ],
+                  [
+                    "at",
+                    "$ecAttr",
+                    0
+                  ]
+                ],
+                "message": "EC-D003: This HTML attribute is not granted."
+              },
+              {
+                "when": [
+                  "eq",
+                  [
+                    "at",
+                    "$ecAttr",
+                    0
+                  ],
+                  "href"
+                ],
+                "then": [
+                  {
+                    "port": "text.matches",
+                    "args": {
+                      "value": [
+                        "at",
+                        "$ecAttr",
+                        1
+                      ],
+                      "pattern": "^encounter-[a-z0-9-]+\\.html$"
+                    },
+                    "into": "ecHrefSafe"
+                  },
+                  {
+                    "assert": "$ecHrefSafe",
+                    "message": "EC-D004: Link to an explicit local experimental page route."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "each": [
+              "or",
+              [
+                "at",
+                "$ecTree",
+                "children"
+              ],
+              [
+                "list"
+              ]
+            ],
+            "as": "ecChild",
+            "steps": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.safeTree",
+                  "input": {
+                    "tree": "$ecChild"
+                  }
+                },
+                "into": "_"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            "$ecTreeKind.type",
+            "object"
+          ]
+        ],
+        "then": [
+          {
+            "assert": [
+              "eq",
+              "$ecTreeKind.type",
+              "string"
+            ],
+            "message": "EC-D005: Rendered text must be text."
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": true
+      }
+    ],
+    "ec.events": [
+      {
+        "each": "$eventInput.events",
+        "as": "ecEvent",
+        "steps": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "ec.findElement",
+              "input": {
+                "tree": "$eventInput.tree",
+                "selector": "$ecEvent.selector"
+              }
+            },
+            "into": "ecSelectorCount"
+          },
+          {
+            "assert": [
+              "eq",
+              "$ecSelectorCount",
+              1
+            ],
+            "message": "EC-A005: An action must bind exactly one element inside its own rendered representation."
+          },
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$ecEvent"
+            },
+            "into": "ecEventFields"
+          },
+          {
+            "assert": [
+              "every",
+              "$ecEventFields",
+              "ecF",
+              [
+                "includes",
+                [
+                  "list",
+                  "selector",
+                  "open",
+                  "run",
+                  "arguments"
+                ],
+                [
+                  "at",
+                  "$ecF",
+                  0
+                ]
+              ]
+            ],
+            "message": "EC-A006: This action contains an undeclared field."
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$ecEvent.selector",
+              "pattern": "^#[a-z][a-z0-9-]*$"
+            },
+            "into": "ecSelectorSafe"
+          },
+          {
+            "assert": "$ecSelectorSafe",
+            "message": "EC-A001: Events need a local element identity selector."
+          },
+          {
+            "assert": [
+              "or",
+              [
+                "and",
+                [
+                  "at",
+                  "$ecEvent",
+                  "open"
+                ],
+                [
+                  "not",
+                  [
+                    "at",
+                    "$ecEvent",
+                    "run"
+                  ]
+                ]
+              ],
+              [
+                "and",
+                [
+                  "at",
+                  "$ecEvent",
+                  "run"
+                ],
+                [
+                  "not",
+                  [
+                    "at",
+                    "$ecEvent",
+                    "open"
+                  ]
+                ]
+              ]
+            ],
+            "message": "EC-A002: Choose exactly one explicit action: open a page or run a typed representation."
+          },
+          {
+            "when": [
+              "at",
+              "$ecEvent",
+              "open"
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.reference",
+                  "input": {
+                    "id": [
+                      "at",
+                      "$ecEvent",
+                      "open"
+                    ],
+                    "type": "Page"
+                  }
+                },
+                "into": "_"
+              }
+            ]
+          },
+          {
+            "when": [
+              "at",
+              "$ecEvent",
+              "run"
+            ],
+            "then": [
+              {
+                "let": "ecEventRep",
+                "value": [
+                  "at",
+                  [
+                    "filter",
+                    "$codePlan.representations",
+                    "ecR",
+                    [
+                      "eq",
+                      "$ecR.id",
+                      [
+                        "at",
+                        "$ecEvent",
+                        "run"
+                      ]
+                    ]
+                  ],
+                  0
+                ]
+              },
+              {
+                "assert": "$ecEventRep",
+                "message": "EC-A003: The action must name a representation in this admitted module."
+              },
+              {
+                "port": "record.entries",
+                "args": {
+                  "value": "$ecEvent.arguments"
+                },
+                "into": "ecEventArgs"
+              },
+              {
+                "assert": [
+                  "eq",
+                  [
+                    "count",
+                    "$ecEventArgs"
+                  ],
+                  [
+                    "count",
+                    "$ecEventRep.given"
+                  ]
+                ],
+                "message": "EC-A004: The action argument count does not match its typed signature."
+              },
+              {
+                "each": "$ecEventRep.given",
+                "as": "ecGiven",
+                "steps": [
+                  {
+                    "port": "kernel.invoke",
+                    "args": {
+                      "query": "ec.argument",
+                      "input": {
+                        "value": [
+                          "at",
+                          "$ecEvent.arguments",
+                          "$ecGiven.name"
+                        ],
+                        "type": "$ecGiven.type"
+                      }
+                    },
+                    "into": "_"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": true
+      }
+    ],
+    "ec.run": [
+      {
+        "let": "codePlan",
+        "value": "$eventInput.candidate.plan"
+      },
+      {
+        "let": "codeModel",
+        "value": "$eventInput.candidate.model"
+      },
+      {
+        "let": "factIndex",
+        "value": "$eventInput.candidate.factIndex"
+      },
+      {
+        "fold": "$codePlan.views",
+        "as": "ecV",
+        "accumulator": "ecResults",
+        "initial": [
+          "list"
+        ],
+        "steps": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "ec.reference",
+              "input": {
+                "id": "$ecV.id",
+                "type": "$ecV.type"
+              }
+            },
+            "into": "_"
+          },
+          {
+            "when": "$ecV.show",
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.resolve",
+                  "input": {
+                    "view": "$ecV.id",
+                    "context": null
+                  }
+                },
+                "into": "ecResolved"
+              },
+              {
+                "let": "ecResults",
+                "value": [
+                  "append",
+                  "$ecResults",
+                  [
+                    "list",
+                    "$ecResolved"
+                  ]
+                ]
+              }
+            ]
+          },
+          {
+            "fold": "$ecV.contexts",
+            "as": "ecContext",
+            "accumulator": "ecResults",
+            "initial": "$ecResults",
+            "steps": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.resolve",
+                  "input": {
+                    "view": "$ecV.id",
+                    "context": "$ecContext.id"
+                  }
+                },
+                "into": "ecResolved"
+              }
+            ],
+            "yield": [
+              "append",
+              "$ecResults",
+              [
+                "list",
+                "$ecResolved"
+              ]
+            ],
+            "into": "ecResults"
+          }
+        ],
+        "yield": "$ecResults",
+        "into": "ecResults"
+      },
+      {
+        "let": "result",
+        "value": "$ecResults"
+      }
+    ],
+    "ec.patch": [
+      {
+        "let": "ecBasis",
+        "value": "$eventInput.candidate"
+      },
+      {
+        "let": "ecProjection",
+        "value": "$eventInput.projection"
+      },
+      {
+        "let": "ecNewText",
+        "value": "$eventInput.value"
+      },
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$ecNewText"
+        },
+        "into": "ecNewKind"
+      },
+      {
+        "assert": [
+          "eq",
+          "$ecNewKind.type",
+          "string"
+        ],
+        "message": "EC-E010: A text edit requires text; values are never coerced."
+      },
+      {
+        "let": "ecRoutes",
+        "value": [
+          "filter",
+          "$ecProjection.edits",
+          "ecE",
+          [
+            "eq",
+            "$ecE.field",
+            "$eventInput.field"
+          ]
+        ]
+      },
+      {
+        "assert": [
+          "eq",
+          [
+            "count",
+            "$ecRoutes"
+          ],
+          1
+        ],
+        "message": "EC-E011: This field has no unique declared reverse route. Edit its source or rule instead."
+      },
+      {
+        "let": "ecRoute",
+        "value": [
+          "at",
+          "$ecRoutes",
+          0
+        ]
+      },
+      {
+        "let": "ecPatchInputs",
+        "value": "$ecBasis.inputs"
+      },
+      {
+        "when": [
+          "eq",
+          "$ecRoute.destination.kind",
+          "source"
+        ],
+        "then": [
+          {
+            "let": "text",
+            "value": "$ecBasis.inputs.factText"
+          },
+          {
+            "let": "file",
+            "value": "source/experiment/story.rel"
+          },
+          {
+            "call": "source.rel"
+          },
+          {
+            "let": "ecSourceDoc",
+            "value": "$result"
+          },
+          {
+            "let": "ecOwned",
+            "value": [
+              "filter",
+              "$ecSourceDoc.origins",
+              "ecO",
+              [
+                "and",
+                [
+                  "eq",
+                  [
+                    "at",
+                    [
+                      "at",
+                      "$ecSourceDoc.facts",
+                      "$ecO.index"
+                    ],
+                    "s"
+                  ],
+                  "$ecProjection.source"
+                ],
+                [
+                  "eq",
+                  [
+                    "at",
+                    [
+                      "at",
+                      "$ecSourceDoc.facts",
+                      "$ecO.index"
+                    ],
+                    "p"
+                  ],
+                  "$ecRoute.destination.field"
+                ]
+              ]
+            ]
+          },
+          {
+            "assert": [
+              "eq",
+              [
+                "count",
+                "$ecOwned"
+              ],
+              1
+            ],
+            "message": "EC-E012: The source value does not have a single authored location."
+          },
+          {
+            "let": "ecSpan",
+            "value": [
+              "at",
+              "$ecOwned",
+              0
+            ]
+          },
+          {
+            "port": "json.stringify",
+            "args": {
+              "value": "$ecNewText"
+            },
+            "into": "ecEncoded"
+          },
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$ecBasis.inputs.factText",
+              "start": 0,
+              "end": "$ecSpan.span.valueStart"
+            },
+            "into": "ecBefore"
+          },
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$ecBasis.inputs.factText",
+              "start": "$ecSpan.span.valueEnd"
+            },
+            "into": "ecAfter"
+          },
+          {
+            "port": "record.put",
+            "args": {
+              "record": "$ecPatchInputs",
+              "key": "factText",
+              "value": [
+                "concat",
+                "$ecBefore",
+                "$ecEncoded",
+                "$ecAfter"
+              ]
+            },
+            "into": "ecPatchInputs"
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$ecRoute.destination.kind",
+          "literal"
+        ],
+        "then": [
+          {
+            "let": "ecNode",
+            "value": "$ecRoute.destination.node"
+          },
+          {
+            "port": "text.indexOf",
+            "args": {
+              "value": "$ecNode.raw",
+              "search": "$ecRoute.destination.token"
+            },
+            "into": "ecTokenStart"
+          },
+          {
+            "assert": [
+              "not",
+              [
+                "eq",
+                "$ecTokenStart",
+                -1
+              ]
+            ],
+            "message": "EC-E013: The authored literal moved; re-open the current route."
+          },
+          {
+            "let": "ecStart",
+            "value": [
+              "add",
+              "$ecNode.offset",
+              "$ecTokenStart"
+            ]
+          },
+          {
+            "port": "json.stringify",
+            "args": {
+              "value": "$ecNewText"
+            },
+            "into": "ecEncoded"
+          },
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$ecBasis.inputs.codeText",
+              "start": 0,
+              "end": "$ecStart"
+            },
+            "into": "ecBefore"
+          },
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$ecBasis.inputs.codeText",
+              "start": [
+                "add",
+                "$ecStart",
+                [
+                  "count",
+                  "$ecRoute.destination.token"
+                ]
+              ]
+            },
+            "into": "ecAfter"
+          },
+          {
+            "port": "record.put",
+            "args": {
+              "record": "$ecPatchInputs",
+              "key": "codeText",
+              "value": [
+                "concat",
+                "$ecBefore",
+                "$ecEncoded",
+                "$ecAfter"
+              ]
+            },
+            "into": "ecPatchInputs"
+          }
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.prepare",
+          "input": "$ecPatchInputs"
+        },
+        "into": "ecPatched"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.run",
+          "input": {
+            "candidate": "$ecPatched"
+          }
+        },
+        "into": "ecForward"
+      },
+      {
+        "let": "ecObserved",
+        "value": [
+          "at",
+          [
+            "filter",
+            "$ecForward",
+            "ecP",
+            [
+              "and",
+              [
+                "eq",
+                "$ecP.view",
+                "$ecProjection.view"
+              ],
+              [
+                "eq",
+                [
+                  "or",
+                  [
+                    "at",
+                    [
+                      "at",
+                      "$ecP",
+                      "contribution"
+                    ],
+                    "id"
+                  ],
+                  null
+                ],
+                [
+                  "or",
+                  [
+                    "at",
+                    [
+                      "at",
+                      "$ecProjection",
+                      "contribution"
+                    ],
+                    "id"
+                  ],
+                  null
+                ]
+              ]
+            ]
+          ],
+          0
+        ]
+      },
+      {
+        "assert": [
+          "eq",
+          [
+            "at",
+            "$ecObserved.values",
+            "$eventInput.field"
+          ],
+          "$ecNewText"
+        ],
+        "message": "EC-E014: The proposed inverse does not reproduce this requested value."
+      },
+      {
+        "let": "result",
+        "value": {
+          "candidate": "$ecPatched",
+          "projections": "$ecForward",
+          "destination": "$ecRoute.destination"
+        }
+      }
+    ],
+    "ec.findElement": [
+      {
+        "let": "ecTree",
+        "value": "$eventInput.tree"
+      },
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$ecTree"
+        },
+        "into": "ecKind"
+      },
+      {
+        "let": "result",
+        "value": 0
+      },
+      {
+        "when": [
+          "eq",
+          "$ecKind.type",
+          "object"
+        ],
+        "then": [
+          {
+            "fold": [
+              "or",
+              [
+                "at",
+                "$ecTree",
+                "children"
+              ],
+              [
+                "list"
+              ]
+            ],
+            "as": "ecChild",
+            "accumulator": "ecMatches",
+            "initial": [
+              "if",
+              [
+                "eq",
+                [
+                  "concat",
+                  "#",
+                  [
+                    "at",
+                    [
+                      "at",
+                      "$ecTree",
+                      "attrs"
+                    ],
+                    "id"
+                  ]
+                ],
+                "$eventInput.selector"
+              ],
+              1,
+              0
+            ],
+            "steps": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.findElement",
+                  "input": {
+                    "tree": "$ecChild",
+                    "selector": "$eventInput.selector"
+                  }
+                },
+                "into": "ecFound"
+              }
+            ],
+            "yield": [
+              "add",
+              "$ecMatches",
+              "$ecFound"
+            ],
+            "into": "result"
+          }
+        ]
+      }
+    ]
+  }
+}

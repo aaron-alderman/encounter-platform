@@ -1,0 +1,462 @@
+# Authoritative Usewords workspace processes.
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process ws.boot:
+  call cs.boot
+
+process ws.agent:
+  call cs.agent
+
+process cs.read:
+  port dom.exists { selector = $eventInput } → exists
+  let result = ""
+  when $exists:
+    port browser.property { ref = $eventInput; name = "value" } → result
+
+process cs.notify:
+  port state.set { key = "cs.notice"; value = $eventInput } → _
+  port browser.write { ref = "#cs-status"; name = "textContent"; value = $eventInput } → _
+
+process cs.store:
+  port state.get { key = "cs.projectId" } → id
+  port json.stringify { value = $eventInput } → encoded
+  port number.calculate { operation = "lessEqual"; values = list(count($encoded), 1800000) } → bounded
+  assert $bounded
+    otherwise "CS-STORAGE: Export this project's history before the local 1.8 MB record limit."
+  port storage.write { key = concat("creator-studio.project.v1.", $id); value = $encoded } → stored
+  assert $stored.ok
+    otherwise "CS-STORAGE: Browser storage could not retain this change. Accepted work has not been replaced."
+
+process cs.pack:
+  port state.get { key = "cs.draft" } → draft
+  port state.get { key = "cs.acceptedReceipt" } → accepted
+  port state.get { key = "cs.history" } → history
+  port state.get { key = "cs.projectId" } → id
+  port kernel.invoke { query = "ws.receipt"; input = { state = $draft; expectedRevision = $draft.revision; expectedHash = $draft.documentHash } } → draftReceipt
+  let result = { protocol = "creator-studio/project/1"; id = $id; accepted = $accepted; draft = $draftReceipt; history = $history }
+
+process cs.restore:
+  let packet = $eventInput
+  port kernel.invoke { query = "cs.closed"; input = { value = $packet; fields = list("protocol", "id", "accepted", "draft", "history") } } → valid
+  assert eq($packet.protocol, "creator-studio/project/1")
+    otherwise "CS-IMPORT: This is not a Creator Studio project packet."
+  port kernel.invoke { query = "ws.id"; input = $packet.id } → valid
+  assert isArray($packet.history)
+    otherwise "CS-HISTORY: Version history must be a list."
+  port number.calculate { operation = "lessEqual"; values = list(count($packet.history), 12) } → bounded
+  assert $bounded
+    otherwise "CS-HISTORY: This local profile retains 12 complete versions per project. Export or fork before continuing."
+  assert not(eq(count($packet.history), 0))
+    otherwise "CS-HISTORY: A retained project needs its initial version."
+  fold $packet.history as item; index starts 0:
+    port kernel.invoke { query = "cs.closed"; input = { value = $item; fields = list("version", "label", "receipt") } } → valid
+    assert eq($item.version, $index)
+      otherwise "CS-HISTORY: Retained versions must remain ordered."
+    port kernel.invoke { query = "cs.text"; input = { value = $item.label; maximum = 160 } } → valid
+    port kernel.invoke { query = "uw.hash"; input = $item.receipt.body } → hash
+    assert and(eq($hash, $item.receipt.sha256), eq($item.receipt.body.programHash, $data.programHash))
+      otherwise "CS-HISTORY: A retained receipt has changed or belongs to a different process version."
+    yield add($index, 1) → index
+  let latest = at($packet.history, add(count($packet.history), -1))
+  assert eq($latest.receipt, $packet.accepted)
+    otherwise "CS-HISTORY: The accepted version must be the last retained receipt."
+  port kernel.invoke { query = "ws.reconstruct"; input = $packet.accepted } → accepted
+  port kernel.invoke { query = "cs.validate"; input = $accepted } → checked
+  port kernel.invoke { query = "ws.reconstruct"; input = $packet.draft } → draft
+  port kernel.invoke { query = "cs.validate"; input = $draft } → checked
+  port kernel.invoke { query = "uw.hash"; input = $draft.basis } → draftBasis
+  assert eq($draftBasis, $accepted.documentHash)
+    otherwise "CS-IMPORT: The draft does not extend this accepted project."
+  let result = { accepted = $accepted; draft = $draft; receipt = $packet.accepted; history = $packet.history; id = $packet.id }
+
+process cs.useProject:
+  let restored = $eventInput
+  port state.set { key = "cs.accepted"; value = $restored.accepted } → _
+  port state.set { key = "cs.draft"; value = $restored.draft } → _
+  port state.set { key = "cs.acceptedReceipt"; value = $restored.receipt } → _
+  port state.set { key = "cs.history"; value = $restored.history } → _
+  port state.set { key = "cs.projectId"; value = $restored.id } → _
+  port state.set { key = "cs.recordId"; value = "proposal" } → _
+  port state.set { key = "cs.view"; value = "home" } → _
+  port state.set { key = "cs.selected"; value = "participants" } → _
+  port state.set { key = "cs.slide"; value = 0 } → _
+  port state.set { key = "cs.run"; value = null } → _
+  port state.set { key = "cs.comparison"; value = null } → _
+  port state.set { key = "cs.sourceMode"; value = "meaning" } → _
+  port storage.write { key = "creator-studio.current.v1"; value = $restored.id } → remembered
+
+process cs.createProject:
+  port state.get { key = "cs.registry" } → registry
+  port number.calculate { operation = "less"; values = list(count($registry), 8) } → bounded
+  assert $bounded
+    otherwise "CS-PROJECTS: This local profile supports eight projects. Export before moving work to another browser."
+  port kernel.invoke { query = "cs.seed"; input = $eventInput } → document
+  port kernel.invoke { query = "ws.initial"; input = { basis = $document } } → initial
+  port kernel.invoke { query = "cs.validate"; input = $initial } → checked
+  port kernel.invoke { query = "ws.accept"; input = { state = $initial; expectedRevision = 0; expectedHash = $initial.documentHash } } → receipt
+  let id = concat("project_", add(count($registry), 1))
+  let history = list({ version = 0; label = "Project created"; receipt = $receipt })
+  let packet = { protocol = "creator-studio/project/1"; id = $id; accepted = $receipt; draft = $receipt; history = $history }
+  port state.set { key = "cs.projectId"; value = $id } → _
+  port kernel.invoke { query = "cs.store"; input = $packet } → _
+  let registry = append($registry, list({ id = $id; title = $checked.model.title }))
+  port json.stringify { value = $registry } → encoded
+  port storage.write { key = "creator-studio.registry.v1"; value = $encoded } → stored
+  assert $stored.ok
+    otherwise "CS-STORAGE: The project was retained, but the local index needs recovery."
+  port state.set { key = "cs.registry"; value = $registry } → _
+  port kernel.invoke { query = "cs.useProject"; input = { accepted = $initial; draft = $initial; receipt = $receipt; history = $history; id = $id } } → _
+
+process cs.boot:
+  port state.set { key = "cs.registry"; value = list() } → _
+  port state.set { key = "cs.notice"; value = "A local, replayable workspace. Start anywhere; the meaning comes with you." } → _
+  let opened = false
+  try:
+    port storage.read { key = "creator-studio.registry.v1"; maxLength = 10000 } → stored
+    when and($stored.ok, not(eq($stored.value, null))):
+      port json.parse { text = $stored.value } → registry
+      assert isArray($registry)
+        otherwise "CS-STORAGE: The project index is malformed."
+      port number.calculate { operation = "lessEqual"; values = list(count($registry), 8) } → bounded
+      assert $bounded
+        otherwise "CS-STORAGE: The project index exceeds this profile."
+      each $registry as item:
+        port kernel.invoke { query = "ws.id"; input = $item.id } → valid
+      port state.set { key = "cs.registry"; value = $registry } → _
+      when not(eq(count($registry), 0)):
+        let first = at($registry, add(count($registry), -1))
+        port storage.read { key = "creator-studio.current.v1"; maxLength = 100 } → remembered
+        when and($remembered.ok, not(eq($remembered.value, null))):
+          let matching = filter($registry, "r", eq($r.id, $remembered.value))
+          when eq(count($matching), 1):
+            let first = at($matching, 0)
+        port storage.read { key = concat("creator-studio.project.v1.", $first.id); maxLength = 1800000 } → saved
+        assert and($saved.ok, not(eq($saved.value, null)))
+          otherwise "CS-STORAGE: This project record is unavailable."
+        port json.parse { text = $saved.value } → packet
+        port kernel.invoke { query = "cs.restore"; input = $packet } → restored
+        port kernel.invoke { query = "cs.useProject"; input = $restored } → _
+        let opened = true
+        port state.set { key = "cs.notice"; value = "Restored accepted work and its draft after exact replay. Comments and version history came with it." } → _
+  catch fault:
+    port state.set { key = "cs.notice"; value = concat("Saved data was retained but not activated: ", $fault.message, " Start a new project or import a compatible packet from Library.") } → _
+  when not($opened):
+    port kernel.invoke { query = "cs.createProject"; input = { } } → _
+  port browser.on { ref = "#cs-shell"; event = "click"; delegate = "[data-action]"; query = "cs.click"; input = { }; preventDefault = true } → _
+  port browser.on { ref = "#cs-shell"; event = "submit"; delegate = "form[data-command]"; query = "cs.submit"; input = { }; preventDefault = true } → _
+  port browser.on { ref = "#cs-shell"; event = "change"; delegate = "#cs-project-select"; query = "cs.switchProject"; input = { } } → _
+  call cs.paint
+
+process cs.stage:
+  port state.get { key = "cs.draft" } → current
+  let requests = if(isArray($eventInput), $eventInput, list($eventInput))
+  fold $requests as requested; next starts $current:
+    port record.put { record = $requested; key = "baseRevision"; value = $next.revision } → request
+    port kernel.invoke { query = "cs.edit"; input = { state = $next; request = $request; expectedHash = $next.documentHash } } → changed
+    yield $changed → next
+  port kernel.invoke { query = "cs.pack"; input = { } } → packet
+  port kernel.invoke { query = "ws.receipt"; input = { state = $next; expectedRevision = $next.revision; expectedHash = $next.documentHash } } → receipt
+  port record.put { record = $packet; key = "draft"; value = $receipt } → packet
+  port kernel.invoke { query = "cs.store"; input = $packet } → _
+  port state.set { key = "cs.draft"; value = $next } → _
+  port state.set { key = "cs.notice"; value = "Draft updated through Encounter. Preview the consequences, then save a version when ready." } → _
+
+process cs.stageBody:
+  let body = $eventInput.body
+  when not(eq(at($eventInput, "text"), true)):
+    port json.stringify { value = $body } → body
+  port kernel.invoke { query = "cs.stage"; input = { kind = "edit"; scope = "shared"; object = $eventInput.id; field = "body"; value = $body } } → result
+
+process cs.acceptUI:
+  port state.get { key = "cs.draft" } → draft
+  assert not(eq(count($draft.journal), 0))
+    otherwise "There are no draft changes to accept."
+  port state.get { key = "cs.history" } → history
+  port number.calculate { operation = "less"; values = list(count($history), 12) } → bounded
+  assert $bounded
+    otherwise "Export this complete history and fork the project before adding another retained version."
+  port kernel.invoke { query = "cs.validate"; input = $draft } → checked
+  port kernel.invoke { query = "ws.accept"; input = { state = $draft; expectedRevision = $draft.revision; expectedHash = $draft.documentHash } } → accepted
+  port kernel.invoke { query = "ws.initial"; input = { basis = $draft.document; predecessor = $accepted.sha256 } } → fresh
+  port kernel.invoke { query = "ws.receipt"; input = { state = $fresh; expectedRevision = 0; expectedHash = $fresh.documentHash } } → freshReceipt
+  let history = append($history, list({ version = count($history); label = concat("Saved ", count($draft.journal), " reviewed changes"); receipt = $accepted }))
+  port state.get { key = "cs.projectId" } → id
+  let packet = { protocol = "creator-studio/project/1"; id = $id; accepted = $accepted; draft = $freshReceipt; history = $history }
+  port kernel.invoke { query = "cs.store"; input = $packet } → _
+  port state.set { key = "cs.accepted"; value = $draft } → _
+  port state.set { key = "cs.acceptedReceipt"; value = $accepted } → _
+  port state.set { key = "cs.draft"; value = $fresh } → _
+  port state.set { key = "cs.history"; value = $history } → _
+  port state.set { key = "cs.notice"; value = "Version saved after exact replay. Every compiled output now has an accepted source identity." } → _
+
+process cs.discardUI:
+  port state.get { key = "cs.accepted" } → accepted
+  port state.get { key = "cs.acceptedReceipt" } → receipt
+  port kernel.invoke { query = "ws.initial"; input = { basis = $accepted.document; predecessor = $receipt.sha256 } } → fresh
+  port kernel.invoke { query = "ws.receipt"; input = { state = $fresh; expectedRevision = 0; expectedHash = $fresh.documentHash } } → freshReceipt
+  port kernel.invoke { query = "cs.pack"; input = { } } → packet
+  port record.put { record = $packet; key = "draft"; value = $freshReceipt } → packet
+  port kernel.invoke { query = "cs.store"; input = $packet } → _
+  port state.set { key = "cs.draft"; value = $fresh } → _
+  port state.set { key = "cs.notice"; value = "Draft changes discarded. Accepted work and its history are retained." } → _
+
+process cs.switchProject:
+  try:
+    port kernel.invoke { query = "cs.read"; input = "#cs-project-select" } → id
+    port storage.read { key = concat("creator-studio.project.v1.", $id); maxLength = 1800000 } → saved
+    assert and($saved.ok, not(eq($saved.value, null)))
+      otherwise "CS-STORAGE: The selected project is unavailable."
+    port json.parse { text = $saved.value } → packet
+    port kernel.invoke { query = "cs.restore"; input = $packet } → restored
+    port kernel.invoke { query = "cs.useProject"; input = $restored } → _
+    port state.set { key = "cs.notice"; value = "Project opened after replay. Its draft, commentary and history remain distinct." } → _
+    call cs.paint
+  catch fault:
+    port kernel.invoke { query = "cs.notify"; input = $fault.message } → _
+
+process cs.agent:
+  let operation = $eventInput.operation
+  assert includes(list("inspect", "propose", "compile", "view"), $operation)
+    otherwise "CS-AGENT: This local agent surface can inspect, propose, compile or change a view; it cannot grant acceptance or external authority."
+  port state.get { key = "cs.draft" } → draft
+  when eq($operation, "inspect"):
+    port kernel.invoke { query = "cs.validate"; input = $draft } → checked
+    let result = { sourceHash = $draft.documentHash; document = $draft.document; meaning = $checked.model; pending = count($draft.journal); identity = "Local caller; not authenticated remote access" }
+  when eq($operation, "propose"):
+    assert eq($eventInput.expectedHash, $draft.documentHash)
+      otherwise "CS-STALE: Reinspect the project before proposing."
+    port kernel.invoke { query = "cs.stage"; input = $eventInput.request } → _
+    call cs.paint
+    port state.get { key = "cs.draft" } → next
+    let result = { status = "draft-proposal"; sourceHash = $next.documentHash; accepted = false }
+  when eq($operation, "compile"):
+    port state.get { key = "cs.accepted" } → accepted
+    port kernel.invoke { query = "cs.artifact"; input = { state = $accepted; id = $eventInput.id } } → result
+  when eq($operation, "view"):
+    port kernel.invoke { query = "cs.navigate"; input = $eventInput.view } → _
+    call cs.paint
+    let result = { view = $eventInput.view }
+
+# Workspace interface.
+
+process ws.persist:
+  port state.get { key = "workspace" } → state
+  port kernel.invoke { query = "ws.receipt"; input = { state = $state; expectedRevision = $state.revision; expectedHash = $state.documentHash } } → receipt
+  port json.stringify { value = $receipt; space = 0 } → encoded
+  port storage.write { key = "usewords.workspace.draft.v1"; value = $encoded } → stored
+  when not($stored.ok):
+    port state.set { key = "workspaceNotice"; value = "Draft is in memory. Browser storage is unavailable; export source to keep it." } → _
+
+process ws.saveDefinition:
+  port browser.property { ref = "#ws-definition"; name = "value" } → source
+  port text.utf8Length { value = $source } → length
+  port number.calculate { operation = "lessEqual"; values = list($length, 12000) } → bounded
+  when $bounded:
+    port storage.write { key = "usewords.workspace.definition-draft.v1"; value = $source } → stored
+
+process ws.retainedAgent:
+  let request = $eventInput
+  assert includes(list("status", "apply", "check-definition", "inspect", "accept-candidate", "export-source", "collaboration-status", "collaboration-command", "matter-status", "matter-overview", "matter-brief", "matter-suggestions"), $request.operation)
+    otherwise "WS-AGENT: Unsupported operation."
+  port state.get { key = "workspace" } → state
+  when eq($request.operation, "matter-overview"):
+    port state.get { key = "collaboration" } → board
+    port kernel.invoke { query = "mm.overview"; input = { board = $board; actor = $request.actor } } → result
+  when eq($request.operation, "matter-status"):
+    let result = at($state.document, "matter")
+  when eq($request.operation, "matter-brief"):
+    port kernel.invoke { query = "mw.brief"; input = $state } → brief
+    let nextAI = { brief = $brief; package = null }
+    call mw.storeAI
+    let result = { request = $brief.request; sha256 = $brief.sha256 }
+  when eq($request.operation, "matter-suggestions"):
+    let response = $request.response
+    call mw.checkResponseUI
+    let result = $checked.response
+  when eq($request.operation, "collaboration-status"):
+    port state.get { key = "collaboration" } → result
+  when eq($request.operation, "collaboration-command"):
+    let input = $request.request
+    call cw.commitUI
+    let result = { revision = $next.revision; documentHash = $next.head.documentHash }
+  when eq($request.operation, "status"):
+    let result = { revision = $state.revision; documentHash = $state.documentHash; document = $state.document }
+  when eq($request.operation, "apply"):
+    port state.get { key = "collaboration" } → board
+    assert not($board)
+      otherwise "CW-PROPOSAL: Use collaboration-command; direct mutation cannot bypass review."
+    port kernel.invoke { query = "ws.apply"; input = { state = $state; request = $request.request } } → next
+    port state.set { key = "workspace"; value = $next } → _
+    port state.set { key = "workspaceNotice"; value = "Agent proposal checked and applied as a draft." } → _
+    call ws.persist
+    call ws.paint
+    let result = { revision = $next.revision; documentHash = $next.documentHash }
+  when eq($request.operation, "check-definition"):
+    port kernel.invoke { query = "ws.definition"; input = $request.source } → result
+  when eq($request.operation, "inspect"):
+    let result = { inputs = $state.inputs; projections = $state.projections; journal = $state.journal }
+  when eq($request.operation, "export-source"):
+    let result = { protocol = "usewords/workspace-source/1"; document = $state.document }
+  when eq($request.operation, "accept-candidate"):
+    port kernel.invoke { query = "ws.accept"; input = { state = $state; expectedRevision = $request.revision; expectedHash = $request.documentHash } } → result
+
+process ws.retainedBoot:
+  port kernel.invoke { query = "ws.initial"; input = {  } } → initial
+  port state.set { key = "workspace"; value = $initial } → _
+  port state.set { key = "workspaceAccepted"; value = null } → _
+  port state.set { key = "workspaceNotice"; value = "A real encounter is here to begin. Create your own objects, compose journeys, or adopt a new construct." } → _
+  port browser.write { ref = "#ws-definition"; name = "value"; value = "construct Reflection\nfield question text shared required max 200\nfield invitation text local optional max 600\nheading question\nparagraph invitation" } → _
+  try:
+    port storage.read { key = "usewords.workspace.accepted.v1"; maxLength = 180000 } → stored
+    when and($stored.ok, not(eq($stored.value, null))):
+      port json.parse { text = $stored.value } → receipt
+      port kernel.invoke { query = "ws.reconstruct"; input = $receipt } → restored
+      port state.set { key = "workspace"; value = $restored } → _
+      port state.set { key = "workspaceAccepted"; value = $receipt } → _
+      port state.set { key = "workspaceNotice"; value = "Restored the accepted workspace after replay." } → _
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Previous acceptance retained in storage but not activated: ", $fault.message) } → _
+  try:
+    port storage.read { key = "usewords.workspace.draft.v1"; maxLength = 180000 } → stored
+    when and($stored.ok, not(eq($stored.value, null))):
+      port json.parse { text = $stored.value } → receipt
+      port state.get { key = "workspaceAccepted" } → accepted
+      when not(eq($receipt.sha256, at($accepted, "sha256"))):
+        port kernel.invoke { query = "ws.reconstruct"; input = $receipt } → restored
+        port state.set { key = "workspace"; value = $restored } → _
+        port state.set { key = "workspaceNotice"; value = "Restored your checked draft. It remains separate from accepted source." } → _
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Saved draft could not be replayed; source was not replaced. ", $fault.message) } → _
+  port storage.read { key = "usewords.workspace.definition-draft.v1"; maxLength = 12000 } → raw
+  when and($raw.ok, not(eq($raw.value, null))):
+    port browser.write { ref = "#ws-definition"; name = "value"; value = $raw.value } → _
+  port browser.on { ref = "#ws-object-form"; event = "submit"; query = "ws.action"; input = { kind = "object" }; preventDefault = true } → _
+  port browser.on { ref = "#ws-journey-form"; event = "submit"; query = "ws.action"; input = { kind = "journey" }; preventDefault = true } → _
+  port browser.on { ref = "#ws-compose-form"; event = "submit"; query = "ws.action"; input = { kind = "compose" }; preventDefault = true } → _
+  port browser.on { ref = "#ws-edit-form"; event = "submit"; query = "ws.action"; input = { kind = "edit" }; preventDefault = true } → _
+  port browser.on { ref = "#ws-adopt"; event = "click"; query = "ws.action"; input = { kind = "define" }; preventDefault = false } → _
+  port browser.on { ref = "#ws-check-definition"; event = "click"; query = "ws.checkDefinition"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#ws-accept"; event = "click"; query = "ws.acceptUI"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#ws-segment"; event = "click"; query = "ws.segmentUI"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#ws-export"; event = "click"; query = "ws.exportUI"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#ws-source-package"; event = "click"; query = "ws.sourceUI"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#ws-download-source"; event = "click"; query = "ws.downloadSourceUI"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#ws-import"; event = "click"; query = "ws.importUI"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#ws-object-type"; event = "change"; query = "ws.newFields"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#ws-edit-scope"; event = "change"; query = "ws.editorFields"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#ws-edit-object"; event = "change"; query = "ws.editorFields"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#ws-edit-entry"; event = "change"; query = "ws.editorFields"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#ws-edit-field"; event = "change"; query = "ws.editorFields"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#ws-inspect-choice"; event = "change"; query = "ws.inspectUI"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#ws-definition"; event = "input"; query = "ws.saveDefinition"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#ws-old-demo"; event = "click"; query = "ws.openDemo"; input = {  }; preventDefault = false } → _
+  call cw.boot
+  port dom.exists { selector = "#mw-root" } → mattersUI
+  when $mattersUI:
+    call mw.boot
+  call ws.paint
+
+process cw.boot:
+  call cw.resetUI
+  port state.set { key = "collaborationSelected"; value = "" } → _
+  try:
+    port storage.read { key = concat("usewords.collaboration.v1.", $data.programHash); maxLength = 300000 } → stored
+    when and($stored.ok, not(eq($stored.value, null))):
+      port json.parse { text = $stored.value } → receipt
+      port kernel.invoke { query = "cw.reconstruct"; input = $receipt } → board
+      port state.set { key = "collaboration"; value = $board } → _
+      port state.set { key = "workspace"; value = $board.head } → _
+      port state.set { key = "workspaceNotice"; value = "Restored proposal history and accepted material after exact replay. Personas are local simulations." } → _
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Saved proposal history refused and retained in storage: ", $fault.message) } → _
+  port browser.on { ref = "#cw-selection"; event = "change"; query = "cw.selectionUI"; input = { }; preventDefault = false } → _
+  port browser.on { ref = "#cw-review"; event = "click"; query = "cw.decisionUI"; input = { action = "review" }; preventDefault = false } → _
+  port browser.on { ref = "#cw-accept"; event = "click"; query = "cw.decisionUI"; input = { action = "accept" }; preventDefault = false } → _
+  port browser.on { ref = "#cw-reject"; event = "click"; query = "cw.decisionUI"; input = { action = "reject" }; preventDefault = false } → _
+  port browser.on { ref = "#cw-import-history"; event = "click"; query = "cw.importUI"; input = { }; preventDefault = false } → _
+
+process cw.commitUI:
+  port state.get { key = "collaboration" } → board
+  port kernel.invoke { query = "cw.apply"; input = { board = $board; request = $input } } → next
+  port kernel.invoke { query = "cw.receipt"; input = $next } → receipt
+  when includes(list("accept", "attest", "withdraw-attestation"), $input.action):
+    port kernel.invoke { query = "cw.reconstruct"; input = $receipt } → replayed
+    assert eq($replayed, $next)
+      otherwise "CW-REPLAY: Accepted history was not reproduced."
+  port json.stringify { value = $receipt; space = 0 } → encoded
+  port number.calculate { operation = "lessEqual"; values = list(count($encoded), 300000) } → bounded
+  assert $bounded
+    otherwise "CW-LIMIT: Proposal history exceeds the local storage profile."
+  port kernel.invoke { query = "mw.storageKey"; input = at(at($next.head.document, "matter"), "id") } → storageKey
+  port storage.read { key = $storageKey; maxLength = 300000 } → currentSaved
+  assert $currentSaved.ok
+    otherwise "CW-STORAGE: Cannot check the saved head."
+  when not(eq($currentSaved.value, null)):
+    port json.parse { text = $currentSaved.value } → currentReceipt
+    port kernel.invoke { query = "cw.receipt"; input = $board } → expectedReceipt
+    assert eq($currentReceipt, $expectedReceipt)
+      otherwise "CW-CONFLICT: Another tab changed the saved board. Reload before proposing again."
+  when eq($currentSaved.value, null):
+    assert eq($board.revision, 0)
+      otherwise "CW-CONFLICT: The saved board disappeared; reload before writing."
+  port storage.write { key = $storageKey; value = $encoded } → stored
+  assert $stored.ok
+    otherwise "CW-STORAGE: Could not save proposal history. The previous board remains active."
+  port state.set { key = "collaboration"; value = $next } → _
+  port state.set { key = "workspace"; value = $next.head } → _
+  port state.set { key = "collaborationSelected"; value = $input.id } → _
+  port state.set { key = "workspaceNotice"; value = if(eq($input.action, "accept"), "Proposal accepted after independent review and exact history replay. Saved locally; no authenticated identity is claimed.", "Proposal board saved locally. Accepted material has not changed.") } → _
+  try:
+    call mm.syncIndex
+    call ws.paint
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Board saved, but its register or view could not refresh. Reload to replay saved history. ", $fault.message) } → _
+    call ws.showNotice
+
+process cw.saveUI:
+  try:
+    port browser.write { ref = "#ws-notice"; name = "textContent"; value = "Replaying proposal, review and acceptance history…" } → _
+    port browser.delay { milliseconds = 1 } → _
+    port state.get { key = "collaboration" } → board
+    port kernel.invoke { query = "cw.receipt"; input = $board } → receipt
+    port kernel.invoke { query = "cw.reconstruct"; input = $receipt } → checked
+    assert eq($checked, $board)
+      otherwise "CW-REPLAY: Board does not match its history."
+    port json.stringify { value = $receipt; space = 2 } → encoded
+    port kernel.invoke { query = "mw.storageKey"; input = at(at($board.head.document, "matter"), "id") } → storageKey
+    port storage.write { key = $storageKey; value = $encoded } → stored
+    assert $stored.ok
+      otherwise "CW-STORAGE: History replayed but could not be saved."
+    port browser.write { ref = "#ws-package"; name = "value"; value = $encoded } → _
+    port state.set { key = "workspaceNotice"; value = "Proposal history verified and saved. Saving history does not accept open proposals." } → _
+    call ws.showNotice
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process cw.importUI:
+  try:
+    port state.get { key = "collaboration" } → board
+    assert not(at($board.head.document, "matter"))
+      otherwise "MW-IMPORT: Use the matter history importer for active matters."
+    assert eq($board.revision, 0)
+      otherwise "CW-IMPORT: Existing proposal history cannot be replaced. Import into a fresh browser or empty board."
+    port browser.property { ref = "#ws-package"; name = "value" } → encoded
+    port number.calculate { operation = "lessEqual"; values = list(count($encoded), 300000) } → bounded
+    assert $bounded
+      otherwise "CW-IMPORT: History exceeds the import limit."
+    port json.parse { text = $encoded } → receipt
+    port kernel.invoke { query = "cw.reconstruct"; input = $receipt } → next
+    assert not(at($next.head.document, "matter"))
+      otherwise "MW-IMPORT: Use the matter history importer for this record."
+    port storage.write { key = concat("usewords.collaboration.v1.", $data.programHash); value = $encoded } → stored
+    assert $stored.ok
+      otherwise "CW-STORAGE: History verified but could not be saved."
+    port state.set { key = "collaboration"; value = $next } → _
+    port state.set { key = "workspace"; value = $next.head } → _
+    port state.set { key = "workspaceNotice"; value = "Imported proposal history after exact replay. Persona names remain local simulations." } → _
+    call ws.paint
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice

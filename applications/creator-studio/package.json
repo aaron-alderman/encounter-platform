@@ -1,0 +1,13 @@
+{
+  "name": "creator-studio-encounter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "\"${ENCOUNTER_BIN:-encounter}\" build --browser . bootstrap/native-build.rel ../encounter-libraries \"${ENCOUNTER_BROWSER_OUTPUT:-native-dist}\"",
+    "dev": "node bootstrap/serve.mjs",
+    "check:source": "node bootstrap/cli.mjs creator-check-source assurance/source-projections.request",
+    "project:source": "node bootstrap/cli.mjs creator-project-source assurance/source-projections.request",
+    "test": "npm run check:source && node bootstrap/cli.mjs creator-assure assurance/baseline.request && node bootstrap/cli.mjs creator-assure assurance/edit-replay.request && node bootstrap/cli.mjs creator-assure assurance/model-refusals.request && node bootstrap/cli.mjs creator-assure assurance/templates.request && node bootstrap/cli.mjs creator-assure assurance/formats.request && node bootstrap/cli.mjs creator-assure assurance/commentary.request && node bootstrap/cli.mjs creator-assure assurance/exchange.request && node bootstrap/cli.mjs creator-assure assurance/run.request && node bootstrap/cli.mjs creator-assure assurance/receipts.request && node bootstrap/cli.mjs creator-assure assurance/contrast.request && node bootstrap/cli.mjs creator-assure assurance/standards.request && node bootstrap/cli.mjs creator-assure assurance/platform-boundary.request"
+  }
+}

@@ -1,0 +1,3968 @@
+{
+  "spPolicy": {
+    "protocol": "encounter/source-presentation-policy/1",
+    "status": "supplied-bootstrap-presentation-definition",
+    "roles": [
+      "plain",
+      "comment",
+      "keyword",
+      "string",
+      "property",
+      "number",
+      "boolean",
+      "reference",
+      "identifier",
+      "operator",
+      "punctuation",
+      "identity",
+      "predicate",
+      "type"
+    ],
+    "themesAllowed": [
+      "light",
+      "dark"
+    ],
+    "jsonPatternPath": [
+      "queries",
+      "source.jsonSpan",
+      6,
+      "args",
+      "pattern"
+    ],
+    "maxCodeUnits": 160000,
+    "maxParts": 18000,
+    "identifierPattern": "[@$]?[A-Za-z_][A-Za-z0-9_.-]*",
+    "keywords": [
+      "module",
+      "entity",
+      "view",
+      "of",
+      "isa",
+      "representation",
+      "given",
+      "as",
+      "require",
+      "equals",
+      "return",
+      "render",
+      "events",
+      "edit",
+      "through",
+      "here",
+      "in",
+      "show",
+      "each",
+      "run",
+      "arguments",
+      "let",
+      "assert",
+      "otherwise",
+      "port",
+      "call",
+      "when",
+      "fold",
+      "starts",
+      "yield",
+      "try",
+      "catch",
+      "type",
+      "valueType",
+      "expects",
+      "process-module",
+      "profile",
+      "process"
+    ],
+    "punctuation": [
+      "[",
+      "]",
+      "{",
+      "}",
+      ":",
+      ",",
+      "(",
+      ")",
+      ";"
+    ],
+    "operators": [
+      "=",
+      "→",
+      "-"
+    ],
+    "fileProfiles": [
+      {
+        "pattern": "\\.json$",
+        "language": "json"
+      },
+      {
+        "pattern": "\\.rel$",
+        "language": "rel"
+      },
+      {
+        "pattern": "\\.encounter$",
+        "language": "encounter"
+      },
+      {
+        "pattern": "\\.temple$",
+        "language": "temple"
+      },
+      {
+        "pattern": "\\.(?:js|mjs|cjs)$",
+        "language": "javascript"
+      },
+      {
+        "pattern": "\\.(?:md|markdown)$",
+        "language": "markdown"
+      }
+    ],
+    "javascriptRoles": [
+      {
+        "role": "string",
+        "kinds": [
+          "string",
+          "template",
+          "`"
+        ]
+      },
+      {
+        "role": "number",
+        "kinds": [
+          "num",
+          "bigint",
+          "decimal"
+        ]
+      },
+      {
+        "role": "identifier",
+        "kinds": [
+          "name",
+          "privateId"
+        ]
+      },
+      {
+        "role": "punctuation",
+        "kinds": [
+          "(",
+          ")",
+          "{",
+          "}",
+          "[",
+          "]",
+          ",",
+          ";",
+          ":",
+          "."
+        ]
+      },
+      {
+        "role": "operator",
+        "kinds": [
+          "=",
+          "_=",
+          "==/!=/===/!==",
+          "+/-",
+          "*",
+          "/",
+          "%",
+          "**",
+          "++/--",
+          "!/~",
+          "=>",
+          "?",
+          "?.",
+          "??",
+          "||",
+          "&&",
+          "|",
+          "&",
+          "^",
+          "${"
+        ]
+      },
+      {
+        "role": "string",
+        "kinds": [
+          "regexp"
+        ]
+      }
+    ],
+    "themes": [
+      {
+        "id": "light",
+        "roles": {
+          "plain": "#20323f",
+          "comment": "#657166",
+          "keyword": "#754a91",
+          "string": "#196641",
+          "property": "#07596c",
+          "number": "#96501b",
+          "boolean": "#854c88",
+          "reference": "#6e4590",
+          "identifier": "#20323f",
+          "operator": "#7d431c",
+          "punctuation": "#52636a",
+          "identity": "#07596c",
+          "predicate": "#754a91",
+          "type": "#8c4b16"
+        }
+      },
+      {
+        "id": "dark",
+        "roles": {
+          "plain": "#d8e7e3",
+          "comment": "#94a99e",
+          "keyword": "#e6b6fa",
+          "string": "#b9e1a1",
+          "property": "#91dbe5",
+          "number": "#f6c394",
+          "boolean": "#e6b6fa",
+          "reference": "#f1d293",
+          "identifier": "#d8e7e3",
+          "operator": "#f6b5a4",
+          "punctuation": "#adc6c9",
+          "identity": "#91dbe5",
+          "predicate": "#e6b6fa",
+          "type": "#ffd38b"
+        }
+      }
+    ],
+    "layoutRules": [
+      {
+        "selector": ".sp-code",
+        "context": null,
+        "declarations": [
+          {
+            "property": "display",
+            "value": "block"
+          },
+          {
+            "property": "font",
+            "value": "inherit"
+          },
+          {
+            "property": "white-space",
+            "value": "inherit"
+          },
+          {
+            "property": "counter-reset",
+            "value": "sp-line"
+          }
+        ]
+      },
+      {
+        "selector": ".sp-code .sp-line",
+        "context": null,
+        "declarations": [
+          {
+            "property": "display",
+            "value": "inline"
+          },
+          {
+            "property": "padding",
+            "value": "0"
+          },
+          {
+            "property": "min-height",
+            "value": "0"
+          }
+        ]
+      },
+      {
+        "selector": ".sp-code[data-numbered=\"true\"] .sp-line::before",
+        "context": null,
+        "declarations": [
+          {
+            "property": "content",
+            "value": "attr(data-line)"
+          },
+          {
+            "property": "display",
+            "value": "inline-block"
+          },
+          {
+            "property": "width",
+            "value": "3ch"
+          },
+          {
+            "property": "padding-right",
+            "value": "1.5ch"
+          },
+          {
+            "property": "text-align",
+            "value": "right"
+          },
+          {
+            "property": "opacity",
+            "value": ".55"
+          },
+          {
+            "property": "user-select",
+            "value": "none"
+          },
+          {
+            "property": "font-size",
+            "value": ".85em"
+          }
+        ]
+      },
+      {
+        "selector": ".sp-code[data-numbered=\"false\"] .sp-line::before",
+        "context": null,
+        "declarations": [
+          {
+            "property": "content",
+            "value": "none"
+          }
+        ]
+      },
+      {
+        "selector": ".sp-code .highlight",
+        "context": null,
+        "declarations": [
+          {
+            "property": "background",
+            "value": "#b98b3933"
+          },
+          {
+            "property": "outline",
+            "value": "1px solid #b98b3966"
+          }
+        ]
+      },
+      {
+        "selector": ".sp-code .sp-comment",
+        "context": null,
+        "declarations": [
+          {
+            "property": "font-style",
+            "value": "italic"
+          }
+        ]
+      },
+      {
+        "selector": ".sp-code:focus-visible",
+        "context": null,
+        "declarations": [
+          {
+            "property": "outline",
+            "value": "2px solid currentColor"
+          },
+          {
+            "property": "outline-offset",
+            "value": "4px"
+          }
+        ]
+      },
+      {
+        "selector": ".sp-code .sp-type",
+        "context": null,
+        "declarations": [
+          {
+            "property": "font-weight",
+            "value": "600"
+          }
+        ]
+      }
+    ],
+    "referenceSigil": "$",
+    "fileAliases": {
+      "facts": "source/experiment/story.rel",
+      "encounter": "source/experiment/story.encounter",
+      "contracts": "source/experiment/contracts.rel"
+    },
+    "typeIntroducers": {
+      "encounter": [
+        "isa",
+        "representation",
+        "return"
+      ],
+      "temple": [
+        "isa",
+        "type",
+        "valueType",
+        "expects"
+      ]
+    },
+    "typePredicates": [
+      "isa",
+      "type",
+      "valueType",
+      "expects",
+      "A.accepts"
+    ]
+  },
+  "spGrammar": {
+    "protocol": "temple/surface-process-module/1",
+    "queries": {
+      "source.rel": [
+        {
+          "port": "text.split",
+          "args": {
+            "value": "$text",
+            "pattern": "(\\(\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"\\s*,\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"\\s*,\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"(?:\\s*,\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\")?\\s*\\)|//[^\\r\\n]*)"
+          },
+          "into": "relPieces"
+        },
+        {
+          "fold": "$relPieces",
+          "as": "relPiece",
+          "accumulator": "relState",
+          "initial": {
+            "facts": [
+              "list"
+            ],
+            "origins": [
+              "list"
+            ],
+            "offset": 0,
+            "line": 1,
+            "column": 1,
+            "prefix": "",
+            "error": null
+          },
+          "steps": [
+            {
+              "let": "relFacts",
+              "value": "$relState.facts"
+            },
+            {
+              "let": "relOrigins",
+              "value": "$relState.origins"
+            },
+            {
+              "let": "relError",
+              "value": "$relState.error"
+            },
+            {
+              "port": "text.trim",
+              "args": {
+                "value": "$relPiece"
+              },
+              "into": "relTrim"
+            },
+            {
+              "when": [
+                "and",
+                [
+                  "not",
+                  "$relError"
+                ],
+                [
+                  "not",
+                  [
+                    "eq",
+                    "$relTrim",
+                    ""
+                  ]
+                ]
+              ],
+              "then": [
+                {
+                  "try": [
+                    {
+                      "port": "text.matches",
+                      "args": {
+                        "value": "$relTrim",
+                        "pattern": "^//"
+                      },
+                      "into": "relComment"
+                    },
+                    {
+                      "when": "$relComment",
+                      "then": [
+                        {
+                          "port": "text.trim",
+                          "args": {
+                            "value": "$relState.prefix"
+                          },
+                          "into": "relPrefix"
+                        },
+                        {
+                          "assert": [
+                            "eq",
+                            "$relPrefix",
+                            ""
+                          ],
+                          "message": "Use // comments on their own line."
+                        }
+                      ]
+                    },
+                    {
+                      "when": [
+                        "not",
+                        "$relComment"
+                      ],
+                      "then": [
+                        {
+                          "port": "text.matches",
+                          "args": {
+                            "value": "$relPiece",
+                            "pattern": "^\\(\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"\\s*,\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"\\s*,\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"(?:\\s*,\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\")?\\s*\\)$"
+                          },
+                          "into": "relTuple"
+                        },
+                        {
+                          "assert": "$relTuple",
+                          "message": "Expected a REL tuple: (\"thing\", \"field\", \"value\")."
+                        },
+                        {
+                          "port": "text.split",
+                          "args": {
+                            "value": "$relPiece",
+                            "pattern": "(\"(?:\\\\[\\s\\S]|[^\"\\\\])*\")"
+                          },
+                          "into": "relAtoms"
+                        },
+                        {
+                          "port": "json.parse",
+                          "args": {
+                            "text": [
+                              "at",
+                              "$relAtoms",
+                              1
+                            ]
+                          },
+                          "into": "relS"
+                        },
+                        {
+                          "port": "json.parse",
+                          "args": {
+                            "text": [
+                              "at",
+                              "$relAtoms",
+                              3
+                            ]
+                          },
+                          "into": "relP"
+                        },
+                        {
+                          "port": "json.parse",
+                          "args": {
+                            "text": [
+                              "at",
+                              "$relAtoms",
+                              5
+                            ]
+                          },
+                          "into": "relO"
+                        },
+                        {
+                          "let": "relPol",
+                          "value": "is"
+                        },
+                        {
+                          "when": [
+                            "eq",
+                            [
+                              "count",
+                              "$relAtoms"
+                            ],
+                            9
+                          ],
+                          "then": [
+                            {
+                              "port": "json.parse",
+                              "args": {
+                                "text": [
+                                  "at",
+                                  "$relAtoms",
+                                  7
+                                ]
+                              },
+                              "into": "relPol"
+                            }
+                          ]
+                        },
+                        {
+                          "assert": [
+                            "includes",
+                            [
+                              "list",
+                              "is",
+                              "is-not"
+                            ],
+                            "$relPol"
+                          ],
+                          "message": "Polarity must be is or is-not."
+                        },
+                        {
+                          "let": "relValueStart",
+                          "value": [
+                            "add",
+                            "$relState.offset",
+                            [
+                              "fold",
+                              [
+                                "list",
+                                0,
+                                1,
+                                2,
+                                3,
+                                4
+                              ],
+                              "relPart",
+                              "relSize",
+                              0,
+                              [
+                                "add",
+                                "$relSize",
+                                [
+                                  "count",
+                                  [
+                                    "at",
+                                    "$relAtoms",
+                                    "$relPart"
+                                  ]
+                                ]
+                              ]
+                            ]
+                          ]
+                        },
+                        {
+                          "let": "relOrigins",
+                          "value": [
+                            "append",
+                            "$relOrigins",
+                            [
+                              "list",
+                              {
+                                "index": [
+                                  "count",
+                                  "$relFacts"
+                                ],
+                                "span": {
+                                  "file": "$file",
+                                  "line": "$relState.line",
+                                  "column": "$relState.column",
+                                  "offset": "$relState.offset",
+                                  "endOffset": [
+                                    "add",
+                                    "$relState.offset",
+                                    [
+                                      "count",
+                                      "$relPiece"
+                                    ]
+                                  ],
+                                  "valueStart": "$relValueStart",
+                                  "valueEnd": [
+                                    "add",
+                                    "$relValueStart",
+                                    [
+                                      "count",
+                                      [
+                                        "at",
+                                        "$relAtoms",
+                                        5
+                                      ]
+                                    ]
+                                  ]
+                                }
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "let": "relFacts",
+                          "value": [
+                            "append",
+                            "$relFacts",
+                            [
+                              "list",
+                              {
+                                "s": "$relS",
+                                "p": "$relP",
+                                "o": "$relO",
+                                "pol": "$relPol"
+                              }
+                            ]
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "error": "relFault",
+                  "catch": [
+                    {
+                      "port": "text.indexOf",
+                      "args": {
+                        "value": "$relPiece",
+                        "search": "$relTrim",
+                        "from": 0
+                      },
+                      "into": "relProblemOffset"
+                    },
+                    {
+                      "port": "text.slice",
+                      "args": {
+                        "value": "$relPiece",
+                        "start": 0,
+                        "end": "$relProblemOffset"
+                      },
+                      "into": "relProblemPrefix"
+                    },
+                    {
+                      "port": "text.split",
+                      "args": {
+                        "value": "$relProblemPrefix",
+                        "pattern": "\\n"
+                      },
+                      "into": "relProblemLines"
+                    },
+                    {
+                      "let": "relError",
+                      "value": {
+                        "code": "ENCOUNTER-SOURCE-001",
+                        "summary": "$relFault.message",
+                        "span": {
+                          "file": "$file",
+                          "line": [
+                            "add",
+                            "$relState.line",
+                            [
+                              "add",
+                              [
+                                "count",
+                                "$relProblemLines"
+                              ],
+                              -1
+                            ]
+                          ],
+                          "column": [
+                            "if",
+                            [
+                              "eq",
+                              [
+                                "count",
+                                "$relProblemLines"
+                              ],
+                              1
+                            ],
+                            [
+                              "add",
+                              "$relState.column",
+                              "$relProblemOffset"
+                            ],
+                            [
+                              "add",
+                              [
+                                "count",
+                                [
+                                  "at",
+                                  "$relProblemLines",
+                                  [
+                                    "add",
+                                    [
+                                      "count",
+                                      "$relProblemLines"
+                                    ],
+                                    -1
+                                  ]
+                                ]
+                              ],
+                              1
+                            ]
+                          ]
+                        },
+                        "correction": "Correct this tuple, then try the file again."
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "port": "text.split",
+              "args": {
+                "value": "$relPiece",
+                "pattern": "\\n"
+              },
+              "into": "relLines"
+            }
+          ],
+          "yield": {
+            "facts": "$relFacts",
+            "origins": "$relOrigins",
+            "offset": [
+              "add",
+              "$relState.offset",
+              [
+                "count",
+                "$relPiece"
+              ]
+            ],
+            "line": [
+              "add",
+              "$relState.line",
+              [
+                "add",
+                [
+                  "count",
+                  "$relLines"
+                ],
+                -1
+              ]
+            ],
+            "column": [
+              "if",
+              [
+                "eq",
+                [
+                  "count",
+                  "$relLines"
+                ],
+                1
+              ],
+              [
+                "add",
+                "$relState.column",
+                [
+                  "count",
+                  "$relPiece"
+                ]
+              ],
+              [
+                "add",
+                [
+                  "count",
+                  [
+                    "at",
+                    "$relLines",
+                    [
+                      "add",
+                      [
+                        "count",
+                        "$relLines"
+                      ],
+                      -1
+                    ]
+                  ]
+                ],
+                1
+              ]
+            ],
+            "prefix": [
+              "if",
+              [
+                "eq",
+                [
+                  "count",
+                  "$relLines"
+                ],
+                1
+              ],
+              [
+                "concat",
+                "$relState.prefix",
+                "$relPiece"
+              ],
+              [
+                "at",
+                "$relLines",
+                [
+                  "add",
+                  [
+                    "count",
+                    "$relLines"
+                  ],
+                  -1
+                ]
+              ]
+            ],
+            "error": "$relError"
+          },
+          "into": "relState"
+        },
+        {
+          "let": "result",
+          "value": {
+            "ok": [
+              "not",
+              "$relState.error"
+            ],
+            "facts": [
+              "if",
+              "$relState.error",
+              [
+                "list"
+              ],
+              "$relState.facts"
+            ],
+            "origins": [
+              "if",
+              "$relState.error",
+              [
+                "list"
+              ],
+              "$relState.origins"
+            ],
+            "module": "$file",
+            "diagnostic": "$relState.error"
+          }
+        }
+      ],
+      "source.compile": [
+        {
+          "port": "text.matches",
+          "args": {
+            "value": "$text",
+            "pattern": "^[\\s\\S]{0,524288}$"
+          },
+          "into": "sourceWithinLimit"
+        },
+        {
+          "assert": "$sourceWithinLimit",
+          "message": "ENCOUNTER-SOURCE-005: This editor tries files up to 524,288 characters. Download the buffer or split the source."
+        },
+        {
+          "let": "sourceText",
+          "value": "$text"
+        },
+        {
+          "let": "sourceFile",
+          "value": "$file"
+        },
+        {
+          "let": "sourceFormat",
+          "value": "$format"
+        },
+        {
+          "let": "sourceResult",
+          "value": null
+        },
+        {
+          "when": [
+            "eq",
+            "$format",
+            "rel"
+          ],
+          "then": [
+            {
+              "call": "source.rel"
+            },
+            {
+              "let": "sourceResult",
+              "value": "$result"
+            }
+          ]
+        },
+        {
+          "when": [
+            "eq",
+            "$sourceFormat",
+            "temple"
+          ],
+          "then": [
+            {
+              "call": "language.compile"
+            },
+            {
+              "let": "sourceResult",
+              "value": "$result"
+            },
+            {
+              "when": "$sourceResult.ok",
+              "then": [
+                {
+                  "port": "text.split",
+                  "args": {
+                    "value": "$sourceText",
+                    "pattern": "\\n"
+                  },
+                  "into": "sourceLines"
+                },
+                {
+                  "fold": "$sourceLines",
+                  "as": "sourceLine",
+                  "accumulator": "sourceLocations",
+                  "initial": {
+                    "offset": 0,
+                    "locations": [
+                      "list"
+                    ]
+                  },
+                  "steps": [
+                    {
+                      "port": "text.matches",
+                      "args": {
+                        "value": "$sourceLine",
+                        "pattern": "\\r$"
+                      },
+                      "into": "sourceLineHasCR"
+                    }
+                  ],
+                  "yield": {
+                    "offset": [
+                      "add",
+                      "$sourceLocations.offset",
+                      [
+                        "add",
+                        [
+                          "count",
+                          "$sourceLine"
+                        ],
+                        1
+                      ]
+                    ],
+                    "locations": [
+                      "append",
+                      "$sourceLocations.locations",
+                      [
+                        "list",
+                        {
+                          "offset": "$sourceLocations.offset",
+                          "endOffset": [
+                            "add",
+                            "$sourceLocations.offset",
+                            [
+                              "add",
+                              [
+                                "count",
+                                "$sourceLine"
+                              ],
+                              [
+                                "if",
+                                "$sourceLineHasCR",
+                                -1,
+                                0
+                              ]
+                            ]
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "into": "sourceLocations"
+                },
+                {
+                  "let": "sourceOrigins",
+                  "value": [
+                    "map",
+                    "$sourceResult.origins",
+                    "sourceOrigin",
+                    {
+                      "index": "$sourceOrigin.index",
+                      "span": {
+                        "file": "$sourceFile",
+                        "line": "$sourceOrigin.span.line",
+                        "column": "$sourceOrigin.span.column",
+                        "offset": [
+                          "at",
+                          [
+                            "at",
+                            "$sourceLocations.locations",
+                            [
+                              "add",
+                              "$sourceOrigin.span.line",
+                              -1
+                            ]
+                          ],
+                          "offset"
+                        ],
+                        "endOffset": [
+                          "at",
+                          [
+                            "at",
+                            "$sourceLocations.locations",
+                            [
+                              "add",
+                              "$sourceOrigin.span.line",
+                              -1
+                            ]
+                          ],
+                          "endOffset"
+                        ],
+                        "valueStart": [
+                          "at",
+                          [
+                            "at",
+                            "$sourceLocations.locations",
+                            [
+                              "add",
+                              "$sourceOrigin.span.line",
+                              -1
+                            ]
+                          ],
+                          "offset"
+                        ],
+                        "valueEnd": [
+                          "at",
+                          [
+                            "at",
+                            "$sourceLocations.locations",
+                            [
+                              "add",
+                              "$sourceOrigin.span.line",
+                              -1
+                            ]
+                          ],
+                          "endOffset"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "port": "record.put",
+                  "args": {
+                    "record": "$sourceResult",
+                    "key": "origins",
+                    "value": "$sourceOrigins"
+                  },
+                  "into": "sourceResult"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "when": [
+            "includes",
+            [
+              "list",
+              "process",
+              "json"
+            ],
+            "$sourceFormat"
+          ],
+          "then": [
+            {
+              "try": [
+                {
+                  "port": "json.parse",
+                  "args": {
+                    "text": "$sourceText"
+                  },
+                  "into": "sourceJson"
+                },
+                {
+                  "let": "sourceResult",
+                  "value": {
+                    "ok": true,
+                    "facts": [
+                      "list"
+                    ],
+                    "origins": [
+                      "list"
+                    ],
+                    "module": "$sourceFile",
+                    "json": "$sourceJson",
+                    "diagnostic": null
+                  }
+                }
+              ],
+              "error": "sourceJsonError",
+              "catch": [
+                {
+                  "let": "sourceResult",
+                  "value": {
+                    "ok": false,
+                    "facts": [
+                      "list"
+                    ],
+                    "origins": [
+                      "list"
+                    ],
+                    "module": "$sourceFile",
+                    "diagnostic": {
+                      "code": "ENCOUNTER-SOURCE-002",
+                      "summary": "$sourceJsonError.message",
+                      "span": {
+                        "file": "$sourceFile",
+                        "line": 1,
+                        "column": 1
+                      },
+                      "correction": "Correct the JSON source and try again."
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "assert": "$sourceResult",
+          "message": "ENCOUNTER-SOURCE-003: This source is derived. Follow its inputs or make a separate example."
+        },
+        {
+          "port": "record.put",
+          "args": {
+            "record": "$sourceResult",
+            "key": "text",
+            "value": "$sourceText"
+          },
+          "into": "sourceResult"
+        },
+        {
+          "port": "record.put",
+          "args": {
+            "record": "$sourceResult",
+            "key": "file",
+            "value": "$sourceFile"
+          },
+          "into": "sourceResult"
+        },
+        {
+          "port": "record.put",
+          "args": {
+            "record": "$sourceResult",
+            "key": "format",
+            "value": "$sourceFormat"
+          },
+          "into": "sourceResult"
+        },
+        {
+          "let": "result",
+          "value": "$sourceResult"
+        }
+      ],
+      "source.encode": [
+        {
+          "fold": "$sourceFacts",
+          "as": "sourceFact",
+          "accumulator": "sourceRows",
+          "initial": [
+            "list"
+          ],
+          "steps": [
+            {
+              "port": "json.stringify",
+              "args": {
+                "value": "$sourceFact.s"
+              },
+              "into": "sourceS"
+            },
+            {
+              "port": "json.stringify",
+              "args": {
+                "value": "$sourceFact.p"
+              },
+              "into": "sourceP"
+            },
+            {
+              "port": "json.stringify",
+              "args": {
+                "value": "$sourceFact.o"
+              },
+              "into": "sourceO"
+            }
+          ],
+          "yield": [
+            "append",
+            "$sourceRows",
+            [
+              "list",
+              [
+                "if",
+                [
+                  "eq",
+                  "$format",
+                  "temple"
+                ],
+                [
+                  "concat",
+                  "  ",
+                  "$sourceFact.p",
+                  " ",
+                  "$sourceO"
+                ],
+                [
+                  "concat",
+                  "(",
+                  "$sourceS",
+                  ", ",
+                  "$sourceP",
+                  ", ",
+                  "$sourceO",
+                  [
+                    "if",
+                    [
+                      "eq",
+                      "$sourceFact.pol",
+                      "is-not"
+                    ],
+                    ", \"is-not\"",
+                    ""
+                  ],
+                  ")"
+                ]
+              ]
+            ]
+          ],
+          "into": "sourceRows"
+        },
+        {
+          "port": "text.join",
+          "args": {
+            "values": "$sourceRows",
+            "separator": "\n"
+          },
+          "into": "result"
+        }
+      ],
+      "source.patch": [
+        {
+          "let": "sourceMatches",
+          "value": [
+            "filter",
+            [
+              "range",
+              [
+                "count",
+                "$sourceDocument.facts"
+              ]
+            ],
+            "sourcePosition",
+            [
+              "and",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$sourceDocument.facts",
+                    [
+                      "add",
+                      "$sourcePosition",
+                      -1
+                    ]
+                  ],
+                  "s"
+                ],
+                "$sourceSubject"
+              ],
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$sourceDocument.facts",
+                    [
+                      "add",
+                      "$sourcePosition",
+                      -1
+                    ]
+                  ],
+                  "p"
+                ],
+                "$sourceProperty"
+              ]
+            ]
+          ]
+        },
+        {
+          "let": "format",
+          "value": "$sourceDocument.format"
+        },
+        {
+          "let": "sourceFacts",
+          "value": [
+            "map",
+            "$sourceValues",
+            "sourceValue",
+            {
+              "s": "$sourceSubject",
+              "p": "$sourceProperty",
+              "o": "$sourceValue",
+              "pol": "is"
+            }
+          ]
+        },
+        {
+          "call": "source.encode"
+        },
+        {
+          "let": "sourceReplacement",
+          "value": "$result"
+        },
+        {
+          "fold": "$sourceMatches",
+          "as": "sourcePosition",
+          "accumulator": "sourcePatch",
+          "initial": {
+            "end": 0,
+            "pieces": [
+              "list"
+            ],
+            "first": true
+          },
+          "steps": [
+            {
+              "let": "sourceSpan",
+              "value": [
+                "at",
+                [
+                  "at",
+                  "$sourceDocument.origins",
+                  [
+                    "add",
+                    "$sourcePosition",
+                    -1
+                  ]
+                ],
+                "span"
+              ]
+            },
+            {
+              "port": "text.slice",
+              "args": {
+                "value": "$sourceDocument.text",
+                "start": "$sourcePatch.end",
+                "end": "$sourceSpan.offset"
+              },
+              "into": "sourcePrefix"
+            }
+          ],
+          "yield": {
+            "end": "$sourceSpan.endOffset",
+            "pieces": [
+              "append",
+              "$sourcePatch.pieces",
+              [
+                "list",
+                "$sourcePrefix",
+                [
+                  "if",
+                  "$sourcePatch.first",
+                  "$sourceReplacement",
+                  ""
+                ]
+              ]
+            ],
+            "first": false
+          },
+          "into": "sourcePatch"
+        },
+        {
+          "when": [
+            "not",
+            [
+              "eq",
+              [
+                "count",
+                "$sourceMatches"
+              ],
+              0
+            ]
+          ],
+          "then": [
+            {
+              "port": "text.slice",
+              "args": {
+                "value": "$sourceDocument.text",
+                "start": "$sourcePatch.end",
+                "end": [
+                  "count",
+                  "$sourceDocument.text"
+                ]
+              },
+              "into": "sourceSuffix"
+            },
+            {
+              "port": "text.join",
+              "args": {
+                "values": [
+                  "append",
+                  "$sourcePatch.pieces",
+                  [
+                    "list",
+                    "$sourceSuffix"
+                  ]
+                ],
+                "separator": ""
+              },
+              "into": "result"
+            }
+          ]
+        },
+        {
+          "when": [
+            "eq",
+            [
+              "count",
+              "$sourceMatches"
+            ],
+            0
+          ],
+          "then": [
+            {
+              "let": "sourceSubjectPositions",
+              "value": [
+                "filter",
+                [
+                  "range",
+                  [
+                    "count",
+                    "$sourceDocument.facts"
+                  ]
+                ],
+                "sourcePosition",
+                [
+                  "eq",
+                  [
+                    "at",
+                    [
+                      "at",
+                      "$sourceDocument.facts",
+                      [
+                        "add",
+                        "$sourcePosition",
+                        -1
+                      ]
+                    ],
+                    "s"
+                  ],
+                  "$sourceSubject"
+                ]
+              ]
+            },
+            {
+              "assert": [
+                "not",
+                [
+                  "eq",
+                  [
+                    "count",
+                    "$sourceSubjectPositions"
+                  ],
+                  0
+                ]
+              ],
+              "message": "ENCOUNTER-SOURCE-004: Open the file to add a new identity."
+            },
+            {
+              "let": "sourceInsertion",
+              "value": [
+                "at",
+                [
+                  "at",
+                  "$sourceDocument.origins",
+                  [
+                    "add",
+                    [
+                      "at",
+                      "$sourceSubjectPositions",
+                      [
+                        "add",
+                        [
+                          "count",
+                          "$sourceSubjectPositions"
+                        ],
+                        -1
+                      ]
+                    ],
+                    -1
+                  ]
+                ],
+                "span"
+              ]
+            },
+            {
+              "port": "text.slice",
+              "args": {
+                "value": "$sourceDocument.text",
+                "start": 0,
+                "end": "$sourceInsertion.endOffset"
+              },
+              "into": "sourcePrefix"
+            },
+            {
+              "port": "text.slice",
+              "args": {
+                "value": "$sourceDocument.text",
+                "start": "$sourceInsertion.endOffset",
+                "end": [
+                  "count",
+                  "$sourceDocument.text"
+                ]
+              },
+              "into": "sourceSuffix"
+            },
+            {
+              "let": "result",
+              "value": [
+                "concat",
+                "$sourcePrefix",
+                "\n",
+                "$sourceReplacement",
+                "$sourceSuffix"
+              ]
+            }
+          ]
+        }
+      ],
+      "source.jsonSpan": [
+        {
+          "port": "json.parse",
+          "args": {
+            "text": "$jsonSourceText"
+          },
+          "into": "jsonSpanValue"
+        },
+        {
+          "fold": "$jsonSourcePath",
+          "as": "jsonPointerPart",
+          "accumulator": "jsonPointer",
+          "initial": {
+            "node": "$jsonSpanValue",
+            "path": [
+              "list"
+            ]
+          },
+          "steps": [
+            {
+              "port": "value.describe",
+              "args": {
+                "value": "$jsonPointer.node"
+              },
+              "into": "jsonPointerType"
+            },
+            {
+              "port": "value.string",
+              "args": {
+                "value": "$jsonPointerPart"
+              },
+              "into": "jsonCanonicalPart"
+            },
+            {
+              "when": "$jsonPointerType.array",
+              "then": [
+                {
+                  "port": "json.parse",
+                  "args": {
+                    "text": "$jsonCanonicalPart"
+                  },
+                  "into": "jsonCanonicalPart"
+                }
+              ]
+            }
+          ],
+          "yield": {
+            "node": [
+              "at",
+              "$jsonPointer.node",
+              "$jsonPointerPart"
+            ],
+            "path": [
+              "append",
+              "$jsonPointer.path",
+              [
+                "list",
+                "$jsonCanonicalPart"
+              ]
+            ]
+          },
+          "into": "jsonPointer"
+        },
+        {
+          "let": "jsonSourcePath",
+          "value": "$jsonPointer.path"
+        },
+        {
+          "let": "jsonPointValue",
+          "value": [
+            "fold",
+            "$jsonSourcePath",
+            "jsonPointKey",
+            "jsonPointNode",
+            "$jsonSpanValue",
+            [
+              "at",
+              "$jsonPointNode",
+              "$jsonPointKey"
+            ]
+          ]
+        },
+        {
+          "port": "value.describe",
+          "args": {
+            "value": "$jsonPointValue"
+          },
+          "into": "jsonPointType"
+        },
+        {
+          "assert": [
+            "not",
+            [
+              "eq",
+              "$jsonPointType.type",
+              "undefined"
+            ]
+          ],
+          "message": "The source path is absent from the visible JSON."
+        },
+        {
+          "port": "text.split",
+          "args": {
+            "value": "$jsonSourceText",
+            "pattern": "(\"(?:[^\"\\\\]|\\\\.)*\"|[\\[\\]{}:,]|-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|true|false|null)"
+          },
+          "into": "jsonSpanParts"
+        },
+        {
+          "fold": "$jsonSpanParts",
+          "as": "jsonToken",
+          "accumulator": "jsonScan",
+          "initial": {
+            "offset": 0,
+            "stack": [
+              "list"
+            ],
+            "span": null,
+            "done": false
+          },
+          "steps": [
+            {
+              "let": "jsonSpanStack",
+              "value": "$jsonScan.stack"
+            },
+            {
+              "let": "jsonSpanFound",
+              "value": "$jsonScan.span"
+            },
+            {
+              "let": "jsonSpanDone",
+              "value": "$jsonScan.done"
+            },
+            {
+              "port": "text.matches",
+              "args": {
+                "value": "$jsonToken",
+                "pattern": "^\\s*$"
+              },
+              "into": "jsonSpanWhite"
+            },
+            {
+              "when": [
+                "and",
+                [
+                  "not",
+                  "$jsonSpanWhite"
+                ],
+                [
+                  "not",
+                  "$jsonSpanDone"
+                ]
+              ],
+              "then": [
+                {
+                  "let": "jsonFrame",
+                  "value": [
+                    "at",
+                    "$jsonSpanStack",
+                    [
+                      "add",
+                      [
+                        "count",
+                        "$jsonSpanStack"
+                      ],
+                      -1
+                    ]
+                  ]
+                },
+                {
+                  "let": "jsonIsClose",
+                  "value": [
+                    "includes",
+                    [
+                      "list",
+                      "}",
+                      "]"
+                    ],
+                    "$jsonToken"
+                  ]
+                },
+                {
+                  "let": "jsonIsOpen",
+                  "value": [
+                    "includes",
+                    [
+                      "list",
+                      "{",
+                      "["
+                    ],
+                    "$jsonToken"
+                  ]
+                },
+                {
+                  "when": "$jsonIsClose",
+                  "then": [
+                    {
+                      "when": [
+                        "at",
+                        "$jsonFrame",
+                        "match"
+                      ],
+                      "then": [
+                        {
+                          "let": "jsonSpanFound",
+                          "value": {
+                            "offset": "$jsonSpanFound.offset",
+                            "endOffset": [
+                              "add",
+                              "$jsonScan.offset",
+                              [
+                                "count",
+                                "$jsonToken"
+                              ]
+                            ]
+                          }
+                        },
+                        {
+                          "let": "jsonSpanDone",
+                          "value": false
+                        }
+                      ]
+                    },
+                    {
+                      "let": "jsonSpanStack",
+                      "value": [
+                        "map",
+                        [
+                          "range",
+                          [
+                            "add",
+                            [
+                              "count",
+                              "$jsonSpanStack"
+                            ],
+                            -1
+                          ]
+                        ],
+                        "jsonDepth",
+                        [
+                          "at",
+                          "$jsonSpanStack",
+                          [
+                            "add",
+                            "$jsonDepth",
+                            -1
+                          ]
+                        ]
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "when": [
+                    "eq",
+                    "$jsonToken",
+                    ","
+                  ],
+                  "then": [
+                    {
+                      "port": "record.put",
+                      "args": {
+                        "record": "$jsonFrame",
+                        "key": "phase",
+                        "value": [
+                          "if",
+                          [
+                            "eq",
+                            "$jsonFrame.type",
+                            "object"
+                          ],
+                          "key",
+                          "value"
+                        ]
+                      },
+                      "into": "jsonFrame"
+                    },
+                    {
+                      "port": "record.put",
+                      "args": {
+                        "record": "$jsonFrame",
+                        "key": "index",
+                        "value": [
+                          "add",
+                          "$jsonFrame.index",
+                          1
+                        ]
+                      },
+                      "into": "jsonFrame"
+                    }
+                  ]
+                },
+                {
+                  "when": [
+                    "eq",
+                    "$jsonToken",
+                    ":"
+                  ],
+                  "then": [
+                    {
+                      "port": "record.put",
+                      "args": {
+                        "record": "$jsonFrame",
+                        "key": "phase",
+                        "value": "value"
+                      },
+                      "into": "jsonFrame"
+                    }
+                  ]
+                },
+                {
+                  "when": [
+                    "and",
+                    [
+                      "not",
+                      "$jsonIsClose"
+                    ],
+                    [
+                      "not",
+                      [
+                        "includes",
+                        [
+                          "list",
+                          ",",
+                          ":"
+                        ],
+                        "$jsonToken"
+                      ]
+                    ]
+                  ],
+                  "then": [
+                    {
+                      "let": "jsonIsKey",
+                      "value": [
+                        "and",
+                        "$jsonFrame",
+                        [
+                          "and",
+                          [
+                            "eq",
+                            "$jsonFrame.type",
+                            "object"
+                          ],
+                          [
+                            "eq",
+                            "$jsonFrame.phase",
+                            "key"
+                          ]
+                        ]
+                      ]
+                    },
+                    {
+                      "when": "$jsonIsKey",
+                      "then": [
+                        {
+                          "port": "json.parse",
+                          "args": {
+                            "text": "$jsonToken"
+                          },
+                          "into": "jsonFrameKey"
+                        },
+                        {
+                          "port": "record.put",
+                          "args": {
+                            "record": "$jsonFrame",
+                            "key": "key",
+                            "value": "$jsonFrameKey"
+                          },
+                          "into": "jsonFrame"
+                        },
+                        {
+                          "port": "record.put",
+                          "args": {
+                            "record": "$jsonFrame",
+                            "key": "phase",
+                            "value": "colon"
+                          },
+                          "into": "jsonFrame"
+                        }
+                      ]
+                    },
+                    {
+                      "when": [
+                        "not",
+                        "$jsonIsKey"
+                      ],
+                      "then": [
+                        {
+                          "let": "jsonValuePath",
+                          "value": [
+                            "if",
+                            "$jsonFrame",
+                            [
+                              "append",
+                              "$jsonFrame.path",
+                              [
+                                "list",
+                                [
+                                  "if",
+                                  [
+                                    "eq",
+                                    "$jsonFrame.type",
+                                    "array"
+                                  ],
+                                  "$jsonFrame.index",
+                                  "$jsonFrame.key"
+                                ]
+                              ]
+                            ],
+                            [
+                              "list"
+                            ]
+                          ]
+                        },
+                        {
+                          "let": "jsonPathMatches",
+                          "value": [
+                            "eq",
+                            "$jsonValuePath",
+                            "$jsonSourcePath"
+                          ]
+                        },
+                        {
+                          "when": "$jsonPathMatches",
+                          "then": [
+                            {
+                              "let": "jsonSpanFound",
+                              "value": {
+                                "offset": "$jsonScan.offset",
+                                "endOffset": [
+                                  "add",
+                                  "$jsonScan.offset",
+                                  [
+                                    "count",
+                                    "$jsonToken"
+                                  ]
+                                ]
+                              }
+                            },
+                            {
+                              "when": [
+                                "not",
+                                "$jsonIsOpen"
+                              ],
+                              "then": [
+                                {
+                                  "let": "jsonSpanDone",
+                                  "value": false
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "when": "$jsonIsOpen",
+                          "then": [
+                            {
+                              "let": "jsonNewFrame",
+                              "value": {
+                                "type": [
+                                  "if",
+                                  [
+                                    "eq",
+                                    "$jsonToken",
+                                    "{"
+                                  ],
+                                  "object",
+                                  "array"
+                                ],
+                                "path": "$jsonValuePath",
+                                "key": null,
+                                "index": 0,
+                                "phase": [
+                                  "if",
+                                  [
+                                    "eq",
+                                    "$jsonToken",
+                                    "{"
+                                  ],
+                                  "key",
+                                  "value"
+                                ],
+                                "match": "$jsonPathMatches"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "when": [
+                    "and",
+                    "$jsonFrame",
+                    [
+                      "not",
+                      "$jsonIsClose"
+                    ]
+                  ],
+                  "then": [
+                    {
+                      "let": "jsonSpanStack",
+                      "value": [
+                        "map",
+                        [
+                          "range",
+                          [
+                            "count",
+                            "$jsonSpanStack"
+                          ]
+                        ],
+                        "jsonDepth",
+                        [
+                          "if",
+                          [
+                            "eq",
+                            "$jsonDepth",
+                            [
+                              "count",
+                              "$jsonSpanStack"
+                            ]
+                          ],
+                          "$jsonFrame",
+                          [
+                            "at",
+                            "$jsonSpanStack",
+                            [
+                              "add",
+                              "$jsonDepth",
+                              -1
+                            ]
+                          ]
+                        ]
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "when": "$jsonIsOpen",
+                  "then": [
+                    {
+                      "let": "jsonSpanStack",
+                      "value": [
+                        "append",
+                        "$jsonSpanStack",
+                        [
+                          "list",
+                          "$jsonNewFrame"
+                        ]
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "yield": {
+            "offset": [
+              "add",
+              "$jsonScan.offset",
+              [
+                "count",
+                "$jsonToken"
+              ]
+            ],
+            "stack": "$jsonSpanStack",
+            "span": "$jsonSpanFound",
+            "done": "$jsonSpanDone"
+          },
+          "into": "jsonScan"
+        },
+        {
+          "let": "result",
+          "value": "$jsonScan.span"
+        }
+      ]
+    }
+  },
+  "lexPolicy": {
+    "protocol": "encounter/source-lexical-profile/1",
+    "status": "supplied-bootstrap-lexical-definition",
+    "jsonPatternPath": [
+      "queries",
+      "source.jsonSpan",
+      6,
+      "args",
+      "pattern"
+    ],
+    "identifierPattern": "[@$]?[A-Za-z_][A-Za-z0-9_.-]*",
+    "maxCodeUnits": 160000,
+    "maxParts": 18000,
+    "markdownPattern": "(\\[[^\\]\\r\\n]+\\]\\([^\\)\\r\\n]+\\)|`[^`\\r\\n]+`|\\*\\*[^*\\r\\n]+\\*\\*|\\*[^*\\r\\n]+\\*|#{1,6}(?= )|```[^\\r\\n]*|~~~[^\\r\\n]*|\\||^[ \\t]*[-+>] |  \\r?\\n)"
+  },
+  "lexGrammar": {
+    "protocol": "temple/surface-process-module/1",
+    "queries": {
+      "source.rel": [
+        {
+          "port": "text.split",
+          "args": {
+            "value": "$text",
+            "pattern": "(\\(\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"\\s*,\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"\\s*,\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"(?:\\s*,\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\")?\\s*\\)|//[^\\r\\n]*)"
+          },
+          "into": "relPieces"
+        },
+        {
+          "fold": "$relPieces",
+          "as": "relPiece",
+          "accumulator": "relState",
+          "initial": {
+            "facts": [
+              "list"
+            ],
+            "origins": [
+              "list"
+            ],
+            "offset": 0,
+            "line": 1,
+            "column": 1,
+            "prefix": "",
+            "error": null
+          },
+          "steps": [
+            {
+              "let": "relFacts",
+              "value": "$relState.facts"
+            },
+            {
+              "let": "relOrigins",
+              "value": "$relState.origins"
+            },
+            {
+              "let": "relError",
+              "value": "$relState.error"
+            },
+            {
+              "port": "text.trim",
+              "args": {
+                "value": "$relPiece"
+              },
+              "into": "relTrim"
+            },
+            {
+              "when": [
+                "and",
+                [
+                  "not",
+                  "$relError"
+                ],
+                [
+                  "not",
+                  [
+                    "eq",
+                    "$relTrim",
+                    ""
+                  ]
+                ]
+              ],
+              "then": [
+                {
+                  "try": [
+                    {
+                      "port": "text.matches",
+                      "args": {
+                        "value": "$relTrim",
+                        "pattern": "^//"
+                      },
+                      "into": "relComment"
+                    },
+                    {
+                      "when": "$relComment",
+                      "then": [
+                        {
+                          "port": "text.trim",
+                          "args": {
+                            "value": "$relState.prefix"
+                          },
+                          "into": "relPrefix"
+                        },
+                        {
+                          "assert": [
+                            "eq",
+                            "$relPrefix",
+                            ""
+                          ],
+                          "message": "Use // comments on their own line."
+                        }
+                      ]
+                    },
+                    {
+                      "when": [
+                        "not",
+                        "$relComment"
+                      ],
+                      "then": [
+                        {
+                          "port": "text.matches",
+                          "args": {
+                            "value": "$relPiece",
+                            "pattern": "^\\(\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"\\s*,\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"\\s*,\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"(?:\\s*,\\s*\"(?:\\\\[\\s\\S]|[^\"\\\\])*\")?\\s*\\)$"
+                          },
+                          "into": "relTuple"
+                        },
+                        {
+                          "assert": "$relTuple",
+                          "message": "Expected a REL tuple: (\"thing\", \"field\", \"value\")."
+                        },
+                        {
+                          "port": "text.split",
+                          "args": {
+                            "value": "$relPiece",
+                            "pattern": "(\"(?:\\\\[\\s\\S]|[^\"\\\\])*\")"
+                          },
+                          "into": "relAtoms"
+                        },
+                        {
+                          "port": "json.parse",
+                          "args": {
+                            "text": [
+                              "at",
+                              "$relAtoms",
+                              1
+                            ]
+                          },
+                          "into": "relS"
+                        },
+                        {
+                          "port": "json.parse",
+                          "args": {
+                            "text": [
+                              "at",
+                              "$relAtoms",
+                              3
+                            ]
+                          },
+                          "into": "relP"
+                        },
+                        {
+                          "port": "json.parse",
+                          "args": {
+                            "text": [
+                              "at",
+                              "$relAtoms",
+                              5
+                            ]
+                          },
+                          "into": "relO"
+                        },
+                        {
+                          "let": "relPol",
+                          "value": "is"
+                        },
+                        {
+                          "when": [
+                            "eq",
+                            [
+                              "count",
+                              "$relAtoms"
+                            ],
+                            9
+                          ],
+                          "then": [
+                            {
+                              "port": "json.parse",
+                              "args": {
+                                "text": [
+                                  "at",
+                                  "$relAtoms",
+                                  7
+                                ]
+                              },
+                              "into": "relPol"
+                            }
+                          ]
+                        },
+                        {
+                          "assert": [
+                            "includes",
+                            [
+                              "list",
+                              "is",
+                              "is-not"
+                            ],
+                            "$relPol"
+                          ],
+                          "message": "Polarity must be is or is-not."
+                        },
+                        {
+                          "let": "relValueStart",
+                          "value": [
+                            "add",
+                            "$relState.offset",
+                            [
+                              "fold",
+                              [
+                                "list",
+                                0,
+                                1,
+                                2,
+                                3,
+                                4
+                              ],
+                              "relPart",
+                              "relSize",
+                              0,
+                              [
+                                "add",
+                                "$relSize",
+                                [
+                                  "count",
+                                  [
+                                    "at",
+                                    "$relAtoms",
+                                    "$relPart"
+                                  ]
+                                ]
+                              ]
+                            ]
+                          ]
+                        },
+                        {
+                          "let": "relOrigins",
+                          "value": [
+                            "append",
+                            "$relOrigins",
+                            [
+                              "list",
+                              {
+                                "index": [
+                                  "count",
+                                  "$relFacts"
+                                ],
+                                "span": {
+                                  "file": "$file",
+                                  "line": "$relState.line",
+                                  "column": "$relState.column",
+                                  "offset": "$relState.offset",
+                                  "endOffset": [
+                                    "add",
+                                    "$relState.offset",
+                                    [
+                                      "count",
+                                      "$relPiece"
+                                    ]
+                                  ],
+                                  "valueStart": "$relValueStart",
+                                  "valueEnd": [
+                                    "add",
+                                    "$relValueStart",
+                                    [
+                                      "count",
+                                      [
+                                        "at",
+                                        "$relAtoms",
+                                        5
+                                      ]
+                                    ]
+                                  ]
+                                }
+                              }
+                            ]
+                          ]
+                        },
+                        {
+                          "let": "relFacts",
+                          "value": [
+                            "append",
+                            "$relFacts",
+                            [
+                              "list",
+                              {
+                                "s": "$relS",
+                                "p": "$relP",
+                                "o": "$relO",
+                                "pol": "$relPol"
+                              }
+                            ]
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "error": "relFault",
+                  "catch": [
+                    {
+                      "port": "text.indexOf",
+                      "args": {
+                        "value": "$relPiece",
+                        "search": "$relTrim",
+                        "from": 0
+                      },
+                      "into": "relProblemOffset"
+                    },
+                    {
+                      "port": "text.slice",
+                      "args": {
+                        "value": "$relPiece",
+                        "start": 0,
+                        "end": "$relProblemOffset"
+                      },
+                      "into": "relProblemPrefix"
+                    },
+                    {
+                      "port": "text.split",
+                      "args": {
+                        "value": "$relProblemPrefix",
+                        "pattern": "\\n"
+                      },
+                      "into": "relProblemLines"
+                    },
+                    {
+                      "let": "relError",
+                      "value": {
+                        "code": "ENCOUNTER-SOURCE-001",
+                        "summary": "$relFault.message",
+                        "span": {
+                          "file": "$file",
+                          "line": [
+                            "add",
+                            "$relState.line",
+                            [
+                              "add",
+                              [
+                                "count",
+                                "$relProblemLines"
+                              ],
+                              -1
+                            ]
+                          ],
+                          "column": [
+                            "if",
+                            [
+                              "eq",
+                              [
+                                "count",
+                                "$relProblemLines"
+                              ],
+                              1
+                            ],
+                            [
+                              "add",
+                              "$relState.column",
+                              "$relProblemOffset"
+                            ],
+                            [
+                              "add",
+                              [
+                                "count",
+                                [
+                                  "at",
+                                  "$relProblemLines",
+                                  [
+                                    "add",
+                                    [
+                                      "count",
+                                      "$relProblemLines"
+                                    ],
+                                    -1
+                                  ]
+                                ]
+                              ],
+                              1
+                            ]
+                          ]
+                        },
+                        "correction": "Correct this tuple, then try the file again."
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "port": "text.split",
+              "args": {
+                "value": "$relPiece",
+                "pattern": "\\n"
+              },
+              "into": "relLines"
+            }
+          ],
+          "yield": {
+            "facts": "$relFacts",
+            "origins": "$relOrigins",
+            "offset": [
+              "add",
+              "$relState.offset",
+              [
+                "count",
+                "$relPiece"
+              ]
+            ],
+            "line": [
+              "add",
+              "$relState.line",
+              [
+                "add",
+                [
+                  "count",
+                  "$relLines"
+                ],
+                -1
+              ]
+            ],
+            "column": [
+              "if",
+              [
+                "eq",
+                [
+                  "count",
+                  "$relLines"
+                ],
+                1
+              ],
+              [
+                "add",
+                "$relState.column",
+                [
+                  "count",
+                  "$relPiece"
+                ]
+              ],
+              [
+                "add",
+                [
+                  "count",
+                  [
+                    "at",
+                    "$relLines",
+                    [
+                      "add",
+                      [
+                        "count",
+                        "$relLines"
+                      ],
+                      -1
+                    ]
+                  ]
+                ],
+                1
+              ]
+            ],
+            "prefix": [
+              "if",
+              [
+                "eq",
+                [
+                  "count",
+                  "$relLines"
+                ],
+                1
+              ],
+              [
+                "concat",
+                "$relState.prefix",
+                "$relPiece"
+              ],
+              [
+                "at",
+                "$relLines",
+                [
+                  "add",
+                  [
+                    "count",
+                    "$relLines"
+                  ],
+                  -1
+                ]
+              ]
+            ],
+            "error": "$relError"
+          },
+          "into": "relState"
+        },
+        {
+          "let": "result",
+          "value": {
+            "ok": [
+              "not",
+              "$relState.error"
+            ],
+            "facts": [
+              "if",
+              "$relState.error",
+              [
+                "list"
+              ],
+              "$relState.facts"
+            ],
+            "origins": [
+              "if",
+              "$relState.error",
+              [
+                "list"
+              ],
+              "$relState.origins"
+            ],
+            "module": "$file",
+            "diagnostic": "$relState.error"
+          }
+        }
+      ],
+      "source.compile": [
+        {
+          "port": "text.matches",
+          "args": {
+            "value": "$text",
+            "pattern": "^[\\s\\S]{0,524288}$"
+          },
+          "into": "sourceWithinLimit"
+        },
+        {
+          "assert": "$sourceWithinLimit",
+          "message": "ENCOUNTER-SOURCE-005: This editor tries files up to 524,288 characters. Download the buffer or split the source."
+        },
+        {
+          "let": "sourceText",
+          "value": "$text"
+        },
+        {
+          "let": "sourceFile",
+          "value": "$file"
+        },
+        {
+          "let": "sourceFormat",
+          "value": "$format"
+        },
+        {
+          "let": "sourceResult",
+          "value": null
+        },
+        {
+          "when": [
+            "eq",
+            "$format",
+            "rel"
+          ],
+          "then": [
+            {
+              "call": "source.rel"
+            },
+            {
+              "let": "sourceResult",
+              "value": "$result"
+            }
+          ]
+        },
+        {
+          "when": [
+            "eq",
+            "$sourceFormat",
+            "temple"
+          ],
+          "then": [
+            {
+              "call": "language.compile"
+            },
+            {
+              "let": "sourceResult",
+              "value": "$result"
+            },
+            {
+              "when": "$sourceResult.ok",
+              "then": [
+                {
+                  "port": "text.split",
+                  "args": {
+                    "value": "$sourceText",
+                    "pattern": "\\n"
+                  },
+                  "into": "sourceLines"
+                },
+                {
+                  "fold": "$sourceLines",
+                  "as": "sourceLine",
+                  "accumulator": "sourceLocations",
+                  "initial": {
+                    "offset": 0,
+                    "locations": [
+                      "list"
+                    ]
+                  },
+                  "steps": [
+                    {
+                      "port": "text.matches",
+                      "args": {
+                        "value": "$sourceLine",
+                        "pattern": "\\r$"
+                      },
+                      "into": "sourceLineHasCR"
+                    }
+                  ],
+                  "yield": {
+                    "offset": [
+                      "add",
+                      "$sourceLocations.offset",
+                      [
+                        "add",
+                        [
+                          "count",
+                          "$sourceLine"
+                        ],
+                        1
+                      ]
+                    ],
+                    "locations": [
+                      "append",
+                      "$sourceLocations.locations",
+                      [
+                        "list",
+                        {
+                          "offset": "$sourceLocations.offset",
+                          "endOffset": [
+                            "add",
+                            "$sourceLocations.offset",
+                            [
+                              "add",
+                              [
+                                "count",
+                                "$sourceLine"
+                              ],
+                              [
+                                "if",
+                                "$sourceLineHasCR",
+                                -1,
+                                0
+                              ]
+                            ]
+                          ]
+                        }
+                      ]
+                    ]
+                  },
+                  "into": "sourceLocations"
+                },
+                {
+                  "let": "sourceOrigins",
+                  "value": [
+                    "map",
+                    "$sourceResult.origins",
+                    "sourceOrigin",
+                    {
+                      "index": "$sourceOrigin.index",
+                      "span": {
+                        "file": "$sourceFile",
+                        "line": "$sourceOrigin.span.line",
+                        "column": "$sourceOrigin.span.column",
+                        "offset": [
+                          "at",
+                          [
+                            "at",
+                            "$sourceLocations.locations",
+                            [
+                              "add",
+                              "$sourceOrigin.span.line",
+                              -1
+                            ]
+                          ],
+                          "offset"
+                        ],
+                        "endOffset": [
+                          "at",
+                          [
+                            "at",
+                            "$sourceLocations.locations",
+                            [
+                              "add",
+                              "$sourceOrigin.span.line",
+                              -1
+                            ]
+                          ],
+                          "endOffset"
+                        ],
+                        "valueStart": [
+                          "at",
+                          [
+                            "at",
+                            "$sourceLocations.locations",
+                            [
+                              "add",
+                              "$sourceOrigin.span.line",
+                              -1
+                            ]
+                          ],
+                          "offset"
+                        ],
+                        "valueEnd": [
+                          "at",
+                          [
+                            "at",
+                            "$sourceLocations.locations",
+                            [
+                              "add",
+                              "$sourceOrigin.span.line",
+                              -1
+                            ]
+                          ],
+                          "endOffset"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "port": "record.put",
+                  "args": {
+                    "record": "$sourceResult",
+                    "key": "origins",
+                    "value": "$sourceOrigins"
+                  },
+                  "into": "sourceResult"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "when": [
+            "includes",
+            [
+              "list",
+              "process",
+              "json"
+            ],
+            "$sourceFormat"
+          ],
+          "then": [
+            {
+              "try": [
+                {
+                  "port": "json.parse",
+                  "args": {
+                    "text": "$sourceText"
+                  },
+                  "into": "sourceJson"
+                },
+                {
+                  "let": "sourceResult",
+                  "value": {
+                    "ok": true,
+                    "facts": [
+                      "list"
+                    ],
+                    "origins": [
+                      "list"
+                    ],
+                    "module": "$sourceFile",
+                    "json": "$sourceJson",
+                    "diagnostic": null
+                  }
+                }
+              ],
+              "error": "sourceJsonError",
+              "catch": [
+                {
+                  "let": "sourceResult",
+                  "value": {
+                    "ok": false,
+                    "facts": [
+                      "list"
+                    ],
+                    "origins": [
+                      "list"
+                    ],
+                    "module": "$sourceFile",
+                    "diagnostic": {
+                      "code": "ENCOUNTER-SOURCE-002",
+                      "summary": "$sourceJsonError.message",
+                      "span": {
+                        "file": "$sourceFile",
+                        "line": 1,
+                        "column": 1
+                      },
+                      "correction": "Correct the JSON source and try again."
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "assert": "$sourceResult",
+          "message": "ENCOUNTER-SOURCE-003: This source is derived. Follow its inputs or make a separate example."
+        },
+        {
+          "port": "record.put",
+          "args": {
+            "record": "$sourceResult",
+            "key": "text",
+            "value": "$sourceText"
+          },
+          "into": "sourceResult"
+        },
+        {
+          "port": "record.put",
+          "args": {
+            "record": "$sourceResult",
+            "key": "file",
+            "value": "$sourceFile"
+          },
+          "into": "sourceResult"
+        },
+        {
+          "port": "record.put",
+          "args": {
+            "record": "$sourceResult",
+            "key": "format",
+            "value": "$sourceFormat"
+          },
+          "into": "sourceResult"
+        },
+        {
+          "let": "result",
+          "value": "$sourceResult"
+        }
+      ],
+      "source.encode": [
+        {
+          "fold": "$sourceFacts",
+          "as": "sourceFact",
+          "accumulator": "sourceRows",
+          "initial": [
+            "list"
+          ],
+          "steps": [
+            {
+              "port": "json.stringify",
+              "args": {
+                "value": "$sourceFact.s"
+              },
+              "into": "sourceS"
+            },
+            {
+              "port": "json.stringify",
+              "args": {
+                "value": "$sourceFact.p"
+              },
+              "into": "sourceP"
+            },
+            {
+              "port": "json.stringify",
+              "args": {
+                "value": "$sourceFact.o"
+              },
+              "into": "sourceO"
+            }
+          ],
+          "yield": [
+            "append",
+            "$sourceRows",
+            [
+              "list",
+              [
+                "if",
+                [
+                  "eq",
+                  "$format",
+                  "temple"
+                ],
+                [
+                  "concat",
+                  "  ",
+                  "$sourceFact.p",
+                  " ",
+                  "$sourceO"
+                ],
+                [
+                  "concat",
+                  "(",
+                  "$sourceS",
+                  ", ",
+                  "$sourceP",
+                  ", ",
+                  "$sourceO",
+                  [
+                    "if",
+                    [
+                      "eq",
+                      "$sourceFact.pol",
+                      "is-not"
+                    ],
+                    ", \"is-not\"",
+                    ""
+                  ],
+                  ")"
+                ]
+              ]
+            ]
+          ],
+          "into": "sourceRows"
+        },
+        {
+          "port": "text.join",
+          "args": {
+            "values": "$sourceRows",
+            "separator": "\n"
+          },
+          "into": "result"
+        }
+      ],
+      "source.patch": [
+        {
+          "let": "sourceMatches",
+          "value": [
+            "filter",
+            [
+              "range",
+              [
+                "count",
+                "$sourceDocument.facts"
+              ]
+            ],
+            "sourcePosition",
+            [
+              "and",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$sourceDocument.facts",
+                    [
+                      "add",
+                      "$sourcePosition",
+                      -1
+                    ]
+                  ],
+                  "s"
+                ],
+                "$sourceSubject"
+              ],
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$sourceDocument.facts",
+                    [
+                      "add",
+                      "$sourcePosition",
+                      -1
+                    ]
+                  ],
+                  "p"
+                ],
+                "$sourceProperty"
+              ]
+            ]
+          ]
+        },
+        {
+          "let": "format",
+          "value": "$sourceDocument.format"
+        },
+        {
+          "let": "sourceFacts",
+          "value": [
+            "map",
+            "$sourceValues",
+            "sourceValue",
+            {
+              "s": "$sourceSubject",
+              "p": "$sourceProperty",
+              "o": "$sourceValue",
+              "pol": "is"
+            }
+          ]
+        },
+        {
+          "call": "source.encode"
+        },
+        {
+          "let": "sourceReplacement",
+          "value": "$result"
+        },
+        {
+          "fold": "$sourceMatches",
+          "as": "sourcePosition",
+          "accumulator": "sourcePatch",
+          "initial": {
+            "end": 0,
+            "pieces": [
+              "list"
+            ],
+            "first": true
+          },
+          "steps": [
+            {
+              "let": "sourceSpan",
+              "value": [
+                "at",
+                [
+                  "at",
+                  "$sourceDocument.origins",
+                  [
+                    "add",
+                    "$sourcePosition",
+                    -1
+                  ]
+                ],
+                "span"
+              ]
+            },
+            {
+              "port": "text.slice",
+              "args": {
+                "value": "$sourceDocument.text",
+                "start": "$sourcePatch.end",
+                "end": "$sourceSpan.offset"
+              },
+              "into": "sourcePrefix"
+            }
+          ],
+          "yield": {
+            "end": "$sourceSpan.endOffset",
+            "pieces": [
+              "append",
+              "$sourcePatch.pieces",
+              [
+                "list",
+                "$sourcePrefix",
+                [
+                  "if",
+                  "$sourcePatch.first",
+                  "$sourceReplacement",
+                  ""
+                ]
+              ]
+            ],
+            "first": false
+          },
+          "into": "sourcePatch"
+        },
+        {
+          "when": [
+            "not",
+            [
+              "eq",
+              [
+                "count",
+                "$sourceMatches"
+              ],
+              0
+            ]
+          ],
+          "then": [
+            {
+              "port": "text.slice",
+              "args": {
+                "value": "$sourceDocument.text",
+                "start": "$sourcePatch.end",
+                "end": [
+                  "count",
+                  "$sourceDocument.text"
+                ]
+              },
+              "into": "sourceSuffix"
+            },
+            {
+              "port": "text.join",
+              "args": {
+                "values": [
+                  "append",
+                  "$sourcePatch.pieces",
+                  [
+                    "list",
+                    "$sourceSuffix"
+                  ]
+                ],
+                "separator": ""
+              },
+              "into": "result"
+            }
+          ]
+        },
+        {
+          "when": [
+            "eq",
+            [
+              "count",
+              "$sourceMatches"
+            ],
+            0
+          ],
+          "then": [
+            {
+              "let": "sourceSubjectPositions",
+              "value": [
+                "filter",
+                [
+                  "range",
+                  [
+                    "count",
+                    "$sourceDocument.facts"
+                  ]
+                ],
+                "sourcePosition",
+                [
+                  "eq",
+                  [
+                    "at",
+                    [
+                      "at",
+                      "$sourceDocument.facts",
+                      [
+                        "add",
+                        "$sourcePosition",
+                        -1
+                      ]
+                    ],
+                    "s"
+                  ],
+                  "$sourceSubject"
+                ]
+              ]
+            },
+            {
+              "assert": [
+                "not",
+                [
+                  "eq",
+                  [
+                    "count",
+                    "$sourceSubjectPositions"
+                  ],
+                  0
+                ]
+              ],
+              "message": "ENCOUNTER-SOURCE-004: Open the file to add a new identity."
+            },
+            {
+              "let": "sourceInsertion",
+              "value": [
+                "at",
+                [
+                  "at",
+                  "$sourceDocument.origins",
+                  [
+                    "add",
+                    [
+                      "at",
+                      "$sourceSubjectPositions",
+                      [
+                        "add",
+                        [
+                          "count",
+                          "$sourceSubjectPositions"
+                        ],
+                        -1
+                      ]
+                    ],
+                    -1
+                  ]
+                ],
+                "span"
+              ]
+            },
+            {
+              "port": "text.slice",
+              "args": {
+                "value": "$sourceDocument.text",
+                "start": 0,
+                "end": "$sourceInsertion.endOffset"
+              },
+              "into": "sourcePrefix"
+            },
+            {
+              "port": "text.slice",
+              "args": {
+                "value": "$sourceDocument.text",
+                "start": "$sourceInsertion.endOffset",
+                "end": [
+                  "count",
+                  "$sourceDocument.text"
+                ]
+              },
+              "into": "sourceSuffix"
+            },
+            {
+              "let": "result",
+              "value": [
+                "concat",
+                "$sourcePrefix",
+                "\n",
+                "$sourceReplacement",
+                "$sourceSuffix"
+              ]
+            }
+          ]
+        }
+      ],
+      "source.jsonSpan": [
+        {
+          "port": "json.parse",
+          "args": {
+            "text": "$jsonSourceText"
+          },
+          "into": "jsonSpanValue"
+        },
+        {
+          "fold": "$jsonSourcePath",
+          "as": "jsonPointerPart",
+          "accumulator": "jsonPointer",
+          "initial": {
+            "node": "$jsonSpanValue",
+            "path": [
+              "list"
+            ]
+          },
+          "steps": [
+            {
+              "port": "value.describe",
+              "args": {
+                "value": "$jsonPointer.node"
+              },
+              "into": "jsonPointerType"
+            },
+            {
+              "port": "value.string",
+              "args": {
+                "value": "$jsonPointerPart"
+              },
+              "into": "jsonCanonicalPart"
+            },
+            {
+              "when": "$jsonPointerType.array",
+              "then": [
+                {
+                  "port": "json.parse",
+                  "args": {
+                    "text": "$jsonCanonicalPart"
+                  },
+                  "into": "jsonCanonicalPart"
+                }
+              ]
+            }
+          ],
+          "yield": {
+            "node": [
+              "at",
+              "$jsonPointer.node",
+              "$jsonPointerPart"
+            ],
+            "path": [
+              "append",
+              "$jsonPointer.path",
+              [
+                "list",
+                "$jsonCanonicalPart"
+              ]
+            ]
+          },
+          "into": "jsonPointer"
+        },
+        {
+          "let": "jsonSourcePath",
+          "value": "$jsonPointer.path"
+        },
+        {
+          "let": "jsonPointValue",
+          "value": [
+            "fold",
+            "$jsonSourcePath",
+            "jsonPointKey",
+            "jsonPointNode",
+            "$jsonSpanValue",
+            [
+              "at",
+              "$jsonPointNode",
+              "$jsonPointKey"
+            ]
+          ]
+        },
+        {
+          "port": "value.describe",
+          "args": {
+            "value": "$jsonPointValue"
+          },
+          "into": "jsonPointType"
+        },
+        {
+          "assert": [
+            "not",
+            [
+              "eq",
+              "$jsonPointType.type",
+              "undefined"
+            ]
+          ],
+          "message": "The source path is absent from the visible JSON."
+        },
+        {
+          "port": "text.split",
+          "args": {
+            "value": "$jsonSourceText",
+            "pattern": "(\"(?:[^\"\\\\]|\\\\.)*\"|[\\[\\]{}:,]|-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|true|false|null)"
+          },
+          "into": "jsonSpanParts"
+        },
+        {
+          "fold": "$jsonSpanParts",
+          "as": "jsonToken",
+          "accumulator": "jsonScan",
+          "initial": {
+            "offset": 0,
+            "stack": [
+              "list"
+            ],
+            "span": null,
+            "done": false
+          },
+          "steps": [
+            {
+              "let": "jsonSpanStack",
+              "value": "$jsonScan.stack"
+            },
+            {
+              "let": "jsonSpanFound",
+              "value": "$jsonScan.span"
+            },
+            {
+              "let": "jsonSpanDone",
+              "value": "$jsonScan.done"
+            },
+            {
+              "port": "text.matches",
+              "args": {
+                "value": "$jsonToken",
+                "pattern": "^\\s*$"
+              },
+              "into": "jsonSpanWhite"
+            },
+            {
+              "when": [
+                "and",
+                [
+                  "not",
+                  "$jsonSpanWhite"
+                ],
+                [
+                  "not",
+                  "$jsonSpanDone"
+                ]
+              ],
+              "then": [
+                {
+                  "let": "jsonFrame",
+                  "value": [
+                    "at",
+                    "$jsonSpanStack",
+                    [
+                      "add",
+                      [
+                        "count",
+                        "$jsonSpanStack"
+                      ],
+                      -1
+                    ]
+                  ]
+                },
+                {
+                  "let": "jsonIsClose",
+                  "value": [
+                    "includes",
+                    [
+                      "list",
+                      "}",
+                      "]"
+                    ],
+                    "$jsonToken"
+                  ]
+                },
+                {
+                  "let": "jsonIsOpen",
+                  "value": [
+                    "includes",
+                    [
+                      "list",
+                      "{",
+                      "["
+                    ],
+                    "$jsonToken"
+                  ]
+                },
+                {
+                  "when": "$jsonIsClose",
+                  "then": [
+                    {
+                      "when": [
+                        "at",
+                        "$jsonFrame",
+                        "match"
+                      ],
+                      "then": [
+                        {
+                          "let": "jsonSpanFound",
+                          "value": {
+                            "offset": "$jsonSpanFound.offset",
+                            "endOffset": [
+                              "add",
+                              "$jsonScan.offset",
+                              [
+                                "count",
+                                "$jsonToken"
+                              ]
+                            ]
+                          }
+                        },
+                        {
+                          "let": "jsonSpanDone",
+                          "value": false
+                        }
+                      ]
+                    },
+                    {
+                      "let": "jsonSpanStack",
+                      "value": [
+                        "map",
+                        [
+                          "range",
+                          [
+                            "add",
+                            [
+                              "count",
+                              "$jsonSpanStack"
+                            ],
+                            -1
+                          ]
+                        ],
+                        "jsonDepth",
+                        [
+                          "at",
+                          "$jsonSpanStack",
+                          [
+                            "add",
+                            "$jsonDepth",
+                            -1
+                          ]
+                        ]
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "when": [
+                    "eq",
+                    "$jsonToken",
+                    ","
+                  ],
+                  "then": [
+                    {
+                      "port": "record.put",
+                      "args": {
+                        "record": "$jsonFrame",
+                        "key": "phase",
+                        "value": [
+                          "if",
+                          [
+                            "eq",
+                            "$jsonFrame.type",
+                            "object"
+                          ],
+                          "key",
+                          "value"
+                        ]
+                      },
+                      "into": "jsonFrame"
+                    },
+                    {
+                      "port": "record.put",
+                      "args": {
+                        "record": "$jsonFrame",
+                        "key": "index",
+                        "value": [
+                          "add",
+                          "$jsonFrame.index",
+                          1
+                        ]
+                      },
+                      "into": "jsonFrame"
+                    }
+                  ]
+                },
+                {
+                  "when": [
+                    "eq",
+                    "$jsonToken",
+                    ":"
+                  ],
+                  "then": [
+                    {
+                      "port": "record.put",
+                      "args": {
+                        "record": "$jsonFrame",
+                        "key": "phase",
+                        "value": "value"
+                      },
+                      "into": "jsonFrame"
+                    }
+                  ]
+                },
+                {
+                  "when": [
+                    "and",
+                    [
+                      "not",
+                      "$jsonIsClose"
+                    ],
+                    [
+                      "not",
+                      [
+                        "includes",
+                        [
+                          "list",
+                          ",",
+                          ":"
+                        ],
+                        "$jsonToken"
+                      ]
+                    ]
+                  ],
+                  "then": [
+                    {
+                      "let": "jsonIsKey",
+                      "value": [
+                        "and",
+                        "$jsonFrame",
+                        [
+                          "and",
+                          [
+                            "eq",
+                            "$jsonFrame.type",
+                            "object"
+                          ],
+                          [
+                            "eq",
+                            "$jsonFrame.phase",
+                            "key"
+                          ]
+                        ]
+                      ]
+                    },
+                    {
+                      "when": "$jsonIsKey",
+                      "then": [
+                        {
+                          "port": "json.parse",
+                          "args": {
+                            "text": "$jsonToken"
+                          },
+                          "into": "jsonFrameKey"
+                        },
+                        {
+                          "port": "record.put",
+                          "args": {
+                            "record": "$jsonFrame",
+                            "key": "key",
+                            "value": "$jsonFrameKey"
+                          },
+                          "into": "jsonFrame"
+                        },
+                        {
+                          "port": "record.put",
+                          "args": {
+                            "record": "$jsonFrame",
+                            "key": "phase",
+                            "value": "colon"
+                          },
+                          "into": "jsonFrame"
+                        }
+                      ]
+                    },
+                    {
+                      "when": [
+                        "not",
+                        "$jsonIsKey"
+                      ],
+                      "then": [
+                        {
+                          "let": "jsonValuePath",
+                          "value": [
+                            "if",
+                            "$jsonFrame",
+                            [
+                              "append",
+                              "$jsonFrame.path",
+                              [
+                                "list",
+                                [
+                                  "if",
+                                  [
+                                    "eq",
+                                    "$jsonFrame.type",
+                                    "array"
+                                  ],
+                                  "$jsonFrame.index",
+                                  "$jsonFrame.key"
+                                ]
+                              ]
+                            ],
+                            [
+                              "list"
+                            ]
+                          ]
+                        },
+                        {
+                          "let": "jsonPathMatches",
+                          "value": [
+                            "eq",
+                            "$jsonValuePath",
+                            "$jsonSourcePath"
+                          ]
+                        },
+                        {
+                          "when": "$jsonPathMatches",
+                          "then": [
+                            {
+                              "let": "jsonSpanFound",
+                              "value": {
+                                "offset": "$jsonScan.offset",
+                                "endOffset": [
+                                  "add",
+                                  "$jsonScan.offset",
+                                  [
+                                    "count",
+                                    "$jsonToken"
+                                  ]
+                                ]
+                              }
+                            },
+                            {
+                              "when": [
+                                "not",
+                                "$jsonIsOpen"
+                              ],
+                              "then": [
+                                {
+                                  "let": "jsonSpanDone",
+                                  "value": false
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "when": "$jsonIsOpen",
+                          "then": [
+                            {
+                              "let": "jsonNewFrame",
+                              "value": {
+                                "type": [
+                                  "if",
+                                  [
+                                    "eq",
+                                    "$jsonToken",
+                                    "{"
+                                  ],
+                                  "object",
+                                  "array"
+                                ],
+                                "path": "$jsonValuePath",
+                                "key": null,
+                                "index": 0,
+                                "phase": [
+                                  "if",
+                                  [
+                                    "eq",
+                                    "$jsonToken",
+                                    "{"
+                                  ],
+                                  "key",
+                                  "value"
+                                ],
+                                "match": "$jsonPathMatches"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "when": [
+                    "and",
+                    "$jsonFrame",
+                    [
+                      "not",
+                      "$jsonIsClose"
+                    ]
+                  ],
+                  "then": [
+                    {
+                      "let": "jsonSpanStack",
+                      "value": [
+                        "map",
+                        [
+                          "range",
+                          [
+                            "count",
+                            "$jsonSpanStack"
+                          ]
+                        ],
+                        "jsonDepth",
+                        [
+                          "if",
+                          [
+                            "eq",
+                            "$jsonDepth",
+                            [
+                              "count",
+                              "$jsonSpanStack"
+                            ]
+                          ],
+                          "$jsonFrame",
+                          [
+                            "at",
+                            "$jsonSpanStack",
+                            [
+                              "add",
+                              "$jsonDepth",
+                              -1
+                            ]
+                          ]
+                        ]
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "when": "$jsonIsOpen",
+                  "then": [
+                    {
+                      "let": "jsonSpanStack",
+                      "value": [
+                        "append",
+                        "$jsonSpanStack",
+                        [
+                          "list",
+                          "$jsonNewFrame"
+                        ]
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "yield": {
+            "offset": [
+              "add",
+              "$jsonScan.offset",
+              [
+                "count",
+                "$jsonToken"
+              ]
+            ],
+            "stack": "$jsonSpanStack",
+            "span": "$jsonSpanFound",
+            "done": "$jsonSpanDone"
+          },
+          "into": "jsonScan"
+        },
+        {
+          "let": "result",
+          "value": "$jsonScan.span"
+        }
+      ]
+    }
+  }
+}

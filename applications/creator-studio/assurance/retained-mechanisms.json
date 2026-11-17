@@ -1,0 +1,212 @@
+{
+  "files": [
+    {
+      "path": "bootstrap/build.mjs",
+      "sha256": "a3a48b058ba03a70b64e71683b5c6aaa6030702f6bb96283fdb3ca92b1b2fec1",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "bootstrap/cli.mjs",
+      "sha256": "1386fc72e1c5869917c05c168cec2776233fabb2ad461f3b751c0201c20f5d32",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "bootstrap/client.cjs",
+      "sha256": "f3336c00a849fe122a9084ced4683d2f4de0a66aafb5974d2f521d7bf2b2f6fe",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "bootstrap/frontend.mjs",
+      "sha256": "aea59fe7d00e8363c10b2d669a2258cb8eec136242940ca596a9b86abb904246",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "bootstrap/runtime.mjs",
+      "sha256": "03a80db316caa42a82a6522e57d7462d86665d96a23d4ee753a373c66bcc4221",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "bootstrap/serve.mjs",
+      "sha256": "3a24b3c17a13d99b1864458c18463626d2ea4a7a6634b7cf3e772e0198420c4c",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/algebra/admission.process.json",
+      "sha256": "c459c0aacbb5905b6aca01a6e8344b9e645f854c35244f59c1ea7ac1c1bf662b",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/algebra/css.process.json",
+      "sha256": "12dc9aca9f4c3d9d61588105246e6ae7194f638768f2d5718d0730ebecb6b4f1",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/algebra/encounter-code-compiler.process.json",
+      "sha256": "4e2559bb1b560f30a245a9e71566005e7425825cb6f15e056a626ea1178582d9",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/algebra/encounter-code-runtime.process.json",
+      "sha256": "4c7f7e56e0eb303b1419970f7895903b2e0581a3a27d3bb180a56424bdb64ffc",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/algebra/encounter-code-types.process.json",
+      "sha256": "1289d28de383f0b00e06d9e7ae323da31ad8460668afbb6c9e49e6b6daa79b05",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/algebra/fact-index.process.json",
+      "sha256": "66ba62d753114df7abad1b11a0c89cb014474da7744d391668508caa0ce336d9",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/algebra/html.process.json",
+      "sha256": "3c0daa63fd4ca49a59d3228db2dc55f74f145c3f715bc7d365de0dfbbd6261ef",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/algebra/language.process.json",
+      "sha256": "83e8fcd65685ea08bc875d92d68bef37c95bad2e1f702cd8f8ecbe0337c61cda",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/algebra/lowering.process.json",
+      "sha256": "616c1c5860d0245bad4df16de9e04074e44a601a716d99b641e7fec07d43bbd8",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/algebra/operators.expression.json",
+      "sha256": "b03c2c863cab748899675ffb4afd8f7ead0979f5e992923a086d19ad89a2c7f2",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/algebra/source.process.json",
+      "sha256": "27d5b5a43e7bf6eac502e7096770bf871c6e6ea5a68d9b35e6df40012d5c6246",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/algebra/workshop-lab.process.json",
+      "sha256": "9e3049811c1325c840711a8aa091f44b3f670480fa376421a47e5f69399cd037",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/bootstrap/kernel-profile.json",
+      "sha256": "3067678f68016886d77569c62523c101d299648f37697df51c4524c83647a875",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/bootstrap/temple-seed.cjs",
+      "sha256": "c1fdf47cb183a0c8e69d000d091ada457fdc8333b34a2a5bba4bcc51d53ac71e",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/bootstrap/ports/algebra-lower.cjs",
+      "sha256": "8cc997c2bc965c85b7b5615e796277a485bb1e64765c7df3031f9a30385a3ec2",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/bootstrap/ports/browser-effects.cjs",
+      "sha256": "23d5aece795c7a6338ab4b302853682996797418dbdb4122b08454ce4dbb7c0d",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/bootstrap/ports/browser.cjs",
+      "sha256": "ff320be4c37276a6f4e5ad5979b6eaf7f9d3a3d1190be40b32021356240abf72",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/bootstrap/ports/kernel.cjs",
+      "sha256": "0ab9faa6dbd5c6d3d811171d46301037436c53b6fd5e11afab4769246d121c5c",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/bootstrap/ports/process-source.cjs",
+      "sha256": "ba6c413ea117047e85e024c8aedaf4947ee37761625159ed3f16584c6206bb19",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/bootstrap/ports/programme.cjs",
+      "sha256": "88d1c4d2aefe341533af1f967268e1c9da555d556db34adb7eea6b5838a5c1ec",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/bootstrap/ports/value.cjs",
+      "sha256": "0f7d884a3eb5bd8eb33bcdc236560e4156c2c7498ac3ae39afc1702853fd8ca2",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/frontend/bootstrap.json",
+      "sha256": "eb38af5f82a0a2229aebcbbb0f0b6ee98ffd5251a4ed8fefd2c93071ab84e520",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/frontend/language-process.process.json",
+      "sha256": "c7b765b4bb18d2c6b0b97e11e41cbacaf2ed756586dd25e748a4c48aacb63640",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/frontend/lexical.json",
+      "sha256": "60f3ccd74eed17738478a63f2e24559c430f71d5091974a5c9a3d8b637801f06",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/frontend/presentation.json",
+      "sha256": "04725adbc103d9e53be08a7daa6f14c053bbde9f9d2eeef2cd8e4c27a4700786",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "vendor/worldwright/frontend/profile.json",
+      "sha256": "d1ac279dcbb8488a61384b6cef6f07f587166bf7d995148671fa160bfb8170d6",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "source/canonical.json",
+      "sha256": "7a2e765e96ba7d5b2e9a8f972d3244f9db62ea8ee8ad75795a86ec21546d232d",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "source/journeys.json",
+      "sha256": "b254cd8f95359043644f1af561e389f5e578bd4bdd4149a1183798067c009968",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "source/languages.json",
+      "sha256": "9a4338f735e6487155a27d1d6bd9b644b343421d4cfc7c865be8c9669cfd00eb",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "source/origin.json",
+      "sha256": "bdfaad01aabb3b340b9c15d9c10c663fa6838df5829513fa9ccb65103c030c79",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "source/page.json",
+      "sha256": "55480d8a96edbb7cb81504a24548130b6e1a1c8b20d0b1b2b5a570bf61ccbddd",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "source/runtime.json",
+      "sha256": "1a6de76dc27cf357a723101056a7bfa01f3a5e968a0720bae8875bb90c09c6a7",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "source/style.json",
+      "sha256": "6126295c2b362b0ff4245a23a34d016428925eb11cfeed4208cd2e9ea5b118e7",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "source/words.json",
+      "sha256": "aeb2739fdb2fae139a1e885ab730832dfdbb696763a96db824a51eb94efc44cf",
+      "retainedByteForByte": true
+    },
+    {
+      "path": "source/workspace-seed.json",
+      "sha256": "7d1a0a75238a809df1375cdbaaa51febd60818c59de08f54879d63bd0908eb03",
+      "retainedByteForByte": true
+    }
+  ],
+  "allRetained": true,
+  "predecessor": "../usewords-lightning",
+  "protocol": "creator-studio/retained-mechanism-audit/1"
+}

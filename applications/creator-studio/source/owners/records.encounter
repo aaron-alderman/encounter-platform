@@ -1,0 +1,176 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+# Language catalogue, bounded commands, journeys and workspace seed.
+
+process owner.journeys:
+  let journeysProjection = {
+    protocol = "usewords/two-journeys/1";
+    subject = "place.water";
+    source = {
+      repository = "aaron-alderman/aaronalderman-com";
+      file = "source/expedition.rel";
+      selectedPredicates = list("title", "paragraph");
+      originalTitle = "The horse has a few questions.";
+      publicRoute = "https://aaronalderman.com/places/water.html";
+      snapshot = "source/reference/water.rel";
+      sha256 = "695b4067e51ffdc265de7f72c9c5b653ab2f40b4762d896b325e2e5f3663fe86";
+      scope = "Source-bounded reconstruction of the two short encounter paragraphs. The two journey compositions and introductions are new Usewords authored material.";
+      upstreamGitBlob = "ae83e248c3e53e1ccfa46c9c9f2cf936dd810233";
+      upstreamObservedLines = { start = 405; end = 430 }
+    };
+    journeys = list(
+      {
+        id = "journey.Listening";
+        name = "Listening well";
+        mount = "#journey-listening";
+        badge = "#listening-scope"
+      },
+      { id = "journey.Making"; name = "Making with care"; mount = "#journey-making"; badge = "#making-scope" }
+    )
+  }
+
+process owner.languages:
+  let languagesProjection = {
+    protocol = "usewords/languages/1";
+    purpose = "Usewords authors and inspects languages of expression. Encounter is one family with separate view and process dialects; language profiles explicitly select their meaning and execution route.";
+    variants = list(
+      {
+        id = "usewords.words.v1";
+        name = "Usewords sentences";
+        role = "Bounded command language";
+        grammar = "source/words.json";
+        semantics = "source/usewords.encounter#uw.parse";
+        status = "enabled"
+      },
+      {
+        id = "encounter.views.v1";
+        name = "Encounter views";
+        role = "Representation, contextual contribution and inverse-edit language";
+        grammar = "Retained ec.compile profile";
+        source = "source/canonical.json#codeText";
+        semantics = "Retained ec.prepare / ec.run / ec.patch";
+        status = "enabled"
+      },
+      {
+        id = "encounter.process.v1";
+        name = "Encounter processes";
+        role = "Executable process authoring";
+        profile = "source/languages/usewords-process.profile.json";
+        source = "source/usewords.encounter";
+        compiler = "source/languages/usewords-frontend.json";
+        semantics = "Existing lowering, admission and Temple kernel";
+        status = "enabled"
+      },
+      {
+        id = "rel.facts.v1";
+        name = "REL facts and contracts";
+        role = "Identity, facts and closed type contracts";
+        source = "source/canonical.json#factText / contractText";
+        semantics = "Retained source.rel and type contracts";
+        status = "enabled"
+      },
+      {
+        id = "usewords.constructs.v1";
+        name = "Usewords construct definitions";
+        role = "In-app declaration of text fields, required/maximum constraints, shared/local edit ownership and representations";
+        source = "Workspace document definitions";
+        grammar = "source/workspace.encounter#ws.definition";
+        compiler = "source/workspace.encounter#ws.emit";
+        semantics = "Closed REL contracts and Encounter views, checked by the retained compiler, type checker and ec.patch";
+        status = "enabled";
+        boundary = "This first profile does not install arbitrary host code, add effect grants or define unrestricted computational semantics."
+      },
+      {
+        id = "usewords.matters.v1";
+        name = "Matter framing and AI suggestions";
+        role = "Matter framing, lifecycle, participation, attention requests, relationships and scoped agent briefs";
+        source = "source/matters.encounter";
+        grammar = "Closed own-data records validated by mw.validate / mw.itemCheck / mw.checkSuggestions";
+        semantics = "mw.add through ws.apply and collaborative proposal review/replay; representations through mw.paint";
+        status = "enabled";
+        boundary = "Incorporating framing does not establish truth, consent, agreement or resolution. Agent labels are self-reported; BYO responses cannot invoke effects.";
+        management = "source/matter-management.encounter; source/matter-management-ui.encounter";
+        partyWork = "source/party-work.encounter; explicit disclosure, separate personal statements and replayable packets; source/party-work-ui.encounter"
+      }
+    );
+    extensionContract = list(
+      "Declare syntax/profile identity and canonical representation",
+      "Supply an admitted compiler or interpreter through process algebra",
+      "Declare effects separately from syntax eligibility",
+      "Preserve source correspondence and exact identities",
+      "Define representation and inverse-edit correspondence where supported",
+      "Provide semantic checks, refusal cases and bounded correspondence evidence"
+    );
+    boundary = "Additional variants require explicit implementation and qualification. Naming a variant does not install a compiler, infer semantic equivalence or grant effects."
+  }
+
+process owner.words:
+  let wordsProjection = {
+    protocol = "usewords/words-profile/1";
+    scope = "Bounded sentence grammar for shared encounter edits and explicitly addressed journey introductions. Quoted text is data, never host code.";
+    commands = list(
+      { kind = "recreate"; pattern = "^Recreate the canonical encounter\\.$" },
+      { kind = "shared-title"; pattern = "^Rename the encounter to \"([^\"\\r\\n]+)\"\\.$" },
+      { kind = "menu-label"; pattern = "^Call it \"([^\"\\r\\n]+)\" in the menu only\\.$" },
+      { kind = "recreate"; pattern = "^Recreate the two journeys\\.$" },
+      {
+        kind = "journey-intro";
+        target = "journey.Listening";
+        pattern = "^Introduce it in Listening well as \"([^\"\\r\\n]+)\"\\.$"
+      },
+      {
+        kind = "journey-intro";
+        target = "journey.Making";
+        pattern = "^Introduce it in Making with care as \"([^\"\\r\\n]+)\"\\.$"
+      }
+    )
+  }
+
+process owner.workspace:
+  let workspaceProjection = {
+    protocol = "usewords/workspace/1";
+    definitions = list(
+      "construct Encounter\nfield title text shared required max 160\nfield body text shared required max 4000\nfield introduction text local optional max 600\nheading title\nparagraph introduction\nparagraph body"
+    );
+    objects = list(
+      {
+        id = "water";
+        type = "Encounter";
+        values = {
+          title = "The horse has a few questions.";
+          body = "The guide points at the water. The horse looks down. There is already a horse in there, and it seems to have strong opinions about the guide. Nobody mentioned a committee.\n\nPerhaps the next explanation can wait. What is the horse being invited into? The guide can look at the reflection too. You can read the little fable your own way—or just enjoy a horse declining a well-prepared presentation.";
+          introduction = "An encounter at the water’s edge."
+        };
+        origin = { subject = "place.water"; snapshot = "source/reference/water.rel" }
+      }
+    );
+    journeys = list(
+      {
+        id = "listening";
+        name = "Listening well";
+        entries = list(
+          {
+            id = "water";
+            object = "water";
+            overrides = {
+              introduction = "Start by noticing what the other person is encountering, before offering your explanation."
+            }
+          }
+        )
+      },
+      {
+        id = "making";
+        name = "Making with care";
+        entries = list(
+          {
+            id = "water";
+            object = "water";
+            overrides = {
+              introduction = "Begin with the invitation you are making. What room does your design leave for another response?"
+            }
+          }
+        )
+      }
+    )
+  }

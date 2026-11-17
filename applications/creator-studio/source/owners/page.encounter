@@ -1,0 +1,101 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+# Document tree for the retained workbench.
+
+process owner.head:
+  let head = {
+    tag = "head";
+    attrs = {};
+    children = list(
+      { tag = "meta"; attrs = { charset = "utf-8" }; children = list() },
+      {
+        tag = "meta";
+        attrs = { name = "viewport"; content = "width=device-width, initial-scale=1" };
+        children = list()
+      },
+      { tag = "title"; attrs = {}; children = list("Usewords — for what matters") },
+      {
+        tag = "meta";
+        attrs = {
+          name = "description";
+          content = "A collaborative workbench for giving structure to what matters, with reviewable AI framing and room for disagreement."
+        };
+        children = list()
+      },
+      { tag = "link"; attrs = { rel = "stylesheet"; href = "style.css" }; children = list() },
+      { tag = "script"; attrs = { src = "app.js"; defer = "defer" }; children = list() }
+    )
+  }
+
+process owner.banner:
+  let banner = {
+    tag = "header";
+    attrs = { class = "masthead" };
+    children = list(
+      { tag = "a"; attrs = { href = "/"; class = "wordmark" }; children = list("usewords") },
+      { tag = "span"; attrs = { class = "masthead-note" }; children = list("For what matters.") },
+      {
+        tag = "a";
+        attrs = {
+          href = "https://github.com/aaron-alderman/aaronalderman-com/blob/main/source/expedition.rel";
+          target = "_blank";
+          rel = "noreferrer";
+          class = "source-link"
+        };
+        children = list("Original encounter source ↗")
+      }
+    )
+  }
+
+process owner.intro:
+  let intro = {
+    tag = "section";
+    attrs = { class = "ws-intro" };
+    children = list(
+      { tag = "p"; attrs = { class = "eyebrow" }; children = list("USEWORDS — FOR WHAT MATTERS") },
+      { tag = "h1"; attrs = {}; children = list("What's the matter?") },
+      {
+        tag = "p";
+        attrs = { class = "lede" };
+        children = list(
+          "Tell us what you care about, are trying to understand, or want to work through. We can give it structure without deciding how it must end."
+        )
+      },
+      {
+        tag = "p";
+        attrs = { id = "ws-notice"; class = "notice"; role = "status"; "aria-live" = "polite" };
+        children = list("Starting Temple…")
+      },
+      { tag = "div"; attrs = { "data-temple-errors" = ""; role = "alert"; class = "error" }; children = list() }
+    )
+  }
+
+process owner.footer:
+  let footer = {
+    tag = "footer";
+    attrs = {};
+    children = list(
+      {
+        tag = "p";
+        attrs = {};
+        children = list("Temple execution · Sourcery / Encounter authoring · inspectable process algebra")
+      },
+      {
+        tag = "p";
+        attrs = {};
+        children = list("Local owner workspace · no remote application activation or identity grant")
+      }
+    )
+  }
+
+process owner.page:
+  call owner.head
+  call owner.banner
+  call owner.intro
+  call owner.matters
+  call owner.workbench
+  call owner.footer
+  let main = { tag = "main"; attrs = { class = "ws-main" }; children = list($intro, $matters, $workbench, $footer) }
+  let body = { tag = "body"; attrs = {}; children = list($banner, $main) }
+  let pageProjection = { tag = "html"; attrs = { lang = "en" }; children = list($head, $body) }

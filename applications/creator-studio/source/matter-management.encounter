@@ -1,0 +1,378 @@
+# Matter management is a closed, replayable language, not host-side policy.
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process cs.click:
+  try:
+    let attrs = $eventInput.matched.attributes
+    let action = at($attrs, "data-action")
+    let id = at($attrs, "data-id")
+    assert includes(list("export-chart", "reading-space", "list-revise", "copy-source", "export-source", "nav", "select-record", "new-record", "quantity", "node", "scene", "slide", "accept", "discard", "export-project", "export-record", "export-markdown", "export-encounter", "source-mode", "run", "download-run", "scenario", "route", "comment-status", "compare-version", "open-project", "adopt-example", "adopt-pack", "export-method", "archive-record"), $action)
+      otherwise "CS-ACTION: Unsupported interaction."
+    when eq($action, "export-chart"):
+      port state.get { key = "cs.accepted" } → accepted
+      port kernel.invoke { query = "cs.model"; input = $accepted.document } → meaning
+      port kernel.invoke { query = "cs.record"; input = { document = $accepted.document; id = "standard" } } → record
+      port kernel.invoke { query = "cs.payload"; input = $record } → standard
+      port kernel.invoke { query = "cs.chartSVG"; input = { meaning = $meaning; standard = $standard; sourceHash = $accepted.documentHash } } → svg
+      port download.text { name = "named-quantities.svg"; text = $svg } → _
+      port kernel.invoke { query = "cs.notify"; input = "Exported a same-unit chart from the accepted model and selected profile." } → _
+    when eq($action, "reading-space"):
+      port state.get { key = "cs.roomy" } → roomy
+      port state.set { key = "cs.roomy"; value = not($roomy) } → _
+    when eq($action, "list-revise"):
+      port kernel.invoke { query = "cs.listReviseUI"; input = $id } → _
+    when eq($action, "copy-source"):
+      port kernel.invoke { query = "cs.copySource"; input = $id } → _
+    when eq($action, "export-source"):
+      port state.get { key = "cs.draft" } → draft
+      port kernel.invoke { query = "cs.artifact"; input = { state = $draft; id = $id } } → artifact
+      port download.text { name = $artifact.name; text = $artifact.text } → _
+      port kernel.invoke { query = "cs.notify"; input = "Exported the exact retained original text. This is a source download, not acceptance of its interpretation." } → _
+    when eq($action, "nav"):
+      port kernel.invoke { query = "cs.navigate"; input = $id } → _
+    when eq($action, "select-record"):
+      port state.set { key = "cs.recordId"; value = $id } → _
+      port state.set { key = "cs.slide"; value = 0 } → _
+    when eq($action, "new-record"):
+      port state.set { key = "cs.newKind"; value = $id } → _
+      port kernel.invoke { query = "cs.navigate"; input = "new-record" } → _
+    when includes(list("quantity", "node", "scene"), $action):
+      port state.set { key = "cs.selected"; value = $id } → _
+    when eq($action, "slide"):
+      port number.parse { value = $id } → index
+      port state.set { key = "cs.slide"; value = $index } → _
+    when eq($action, "accept"):
+      call cs.acceptUI
+    when eq($action, "discard"):
+      call cs.discardUI
+    when eq($action, "source-mode"):
+      assert includes(list("meaning", "views", "identity", "history", "process"), $id)
+        otherwise "CS-SOURCE: Unsupported inspection perspective."
+      port state.set { key = "cs.sourceMode"; value = $id } → _
+    when eq($action, "scenario"):
+      call cs.scenarioUI
+    when eq($action, "route"):
+      port kernel.invoke { query = "cs.routeUI"; input = $id } → _
+    when eq($action, "run"):
+      call cs.runUI
+    when eq($action, "comment-status"):
+      port kernel.invoke { query = "cs.commentStatus"; input = $id } → _
+    when eq($action, "compare-version"):
+      port number.parse { value = $id } → index
+      port state.get { key = "cs.history" } → history
+      let version = at($history, $index)
+      assert $version
+        otherwise "CS-HISTORY: This version is not retained."
+      port kernel.invoke { query = "ws.reconstruct"; input = $version.receipt } → before
+      port state.get { key = "cs.draft" } → after
+      port kernel.invoke { query = "cs.impact"; input = { before = $before; after = $after } } → impact
+      port state.set { key = "cs.comparison"; value = { baselineVersion = $index; baselineHash = $before.documentHash; currentHash = $after.documentHash; differences = $impact } } → _
+    when eq($action, "open-project"):
+      port kernel.invoke { query = "cs.openProject"; input = $id } → _
+    when eq($action, "adopt-example"):
+      port kernel.invoke { query = "cs.adoptExample"; input = $id } → _
+    when eq($action, "adopt-pack"):
+      port kernel.invoke { query = "cs.adoptPack"; input = $id } → _
+    when eq($action, "export-method"):
+      call cs.exportMethodUI
+    when eq($action, "export-project"):
+      port kernel.invoke { query = "cs.pack"; input = { } } → packet
+      port json.stringify { value = $packet; space = 2 } → text
+      port download.text { name = "creator-studio-project.json"; text = $text } → _
+      port kernel.invoke { query = "cs.notify"; input = "Exported accepted source, draft and retained versions as an inert, replayable project packet." } → _
+    when includes(list("export-record", "export-markdown"), $action):
+      port state.get { key = "cs.accepted" } → accepted
+      port state.get { key = "cs.recordId" } → selected
+      port kernel.invoke { query = "cs.artifact"; input = { state = $accepted; id = $selected; format = if(eq($action, "export-markdown"), "markdown", "default") } } → artifact
+      port download.text { name = $artifact.name; text = $artifact.text } → _
+      port kernel.invoke { query = "cs.notify"; input = concat("Compiled ", $artifact.format, " from the accepted version. Draft changes are not silently released.") } → _
+    when eq($action, "export-encounter"):
+      port state.get { key = "cs.draft" } → draft
+      port download.text { name = "project-views.encounter"; text = $draft.inputs.codeText } → _
+      port kernel.invoke { query = "cs.notify"; input = "Exported derived Encounter view definitions. The project packet retains their typed values and provenance." } → _
+    when eq($action, "download-run"):
+      port state.get { key = "cs.run" } → report
+      assert $report
+        otherwise "Run the accepted workflow first."
+      port json.stringify { value = $report; space = 2 } → text
+      port download.text { name = "creator-studio-production-run.json"; text = $text } → _
+    when eq($action, "archive-record"):
+      port state.get { key = "cs.recordId" } → selected
+      assert not(includes(list("project", "standard", "commentary", "approach"), $selected))
+        otherwise "Core project records cannot be archived."
+      port kernel.invoke { query = "cs.stage"; input = { kind = "edit"; scope = "shared"; object = $selected; field = "status"; value = "archived" } } → _
+      port kernel.invoke { query = "cs.navigate"; input = "library" } → _
+    when not(includes(list("export-project", "export-record", "export-markdown", "export-encounter", "download-run", "export-method"), $action)):
+      call cs.paint
+      when eq($action, "nav"):
+        port browser.focus { ref = "#cs-main"; preventScroll = false } → _
+  catch fault:
+    port kernel.invoke { query = "cs.notify"; input = concat("Not applied: ", $fault.message) } → _
+    port browser.write { ref = "#cs-status"; name = "className"; value = "notice error" } → _
+
+process cs.submit:
+  try:
+    let command = at($eventInput.matched.attributes, "data-command")
+    assert includes(list("project-details", "text-record", "quantity", "calculation", "node", "edge", "scene", "step", "comment", "standard", "new-project", "import-project", "import-text", "new-record", "import-method", "method-offer"), $command)
+      otherwise "CS-FORM: Unsupported form operation."
+    when eq($command, "text-record"):
+      call cs.editTextUI
+    when eq($command, "project-details"):
+      call cs.editProjectUI
+    when eq($command, "quantity"):
+      call cs.editQuantityUI
+    when eq($command, "calculation"):
+      call cs.addCalculationUI
+    when eq($command, "node"):
+      call cs.editNodeUI
+    when eq($command, "edge"):
+      call cs.addEdgeUI
+    when eq($command, "scene"):
+      call cs.editSceneUI
+    when eq($command, "step"):
+      call cs.addStepUI
+    when eq($command, "comment"):
+      call cs.addCommentUI
+    when eq($command, "standard"):
+      call cs.editStandardUI
+    when eq($command, "new-project"):
+      port kernel.invoke { query = "cs.read"; input = "#cs-new-project-title" } → title
+      port kernel.invoke { query = "cs.read"; input = "#cs-new-project-template" } → template
+      port text.trim { value = $title } → title
+      assert not(eq($title, ""))
+        otherwise "Give the project a name."
+      port kernel.invoke { query = "cs.createProject"; input = { title = $title; template = $template } } → _
+    when eq($command, "import-project"):
+      call cs.importProjectUI
+    when eq($command, "import-text"):
+      call cs.importTextUI
+    when eq($command, "new-record"):
+      call cs.newRecordUI
+    when eq($command, "import-method"):
+      call cs.importMethodUI
+    when eq($command, "method-offer"):
+      call cs.exportMethodUI
+    call cs.paint
+  catch fault:
+    port kernel.invoke { query = "cs.notify"; input = concat("Not applied: ", $fault.message) } → _
+    port browser.write { ref = "#cs-status"; name = "className"; value = "notice error" } → _
+
+process cs.editTextUI:
+  port state.get { key = "cs.draft" } → draft
+  port state.get { key = "cs.recordId" } → id
+  port kernel.invoke { query = "cs.record"; input = { document = $draft.document; id = $id } } → record
+  port kernel.invoke { query = "cs.read"; input = "#cs-edit-title" } → title
+  port kernel.invoke { query = "cs.read"; input = "#cs-edit-body" } → body
+  port kernel.invoke { query = "cs.read"; input = "#cs-edit-note" } → note
+  let proposed = list({ field = "title"; value = $title }, { field = "body"; value = $body }, { field = "note"; value = $note })
+  let changes = map(filter($proposed, "p", not(eq(at($record.values, $p.field), $p.value))), "p", { kind = "edit"; scope = "shared"; object = $id; field = $p.field; value = $p.value })
+  assert not(eq(count($changes), 0))
+    otherwise "These values already match the current draft."
+  port kernel.invoke { query = "cs.stage"; input = $changes } → _
+
+process cs.editQuantityUI:
+  port state.get { key = "cs.draft" } → draft
+  port kernel.invoke { query = "cs.model"; input = $draft.document } → meaning
+  port kernel.invoke { query = "cs.read"; input = "#cs-quantity-existing" } → existing
+  port kernel.invoke { query = "cs.read"; input = "#cs-quantity-id" } → id
+  assert or(eq($existing, ""), eq($existing, $id))
+    otherwise "Changing a label must not rename a quantity's stable identity."
+  port kernel.invoke { query = "cs.read"; input = "#cs-quantity-label" } → label
+  port kernel.invoke { query = "cs.read"; input = "#cs-quantity-value" } → raw
+  port number.parse { value = $raw } → value
+  port kernel.invoke { query = "cs.read"; input = "#cs-quantity-unit" } → unit
+  let item = { id = $id; label = $label; value = $value; unit = $unit }
+  let items = map($meaning.source.inputs, "i", if(eq($i.id, $existing), $item, $i))
+  when eq($existing, ""):
+    let items = append($items, list($item))
+  port record.put { record = $meaning.source; key = "inputs"; value = $items } → body
+  port kernel.invoke { query = "cs.stageBody"; input = { id = "project"; body = $body } } → _
+  port state.set { key = "cs.selected"; value = $id } → _
+
+process cs.addCalculationUI:
+  port state.get { key = "cs.draft" } → draft
+  port kernel.invoke { query = "cs.model"; input = $draft.document } → meaning
+  port kernel.invoke { query = "cs.read"; input = "#cs-calc-id" } → id
+  port kernel.invoke { query = "cs.read"; input = "#cs-calc-existing" } → existing
+  assert or(eq($existing, ""), eq($existing, $id))
+    otherwise "A calculation edit must retain its stable identity."
+  port kernel.invoke { query = "cs.read"; input = "#cs-calc-label" } → label
+  port kernel.invoke { query = "cs.read"; input = "#cs-calc-left" } → left
+  port kernel.invoke { query = "cs.read"; input = "#cs-calc-right" } → right
+  port kernel.invoke { query = "cs.read"; input = "#cs-calc-operation" } → operation
+  port kernel.invoke { query = "cs.read"; input = "#cs-calc-unit" } → unit
+  let calculation = { id = $id; label = $label; left = $left; right = $right; operation = $operation; unit = $unit }
+  let items = map($meaning.source.calculations, "c", if(eq($c.id, $existing), $calculation, $c))
+  when eq($existing, ""):
+    let items = append($items, list($calculation))
+  port record.put { record = $meaning.source; key = "calculations"; value = $items } → body
+  port kernel.invoke { query = "cs.stageBody"; input = { id = "project"; body = $body } } → _
+
+process cs.editProjectUI:
+  port state.get { key = "cs.draft" } → draft
+  port kernel.invoke { query = "cs.model"; input = $draft.document } → meaning
+  port kernel.invoke { query = "cs.read"; input = "#cs-project-name" } → title
+  port kernel.invoke { query = "cs.read"; input = "#cs-project-client" } → client
+  port kernel.invoke { query = "cs.read"; input = "#cs-project-goal" } → goal
+  port record.put { record = $meaning.source; key = "client"; value = $client } → body
+  port record.put { record = $body; key = "goal"; value = $goal } → body
+  port json.stringify { value = $body } → text
+  port kernel.invoke { query = "cs.record"; input = { document = $draft.document; id = "project" } } → current
+  let proposed = list({ field = "title"; value = $title }, { field = "body"; value = $text })
+  let changes = map(filter($proposed, "p", not(eq(at($current.values, $p.field), $p.value))), "p", { kind = "edit"; scope = "shared"; object = "project"; field = $p.field; value = $p.value })
+  assert not(eq(count($changes), 0))
+    otherwise "These project details already match."
+  port kernel.invoke { query = "cs.stage"; input = $changes } → _
+
+process cs.selectedBody:
+  port state.get { key = "cs.draft" } → draft
+  port state.get { key = "cs.recordId" } → id
+  port kernel.invoke { query = "cs.record"; input = { document = $draft.document; id = $id } } → record
+  port kernel.invoke { query = "cs.payload"; input = $record } → payload
+  let result = { id = $id; record = $record; body = $payload }
+
+process cs.editNodeUI:
+  call cs.selectedBody
+  let selected = $result
+  assert eq($selected.record.values.kind, "canvas")
+    otherwise "Choose a Canvas record."
+  port kernel.invoke { query = "cs.read"; input = "#cs-node-existing" } → existing
+  port kernel.invoke { query = "cs.read"; input = "#cs-node-id" } → id
+  assert or(eq($existing, ""), eq($existing, $id))
+    otherwise "A layout edit cannot rename a node's identity."
+  port kernel.invoke { query = "cs.read"; input = "#cs-node-label" } → label
+  port kernel.invoke { query = "cs.read"; input = "#cs-node-detail" } → detail
+  port kernel.invoke { query = "cs.read"; input = "#cs-node-x" } → rawX
+  port kernel.invoke { query = "cs.read"; input = "#cs-node-y" } → rawY
+  port number.parse { value = $rawX } → x
+  port number.parse { value = $rawY } → y
+  let node = { id = $id; label = $label; detail = $detail; x = $x; y = $y }
+  let nodes = map($selected.body.nodes, "n", if(eq($n.id, $existing), $node, $n))
+  when eq($existing, ""):
+    let nodes = append($nodes, list($node))
+  port record.put { record = $selected.body; key = "nodes"; value = $nodes } → body
+  port kernel.invoke { query = "cs.stageBody"; input = { id = $selected.id; body = $body } } → _
+  port state.set { key = "cs.selected"; value = $id } → _
+
+process cs.addEdgeUI:
+  call cs.selectedBody
+  let selected = $result
+  assert eq($selected.record.values.kind, "canvas")
+    otherwise "Choose a Canvas record."
+  port kernel.invoke { query = "cs.read"; input = "#cs-edge-from" } → from
+  port kernel.invoke { query = "cs.read"; input = "#cs-edge-to" } → to
+  port kernel.invoke { query = "cs.read"; input = "#cs-edge-kind" } → kind
+  port record.put { record = $selected.body; key = "edges"; value = append($selected.body.edges, list({ from = $from; to = $to; kind = $kind })) } → body
+  port kernel.invoke { query = "cs.stageBody"; input = { id = $selected.id; body = $body } } → _
+
+process cs.editSceneUI:
+  call cs.selectedBody
+  let selected = $result
+  assert eq($selected.record.values.kind, "media")
+    otherwise "Choose a Media record."
+  port kernel.invoke { query = "cs.read"; input = "#cs-scene-index" } → rawIndex
+  port number.parse { value = $rawIndex } → index
+  port kernel.invoke { query = "cs.read"; input = "#cs-scene-title" } → title
+  port kernel.invoke { query = "cs.read"; input = "#cs-scene-text" } → text
+  port kernel.invoke { query = "cs.read"; input = "#cs-scene-seconds" } → rawSeconds
+  port number.parse { value = $rawSeconds } → seconds
+  let scene = { title = $title; text = $text; seconds = $seconds }
+  assert or(eq($index, -1), not(eq(at($selected.body.scenes, $index), null)))
+    otherwise "The selected scene is not present."
+  fold $selected.body.scenes as old; scenes starts { items = list(); index = 0 }:
+    yield { items = append($scenes.items, list(if(eq($scenes.index, $index), $scene, $old))); index = add($scenes.index, 1) } → scenes
+  let items = $scenes.items
+  when eq($index, -1):
+    let items = append($items, list($scene))
+  port record.put { record = $selected.body; key = "scenes"; value = $items } → body
+  port kernel.invoke { query = "cs.stageBody"; input = { id = $selected.id; body = $body } } → _
+
+process cs.addStepUI:
+  call cs.selectedBody
+  let selected = $result
+  assert eq($selected.record.values.kind, "workflow")
+    otherwise "Choose a Workflow record."
+  port kernel.invoke { query = "cs.read"; input = "#cs-step-id" } → id
+  port kernel.invoke { query = "cs.read"; input = "#cs-step-label" } → label
+  port kernel.invoke { query = "cs.read"; input = "#cs-step-app" } → app
+  port kernel.invoke { query = "cs.read"; input = "#cs-step-operation" } → operation
+  let item = { id = $id; label = $label; app = $app; operation = $operation }
+  let steps = map($selected.body.steps, "s", if(eq($s.id, $id), $item, $s))
+  when eq(count(filter($selected.body.steps, "s", eq($s.id, $id))), 0):
+    let steps = append($steps, list($item))
+  port record.put { record = $selected.body; key = "steps"; value = $steps } → body
+  port record.put { record = $body; key = "route"; value = "custom" } → body
+  port kernel.invoke { query = "cs.stageBody"; input = { id = $selected.id; body = $body } } → _
+
+process cs.addCommentUI:
+  port state.get { key = "cs.draft" } → draft
+  port kernel.invoke { query = "cs.read"; input = "#cs-comment-subject" } → subject
+  port kernel.invoke { query = "cs.read"; input = "#cs-comment-author" } → author
+  port kernel.invoke { query = "cs.read"; input = "#cs-comment-text" } → text
+  port text.trim { value = $text } → text
+  assert not(eq($text, ""))
+    otherwise "Write a question, suggestion or disagreement."
+  port kernel.invoke { query = "cs.record"; input = { document = $draft.document; id = $subject } } → target
+  port kernel.invoke { query = "cs.record"; input = { document = $draft.document; id = "commentary" } } → conversation
+  port kernel.invoke { query = "cs.payload"; input = $conversation } → body
+  port kernel.invoke { query = "cs.anchor"; input = { state = $draft; id = $subject } } → anchor
+  let comment = { id = concat("comment_", add(count($body.comments), 1)); subject = $subject; field = "body"; author = $author; text = $text; basis = $draft.documentHash; anchorHash = $anchor.hash; status = "open"; context = $anchor.context }
+  port record.put { record = $body; key = "comments"; value = append($body.comments, list($comment)) } → body
+  port kernel.invoke { query = "cs.stageBody"; input = { id = "commentary"; body = $body } } → _
+
+process cs.commentStatus:
+  port state.get { key = "cs.draft" } → draft
+  port kernel.invoke { query = "cs.record"; input = { document = $draft.document; id = "commentary" } } → conversation
+  port kernel.invoke { query = "cs.payload"; input = $conversation } → body
+  let matching = filter($body.comments, "c", eq($c.id, $eventInput))
+  assert eq(count($matching), 1)
+    otherwise "This comment is not present."
+  let comment = at($matching, 0)
+  port record.put { record = $comment; key = "status"; value = if(eq($comment.status, "open"), "resolved", "open") } → comment
+  port record.put { record = $body; key = "comments"; value = map($body.comments, "c", if(eq($c.id, $comment.id), $comment, $c)) } → body
+  port kernel.invoke { query = "cs.stageBody"; input = { id = "commentary"; body = $body } } → _
+
+process cs.editStandardUI:
+  port kernel.invoke { query = "cs.read"; input = "#cs-standard-profile" } → profile
+  port kernel.invoke { query = "cs.read"; input = "#cs-standard-terms" } → raw
+  port text.split { value = $raw; pattern = "\\r?\\n" } → lines
+  fold $lines as line; terms starts list():
+    port text.trim { value = $line } → line
+    when not(eq($line, "")):
+      port text.match { value = $line; pattern = "^([A-Za-z][A-Za-z -]{0,40}) => (.{1,80})$" } → term
+      assert $term
+        otherwise "Write each terminology mapping as from => to."
+      let terms = append($terms, list({ from = at($term.groups, 0); to = at($term.groups, 1) }))
+    yield $terms → terms
+  port kernel.invoke { query = "cs.read"; input = "#cs-standard-accessibility" } → accessibility
+  port kernel.invoke { query = "cs.read"; input = "#cs-standard-licence" } → licence
+  port kernel.invoke { query = "cs.stageBody"; input = { id = "standard"; body = { profile = $profile; terminology = $terms; accessibility = $accessibility; licence = $licence } } } → _
+
+process cs.scenarioUI:
+  port state.get { key = "cs.draft" } → draft
+  port kernel.invoke { query = "cs.model"; input = $draft.document } → meaning
+  let matching = filter($meaning.source.inputs, "i", eq($i.id, "participants"))
+  assert eq(count($matching), 1)
+    otherwise "This project has no participants input. Add it in Tables to use this illustrative scenario."
+  let item = at($matching, 0)
+  port record.put { record = $item; key = "value"; value = 48 } → item
+  port record.put { record = $meaning.source; key = "inputs"; value = map($meaning.source.inputs, "i", if(eq($i.id, "participants"), $item, $i)) } → body
+  port kernel.invoke { query = "cs.stageBody"; input = { id = "project"; body = $body } } → _
+  port state.set { key = "cs.notice"; value = "48-person scenario is a draft. The accepted baseline and its earlier outputs remain intact until you review and save." } → _
+
+process cs.routeUI:
+  let route = $eventInput
+  call cs.selectedBody
+  let selected = $result
+  assert eq($selected.record.values.kind, "workflow")
+    otherwise "Choose a workflow before changing its approach."
+  port kernel.invoke { query = "cs.route"; input = { workflow = $selected.body; route = $route } } → body
+  port kernel.invoke { query = "cs.stageBody"; input = { id = $selected.id; body = $body } } → _
+
+process cs.runUI:
+  port state.get { key = "cs.accepted" } → accepted
+  port state.get { key = "cs.recordId" } → id
+  port kernel.invoke { query = "cs.run"; input = { state = $accepted; id = $id } } → report
+  port state.set { key = "cs.run"; value = $report } → _
+  port state.set { key = "cs.notice"; value = concat("Compiled ", count($report.artifacts), " artifacts from accepted source. Human review remains a distinct checkpoint.") } → _

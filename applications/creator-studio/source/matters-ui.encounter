@@ -1,0 +1,631 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+# Shared Creator Studio projections. Each consumes identified source records.
+process cs.escape:
+  let input = $eventInput
+  call html.escape
+
+process cs.luminance:
+  assert and(isArray($eventInput), eq(count($eventInput), 3))
+    otherwise "CS-CONTRAST: RGB requires three channels."
+  fold $eventInput as channel; linear starts list():
+    port kernel.invoke { query = "cs.numeric"; input = { value = $channel; maximum = 255 } } → valid
+    port number.calculate { operation = "divide"; values = list($channel, 255) } → fraction
+    port number.calculate { operation = "lessEqual"; values = list($fraction, 0.04045) } → dark
+    let value = 0
+    when $dark:
+      port number.calculate { operation = "divide"; values = list($fraction, 12.92) } → value
+    when not($dark):
+      port number.calculate { operation = "divide"; values = list(add($fraction, 0.055), 1.055) } → base
+      port number.calculate { operation = "power"; values = list($base, 2.4) } → value
+    yield append($linear, list($value)) → linear
+  port number.calculate { operation = "multiply"; values = list(at($linear, 0), 0.2126) } → red
+  port number.calculate { operation = "multiply"; values = list(at($linear, 1), 0.7152) } → green
+  port number.calculate { operation = "multiply"; values = list(at($linear, 2), 0.0722) } → blue
+  let result = add(add($red, $green), $blue)
+
+process cs.contrast:
+  port kernel.invoke { query = "cs.luminance"; input = $eventInput.foreground } → foreground
+  port kernel.invoke { query = "cs.luminance"; input = $eventInput.background } → background
+  port number.calculate { operation = "max"; values = list($foreground, $background) } → lighter
+  port number.calculate { operation = "min"; values = list($foreground, $background) } → darker
+  port number.calculate { operation = "divide"; values = list(add($lighter, 0.05), add($darker, 0.05)) } → result
+
+process cs.renderedAssurance:
+  assert and(isArray($eventInput.samples), not(eq(count($eventInput.samples), 0)))
+    otherwise "CS-ASSURANCE: No rendered samples were supplied."
+  fold $eventInput.samples as sample; rows starts list():
+    port kernel.invoke { query = "cs.contrast"; input = $sample } → ratio
+    port number.calculate { operation = "greaterEqual"; values = list($ratio, $sample.minimum) } → pass
+    assert $pass
+      otherwise "CS-CONTRAST: A rendered text sample failed its declared threshold. Inspect the observation packet."
+    yield append($rows, list({ label = $sample.label; ratio = $ratio; minimum = $sample.minimum })) → rows
+  assert eq($eventInput.documentOverflow, false)
+    otherwise "CS-REFLOW: The document overflows the measured viewport."
+  let result = { protocol = "creator-studio/rendered-assurance/1"; programHash = $data.programHash; observation = $eventInput.observation; pairs = $rows; documentOverflow = false; basis = "Observed opaque DOM text and nearest solid background. Alpha compositing and imagery require independent visual inspection." }
+
+# The anchor includes the rendered context, not just an unchanged template.
+process cs.anchor:
+  port kernel.invoke { query = "cs.record"; input = { document = $eventInput.state.document; id = $eventInput.id } } → record
+  let context = $record.values.body
+  when includes(list("document", "presentation", "canvas", "media"), $record.values.kind):
+    port kernel.invoke { query = "cs.model"; input = $eventInput.state.document } → meaning
+    port kernel.invoke { query = "cs.expand"; input = { text = $context; model = $meaning } } → expanded
+    port kernel.invoke { query = "cs.record"; input = { document = $eventInput.state.document; id = "standard" } } → standardRecord
+    port kernel.invoke { query = "cs.payload"; input = $standardRecord } → standard
+    port kernel.invoke { query = "cs.standardize"; input = { text = $expanded.text; standard = $standard } } → context
+  port kernel.invoke { query = "uw.hash"; input = $context } → hash
+  port text.slice { value = $context; start = 0; end = 500 } → excerpt
+  let result = { hash = $hash; context = $excerpt }
+
+process cs.markdown:
+  port kernel.invoke { query = "cs.expand"; input = { text = $eventInput.text; model = $eventInput.meaning } } → expanded
+  port kernel.invoke { query = "cs.standardize"; input = { text = $expanded.text; standard = $eventInput.standard } } → text
+  port text.split { value = $text; pattern = "\\r?\\n" } → lines
+  fold $lines as line; html starts "":
+    port kernel.invoke { query = "cs.escape"; input = $line } → escaped
+    let block = concat("<p>", $escaped, "</p>")
+    port text.match { value = $line; pattern = "^(#{1,3}) (.+)$" } → heading
+    when $heading:
+      port kernel.invoke { query = "cs.escape"; input = at($heading.groups, 1) } → escaped
+      let level = count(at($heading.groups, 0))
+      let block = concat("<h", $level, ">", $escaped, "</h", $level, ">")
+    when eq($line, ""):
+      let block = ""
+    yield concat($html, $block) → html
+  let result = { html = $html; text = $text; bindings = $expanded.bindings }
+
+process cs.chartSVG:
+  let meaning = $eventInput.meaning
+  let source = "projection-only"
+  when at($eventInput, "state"):
+    let source = $eventInput.state.documentHash
+  when at($eventInput, "sourceHash"):
+    let source = $eventInput.sourceHash
+  port kernel.invoke { query = "cs.escape"; input = $source } → source
+  assert not(eq(count($meaning.quantities), 0))
+    otherwise "CS-CHART: Define some quantities before exporting a chart."
+  let first = at($meaning.quantities, 0)
+  let unit = $first.unit
+  when not(eq(count(filter($meaning.quantities, "q", eq($q.unit, "AUD"))), 0)):
+    let unit = "AUD"
+  let items = filter($meaning.quantities, "q", eq($q.unit, $unit))
+  fold $items as item; maximum starts 1:
+    port number.calculate { operation = "max"; values = list($maximum, $item.value) } → next
+    yield $next → maximum
+  let colour = if(eq($eventInput.standard.profile, "technical"), "#275574", if(eq($eventInput.standard.profile, "client"), "#80523a", "#236656"))
+  fold $items as item; chart starts { html = ""; y = 28; description = "" }:
+    port kernel.invoke { query = "cs.svgText"; input = { text = $item.label; x = 12; limit = 16; leading = 15 } } → label
+    port number.calculate { operation = "multiply"; values = list($label.lines, 15) } → labelHeight
+    port number.calculate { operation = "max"; values = list(42, add($labelHeight, 16)) } → rowHeight
+    port number.calculate { operation = "divide"; values = list($item.value, $maximum) } → ratio
+    port number.calculate { operation = "multiply"; values = list($ratio, 260) } → width
+    port kernel.invoke { query = "cs.numberText"; input = $item.value } → value
+    yield { html = concat($chart.html, "<text x=\"12\" y=\"", $chart.y, "\" fill=\"#183e38\" font-family=\"system-ui,sans-serif\" font-size=\"12\">", $label.text, "</text><rect x=\"245\" y=\"", add($chart.y, -12), "\" width=\"", $width, "\" height=\"20\" rx=\"4\" fill=\"", $colour, "\"></rect><text x=\"540\" y=\"", $chart.y, "\" fill=\"#183e38\" font-family=\"system-ui,sans-serif\" font-size=\"12\">", $value, "</text>"); y = add($chart.y, $rowHeight); description = concat($chart.description, $item.label, ": ", $value, " ", $unit, ". ") } → chart
+  port kernel.invoke { query = "cs.escape"; input = $chart.description } → description
+  let result = concat("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 690 ", add($chart.y, 10), "\" class=\"diagram\" role=\"img\" aria-labelledby=\"studio-chart-title studio-chart-desc\"><title id=\"studio-chart-title\">Named quantities · ", $unit, "</title><desc id=\"studio-chart-desc\">", $description, " Values share one unit; derived totals may include other shown values, so the bars must not be added together.</desc><metadata>Source ", $source, " · process ", $data.programHash, "</metadata>", $chart.html, "</svg>")
+
+process cs.chartPanel:
+  let result = ""
+  when not(eq(count($eventInput.meaning.quantities), 0)):
+    port kernel.invoke { query = "cs.chartSVG"; input = $eventInput } → chart
+    let result = concat("<section class=\"panel\"><div class=\"panel-head\"><h2>See the scale.</h2><button type=\"button\" class=\"secondary\" data-action=\"export-chart\">Export accepted chart</button></div><div class=\"diagram-frame\" tabindex=\"0\" aria-label=\"Same-unit quantity chart\">", $chart, "</div><p class=\"help\">One unit at a time; costs use AUD when available. Derived totals may include other bars. Inspect the table below for dependencies.</p></section>")
+
+process cs.tableHTML:
+  let meaning = $eventInput
+  fold $meaning.quantities as quantity; rows starts "":
+    port kernel.invoke { query = "cs.escape"; input = $quantity.label } → label
+    port kernel.invoke { query = "cs.numberText"; input = $quantity.value } → value
+    port kernel.invoke { query = "cs.escape"; input = $quantity.unit } → unit
+    port text.join { values = $quantity.dependencies; separator = if(eq($quantity.operation, "multiply"), " × ", if(eq($quantity.operation, "add"), " + ", " ÷ ")) } → formula
+    port kernel.invoke { query = "cs.escape"; input = $formula } → formula
+    let name = concat("<button type=\"button\" class=\"table-link\" data-action=\"quantity\" data-id=\"", $quantity.id, "\">", $label, "</button>")
+    yield concat($rows, "<tr class=\"", if(eq($quantity.id, "total"), "total-row", if(eq($quantity.operation, "input"), "", "calc")), "\"><td>", $name, "<span class=\"help\">", $quantity.id, "</span></td><td class=\"numeric\">", $value, "</td><td>", $unit, "</td><td>", if(eq($quantity.operation, "input"), "Named input", $formula), "</td></tr>") → rows
+  let result = concat("<div class=\"table-wrap\" tabindex=\"0\" aria-label=\"Named project quantities\"><table><thead><tr><th scope=\"col\">Meaning</th><th scope=\"col\">Value</th><th scope=\"col\">Unit</th><th scope=\"col\">Comes from</th></tr></thead><tbody>", $rows, "</tbody></table></div>")
+
+process cs.svgText:
+  port text.split { value = $eventInput.text; pattern = "\\s+" } → words
+  fold $words as word; segments starts list():
+    port text.split { value = $word; pattern = "" } → characters
+    fold $characters as character; parts starts { lines = list(); current = "" }:
+      when eq(count($parts.current), $eventInput.limit):
+        let parts = { lines = append($parts.lines, list($parts.current)); current = "" }
+      yield { lines = $parts.lines; current = concat($parts.current, $character) } → parts
+    yield append($segments, append($parts.lines, list($parts.current))) → segments
+  fold $segments as word; layout starts { lines = list(); current = "" }:
+    let combined = concat($layout.current, if(eq($layout.current, ""), "", " "), $word)
+    port number.calculate { operation = "greater"; values = list(count($combined), $eventInput.limit) } → wrap
+    when $wrap:
+      let layout = { lines = append($layout.lines, list($layout.current)); current = $word }
+    when not($wrap):
+      let layout = { lines = $layout.lines; current = $combined }
+    yield $layout → layout
+  let lines = append($layout.lines, list($layout.current))
+  fold $lines as line; spans starts { text = ""; index = 0 }:
+    port kernel.invoke { query = "cs.escape"; input = $line } → text
+    yield { text = concat($spans.text, "<tspan x=\"", $eventInput.x, "\" dy=\"", if(eq($spans.index, 0), 0, $eventInput.leading), "\">", $text, "</tspan>"); index = add($spans.index, 1) } → spans
+  let result = { text = $spans.text; lines = count($lines) }
+
+process cs.canvasHTML:
+  let canvas = $eventInput.canvas
+  fold $canvas.nodes as node; description starts "":
+    yield concat($description, $node.label, ": ", $node.detail, ". ") → description
+  fold $canvas.edges as edge; description starts $description:
+    yield concat($description, $edge.from, " ", $edge.kind, " ", $edge.to, ". ") → description
+  port kernel.invoke { query = "cs.expand"; input = { text = $description; model = $eventInput.meaning } } → expandedDescription
+  port kernel.invoke { query = "cs.standardize"; input = { text = $expandedDescription.text; standard = $eventInput.standard } } → description
+  port kernel.invoke { query = "cs.escape"; input = $description } → description
+  fold $canvas.nodes as node; width starts 300:
+    port number.calculate { operation = "max"; values = list($width, add($node.x, 190)) } → next
+    yield $next → width
+  fold $canvas.edges as edge; lines starts "":
+    let from = at(filter($canvas.nodes, "n", eq($n.id, $edge.from)), 0)
+    let to = at(filter($canvas.nodes, "n", eq($n.id, $edge.to)), 0)
+    port kernel.invoke { query = "cs.escape"; input = $edge.kind } → reason
+    port number.calculate { operation = "add"; values = list($from.x, 170) } → x1
+    port number.calculate { operation = "add"; values = list($from.y, 43) } → y1
+    port number.calculate { operation = "add"; values = list($to.y, 43) } → y2
+    port number.calculate { operation = "add"; values = list($x1, $to.x) } → mid
+    port number.calculate { operation = "divide"; values = list($mid, 2) } → mid
+    yield concat($lines, "<line class=\"edge\" stroke=\"#75927b\" stroke-width=\"2\" x1=\"", $x1, "\" y1=\"", $y1, "\" x2=\"", $to.x, "\" y2=\"", $y2, "\" marker-end=\"url(#studio-arrow)\"></line><text fill=\"#183e38\" font-family=\"system-ui,sans-serif\" x=\"", $mid, "\" y=\"", add($y1, -12), "\" text-anchor=\"middle\" font-size=\"11\">", $reason, "</text>") → lines
+  fold $canvas.nodes as node; nodes starts { html = ""; height = 240 }:
+    port kernel.invoke { query = "cs.expand"; input = { text = $node.label; model = $eventInput.meaning } } → title
+    port kernel.invoke { query = "cs.expand"; input = { text = $node.detail; model = $eventInput.meaning } } → detail
+    port kernel.invoke { query = "cs.standardize"; input = { text = $title.text; standard = $eventInput.standard } } → titleText
+    port kernel.invoke { query = "cs.standardize"; input = { text = $detail.text; standard = $eventInput.standard } } → detailText
+    port kernel.invoke { query = "cs.svgText"; input = { text = $titleText; x = add($node.x, 14); limit = 12; leading = 18 } } → title
+    port kernel.invoke { query = "cs.svgText"; input = { text = $detailText; x = add($node.x, 14); limit = 17; leading = 14 } } → detail
+    port number.calculate { operation = "multiply"; values = list($title.lines, 18) } → titleHeight
+    port number.calculate { operation = "multiply"; values = list($detail.lines, 14) } → detailHeight
+    port number.calculate { operation = "max"; values = list(86, add(add($titleHeight, $detailHeight), 40)) } → boxHeight
+    port number.calculate { operation = "max"; values = list($nodes.height, add(add($node.y, $boxHeight), 50)) } → height
+    yield { html = concat($nodes.html, "<g><rect class=\"node\" fill=\"#fffef9\" stroke=\"#75927b\" x=\"", $node.x, "\" y=\"", $node.y, "\" width=\"170\" height=\"", $boxHeight, "\" rx=\"9\"></rect><text fill=\"#183e38\" font-family=\"system-ui,sans-serif\" x=\"", add($node.x, 14), "\" y=\"", add($node.y, 30), "\" font-size=\"18\">", $title.text, "</text><text fill=\"#183e38\" font-family=\"system-ui,sans-serif\" x=\"", add($node.x, 14), "\" y=\"", add(add($node.y, $titleHeight), 36), "\" font-size=\"14\">", $detail.text, "</text></g>"); height = $height } → nodes
+  let result = concat("<svg xmlns=\"http://www.w3.org/2000/svg\" class=\"diagram\" viewBox=\"0 0 ", $width, " ", $nodes.height, "\" role=\"img\" aria-labelledby=\"studio-map-title studio-map-desc\"><title id=\"studio-map-title\">Delivery relationships</title><desc id=\"studio-map-desc\">", $description, "</desc><defs><marker id=\"studio-arrow\" markerWidth=\"8\" markerHeight=\"8\" refX=\"7\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L0,6 L8,3 z\" fill=\"#75927b\"></path></marker></defs>", $lines, $nodes.html, "</svg>")
+
+process cs.slides:
+  port text.split { value = $eventInput; pattern = "\\r?\\n---\\r?\\n" } → parts
+  fold $parts as part; slides starts list():
+    port text.split { value = $part; pattern = "\\r?\\n" } → lines
+    port text.match { value = at($lines, 0); pattern = "^# (.+)$" } → title
+    assert $title
+      otherwise "CS-SLIDES: Start each slide with # Title and separate slides with a line containing ---."
+    port text.slice { value = $part; start = add(count(at($lines, 0)), 1) } → body
+    yield append($slides, list({ title = at($title.groups, 0); text = $body })) → slides
+  let result = $slides
+
+process cs.timestamp:
+  let seconds = $eventInput
+  port number.calculate { operation = "multiply"; values = list($seconds, 1000) } → totalMillis
+  port number.calculate { operation = "round"; values = list($totalMillis) } → totalMillis
+  port number.calculate { operation = "divide"; values = list($totalMillis, 1000) } → seconds
+  port number.calculate { operation = "floor"; values = list($seconds) } → whole
+  port number.calculate { operation = "divide"; values = list($whole, 3600) } → hour
+  port number.calculate { operation = "floor"; values = list($hour) } → hour
+  port number.calculate { operation = "remainder"; values = list($whole, 3600) } → remaining
+  port number.calculate { operation = "divide"; values = list($remaining, 60) } → minute
+  port number.calculate { operation = "floor"; values = list($minute) } → minute
+  port number.calculate { operation = "remainder"; values = list($whole, 60) } → second
+  port number.calculate { operation = "remainder"; values = list($totalMillis, 1000) } → millis
+  fold list($hour, $minute, $second) as value; chunks starts list():
+    port number.calculate { operation = "less"; values = list($value, 10) } → pad
+    yield append($chunks, list(concat(if($pad, "0", ""), $value))) → chunks
+  port text.join { values = $chunks; separator = ":" } → text
+  port number.calculate { operation = "less"; values = list($millis, 10) } → padTwo
+  port number.calculate { operation = "less"; values = list($millis, 100) } → padOne
+  let result = concat($text, ".", if($padTwo, "00", if($padOne, "0", "")), $millis)
+
+process cs.captions:
+  fold $eventInput.media.scenes as scene; captions starts { text = "WEBVTT\n\n"; time = 0; index = 1 }:
+    port kernel.invoke { query = "cs.timestamp"; input = $captions.time } → start
+    port number.calculate { operation = "add"; values = list($captions.time, $scene.seconds) } → endSeconds
+    port kernel.invoke { query = "cs.timestamp"; input = $endSeconds } → end
+    port kernel.invoke { query = "cs.expand"; input = { text = $scene.text; model = $eventInput.meaning } } → expanded
+    port kernel.invoke { query = "cs.standardize"; input = { text = $expanded.text; standard = $eventInput.standard } } → text
+    port kernel.invoke { query = "cs.escape"; input = $text } → text
+    yield { text = concat($captions.text, $captions.index, "\n", $start, " --> ", $end, "\n", $text, "\n\n"); time = $endSeconds; index = add($captions.index, 1) } → captions
+  let result = $captions
+
+process cs.artifact:
+  let state = $eventInput.state
+  port kernel.invoke { query = "cs.validate"; input = $state } → checked
+  port kernel.invoke { query = "cs.record"; input = { document = $state.document; id = $eventInput.id } } → record
+  port kernel.invoke { query = "cs.record"; input = { document = $state.document; id = "standard" } } → standardRecord
+  port kernel.invoke { query = "cs.payload"; input = $standardRecord } → standard
+  port kernel.invoke { query = "cs.payload"; input = $record } → payload
+  let title = $record.values.title
+  let content = ""
+  let extension = ".html"
+  let format = "HTML document"
+  when eq($record.values.kind, "source"):
+    let content = $payload
+    let extension = ".txt"
+    let format = "Original source text"
+  when eq($record.values.kind, "document"):
+    port kernel.invoke { query = "cs.markdown"; input = { text = $payload; meaning = $checked.model; standard = $standard } } → rendered
+    let content = $rendered.html
+    when eq(at($eventInput, "format"), "markdown"):
+      let content = $rendered.text
+      let extension = ".md"
+      let format = "Markdown"
+  when eq($record.values.kind, "project"):
+    fold $checked.model.quantities as quantity; csv starts "Identity,Meaning,Value,Unit,Operation,Dependencies\r\n":
+      port kernel.invoke { query = "cs.csv"; input = list($quantity.id, $quantity.label, $quantity.value, $quantity.unit, $quantity.operation, $quantity.dependencies) } → row
+      yield concat($csv, $row, "\r\n") → csv
+    let content = $csv
+    let extension = ".csv"
+    let format = "CSV named model"
+  when eq($record.values.kind, "presentation"):
+    port kernel.invoke { query = "cs.slides"; input = $payload } → slides
+    fold $slides as slide; sections starts "":
+      port kernel.invoke { query = "cs.markdown"; input = { text = concat("# ", $slide.title, "\n", $slide.text); meaning = $checked.model; standard = $standard } } → rendered
+      yield concat($sections, "<section class=\"export-slide\">", $rendered.html, "</section>") → sections
+    let content = $sections
+    let format = "HTML presentation"
+  when eq($record.values.kind, "canvas"):
+    port kernel.invoke { query = "cs.canvasHTML"; input = { canvas = $payload; meaning = $checked.model; standard = $standard } } → content
+    let extension = ".svg"
+    let format = "SVG relationship diagram"
+  when eq($record.values.kind, "media"):
+    port kernel.invoke { query = "cs.captions"; input = { media = $payload; meaning = $checked.model; standard = $standard } } → captions
+    let content = $captions.text
+    let extension = ".vtt"
+    let format = "WebVTT captions"
+  when includes(list("workflow", "review", "standard", "pack"), $record.values.kind):
+    port json.stringify { value = { protocol = "creator-studio/record-export/1"; sourceHash = $state.documentHash; record = $record }; space = 2 } → content
+    let extension = ".json"
+    let format = "Inert structured record"
+  when eq($extension, ".html"):
+    port kernel.invoke { query = "cs.escape"; input = $title } → escapedTitle
+    let content = concat("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>", $escapedTitle, "</title><style>body{max-width:900px;margin:60px auto;padding:0 28px;font:17px/1.75 system-ui;color:#183e38;background:#fffef9}h1,h2{font-family:Georgia,serif;line-height:1.2}h1{font-size:44px}.export-slide{padding:65px 0;min-height:70vh;page-break-after:always}footer{font-size:11px;border-top:1px solid #ccd7c8;padding-top:20px;margin-top:50px;overflow-wrap:anywhere}@media print{body{margin:0}.export-slide{min-height:85vh}}</style></head><body>", $content, "<footer>Creator Studio · source ", $state.documentHash, " · selected profile ", $standard.profile, " · compiled through Encounter</footer></body></html>")
+  port digest.sha256 { text = $content } → hash
+  let result = { name = concat($record.id, $extension); text = $content; sha256 = $hash; format = $format; sourceHash = $state.documentHash; profile = $standard.profile }
+
+process cs.csv:
+  fold $eventInput as value; cells starts list():
+    let input = $value
+    when isArray($value):
+      port text.join { values = $value; separator = " | " } → input
+    port json.stringify { value = $input } → printable
+    port value.describe { value = $input } → kind
+    when eq($kind.type, "string"):
+      let printable = $input
+    port text.split { value = $printable; pattern = "\"" } → parts
+    port text.join { values = $parts; separator = "\"\"" } → escaped
+    port text.matches { value = $escaped; pattern = "^[=+@\\-]" } → formula
+    yield append($cells, list(concat("\"", if($formula, "'", ""), $escaped, "\""))) → cells
+  port text.join { values = $cells; separator = "," } → result
+
+process mw.indexCheck:
+  let index = $eventInput
+  assert isArray($index.items)
+    otherwise "MW-INDEX: Matter list is invalid."
+  port number.calculate { operation = "lessEqual"; values = list(count($index.items), 6) } → bounded
+  assert $bounded
+    otherwise "MW-LIMIT: Six local matters in this profile."
+  each $index.items as item:
+    port kernel.invoke { query = "ws.id"; input = $item.id } → valid
+    port kernel.invoke { query = "mw.text"; input = { value = $item.title; required = true; maximum = 160 } } → valid
+    assert eq(count(filter($index.items, "r", eq($r.id, $item.id))), 1)
+      otherwise "MW-INDEX: Duplicate matter identifier."
+  when not(eq($index.selected, "")):
+    assert eq(count(filter($index.items, "r", eq($r.id, $index.selected))), 1)
+      otherwise "MW-INDEX: Selected matter is not registered."
+  let result = true
+
+process mw.saveIndex:
+  port kernel.invoke { query = "mw.indexCheck"; input = $nextIndex } → valid
+  port json.stringify { value = $nextIndex; space = 0 } → encodedIndex
+  port storage.write { key = concat("usewords.matters.index.v1.", $data.programHash); value = $encodedIndex } → storedIndex
+  assert $storedIndex.ok
+    otherwise "MW-STORAGE: Could not save the local matter list."
+
+process mw.boot:
+  port state.set { key = "matterIndex"; value = { items = list(); selected = "" } } → _
+  port state.set { key = "matterBrief"; value = null } → _
+  port state.set { key = "matterSuggestions"; value = null } → _
+  port state.set { key = "workspaceNotice"; value = "Begin with what matters to you. You can give it structure without deciding how it must end." } → _
+  try:
+    port storage.read { key = concat("usewords.matters.index.v1.", $data.programHash); maxLength = 20000 } → stored
+    when and($stored.ok, not(eq($stored.value, null))):
+      port json.parse { text = $stored.value } → index
+      port kernel.invoke { query = "mw.indexCheck"; input = $index } → valid
+      port state.set { key = "matterIndex"; value = $index } → _
+      when not(eq($index.selected, "")):
+        let matterId = $index.selected
+        call mw.readBoard
+        call mw.activateBoard
+        port state.set { key = "workspaceNotice"; value = "Restored this matter and its proposal history after replay. Its lifecycle and framings were preserved." } → _
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Saved matter could not be opened; its stored records were retained. ", $fault.message) } → _
+  call mm.boot
+  call pc.boot
+  each list({ ref = "#mw-example"; query = "mw.exampleUI" }, { ref = "#mw-prepare"; query = "mw.briefUI" }, { ref = "#mw-check-ai"; query = "mw.checkUI" }, { ref = "#mw-propose-ai"; query = "mw.suggestUI" }, { ref = "#mw-dismiss-ai"; query = "mw.dismissUI" }, { ref = "#mw-import"; query = "mw.importUI" }, { ref = "#mw-export"; query = "cw.exportUI" }) as binding:
+    port browser.on { ref = $binding.ref; event = "click"; query = $binding.query; input = { }; preventDefault = false } → _
+  port browser.on { ref = "#mw-create"; event = "submit"; query = "mw.createUI"; input = { }; preventDefault = true } → _
+  port browser.on { ref = "#mw-item-form"; event = "submit"; query = "mw.itemUI"; input = { }; preventDefault = true } → _
+  port browser.on { ref = "#mw-select"; event = "change"; query = "mw.selectUI"; input = { }; preventDefault = false } → _
+
+process mw.exampleUI:
+  port browser.write { ref = "#mw-title"; name = "value"; value = "A shared workshop space" } → _
+  port browser.write { ref = "#mw-description"; name = "value"; value = "A community group wants to open a shared workshop. Some members prioritise low fees; others want enough paid staff to make opening hours reliable. We do not yet know likely usage or operating costs. We want to understand the different priorities and possibilities before making a decision." } → _
+
+process mw.createUI:
+  try:
+    port browser.property { ref = "#cw-actor"; name = "value" } → actorId
+    port kernel.invoke { query = "cw.member"; input = $actorId } → actor
+    assert $actor.canChange
+      otherwise "CW-ROLE: An observer cannot create a matter."
+    port state.get { key = "matterIndex" } → index
+    port browser.property { ref = "#mw-title"; name = "value" } → title
+    port browser.property { ref = "#mw-description"; name = "value" } → description
+    let matterId = concat("matter_", add(count($index.items), 1))
+    let nextIndex = { items = append($index.items, list({ id = $matterId; title = $title })); selected = $matterId }
+    port kernel.invoke { query = "mw.indexCheck"; input = $nextIndex } → valid
+    port kernel.invoke { query = "mw.create"; input = { id = $matterId; title = $title; description = $description } } → board
+    port kernel.invoke { query = "cw.receipt"; input = $board } → receipt
+    port json.stringify { value = $receipt; space = 0 } → encoded
+    call mw.installBoard
+    port state.set { key = "workspaceNotice"; value = "Matter created and saved in this browser. Its description is your starting framing; no agreement or resolution is implied." } → _
+    call ws.paint
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+# Creation/import is registered only after the exact board and index are saved.
+process mw.installBoard:
+  port kernel.invoke { query = "mm.summary"; input = $board } → summary
+  let nextIndex = { items = map($nextIndex.items, "m", if(eq($m.id, $matterId), $summary, $m)); selected = $nextIndex.selected }
+  port kernel.invoke { query = "mw.storageKey"; input = $matterId } → key
+  port storage.write { key = $key; value = $encoded } → stored
+  assert $stored.ok
+    otherwise "MW-STORAGE: Could not keep the new matter. Previous selection remains active."
+  call mw.saveIndex
+  port state.set { key = "matterIndex"; value = $nextIndex } → _
+  port state.set { key = "collaboration"; value = $board } → _
+  port state.set { key = "workspace"; value = $board.head } → _
+  port state.set { key = "collaborationSelected"; value = "" } → _
+  port state.set { key = "matterBrief"; value = null } → _
+  port state.set { key = "matterSuggestions"; value = null } → _
+  call mw.clearDrafts
+
+process mw.readBoard:
+  port kernel.invoke { query = "mw.storageKey"; input = $matterId } → key
+  port storage.read { key = $key; maxLength = 300000 } → stored
+  assert and($stored.ok, not(eq($stored.value, null)))
+    otherwise "MW-STORAGE: This matter's board is unavailable."
+  port json.parse { text = $stored.value } → receipt
+  port kernel.invoke { query = "cw.reconstruct"; input = $receipt } → board
+  assert eq($board.head.document.matter.id, $matterId)
+    otherwise "MW-SCOPE: Stored board belongs to another matter."
+
+process mw.activateBoard:
+  port state.set { key = "collaboration"; value = $board } → _
+  port state.set { key = "workspace"; value = $board.head } → _
+  port state.set { key = "collaborationSelected"; value = "" } → _
+  port state.set { key = "matterBrief"; value = null } → _
+  port state.set { key = "matterSuggestions"; value = null } → _
+  call mw.clearDrafts
+  try:
+    call mm.syncIndex
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Matter replayed; its register summary could not be refreshed. ", $fault.message) } → _
+  try:
+    port storage.read { key = concat($key, ".ai"); maxLength = 140000 } → savedAI
+    when and($savedAI.ok, not(eq($savedAI.value, null))):
+      port json.parse { text = $savedAI.value } → ai
+      assert eq($ai.brief.request.matterId, $matterId)
+        otherwise "MW-SCOPE: AI draft belongs to another matter."
+      port kernel.invoke { query = "mw.checkBrief"; input = $ai.brief } → source
+      when $ai.package:
+        assert eq($ai.package.brief, $ai.brief)
+          otherwise "MW-SCOPE: Saved suggestions belong to a different brief."
+        port kernel.invoke { query = "mw.checkSuggestions"; input = $ai.package } → checked
+      port state.set { key = "matterBrief"; value = $ai.brief } → _
+      port state.set { key = "matterSuggestions"; value = $ai.package } → _
+      when $ai.package:
+        port json.stringify { value = $ai.package.response; space = 2 } → responseText
+        port browser.write { ref = "#mw-ai-response"; name = "value"; value = $responseText } → _
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Matter opened; AI draft was refused and retained: ", $fault.message) } → _
+
+process mw.selectUI:
+  try:
+    port browser.property { ref = "#mw-select"; name = "value" } → matterId
+    port state.get { key = "matterIndex" } → index
+    let nextIndex = { items = $index.items; selected = $matterId }
+    port kernel.invoke { query = "mw.indexCheck"; input = $nextIndex } → valid
+    when not(eq($matterId, "")):
+      call mw.readBoard
+      call mw.saveIndex
+      port state.set { key = "matterIndex"; value = $nextIndex } → _
+      call mw.activateBoard
+      port state.set { key = "workspaceNotice"; value = "Opened this matter after replay. Other matters and AI drafts remain separate." } → _
+      call ws.paint
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Could not open matter: ", $fault.message) } → _
+    call ws.showNotice
+
+process mw.persistAI:
+  port state.get { key = "matterBrief" } → brief
+  port state.get { key = "matterSuggestions" } → package
+  let nextAI = { brief = $brief; package = $package }
+  call mw.storeAI
+
+process mw.storeAI:
+  port state.get { key = "workspace" } → state
+  port json.stringify { value = $nextAI; space = 0 } → encodedAI
+  port number.calculate { operation = "lessEqual"; values = list(count($encodedAI), 140000) } → bounded
+  assert $bounded
+    otherwise "MW-LIMIT: AI draft exceeds the local profile."
+  port kernel.invoke { query = "mw.storageKey"; input = $state.document.matter.id } → key
+  port storage.write { key = concat($key, ".ai"); value = $encodedAI } → storedAI
+  assert $storedAI.ok
+    otherwise "MW-STORAGE: Could not save AI draft. Previous draft is unchanged."
+  port state.set { key = "matterBrief"; value = $nextAI.brief } → _
+  port state.set { key = "matterSuggestions"; value = $nextAI.package } → _
+
+process mw.briefUI:
+  try:
+    port state.get { key = "workspace" } → state
+    port kernel.invoke { query = "mw.brief"; input = $state } → brief
+    let nextAI = { brief = $brief; package = null }
+    call mw.storeAI
+    port browser.write { ref = "#mw-ai-response"; name = "value"; value = "" } → _
+    port state.set { key = "workspaceNotice"; value = "Brief prepared below for your agent. Inspect it before sharing. Nothing was sent automatically." } → _
+    call mw.paint
+    call ws.showNotice
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process mw.checkResponseUI:
+  port state.get { key = "workspace" } → state
+  port state.get { key = "matterBrief" } → brief
+  assert $brief
+    otherwise "MW-AI: Prepare a brief first."
+  assert eq($state.documentHash, $brief.request.sourceHash)
+    otherwise "MW-STALE: Matter changed while the agent was working. Prepare a new brief."
+  port kernel.invoke { query = "mw.checkSuggestions"; input = { brief = $brief; response = $response } } → checked
+  let nextAI = { brief = $brief; package = $checked }
+  call mw.storeAI
+  call mw.paint
+
+process mw.checkUI:
+  try:
+    port browser.property { ref = "#mw-ai-response"; name = "value" } → encoded
+    port number.calculate { operation = "lessEqual"; values = list(count($encoded), 50000) } → bounded
+    assert $bounded
+      otherwise "MW-AI: Response exceeds the import limit."
+    port json.parse { text = $encoded } → response
+    call mw.checkResponseUI
+    port state.set { key = "workspaceNotice"; value = "Suggestions checked and saved as AI framing. Select one to propose; nothing has entered the matter or resolved an issue." } → _
+    call ws.showNotice
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process mw.propose:
+  port state.get { key = "collaboration" } → board
+  port browser.property { ref = "#cw-actor"; name = "value" } → actor
+  let input = { action = "propose"; actor = $actor; expectedBoardRevision = $board.revision; id = concat("proposal_", add(count($board.proposals), 1)); title = concat("Frame ", $change.item.kind, ": ", $change.item.title); change = $change }
+  call cw.commitUI
+  port browser.write { ref = "#mw-workbench"; name = "open"; value = true } → _
+
+process mw.suggestUI:
+  try:
+    port state.get { key = "workspace" } → state
+    port state.get { key = "matterSuggestions" } → package
+    assert $package
+      otherwise "MW-AI: Import checked suggestions first."
+    port browser.property { ref = "#mw-suggestion"; name = "value" } → id
+    port kernel.invoke { query = "mw.suggestionChange"; input = { state = $state; package = $package; id = $id } } → change
+    call mw.propose
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process mw.dismissUI:
+  try:
+    port state.get { key = "matterBrief" } → brief
+    assert $brief
+      otherwise "MW-AI: No AI draft to dismiss."
+    let nextAI = { brief = $brief; package = null }
+    call mw.storeAI
+    port browser.write { ref = "#mw-ai-response"; name = "value"; value = "" } → _
+    call mw.paint
+    port state.set { key = "workspaceNotice"; value = "Suggestion draft dismissed. Existing contributions and open questions are unchanged." } → _
+    call ws.showNotice
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Could not save dismissal: ", $fault.message) } → _
+    call ws.showNotice
+
+process mw.itemUI:
+  try:
+    port state.get { key = "workspace" } → state
+    port browser.property { ref = "#mw-kind"; name = "value" } → kind
+    port browser.property { ref = "#mw-item-id"; name = "value" } → id
+    port browser.property { ref = "#mw-item-title"; name = "value" } → title
+    port browser.property { ref = "#mw-item-body"; name = "value" } → body
+    port browser.property { ref = "#mw-issue"; name = "value" } → issueId
+    port browser.property { ref = "#mw-voice"; name = "value" } → voice
+    port browser.property { ref = "#cw-actor"; name = "value" } → actor
+    let change = { kind = "matter-item"; matterId = $state.document.matter.id; item = { id = $id; kind = $kind; title = $title; body = $body; issue = if(eq($kind, "issue"), null, $issueId); voice = if(eq($kind, "position"), $voice, null) }; origin = { kind = "participant"; label = $actor; briefHash = null; sourceHash = null }; baseRevision = $state.revision }
+    call mw.propose
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process mw.paint:
+  port state.get { key = "workspace" } → state
+  call mm.paint
+  call pc.paint
+  port state.get { key = "matterIndex" } → index
+  port state.get { key = "matterBrief" } → brief
+  port state.get { key = "matterSuggestions" } → package
+  let matter = at($state.document, "matter")
+  port browser.write { ref = "#mw-active"; name = "hidden"; value = not($matter) } → _
+  port kernel.invoke { query = "ws.options"; input = { items = append(list({ value = ""; label = "Choose a local matter" }), map($index.items, "m", { value = $m.id; label = $m.title })); selected = $index.selected } } → html
+  port browser.content { ref = "#mw-select"; html = $html } → _
+  when $matter:
+    port browser.write { ref = "#mw-name"; name = "textContent"; value = $matter.title } → _
+    port browser.write { ref = "#mw-narrative"; name = "textContent"; value = $matter.description } → _
+    port browser.write { ref = "#mw-status"; name = "textContent"; value = concat(if(eq($matter.status, "open"), "Open matter", $matter.status), " · ", count(filter($matter.items, "r", eq($r.item.kind, "issue"))), " issues · ", count(filter($matter.items, "r", eq($r.item.kind, "position"))), " positions · ", count(filter($matter.items, "r", eq($r.item.kind, "option"))), " possible approaches. Recording a framing does not endorse a claim or settle the matter.") } → _
+    each list({ kind = "issue"; ref = "#mw-issues" }, { kind = "position"; ref = "#mw-positions" }, { kind = "option"; ref = "#mw-options" }) as group:
+      fold filter($matter.items, "r", eq($r.item.kind, $group.kind)) as record; cards starts list():
+        let item = $record.item
+        yield append($cards, list({ tag = "article"; attrs = { class = "mw-card" }; children = list({ tag = "h4"; attrs = { }; children = list($item.title) }, { tag = "p"; attrs = { }; children = list($item.body) }, { tag = "p"; attrs = { class = "muted" }; children = list(concat($record.standing, if($item.issue, concat(" · issue: ", $item.issue), ""), if($item.voice, concat(" · perspective: ", $item.voice), ""))) }, { tag = "p"; attrs = { class = "mw-origin" }; children = list(concat(if(eq($record.origin.kind, "ai-suggestion"), "AI-origin framing · ", "Participant framing · "), $record.origin.label)) }) })) → cards
+      let input = { tag = "div"; attrs = { }; children = if(eq(count($cards), 0), list({ tag = "p"; attrs = { class = "muted" }; children = list("Nothing incorporated here yet. It is fine to leave this open.") }), $cards) }
+      call html.serialize
+      port browser.content { ref = $group.ref; html = $result } → _
+    port browser.property { ref = "#mw-issue"; name = "value" } → selectedIssue
+    port kernel.invoke { query = "ws.options"; input = { items = map(filter($matter.items, "r", eq($r.item.kind, "issue")), "r", { value = $r.item.id; label = $r.item.title }); selected = $selectedIssue } } → html
+    port browser.content { ref = "#mw-issue"; html = $html } → _
+    port browser.write { ref = "#mw-brief"; name = "value"; value = "" } → _
+    when $brief:
+      port json.stringify { value = { request = $brief.request; sha256 = $brief.sha256 }; space = 2 } → encoded
+      port browser.write { ref = "#mw-brief"; name = "value"; value = $encoded } → _
+    port browser.content { ref = "#mw-suggestion-cards"; html = "" } → _
+    port browser.content { ref = "#mw-suggestion"; html = "" } → _
+    when $package:
+      port kernel.invoke { query = "ws.options"; input = { items = map($package.response.items, "s", { value = $s.id; label = concat($s.kind, " · ", $s.title) }); selected = "" } } → html
+      port browser.content { ref = "#mw-suggestion"; html = $html } → _
+      fold $package.response.items as item; cards starts list():
+        yield append($cards, list({ tag = "article"; attrs = { class = "mw-card" }; children = list({ tag = "h4"; attrs = { }; children = list(concat($item.kind, " · ", $item.title)) }, { tag = "p"; attrs = { }; children = list($item.body) }, { tag = "p"; attrs = { class = "muted" }; children = list(concat("AI suggestion, not incorporated", if($item.issue, concat(" · linked issue: ", $item.issue), ""))) }) })) → cards
+      let input = { tag = "div"; attrs = { }; children = append(list({ tag = "p"; attrs = { class = "muted" }; children = list(concat("Agent label (self-reported): ", $package.response.provider, if(eq($state.documentHash, $package.brief.request.sourceHash), " · based on this version", " · based on an earlier version; recheck each suggestion against the current matter"))) }), $cards) }
+      call html.serialize
+      port browser.content { ref = "#mw-suggestion-cards"; html = $result } → _
+
+process mw.importUI:
+  try:
+    port browser.property { ref = "#cw-actor"; name = "value" } → actorId
+    port kernel.invoke { query = "cw.member"; input = $actorId } → actor
+    assert $actor.canChange
+      otherwise "CW-ROLE: An observer cannot import a matter."
+    port browser.property { ref = "#mw-import-text"; name = "value" } → encoded
+    port number.calculate { operation = "lessEqual"; values = list(count($encoded), 300000) } → bounded
+    assert $bounded
+      otherwise "MW-IMPORT: History exceeds the local import limit."
+    port json.parse { text = $encoded } → receipt
+    port kernel.invoke { query = "cw.reconstruct"; input = $receipt } → board
+    let matter = at($board.head.document, "matter")
+    assert $matter
+      otherwise "MW-IMPORT: This history contains no matter."
+    port state.get { key = "matterIndex" } → index
+    assert eq(count(filter($index.items, "m", eq($m.id, $matter.id))), 0)
+      otherwise "MW-IMPORT: This identifier already exists. Existing matters are never replaced."
+    let matterId = $matter.id
+    let nextIndex = { items = append($index.items, list({ id = $matterId; title = $matter.title })); selected = $matterId }
+    port kernel.invoke { query = "mw.indexCheck"; input = $nextIndex } → valid
+    call mw.installBoard
+    port state.set { key = "workspaceNotice"; value = "Imported this matter and its history after exact replay. Origin labels remain self-reported; separate AI drafts are not included." } → _
+    call ws.paint
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process mw.clearDrafts:
+  each list("#mm-reason", "#mm-capacity", "#mm-request-id", "#mm-request-title", "#mm-response-text", "#mm-link-id", "#mm-link-note", "#mw-ai-response", "#mw-item-id", "#mw-item-title", "#mw-item-body", "#mw-voice", "#cw-title", "#cw-comment", "#ws-object-id", "#ws-journey-id", "#ws-journey-name", "#ws-entry-id") as ref:
+    port browser.write { ref = $ref; name = "value"; value = "" } → _
+  port state.set { key = "workspaceObjectFormType"; value = null } → _
+  port browser.write { ref = "#ws-definition"; name = "value"; value = "construct Reflection\nfield question text shared required max 200\nfield invitation text local optional max 600\nheading question\nparagraph invitation" } → _

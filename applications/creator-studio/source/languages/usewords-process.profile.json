@@ -1,0 +1,80 @@
+{
+  "protocol": "encounter-process-text/2",
+  "status": "selected-usewords-syntax-profile",
+  "operators": [
+    "add",
+    "and",
+    "append",
+    "at",
+    "concat",
+    "count",
+    "eq",
+    "filter",
+    "if",
+    "includes",
+    "isArray",
+    "list",
+    "map",
+    "not",
+    "or"
+  ],
+  "forbidden": [
+    "__proto__",
+    "prototype",
+    "constructor"
+  ],
+  "referenceSigil": "$",
+  "directPorts": [
+    "browser.content",
+    "browser.delay",
+    "browser.focus",
+    "browser.on",
+    "browser.property",
+    "browser.write",
+    "digest.sha256",
+    "dom.exists",
+    "download.text",
+    "json.parse",
+    "json.stringify",
+    "kernel.invoke",
+    "number.calculate",
+    "number.parse",
+    "record.entries",
+    "record.get",
+    "record.put",
+    "state.get",
+    "state.set",
+    "storage.read",
+    "storage.write",
+    "text.join",
+    "text.match",
+    "text.matches",
+    "text.slice",
+    "text.split",
+    "text.trim",
+    "text.utf8Length",
+    "value.describe"
+  ],
+  "maxDepth": 64,
+  "maxCodeUnits": 160000,
+  "maxTokens": 36000,
+  "name": "usewords/process/1",
+  "emitProfile": false,
+  "statementForms": [
+    "assert",
+    "call",
+    "fold",
+    "let",
+    "port",
+    "try",
+    "when",
+    "each"
+  ],
+  "statementFieldOrder": {
+    "try": [
+      "try",
+      "error",
+      "catch"
+    ]
+  }
+}

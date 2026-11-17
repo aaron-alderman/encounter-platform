@@ -1,0 +1,875 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+# Stylesheet plan for the retained workbench.
+
+process owner.style:
+  let styleProjection = {
+    rules = append(list(
+      {
+        selector = ":root";
+        declarations = list(
+          { name = "color-scheme"; value = "light" },
+          { name = "font-family"; value = "system-ui, sans-serif" },
+          { name = "color"; value = "#2c2724" },
+          { name = "background"; value = "#f8f6f1" },
+          { name = "font-size"; value = "15px" },
+          { name = "line-height"; value = "1.6" },
+          { name = "--ink"; value = "#2c2724" },
+          { name = "--muted"; value = "#706860" },
+          { name = "--line"; value = "#ded8ce" },
+          { name = "--accent"; value = "#974835" },
+          { name = "--paper"; value = "#fffdf8" }
+        )
+      },
+      { selector = "*"; declarations = list({ name = "box-sizing"; value = "border-box" }) },
+      { selector = "body"; declarations = list({ name = "margin"; value = "0" }) },
+      { selector = "button, textarea"; declarations = list({ name = "font"; value = "inherit" }) },
+      {
+        selector = "button";
+        declarations = list(
+          { name = "cursor"; value = "pointer" },
+          { name = "min-height"; value = "44px" },
+          { name = "background"; value = "transparent" },
+          { name = "border"; value = "1px solid var(--line)" },
+          { name = "color"; value = "var(--ink)" },
+          { name = "padding"; value = "10px 14px" },
+          { name = "border-radius"; value = "6px" }
+        )
+      },
+      { selector = "button:hover"; declarations = list({ name = "background"; value = "#eee9e0" }) },
+      {
+        selector = ":focus-visible";
+        declarations = list({ name = "outline"; value = "3px solid #a34c35" }, { name = "outline-offset"; value = "4px" })
+      },
+      { selector = "a"; declarations = list({ name = "color"; value = "inherit" }) },
+      {
+        selector = ".masthead";
+        declarations = list(
+          { name = "display"; value = "flex" },
+          { name = "align-items"; value = "center" },
+          { name = "gap"; value = "24px" },
+          { name = "padding"; value = "22px 5vw" },
+          { name = "border-bottom"; value = "1px solid var(--line)" }
+        )
+      },
+      {
+        selector = ".wordmark";
+        declarations = list(
+          { name = "font-family"; value = "Georgia,serif" },
+          { name = "font-size"; value = "30px" },
+          { name = "font-weight"; value = "bold" },
+          { name = "text-decoration"; value = "none" },
+          { name = "letter-spacing"; value = "-1px" }
+        )
+      },
+      { selector = ".masthead-note"; declarations = list({ name = "color"; value = "var(--muted)" }) },
+      {
+        selector = ".source-link";
+        declarations = list(
+          { name = "margin-left"; value = "auto" },
+          { name = "font-size"; value = "13px" },
+          { name = "text-underline-offset"; value = "4px" }
+        )
+      },
+      {
+        selector = "main";
+        declarations = list(
+          { name = "max-width"; value = "1240px" },
+          { name = "margin"; value = "0 auto" },
+          { name = "padding"; value = "0 5vw" }
+        )
+      },
+      { selector = ".intro"; declarations = list({ name = "padding"; value = "58px 0 34px" }) },
+      {
+        selector = ".eyebrow";
+        declarations = list(
+          { name = "font-size"; value = "11px" },
+          { name = "font-weight"; value = "700" },
+          { name = "letter-spacing"; value = "1.8px" },
+          { name = "color"; value = "var(--accent)" },
+          { name = "margin"; value = "0 0 12px" }
+        )
+      },
+      { selector = "h1, h2, h3, p"; declarations = list({ name = "margin"; value = "0" }) },
+      {
+        selector = "h1";
+        declarations = list(
+          { name = "font-family"; value = "Georgia,serif" },
+          { name = "font-size"; value = "clamp(35px,4.6vw,58px)" },
+          { name = "font-weight"; value = "400" },
+          { name = "letter-spacing"; value = "-1.5px" },
+          { name = "line-height"; value = "1.1" },
+          { name = "margin-bottom"; value = "18px" }
+        )
+      },
+      {
+        selector = "h2";
+        declarations = list(
+          { name = "font-family"; value = "Georgia,serif" },
+          { name = "font-size"; value = "26px" },
+          { name = "font-weight"; value = "400" },
+          { name = "line-height"; value = "1.25" },
+          { name = "margin-bottom"; value = "12px" }
+        )
+      },
+      {
+        selector = "h3";
+        declarations = list({ name = "font-size"; value = "15px" }, { name = "margin-bottom"; value = "12px" })
+      },
+      {
+        selector = ".lede";
+        declarations = list(
+          { name = "max-width"; value = "690px" },
+          { name = "color"; value = "var(--muted)" },
+          { name = "font-size"; value = "17px" }
+        )
+      },
+      {
+        selector = ".provenance";
+        declarations = list(
+          { name = "display"; value = "flex" },
+          { name = "flex-wrap"; value = "wrap" },
+          { name = "gap"; value = "12px 28px" },
+          { name = "margin-top"; value = "25px" },
+          { name = "font-size"; value = "12px" },
+          { name = "color"; value = "var(--muted)" }
+        )
+      },
+      {
+        selector = ".workspace";
+        declarations = list(
+          { name = "display"; value = "grid" },
+          { name = "grid-template-columns"; value = "minmax(0,.85fr) minmax(0,1.25fr)" },
+          { name = "gap"; value = "40px" },
+          { name = "align-items"; value = "start" },
+          { name = "border-top"; value = "1px solid var(--line)" },
+          { name = "padding"; value = "32px 0 44px" }
+        )
+      },
+      { selector = ".words-panel, .preview"; declarations = list({ name = "min-width"; value = "0" }) },
+      {
+        selector = ".muted";
+        declarations = list({ name = "color"; value = "var(--muted)" }, { name = "font-size"; value = "14px" })
+      },
+      { selector = "form"; declarations = list({ name = "margin-top"; value = "24px" }) },
+      {
+        selector = "label";
+        declarations = list(
+          { name = "display"; value = "block" },
+          { name = "font-size"; value = "13px" },
+          { name = "font-weight"; value = "600" },
+          { name = "margin-bottom"; value = "8px" }
+        )
+      },
+      {
+        selector = "textarea";
+        declarations = list(
+          { name = "display"; value = "block" },
+          { name = "width"; value = "100%" },
+          { name = "resize"; value = "vertical" },
+          { name = "padding"; value = "14px" },
+          { name = "background"; value = "var(--paper)" },
+          { name = "border"; value = "1px solid #bfb5a8" },
+          { name = "border-radius"; value = "8px" },
+          { name = "color"; value = "var(--ink)" },
+          { name = "line-height"; value = "1.6" },
+          { name = "font-size"; value = "16px" }
+        )
+      },
+      {
+        selector = ".primary";
+        declarations = list(
+          { name = "background"; value = "var(--accent)" },
+          { name = "color"; value = "#fffaf4" },
+          { name = "border"; value = "1px solid var(--accent)" },
+          { name = "font-weight"; value = "600" }
+        )
+      },
+      { selector = ".primary:hover"; declarations = list({ name = "background"; value = "#793b2b" }) },
+      {
+        selector = "form .primary";
+        declarations = list({ name = "margin-top"; value = "12px" }, { name = "width"; value = "100%" })
+      },
+      {
+        selector = ".examples";
+        declarations = list(
+          { name = "display"; value = "flex" },
+          { name = "flex-wrap"; value = "wrap" },
+          { name = "gap"; value = "7px" },
+          { name = "margin-top"; value = "14px" }
+        )
+      },
+      {
+        selector = ".examples button";
+        declarations = list({ name = "font-size"; value = "12px" }, { name = "padding"; value = "6px 10px" })
+      },
+      {
+        selector = ".hint";
+        declarations = list(
+          { name = "font-size"; value = "12px" },
+          { name = "color"; value = "var(--muted)" },
+          { name = "line-height"; value = "1.55" },
+          { name = "margin-top"; value = "10px" }
+        )
+      },
+      {
+        selector = ".notice";
+        declarations = list(
+          { name = "margin-top"; value = "22px" },
+          { name = "padding"; value = "14px 16px" },
+          { name = "background"; value = "#eee8df" },
+          { name = "border-left"; value = "3px solid var(--accent)" },
+          { name = "font-size"; value = "13px" }
+        )
+      },
+      {
+        selector = ".error";
+        declarations = list({ name = "color"; value = "#9b251d" }, { name = "overflow-wrap"; value = "anywhere" })
+      },
+      {
+        selector = ".agreement";
+        declarations = list({ name = "margin-top"; value = "28px" }, { name = "font-size"; value = "13px" })
+      },
+      {
+        selector = ".agreement>p";
+        declarations = list({ name = "padding"; value = "6px 0" }, { name = "border-bottom"; value = "1px solid var(--line)" })
+      },
+      {
+        selector = ".section-head";
+        declarations = list(
+          { name = "display"; value = "flex" },
+          { name = "flex-wrap"; value = "wrap" },
+          { name = "gap"; value = "12px" },
+          { name = "justify-content"; value = "space-between" },
+          { name = "align-items"; value = "center" },
+          { name = "margin-bottom"; value = "14px" }
+        )
+      },
+      {
+        selector = ".revision";
+        declarations = list(
+          { name = "font-size"; value = "12px" },
+          { name = "padding"; value = "5px 10px" },
+          { name = "border-radius"; value = "20px" },
+          { name = "background"; value = "#e8e6db" }
+        )
+      },
+      {
+        selector = ".reader-frame";
+        declarations = list(
+          { name = "background"; value = "var(--paper)" },
+          { name = "border"; value = "1px solid var(--line)" },
+          { name = "border-radius"; value = "10px" },
+          { name = "overflow"; value = "hidden" }
+        )
+      },
+      {
+        selector = ".reader-top";
+        declarations = list(
+          { name = "display"; value = "flex" },
+          { name = "justify-content"; value = "space-between" },
+          { name = "flex-wrap"; value = "wrap" },
+          { name = "gap"; value = "8px" },
+          { name = "padding"; value = "12px 20px" },
+          { name = "border-bottom"; value = "1px solid var(--line)" },
+          { name = "font-size"; value = "10px" },
+          { name = "letter-spacing"; value = "1px" },
+          { name = "color"; value = "var(--muted)" }
+        )
+      },
+      {
+        selector = "#reading";
+        declarations = list({ name = "padding"; value = "32px" }, { name = "min-height"; value = "220px" })
+      },
+      {
+        selector = "#reading h2";
+        declarations = list({ name = "font-size"; value = "30px" }, { name = "margin-bottom"; value = "24px" })
+      },
+      {
+        selector = "#reading p";
+        declarations = list(
+          { name = "font-family"; value = "Georgia,serif" },
+          { name = "font-size"; value = "18px" },
+          { name = "margin-bottom"; value = "16px" },
+          { name = "line-height"; value = "1.7" }
+        )
+      },
+      {
+        selector = ".alternate-views";
+        declarations = list(
+          { name = "display"; value = "grid" },
+          { name = "grid-template-columns"; value = "1fr 1fr" },
+          { name = "gap"; value = "14px" },
+          { name = "margin-top"; value = "16px" }
+        )
+      },
+      {
+        selector = ".view";
+        declarations = list(
+          { name = "background"; value = "var(--paper)" },
+          { name = "border"; value = "1px solid var(--line)" },
+          { name = "border-radius"; value = "9px" },
+          { name = "padding"; value = "17px" },
+          { name = "min-width"; value = "0" }
+        )
+      },
+      {
+        selector = ".row-button, .menu-button";
+        declarations = list(
+          { name = "display"; value = "flex" },
+          { name = "width"; value = "100%" },
+          { name = "text-align"; value = "left" },
+          { name = "align-items"; value = "center" },
+          { name = "justify-content"; value = "space-between" },
+          { name = "gap"; value = "12px" },
+          { name = "border"; value = "0" },
+          { name = "padding"; value = "8px 0" }
+        )
+      },
+      {
+        selector = ".row-number";
+        declarations = list({ name = "color"; value = "var(--muted)" }, { name = "font-family"; value = "monospace" })
+      }
+    ), append(list(
+      { selector = "#row-title, #menu-title"; declarations = list({ name = "overflow-wrap"; value = "anywhere" }) },
+      {
+        selector = ".accept-bar";
+        declarations = list(
+          { name = "display"; value = "flex" },
+          { name = "flex-wrap"; value = "wrap" },
+          { name = "gap"; value = "16px" },
+          { name = "justify-content"; value = "space-between" },
+          { name = "align-items"; value = "center" },
+          { name = "margin-top"; value = "24px" },
+          { name = "padding"; value = "20px 0" },
+          { name = "border-top"; value = "1px solid var(--line)" }
+        )
+      },
+      { selector = ".accept-bar strong"; declarations = list({ name = "font-size"; value = "14px" }) },
+      { selector = ".accept-bar .hint"; declarations = list({ name = "margin-top"; value = "3px" }) },
+      {
+        selector = ".inspection";
+        declarations = list({ name = "border-top"; value = "1px solid var(--line)" }, { name = "padding"; value = "34px 0" })
+      },
+      {
+        selector = ".inspection-tabs";
+        declarations = list(
+          { name = "display"; value = "flex" },
+          { name = "flex-wrap"; value = "wrap" },
+          { name = "gap"; value = "7px" },
+          { name = "margin-bottom"; value = "15px" }
+        )
+      },
+      { selector = ".inspection-tabs button"; declarations = list({ name = "font-size"; value = "12px" }) },
+      {
+        selector = ".source-caption";
+        declarations = list(
+          { name = "display"; value = "flex" },
+          { name = "flex-direction"; value = "column" },
+          { name = "gap"; value = "6px" },
+          { name = "font-size"; value = "12px" },
+          { name = "padding"; value = "14px 18px" },
+          { name = "background"; value = "#ebe6dd" },
+          { name = "border-radius"; value = "8px 8px 0 0" }
+        )
+      },
+      {
+        selector = "code";
+        declarations = list({ name = "font-size"; value = "11px" }, { name = "overflow-wrap"; value = "anywhere" })
+      },
+      {
+        selector = "pre";
+        declarations = list(
+          { name = "margin"; value = "0" },
+          { name = "padding"; value = "18px" },
+          { name = "background"; value = "#f0ece4" },
+          { name = "color"; value = "#3d3934" },
+          { name = "font-size"; value = "12px" },
+          { name = "line-height"; value = "1.65" },
+          { name = "max-height"; value = "330px" },
+          { name = "overflow"; value = "auto" },
+          { name = "white-space"; value = "pre-wrap" },
+          { name = "overflow-wrap"; value = "anywhere" },
+          { name = "border-radius"; value = "0 0 8px 8px" }
+        )
+      },
+      { selector = "details"; declarations = list({ name = "margin-top"; value = "22px" }) },
+      {
+        selector = "summary";
+        declarations = list(
+          { name = "cursor"; value = "pointer" },
+          { name = "font-size"; value = "13px" },
+          { name = "min-height"; value = "44px" }
+        )
+      },
+      {
+        selector = ".reproduction";
+        declarations = list(
+          { name = "display"; value = "grid" },
+          { name = "grid-template-columns"; value = "1fr 1fr" },
+          { name = "gap"; value = "40px" },
+          { name = "border-top"; value = "1px solid var(--line)" },
+          { name = "padding"; value = "34px 0" }
+        )
+      },
+      { selector = ".reproduction button"; declarations = list({ name = "margin-top"; value = "12px" }) },
+      {
+        selector = "footer";
+        declarations = list(
+          { name = "border-top"; value = "1px solid var(--line)" },
+          { name = "padding"; value = "25px 0 36px" },
+          { name = "color"; value = "var(--muted)" },
+          { name = "font-size"; value = "12px" },
+          { name = "display"; value = "flex" },
+          { name = "flex-wrap"; value = "wrap" },
+          { name = "justify-content"; value = "space-between" },
+          { name = "gap"; value = "10px" }
+        )
+      },
+      {
+        selector = ".inspection-tabs .is-selected";
+        declarations = list(
+          { name = "background"; value = "var(--ink)" },
+          { name = "color"; value = "var(--paper)" },
+          { name = "border-color"; value = "var(--ink)" }
+        )
+      },
+      {
+        selector = ".workspace";
+        declarations = list(
+          { name = "grid-template-columns"; value = "minmax(0,.66fr) minmax(0,1.6fr)" },
+          { name = "gap"; value = "28px" }
+        )
+      },
+      { selector = ".intro"; declarations = list({ name = "padding"; value = "35px 0 26px" }) },
+      {
+        selector = ".journey-grid";
+        declarations = list(
+          { name = "display"; value = "grid" },
+          { name = "grid-template-columns"; value = "1fr 1fr" },
+          { name = "gap"; value = "16px" }
+        )
+      },
+      {
+        selector = ".journey-card";
+        declarations = list(
+          { name = "background"; value = "var(--paper)" },
+          { name = "border"; value = "1px solid var(--line)" },
+          { name = "border-radius"; value = "10px" },
+          { name = "padding"; value = "21px" },
+          { name = "min-width"; value = "0" }
+        )
+      },
+      {
+        selector = ".journey-card>h3";
+        declarations = list(
+          { name = "font-family"; value = "Georgia,serif" },
+          { name = "font-size"; value = "23px" },
+          { name = "font-weight"; value = "400" },
+          { name = "margin-bottom"; value = "8px" }
+        )
+      },
+      {
+        selector = ".journey-scope";
+        declarations = list(
+          { name = "font-size"; value = "11px" },
+          { name = "color"; value = "var(--muted)" },
+          { name = "padding-bottom"; value = "15px" },
+          { name = "border-bottom"; value = "1px solid var(--line)" },
+          { name = "margin-bottom"; value = "18px" }
+        )
+      },
+      {
+        selector = ".journey-introduction";
+        declarations = list(
+          { name = "font-size"; value = "14px" },
+          { name = "color"; value = "var(--accent)" },
+          { name = "border-left"; value = "2px solid var(--accent)" },
+          { name = "padding-left"; value = "12px" },
+          { name = "margin-bottom"; value = "22px" },
+          { name = "line-height"; value = "1.6" }
+        )
+      },
+      {
+        selector = ".journey-article h2";
+        declarations = list(
+          { name = "font-family"; value = "Georgia,serif" },
+          { name = "font-size"; value = "25px" },
+          { name = "line-height"; value = "1.2" },
+          { name = "margin-bottom"; value = "17px" }
+        )
+      },
+      {
+        selector = ".journey-article p:not(.journey-introduction)";
+        declarations = list(
+          { name = "font-family"; value = "Georgia,serif" },
+          { name = "font-size"; value = "15px" },
+          { name = "line-height"; value = "1.75" },
+          { name = "margin-bottom"; value = "15px" }
+        )
+      },
+      {
+        selector = ".journey-identity";
+        declarations = list(
+          { name = "border-top"; value = "1px solid var(--line)" },
+          { name = "padding-top"; value = "12px" },
+          { name = "font-size"; value = "11px" },
+          { name = "color"; value = "var(--muted)" }
+        )
+      },
+      {
+        selector = ".shared-proof";
+        declarations = list(
+          { name = "background"; value = "#e9eee4" },
+          { name = "padding"; value = "12px 15px" },
+          { name = "border-radius"; value = "6px" },
+          { name = "font-size"; value = "13px" },
+          { name = "margin-bottom"; value = "17px" }
+        )
+      },
+      {
+        selector = "select, input";
+        declarations = list(
+          { name = "font"; value = "inherit" },
+          { name = "font-size"; value = "16px" },
+          { name = "width"; value = "100%" },
+          { name = "padding"; value = "10px" },
+          { name = "border"; value = "1px solid #bfb5a8" },
+          { name = "border-radius"; value = "6px" },
+          { name = "background"; value = "var(--paper)" },
+          { name = "color"; value = "var(--ink)" },
+          { name = "margin-top"; value = "6px" }
+        )
+      },
+      { selector = ".ws-main"; declarations = list({ name = "max-width"; value = "1440px" }) },
+      { selector = ".ws-intro"; declarations = list({ name = "padding"; value = "36px 0 28px" }) },
+      {
+        selector = ".ws-toolbar, .ws-actions";
+        declarations = list(
+          { name = "display"; value = "flex" },
+          { name = "flex-wrap"; value = "wrap" },
+          { name = "gap"; value = "9px" },
+          { name = "align-items"; value = "center" },
+          { name = "margin-top"; value = "20px" }
+        )
+      },
+      {
+        selector = ".ws-toolbar>span";
+        declarations = list(
+          { name = "margin-right"; value = "auto" },
+          { name = "color"; value = "var(--muted)" },
+          { name = "font-size"; value = "13px" }
+        )
+      },
+      {
+        selector = ".ws-layout";
+        declarations = list(
+          { name = "display"; value = "grid" },
+          { name = "grid-template-columns"; value = "minmax(260px,.7fr) minmax(0,1.8fr)" },
+          { name = "gap"; value = "28px" },
+          { name = "align-items"; value = "start" },
+          { name = "margin-bottom"; value = "36px" }
+        )
+      },
+      {
+        selector = ".ws-tools";
+        declarations = list(
+          { name = "display"; value = "grid" },
+          { name = "gap"; value = "12px" },
+          { name = "min-width"; value = "0" }
+        )
+      },
+      {
+        selector = ".ws-panel";
+        declarations = list(
+          { name = "padding"; value = "18px" },
+          { name = "background"; value = "var(--paper)" },
+          { name = "border"; value = "1px solid var(--line)" },
+          { name = "border-radius"; value = "8px" },
+          { name = "margin-top"; value = "0" },
+          { name = "margin-bottom"; value = "12px" },
+          { name = "min-width"; value = "0" }
+        )
+      },
+      {
+        selector = ".ws-panel summary";
+        declarations = list({ name = "font-size"; value = "15px" }, { name = "font-weight"; value = "600" })
+      },
+      { selector = ".ws-panel form"; declarations = list({ name = "margin-top"; value = "12px" }) },
+      {
+        selector = ".ws-panel label, .ws-language label";
+        declarations = list({ name = "margin-top"; value = "13px" }, { name = "font-size"; value = "13px" })
+      },
+      { selector = ".ws-panel button[type=submit]"; declarations = list({ name = "margin-top"; value = "14px" }) },
+      { selector = ".ws-preview"; declarations = list({ name = "min-width"; value = "0" }) },
+      {
+        selector = ".ws-journey-grid";
+        declarations = list(
+          { name = "display"; value = "grid" },
+          { name = "grid-template-columns"; value = "repeat(auto-fit,minmax(min(100%,280px),1fr))" },
+          { name = "gap"; value = "16px" },
+          { name = "margin-top"; value = "20px" }
+        )
+      },
+      {
+        selector = ".ws-journey";
+        declarations = list(
+          { name = "padding"; value = "22px" },
+          { name = "background"; value = "var(--paper)" },
+          { name = "border"; value = "1px solid var(--line)" },
+          { name = "border-radius"; value = "9px" },
+          { name = "min-width"; value = "0" }
+        )
+      },
+      {
+        selector = ".ws-journey>h3";
+        declarations = list(
+          { name = "font-family"; value = "Georgia,serif" },
+          { name = "font-size"; value = "23px" },
+          { name = "font-weight"; value = "400" }
+        )
+      },
+      {
+        selector = ".ws-entry";
+        declarations = list(
+          { name = "margin-top"; value = "20px" },
+          { name = "padding-top"; value = "15px" },
+          { name = "border-top"; value = "1px solid var(--line)" }
+        )
+      },
+      {
+        selector = ".ws-entry-id";
+        declarations = list(
+          { name = "font-size"; value = "11px" },
+          { name = "color"; value = "var(--muted)" },
+          { name = "margin-bottom"; value = "12px" }
+        )
+      },
+      {
+        selector = ".ws-entry article p";
+        declarations = list(
+          { name = "white-space"; value = "pre-line" },
+          { name = "font-family"; value = "Georgia,serif" },
+          { name = "font-size"; value = "15px" },
+          { name = "line-height"; value = "1.7" },
+          { name = "margin-bottom"; value = "14px" }
+        )
+      },
+      { selector = ".ws-entry article h2"; declarations = list({ name = "font-size"; value = "24px" }) },
+      {
+        selector = ".ws-library";
+        declarations = list(
+          { name = "padding"; value = "0" },
+          { name = "margin"; value = "0" },
+          { name = "list-style"; value = "none" }
+        )
+      }
+    ), list(
+      {
+        selector = ".ws-library li";
+        declarations = list({ name = "padding"; value = "12px 0" }, { name = "border-bottom"; value = "1px solid var(--line)" })
+      },
+      {
+        selector = ".ws-library span";
+        declarations = list(
+          { name = "display"; value = "block" },
+          { name = "color"; value = "var(--muted)" },
+          { name = "font-size"; value = "12px" }
+        )
+      },
+      {
+        selector = ".ws-language";
+        declarations = list(
+          { name = "display"; value = "grid" },
+          { name = "grid-template-columns"; value = "1.2fr 1fr" },
+          { name = "gap"; value = "32px" },
+          { name = "border-top"; value = "1px solid var(--line)" },
+          { name = "padding"; value = "30px 0" },
+          { name = "margin-bottom"; value = "12px" }
+        )
+      },
+      {
+        selector = "#ws-definition";
+        declarations = list({ name = "font-family"; value = "ui-monospace,monospace" }, { name = "font-size"; value = "14px" })
+      },
+      {
+        selector = ".ws-language-help";
+        declarations = list(
+          { name = "min-width"; value = "0" },
+          { name = "padding"; value = "20px" },
+          { name = "background"; value = "#eee9df" },
+          { name = "border-radius"; value = "8px" }
+        )
+      },
+      {
+        selector = ".ws-language-help p";
+        declarations = list({ name = "font-size"; value = "14px" }, { name = "margin-bottom"; value = "12px" })
+      },
+      {
+        selector = ".ws-language-help pre";
+        declarations = list(
+          { name = "white-space"; value = "pre-wrap" },
+          { name = "padding"; value = "12px 0" },
+          { name = "font-size"; value = "12px" }
+        )
+      },
+      { selector = "#ws-source"; declarations = list({ name = "max-height"; value = "420px" }) },
+      {
+        selector = "#ws-earlier>main";
+        declarations = list({ name = "padding"; value = "0" }, { name = "margin-top"; value = "20px" })
+      },
+      { selector = ".cw-board"; declarations = list({ name = "margin-bottom"; value = "2rem" }) },
+      {
+        selector = ".cw-controls, .cw-diff";
+        declarations = list(
+          { name = "display"; value = "grid" },
+          { name = "grid-template-columns"; value = "1fr 1fr" },
+          { name = "gap"; value = "1rem" }
+        )
+      },
+      {
+        selector = ".cw-details";
+        declarations = list({ name = "overflow-wrap"; value = "anywhere" }, { name = "font-size"; value = ".85rem" })
+      },
+      {
+        selector = ".cw-code";
+        declarations = list(
+          { name = "max-height"; value = "22rem" },
+          { name = "overflow"; value = "auto" },
+          { name = "min-width"; value = "0" }
+        )
+      },
+      {
+        selector = ".cw-board label";
+        declarations = list(
+          { name = "display"; value = "grid" },
+          { name = "gap"; value = ".5rem" },
+          { name = "margin-bottom"; value = "1rem" }
+        )
+      },
+      {
+        selector = ".cw-board select, .cw-board input, .cw-board textarea";
+        declarations = list({ name = "width"; value = "100%" }, { name = "min-width"; value = "0" })
+      },
+      { selector = ".cw-diff section"; declarations = list({ name = "min-width"; value = "0" }) },
+      { selector = ".mw-opening"; declarations = list({ name = "margin-bottom"; value = "2rem" }) },
+      {
+        selector = "#mw-root label";
+        declarations = list(
+          { name = "display"; value = "grid" },
+          { name = "gap"; value = ".5rem" },
+          { name = "margin-bottom"; value = "1rem" }
+        )
+      },
+      {
+        selector = "#mw-root input, #mw-root select, #mw-root textarea";
+        declarations = list({ name = "width"; value = "100%" }, { name = "min-width"; value = "0" })
+      },
+      {
+        selector = ".mw-columns";
+        declarations = list(
+          { name = "display"; value = "grid" },
+          { name = "grid-template-columns"; value = "repeat(3,minmax(0,1fr))" },
+          { name = "gap"; value = "1rem" },
+          { name = "margin"; value = "1.5rem 0" }
+        )
+      },
+      {
+        selector = ".mw-card";
+        declarations = list(
+          { name = "padding"; value = "1rem" },
+          { name = "border"; value = "1px solid var(--line)" },
+          { name = "border-radius"; value = ".6rem" },
+          { name = "margin-bottom"; value = ".8rem" },
+          { name = "overflow-wrap"; value = "anywhere" }
+        )
+      },
+      { selector = ".mw-card h4"; declarations = list({ name = "margin"; value = "0 0 .6rem" }) },
+      {
+        selector = ".mw-origin, .mw-status";
+        declarations = list({ name = "font-size"; value = ".85rem" }, { name = "color"; value = "var(--accent)" })
+      },
+      {
+        selector = ".mw-narrative";
+        declarations = list({ name = "white-space"; value = "pre-wrap" }, { name = "max-width"; value = "75ch" })
+      },
+      { selector = "#mw-active .ws-panel"; declarations = list({ name = "margin-bottom"; value = "1rem" }) },
+      { selector = "#mw-workbench"; declarations = list({ name = "margin-top"; value = "1.5rem" }) },
+      {
+        selector = "#mw-brief";
+        declarations = list({ name = "font-family"; value = "ui-monospace, monospace" }, { name = "font-size"; value = ".8rem" })
+      },
+      {
+        selector = ".mw-ai .mw-card";
+        declarations = list({ name = "border-left"; value = "3px solid var(--accent)" })
+      },
+      {
+        selector = ".mm-form";
+        declarations = list(
+          { name = "display"; value = "grid" },
+          { name = "gap"; value = "12px" },
+          { name = "margin"; value = "20px 0" },
+          { name = "padding"; value = "16px" },
+          { name = "border"; value = "1px solid #dedbd4" },
+          { name = "border-radius"; value = "10px" }
+        )
+      },
+      { selector = "#mm-register .mw-card"; declarations = list({ name = "min-width"; value = "0" }) }
+    )));
+    media = list(
+      {
+        condition = "(max-width:1050px)";
+        rules = list({ selector = ".workspace"; declarations = list({ name = "grid-template-columns"; value = "1fr" }) })
+      },
+      {
+        condition = "(max-width:760px)";
+        rules = list(
+          {
+            selector = ".workspace, .reproduction";
+            declarations = list({ name = "grid-template-columns"; value = "1fr" }, { name = "gap"; value = "28px" })
+          },
+          { selector = ".masthead-note"; declarations = list({ name = "display"; value = "none" }) },
+          {
+            selector = ".masthead";
+            declarations = list({ name = "padding"; value = "16px 5vw" }, { name = "gap"; value = "12px" })
+          },
+          { selector = ".source-link"; declarations = list({ name = "font-size"; value = "11px" }) },
+          { selector = ".intro"; declarations = list({ name = "padding"; value = "38px 0 26px" }) }
+        )
+      },
+      {
+        condition = "(max-width:400px)";
+        rules = list(
+          { selector = ".alternate-views"; declarations = list({ name = "grid-template-columns"; value = "1fr" }) },
+          { selector = "#reading"; declarations = list({ name = "padding"; value = "22px" }) }
+        )
+      },
+      {
+        condition = "(max-width:620px)";
+        rules = list({ selector = ".journey-grid"; declarations = list({ name = "grid-template-columns"; value = "1fr" }) })
+      },
+      {
+        condition = "(max-width:850px)";
+        rules = list(
+          {
+            selector = ".ws-layout, .ws-language";
+            declarations = list({ name = "grid-template-columns"; value = "1fr" })
+          }
+        )
+      },
+      {
+        condition = "(max-width:850px)";
+        rules = list(
+          {
+            selector = ".cw-controls, .cw-diff";
+            declarations = list({ name = "grid-template-columns"; value = "1fr" })
+          }
+        )
+      },
+      {
+        condition = "(max-width:850px)";
+        rules = list({ selector = ".mw-columns"; declarations = list({ name = "grid-template-columns"; value = "1fr" }) })
+      }
+    )
+  }

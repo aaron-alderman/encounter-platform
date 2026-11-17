@@ -1,0 +1,88 @@
+{
+  "protocol": "temple/process-frontend/1",
+  "entry": "language.process.compile",
+  "modules": [
+    {
+      "file": "vendor/worldwright/frontend/language-process.process.json"
+    },
+    {
+      "file": "vendor/worldwright/frontend/bootstrap.json",
+      "queries": [
+        "source.split",
+        "source.lex",
+        "s01.portable"
+      ]
+    }
+  ],
+  "lowering": "vendor/worldwright/algebra/lowering.process.json",
+  "operators": "vendor/worldwright/algebra/operators.expression.json",
+  "admission": "vendor/worldwright/algebra/admission.process.json",
+  "kernelProfile": "vendor/worldwright/bootstrap/kernel-profile.json",
+  "data": {
+    "lpPolicy": {
+      "file": "source/languages/usewords-process.profile.json"
+    },
+    "lexPolicy": {
+      "file": "vendor/worldwright/frontend/lexical.json"
+    },
+    "lexGrammar": {
+      "file": "vendor/worldwright/frontend/presentation.json",
+      "path": [
+        "lexGrammar"
+      ]
+    }
+  },
+  "grants": [
+    "digest.sha256",
+    "json.parse",
+    "json.stringify",
+    "kernel.invoke",
+    "record.entries",
+    "record.fromEntries",
+    "record.put",
+    "text.matches",
+    "text.replaceAll",
+    "text.slice",
+    "text.split",
+    "value.describe"
+  ],
+  "files": [
+    {
+      "path": "vendor/worldwright/algebra/lowering.process.json",
+      "sha256": "616c1c5860d0245bad4df16de9e04074e44a601a716d99b641e7fec07d43bbd8"
+    },
+    {
+      "path": "vendor/worldwright/algebra/operators.expression.json",
+      "sha256": "b03c2c863cab748899675ffb4afd8f7ead0979f5e992923a086d19ad89a2c7f2"
+    },
+    {
+      "path": "vendor/worldwright/algebra/admission.process.json",
+      "sha256": "c459c0aacbb5905b6aca01a6e8344b9e645f854c35244f59c1ea7ac1c1bf662b"
+    },
+    {
+      "path": "vendor/worldwright/bootstrap/kernel-profile.json",
+      "sha256": "3067678f68016886d77569c62523c101d299648f37697df51c4524c83647a875"
+    },
+    {
+      "path": "vendor/worldwright/frontend/language-process.process.json",
+      "sha256": "c7b765b4bb18d2c6b0b97e11e41cbacaf2ed756586dd25e748a4c48aacb63640"
+    },
+    {
+      "path": "vendor/worldwright/frontend/bootstrap.json",
+      "sha256": "eb38af5f82a0a2229aebcbbb0f0b6ee98ffd5251a4ed8fefd2c93071ab84e520"
+    },
+    {
+      "path": "source/languages/usewords-process.profile.json",
+      "sha256": "a3767295b983348bec692ba8d86d80d312463b7ec88b042bb1f39069956c000c"
+    },
+    {
+      "path": "vendor/worldwright/frontend/lexical.json",
+      "sha256": "60f3ccd74eed17738478a63f2e24559c430f71d5091974a5c9a3d8b637801f06"
+    },
+    {
+      "path": "vendor/worldwright/frontend/presentation.json",
+      "sha256": "04725adbc103d9e53be08a7daa6f14c053bbde9f9d2eeef2cd8e4c27a4700786"
+    }
+  ],
+  "identity": "3eeca5181c9ad2407e1a7d310abdbaa9b5a6890f210a615a0955ca09764629e3"
+}

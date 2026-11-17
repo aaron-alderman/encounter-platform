@@ -1,0 +1,44 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process owner.projections:
+  call owner.canonical
+  call owner.journeys
+  call owner.languages
+  call owner.page
+  call owner.runtime
+  call owner.style
+  call owner.words
+  call owner.workspace
+  call cs.packageMetadata
+  let projections = {
+    "package.json" = $result;
+    "source/canonical.json" = $canonicalProjection;
+    "source/journeys.json" = $journeysProjection;
+    "source/languages.json" = $languagesProjection;
+    "source/page.json" = $pageProjection;
+    "source/runtime.json" = $runtimeProjection;
+    "source/style.json" = $styleProjection;
+    "source/words.json" = $wordsProjection;
+    "source/workspace-seed.json" = $workspaceProjection
+  }
+
+process owner.emit:
+  call owner.projections
+  let file = at($eventInput.input, "file")
+  let result = $projections
+  when $file:
+    let result = at($projections, $file)
+    assert $result
+      otherwise "CS-SOURCE: No Encounter owner for this projection path."
+
+process owner.check:
+  call owner.projections
+  port record.entries { value = $projections } → entries
+  each $entries as entry:
+    let file = at($entry, 0)
+    port json.stringify { value = at($entry, 1); space = 2 } → text
+    port digest.sha256 { text = concat($text, "\n") } → expected
+    assert eq(at($data.identity, $file), $expected)
+      otherwise "CS-SOURCE: A bootstrap JSON projection differs from its Encounter owner. Regenerate the source projections."
+  let result = { protocol = "creator-studio/source-projection-check/1"; checked = count($entries); paths = map($entries, "entry", at($entry, 0)) }

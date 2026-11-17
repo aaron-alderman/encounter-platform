@@ -1,0 +1,1172 @@
+{
+  "protocol": "temple/surface-process-module/1",
+  "queries": {
+    "ec.schema": [
+      {
+        "let": "ecType",
+        "value": "$eventInput.type"
+      },
+      {
+        "let": "ecInterfaces",
+        "value": [
+          "filter",
+          [
+            "subjects",
+            "isa",
+            "Interface"
+          ],
+          "ecI",
+          [
+            "eq",
+            [
+              "optional",
+              "$ecI",
+              "type"
+            ],
+            "$ecType"
+          ]
+        ]
+      },
+      {
+        "assert": [
+          "eq",
+          [
+            "count",
+            "$ecInterfaces"
+          ],
+          1
+        ],
+        "message": "EC-T001: A type must resolve to exactly one declared interface in this contract profile."
+      },
+      {
+        "let": "ecInterface",
+        "value": [
+          "at",
+          "$ecInterfaces",
+          0
+        ]
+      },
+      {
+        "assert": [
+          "eq",
+          [
+            "one",
+            "$ecInterface",
+            "mode"
+          ],
+          "closed"
+        ],
+        "message": "EC-T002: This experiment requires an explicitly closed interface."
+      },
+      {
+        "let": "result",
+        "value": {
+          "type": "$ecType",
+          "slots": [
+            "map",
+            [
+              "objects",
+              "$ecInterface",
+              "slot"
+            ],
+            "ecS",
+            {
+              "id": "$ecS",
+              "name": [
+                "one",
+                "$ecS",
+                "predicate"
+              ],
+              "kind": [
+                "one",
+                "$ecS",
+                "valueType"
+              ],
+              "cardinality": [
+                "one",
+                "$ecS",
+                "cardinality"
+              ],
+              "expects": [
+                "or",
+                [
+                  "optional",
+                  "$ecS",
+                  "expects"
+                ],
+                null
+              ],
+              "allowed": [
+                "objects",
+                "$ecS",
+                "allowed"
+              ],
+              "storage": [
+                "or",
+                [
+                  "optional",
+                  "$ecS",
+                  "storage"
+                ],
+                null
+              ],
+              "entryType": [
+                "or",
+                [
+                  "optional",
+                  "$ecS",
+                  "entryType"
+                ],
+                null
+              ],
+              "entryField": [
+                "or",
+                [
+                  "optional",
+                  "$ecS",
+                  "entryField"
+                ],
+                null
+              ],
+              "nonempty": [
+                "eq",
+                [
+                  "optional",
+                  "$ecS",
+                  "nonempty"
+                ],
+                "true"
+              ],
+              "pattern": [
+                "or",
+                [
+                  "optional",
+                  "$ecS",
+                  "pattern"
+                ],
+                null
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "ec.slot": [
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.schema",
+          "input": {
+            "type": "$eventInput.type"
+          }
+        },
+        "into": "ecSchema"
+      },
+      {
+        "let": "ecRequested",
+        "value": "$eventInput.name"
+      },
+      {
+        "let": "ecMatches",
+        "value": [
+          "filter",
+          "$ecSchema.slots",
+          "ecS",
+          [
+            "eq",
+            "$ecS.name",
+            "$ecRequested"
+          ]
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          [
+            "count",
+            "$ecMatches"
+          ],
+          0
+        ],
+        "then": [
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$ecRequested",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+            },
+            "into": "ecBare"
+          },
+          {
+            "when": "$ecBare",
+            "then": [
+              {
+                "fold": "$ecSchema.slots",
+                "as": "ecSlot",
+                "accumulator": "ecMatches",
+                "initial": [
+                  "list"
+                ],
+                "steps": [
+                  {
+                    "port": "text.split",
+                    "args": {
+                      "value": "$ecSlot.name",
+                      "pattern": "\\."
+                    },
+                    "into": "ecParts"
+                  }
+                ],
+                "yield": [
+                  "if",
+                  [
+                    "eq",
+                    [
+                      "at",
+                      "$ecParts",
+                      [
+                        "add",
+                        [
+                          "count",
+                          "$ecParts"
+                        ],
+                        -1
+                      ]
+                    ],
+                    "$ecRequested"
+                  ],
+                  [
+                    "append",
+                    "$ecMatches",
+                    [
+                      "list",
+                      "$ecSlot"
+                    ]
+                  ],
+                  "$ecMatches"
+                ],
+                "into": "ecMatches"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "assert": [
+          "not",
+          [
+            "eq",
+            [
+              "count",
+              "$ecMatches"
+            ],
+            0
+          ]
+        ],
+        "message": "EC-T003: Unknown field. Use a field declared by the input/output interface."
+      },
+      {
+        "assert": [
+          "eq",
+          [
+            "count",
+            "$ecMatches"
+          ],
+          1
+        ],
+        "message": "EC-T004: Ambiguous field. Qualify it with its type participation alias."
+      },
+      {
+        "let": "result",
+        "value": [
+          "at",
+          "$ecMatches",
+          0
+        ]
+      }
+    ],
+    "ec.scalar": [
+      {
+        "let": "ecSlot",
+        "value": "$eventInput.slot"
+      },
+      {
+        "let": "ecValue",
+        "value": "$eventInput.value"
+      },
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$ecValue"
+        },
+        "into": "ecKind"
+      },
+      {
+        "assert": [
+          "includes",
+          [
+            "list",
+            "string",
+            "ref"
+          ],
+          "$ecSlot.kind"
+        ],
+        "message": "EC-T005: Unsupported value kind in this experiment; it cannot be treated as assured."
+      },
+      {
+        "assert": [
+          "eq",
+          "$ecKind.type",
+          "string"
+        ],
+        "message": "EC-T006: This field requires text or an explicit reference; no implicit coercion is permitted."
+      },
+      {
+        "when": "$ecSlot.nonempty",
+        "then": [
+          {
+            "assert": [
+              "not",
+              [
+                "eq",
+                "$ecValue",
+                ""
+              ]
+            ],
+            "message": "EC-T007: Give this field a non-empty value."
+          }
+        ]
+      },
+      {
+        "when": "$ecSlot.pattern",
+        "then": [
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$ecValue",
+              "pattern": "$ecSlot.pattern"
+            },
+            "into": "ecPattern"
+          },
+          {
+            "assert": "$ecPattern",
+            "message": "EC-T008: This value does not satisfy the declared format. Correct the source value."
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            [
+              "count",
+              "$ecSlot.allowed"
+            ],
+            0
+          ]
+        ],
+        "then": [
+          {
+            "assert": [
+              "includes",
+              "$ecSlot.allowed",
+              "$ecValue"
+            ],
+            "message": "EC-T009: This value is outside the declared allowed choices."
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$ecSlot.kind",
+          "ref"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "ec.referenceType",
+              "input": {
+                "id": "$ecValue"
+              }
+            },
+            "into": "ecTargetType"
+          },
+          {
+            "assert": [
+              "eq",
+              "$ecTargetType",
+              "$ecSlot.expects"
+            ],
+            "message": "EC-T010: The reference exists but its target does not satisfy the expected type."
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": true
+      }
+    ],
+    "ec.check": [
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.schema",
+          "input": {
+            "type": "$eventInput.type"
+          }
+        },
+        "into": "ecCheckSchema"
+      },
+      {
+        "let": "ecCheckValues",
+        "value": "$eventInput.values"
+      },
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$ecCheckValues"
+        },
+        "into": "ecRecordKind"
+      },
+      {
+        "assert": [
+          "and",
+          "$ecRecordKind.plain",
+          [
+            "not",
+            "$ecRecordKind.array"
+          ],
+          "$ecRecordKind.dataOnly"
+        ],
+        "message": "EC-T011: A typed value must be an own-data record."
+      },
+      {
+        "port": "record.entries",
+        "args": {
+          "value": "$ecCheckValues"
+        },
+        "into": "ecValueEntries"
+      },
+      {
+        "assert": [
+          "every",
+          "$ecValueEntries",
+          "ecEntry",
+          [
+            "some",
+            "$ecCheckSchema.slots",
+            "ecS",
+            [
+              "eq",
+              "$ecS.name",
+              [
+                "at",
+                "$ecEntry",
+                0
+              ]
+            ]
+          ]
+        ],
+        "message": "EC-T012: This closed interface contains an undeclared field."
+      },
+      {
+        "each": "$ecCheckSchema.slots",
+        "as": "ecCheckSlot",
+        "steps": [
+          {
+            "let": "ecCheckValue",
+            "value": [
+              "at",
+              "$ecCheckValues",
+              "$ecCheckSlot.name"
+            ]
+          },
+          {
+            "port": "value.describe",
+            "args": {
+              "value": "$ecCheckValue"
+            },
+            "into": "ecCheckKind"
+          },
+          {
+            "assert": [
+              "includes",
+              [
+                "list",
+                "one",
+                "optional",
+                "many"
+              ],
+              "$ecCheckSlot.cardinality"
+            ],
+            "message": "EC-T013: Unknown slot cardinality; assurance cannot be inferred."
+          },
+          {
+            "assert": [
+              "or",
+              [
+                "not",
+                [
+                  "eq",
+                  "$ecCheckKind.type",
+                  "undefined"
+                ]
+              ],
+              [
+                "eq",
+                "$ecCheckSlot.cardinality",
+                "optional"
+              ]
+            ],
+            "message": "EC-T014: A required field is missing."
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                "$ecCheckKind.type",
+                "undefined"
+              ]
+            ],
+            "then": [
+              {
+                "when": [
+                  "eq",
+                  "$ecCheckSlot.cardinality",
+                  "many"
+                ],
+                "then": [
+                  {
+                    "assert": "$ecCheckKind.array",
+                    "message": "EC-T015: This field requires an ordered collection."
+                  },
+                  {
+                    "each": "$ecCheckValue",
+                    "as": "ecItem",
+                    "steps": [
+                      {
+                        "port": "kernel.invoke",
+                        "args": {
+                          "query": "ec.scalar",
+                          "input": {
+                            "slot": "$ecCheckSlot",
+                            "value": "$ecItem"
+                          }
+                        },
+                        "into": "_"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "not",
+                  [
+                    "eq",
+                    "$ecCheckSlot.cardinality",
+                    "many"
+                  ]
+                ],
+                "then": [
+                  {
+                    "port": "kernel.invoke",
+                    "args": {
+                      "query": "ec.scalar",
+                      "input": {
+                        "slot": "$ecCheckSlot",
+                        "value": "$ecCheckValue"
+                      }
+                    },
+                    "into": "_"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": true
+      }
+    ],
+    "ec.referenceType": [
+      {
+        "let": "ecRef",
+        "value": "$eventInput.id"
+      },
+      {
+        "let": "ecViews",
+        "value": [
+          "filter",
+          "$codePlan.views",
+          "ecV",
+          [
+            "eq",
+            "$ecV.id",
+            "$ecRef"
+          ]
+        ]
+      },
+      {
+        "let": "ecMemberships",
+        "value": [
+          "objects",
+          "$ecRef",
+          "isa"
+        ]
+      },
+      {
+        "assert": [
+          "or",
+          [
+            "eq",
+            [
+              "count",
+              "$ecViews"
+            ],
+            1
+          ],
+          [
+            "eq",
+            [
+              "count",
+              "$ecMemberships"
+            ],
+            1
+          ]
+        ],
+        "message": "EC-T016: A reference must resolve uniquely in the explicit programme/fact scope."
+      },
+      {
+        "assert": [
+          "not",
+          [
+            "and",
+            [
+              "eq",
+              [
+                "count",
+                "$ecViews"
+              ],
+              1
+            ],
+            [
+              "not",
+              [
+                "eq",
+                [
+                  "count",
+                  "$ecMemberships"
+                ],
+                0
+              ]
+            ]
+          ]
+        ],
+        "message": "EC-T017: A generated view identity collides with an authored fact identity."
+      },
+      {
+        "let": "result",
+        "value": [
+          "if",
+          [
+            "eq",
+            [
+              "count",
+              "$ecViews"
+            ],
+            1
+          ],
+          [
+            "at",
+            [
+              "at",
+              "$ecViews",
+              0
+            ],
+            "type"
+          ],
+          [
+            "at",
+            "$ecMemberships",
+            0
+          ]
+        ]
+      }
+    ],
+    "ec.fact": [
+      {
+        "let": "ecFactId",
+        "value": "$eventInput.id"
+      },
+      {
+        "let": "ecFactType",
+        "value": "$eventInput.type"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.referenceType",
+          "input": {
+            "id": "$ecFactId"
+          }
+        },
+        "into": "ecObservedType"
+      },
+      {
+        "assert": [
+          "eq",
+          "$ecObservedType",
+          "$ecFactType"
+        ],
+        "message": "EC-T010: This reference does not satisfy the required interface."
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.schema",
+          "input": {
+            "type": "$ecFactType"
+          }
+        },
+        "into": "ecFactSchema"
+      },
+      {
+        "port": "record.entries",
+        "args": {
+          "value": [
+            "at",
+            "$factIndex.objects",
+            "$ecFactId"
+          ]
+        },
+        "into": "ecFactFields"
+      },
+      {
+        "assert": [
+          "every",
+          "$ecFactFields",
+          "ecF",
+          [
+            "or",
+            [
+              "eq",
+              [
+                "at",
+                "$ecF",
+                0
+              ],
+              "isa"
+            ],
+            [
+              "some",
+              "$ecFactSchema.slots",
+              "ecS",
+              [
+                "eq",
+                "$ecS.name",
+                [
+                  "at",
+                  "$ecF",
+                  0
+                ]
+              ]
+            ]
+          ]
+        ],
+        "message": "EC-T018: The authored fact has fields outside its closed type."
+      },
+      {
+        "fold": "$ecFactSchema.slots",
+        "as": "ecFactSlot",
+        "accumulator": "ecFactValues",
+        "initial": {},
+        "steps": [
+          {
+            "let": "ecRawValues",
+            "value": [
+              "objects",
+              "$ecFactId",
+              "$ecFactSlot.name"
+            ]
+          },
+          {
+            "assert": [
+              "or",
+              [
+                "eq",
+                "$ecFactSlot.cardinality",
+                "many"
+              ],
+              [
+                "or",
+                [
+                  "eq",
+                  [
+                    "count",
+                    "$ecRawValues"
+                  ],
+                  1
+                ],
+                [
+                  "and",
+                  [
+                    "eq",
+                    "$ecFactSlot.cardinality",
+                    "optional"
+                  ],
+                  [
+                    "eq",
+                    [
+                      "count",
+                      "$ecRawValues"
+                    ],
+                    0
+                  ]
+                ]
+              ]
+            ],
+            "message": "EC-T019: The authored field has the wrong cardinality."
+          },
+          {
+            "when": [
+              "eq",
+              "$ecFactSlot.storage",
+              "entries"
+            ],
+            "then": [
+              {
+                "fold": "$ecRawValues",
+                "as": "ecEntryId",
+                "accumulator": "ecDecodedEntries",
+                "initial": [
+                  "list"
+                ],
+                "steps": [
+                  {
+                    "port": "kernel.invoke",
+                    "args": {
+                      "query": "ec.fact",
+                      "input": {
+                        "id": "$ecEntryId",
+                        "type": "$ecFactSlot.entryType"
+                      }
+                    },
+                    "into": "ecEntryCarrier"
+                  }
+                ],
+                "yield": [
+                  "append",
+                  "$ecDecodedEntries",
+                  [
+                    "list",
+                    [
+                      "at",
+                      "$ecEntryCarrier.values",
+                      "$ecFactSlot.entryField"
+                    ]
+                  ]
+                ],
+                "into": "ecRawValues"
+              }
+            ]
+          },
+          {
+            "let": "ecNextValue",
+            "value": [
+              "if",
+              [
+                "eq",
+                "$ecFactSlot.cardinality",
+                "many"
+              ],
+              "$ecRawValues",
+              [
+                "at",
+                "$ecRawValues",
+                0
+              ]
+            ]
+          },
+          {
+            "when": [
+              "or",
+              [
+                "not",
+                [
+                  "eq",
+                  [
+                    "count",
+                    "$ecRawValues"
+                  ],
+                  0
+                ]
+              ],
+              [
+                "eq",
+                "$ecFactSlot.cardinality",
+                "many"
+              ]
+            ],
+            "then": [
+              {
+                "port": "record.put",
+                "args": {
+                  "record": "$ecFactValues",
+                  "key": "$ecFactSlot.name",
+                  "value": "$ecNextValue"
+                },
+                "into": "ecFactValues"
+              }
+            ]
+          }
+        ],
+        "yield": "$ecFactValues",
+        "into": "ecFactValues"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.check",
+          "input": {
+            "type": "$ecFactType",
+            "values": "$ecFactValues"
+          }
+        },
+        "into": "_"
+      },
+      {
+        "let": "result",
+        "value": {
+          "id": "$ecFactId",
+          "type": "$ecFactType",
+          "values": "$ecFactValues"
+        }
+      }
+    ],
+    "ec.reference": [
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.referenceType",
+          "input": {
+            "id": "$eventInput.id"
+          }
+        },
+        "into": "ecRefType"
+      },
+      {
+        "assert": [
+          "eq",
+          "$ecRefType",
+          "$eventInput.type"
+        ],
+        "message": "EC-T010: The reference has the wrong type."
+      },
+      {
+        "let": "ecRefViews",
+        "value": [
+          "filter",
+          "$codePlan.views",
+          "ecV",
+          [
+            "eq",
+            "$ecV.id",
+            "$eventInput.id"
+          ]
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          [
+            "count",
+            "$ecRefViews"
+          ],
+          0
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "ec.fact",
+              "input": "$eventInput"
+            },
+            "into": "ecRefResult"
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          [
+            "count",
+            "$ecRefViews"
+          ],
+          1
+        ],
+        "then": [
+          {
+            "port": "kernel.execute",
+            "args": {
+              "model": "$codeModel",
+              "entry": [
+                "at",
+                [
+                  "at",
+                  "$ecRefViews",
+                  0
+                ],
+                "entry"
+              ],
+              "input": {}
+            },
+            "into": "ecRefResult"
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": "$ecRefResult"
+      }
+    ],
+    "ec.argument": [
+      {
+        "let": "ecArgType",
+        "value": "$eventInput.type"
+      },
+      {
+        "let": "ecArgValue",
+        "value": "$eventInput.value"
+      },
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$ecArgValue"
+        },
+        "into": "ecArgKind"
+      },
+      {
+        "when": [
+          "eq",
+          "$ecArgType",
+          "text"
+        ],
+        "then": [
+          {
+            "assert": [
+              "eq",
+              "$ecArgKind.type",
+              "string"
+            ],
+            "message": "EC-T020: This argument needs text."
+          },
+          {
+            "let": "ecArgResult",
+            "value": {
+              "id": null,
+              "type": "text",
+              "value": "$ecArgValue"
+            }
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            "$ecArgType",
+            "text"
+          ]
+        ],
+        "then": [
+          {
+            "when": [
+              "eq",
+              "$ecArgKind.type",
+              "string"
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.reference",
+                  "input": {
+                    "id": "$ecArgValue",
+                    "type": "$ecArgType"
+                  }
+                },
+                "into": "ecArgResult"
+              }
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                "$ecArgKind.type",
+                "string"
+              ]
+            ],
+            "then": [
+              {
+                "assert": [
+                  "and",
+                  "$ecArgKind.plain",
+                  [
+                    "not",
+                    "$ecArgKind.array"
+                  ]
+                ],
+                "message": "EC-T021: This argument needs a typed value or reference."
+              },
+              {
+                "assert": [
+                  "eq",
+                  [
+                    "at",
+                    "$ecArgValue",
+                    "type"
+                  ],
+                  "$ecArgType"
+                ],
+                "message": "EC-T022: The supplied value has a different type."
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.check",
+                  "input": {
+                    "type": "$ecArgType",
+                    "values": [
+                      "at",
+                      "$ecArgValue",
+                      "values"
+                    ]
+                  }
+                },
+                "into": "_"
+              },
+              {
+                "let": "ecArgResult",
+                "value": "$ecArgValue"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": "$ecArgResult"
+      }
+    ]
+  }
+}

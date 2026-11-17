@@ -1,0 +1,210 @@
+WEBVTT
+
+S01-1
+00:00:00.300 --> 00:00:01.205
+AI is great.
+
+S02-1
+00:00:16.160 --> 00:00:16.860
+At first.
+
+S02-2
+00:00:17.950 --> 00:00:19.683
+And then you try to scale.
+
+S02-3
+00:00:20.910 --> 00:00:23.056
+Who decided that, and why?
+
+S02-4
+00:00:23.400 --> 00:00:30.445
+The specs disagree. One little change touches half the app. Suddenly, cleaning it up feels risky.
+
+S02-5
+00:00:34.105 --> 00:00:36.564
+What if we could build software differently?
+
+S03-1
+00:00:38.280 --> 00:00:43.586
+What if, instead of just generating code, we could capture what you actually mean?
+
+S03-2
+00:00:43.906 --> 00:00:50.102
+Your intentions. Your requirements. Your decisions. And the reasons behind them.
+
+S03-3
+00:00:50.422 --> 00:00:51.771
+That's what we're building.
+
+S03-4
+00:00:52.091 --> 00:00:53.401
+We call it authoring.
+
+S04-1
+00:00:54.280 --> 00:00:56.468
+You describe what you want to create.
+
+S04-2
+00:00:56.788 --> 00:01:01.771
+Sorcery decomposes your request into meaningful, reusable building blocks.
+
+S04-3
+00:01:02.091 --> 00:01:08.466
+It shows you what it understands, what it's assuming, and where important decisions need to be made.
+
+S05-1
+00:01:10.280 --> 00:01:16.357
+You can explore alternatives, change your mind, and see the consequences before committing.
+
+S06-1
+00:01:19.280 --> 00:01:20.748
+Underneath it all is Temple.
+
+S06-2
+00:01:21.068 --> 00:01:28.628
+A new kind of relational database and execution engine, where your software, its meaning, and the rules that govern it live together.
+
+S06-3
+00:01:28.948 --> 00:01:30.234
+Everything is connected.
+
+S06-4
+00:01:30.554 --> 00:01:32.862
+Every important decision can have a reason.
+
+S06-5
+00:01:33.182 --> 00:01:34.999
+Every change can have provenance.
+
+S06-6
+00:01:35.319 --> 00:01:38.755
+And every action can be subject to explicit constraints.
+
+S06-7
+00:01:39.075 --> 00:01:40.959
+We call these admissibility gates.
+
+S07-1
+00:01:42.280 --> 00:01:50.101
+Instead of giving AI unrestricted access and hoping it behaves, Temple is designed to enforce what it's allowed to do.
+
+S07-2
+00:01:50.421 --> 00:01:52.541
+Your AI works within your rules.
+
+S07-3
+00:01:52.861 --> 00:01:54.305
+Not the other way around.
+
+S08-1
+00:01:57.280 --> 00:01:59.045
+And here's where things get interesting.
+
+S08-2
+00:01:59.365 --> 00:02:01.655
+Your software doesn't have to be perfect on day one.
+
+S08-3
+00:02:01.975 --> 00:02:02.670
+Start simple.
+
+S08-4
+00:02:02.990 --> 00:02:04.469
+Reuse existing capabilities.
+
+S08-5
+00:02:04.789 --> 00:02:07.852
+Connect systems that don't quite agree using explicit seams.
+
+S08-6
+00:02:08.172 --> 00:02:09.439
+Improve the parts that matter.
+
+S09-1
+00:02:10.280 --> 00:02:19.008
+As your requirements grow, you can decompose your application further, strengthen its assurances, and optimise its implementation.
+
+S09-2
+00:02:19.328 --> 00:02:21.931
+Without unnecessarily changing its meaning.
+
+S09-3
+00:02:22.251 --> 00:02:28.441
+Because you should be able to optimise how software works without changing what it's supposed to do.
+
+S10-1
+00:02:31.280 --> 00:02:34.111
+Temple also makes your software navigable.
+
+S10-2
+00:02:34.431 --> 00:02:43.170
+With Context Hub, graph-ranking techniques inspired by Google's PageRank help identify the information most relevant to a question.
+
+S10-3
+00:02:43.490 --> 00:02:51.049
+So your AI can work with meaningful, connected context rather than trying to understand an entire codebase at once.
+
+S11-1
+00:02:53.280 --> 00:02:54.528
+Bring your own agent.
+
+S11-2
+00:02:54.848 --> 00:02:56.221
+Choose your own models.
+
+S11-3
+00:02:56.541 --> 00:02:59.172
+And keep the context where it belongs.
+
+S12-1
+00:03:03.280 --> 00:03:05.280
+Temple is built for sovereignty.
+
+S12-2
+00:03:05.600 --> 00:03:06.509
+Open source.
+
+S12-3
+00:03:06.829 --> 00:03:11.016
+Run it yourself, on your own infrastructure, with your own data.
+
+S12-4
+00:03:11.336 --> 00:03:15.550
+Or use a managed platform if you'd rather leave the operations to us.
+
+S12-5
+00:03:15.870 --> 00:03:19.003
+Your systems. Your rules. Your choice.
+
+S13-1
+00:03:21.280 --> 00:03:25.931
+We believe the future of software isn't just about generating more code, faster.
+
+S13-2
+00:03:26.251 --> 00:03:29.049
+It's about creating systems we can understand.
+
+S13-3
+00:03:29.369 --> 00:03:30.753
+Systems we can trust.
+
+S13-4
+00:03:31.073 --> 00:03:37.254
+Systems that preserve our intentions, adapt as our needs change, and remain under human control.
+
+S14-1
+00:03:38.280 --> 00:03:40.110
+Software that remembers why.
+
+S14-2
+00:03:40.430 --> 00:03:43.377
+Software that evolves without losing its meaning.
+
+S14-3
+00:03:43.697 --> 00:03:46.322
+Software you author, not just program.
+
+S14-4
+00:03:46.642 --> 00:03:48.803
+Welcome to Sorcery and Temple.
+

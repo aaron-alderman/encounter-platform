@@ -1,0 +1,413 @@
+{
+  "protocol": "temple/kernel-profile/1",
+  "valueProfile": "ordered-json-observation/1",
+  "operators": {
+    "fold": {
+      "arities": [
+        5
+      ],
+      "binders": [
+        1,
+        2
+      ]
+    },
+    "let": {
+      "arities": [
+        3
+      ],
+      "binders": [
+        0
+      ]
+    },
+    "raise": {
+      "arities": [
+        1
+      ],
+      "binders": []
+    },
+    "isArray": {
+      "arities": [
+        1
+      ],
+      "binders": []
+    },
+    "list": {
+      "arities": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63
+      ],
+      "binders": []
+    },
+    "append": {
+      "arities": [
+        2
+      ],
+      "binders": []
+    },
+    "eq": {
+      "arities": [
+        2
+      ],
+      "binders": []
+    },
+    "includes": {
+      "arities": [
+        2
+      ],
+      "binders": []
+    },
+    "if": {
+      "arities": [
+        3
+      ],
+      "binders": []
+    },
+    "count": {
+      "arities": [
+        1
+      ],
+      "binders": []
+    },
+    "at": {
+      "arities": [
+        2
+      ],
+      "binders": []
+    },
+    "concat": {
+      "arities": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63
+      ],
+      "binders": []
+    },
+    "add": {
+      "arities": [
+        2
+      ],
+      "binders": []
+    },
+    "range": {
+      "arities": [
+        1
+      ],
+      "binders": []
+    },
+    "distinct": {
+      "arities": [
+        1
+      ],
+      "binders": []
+    }
+  },
+  "statements": {
+    "let": {
+      "strings": [],
+      "bindings": [
+        "let"
+      ],
+      "expressions": [
+        "value"
+      ],
+      "programmes": [],
+      "fields": [
+        "let",
+        "value"
+      ],
+      "construction": {
+        "let": "value",
+        "value": null
+      }
+    },
+    "assert": {
+      "strings": [
+        "message"
+      ],
+      "bindings": [],
+      "expressions": [
+        "assert"
+      ],
+      "programmes": [],
+      "fields": [
+        "assert",
+        "message"
+      ],
+      "construction": {
+        "assert": true,
+        "message": "Check failed."
+      }
+    },
+    "when": {
+      "strings": [],
+      "bindings": [],
+      "expressions": [
+        "when"
+      ],
+      "programmes": [
+        "then"
+      ],
+      "fields": [
+        "when",
+        "then"
+      ],
+      "construction": {
+        "when": false,
+        "then": []
+      }
+    },
+    "each": {
+      "strings": [],
+      "bindings": [
+        "as"
+      ],
+      "expressions": [
+        "each"
+      ],
+      "programmes": [
+        "steps"
+      ],
+      "fields": [
+        "each",
+        "as",
+        "steps"
+      ],
+      "construction": {
+        "each": [
+          "list"
+        ],
+        "as": "item",
+        "steps": []
+      }
+    },
+    "fold": {
+      "strings": [],
+      "bindings": [
+        "as",
+        "accumulator",
+        "into"
+      ],
+      "expressions": [
+        "fold",
+        "initial",
+        "yield"
+      ],
+      "programmes": [
+        "steps"
+      ],
+      "fields": [
+        "fold",
+        "as",
+        "accumulator",
+        "initial",
+        "steps",
+        "yield",
+        "into"
+      ],
+      "construction": {
+        "fold": [
+          "list"
+        ],
+        "as": "item",
+        "accumulator": "total",
+        "initial": null,
+        "steps": [],
+        "yield": "$total",
+        "into": "result"
+      }
+    },
+    "call": {
+      "strings": [
+        "call"
+      ],
+      "bindings": [],
+      "expressions": [],
+      "programmes": [],
+      "fields": [
+        "call"
+      ],
+      "construction": {
+        "call": ""
+      }
+    },
+    "port": {
+      "strings": [
+        "port"
+      ],
+      "bindings": [
+        "into"
+      ],
+      "expressions": [
+        "args"
+      ],
+      "programmes": [],
+      "fields": [
+        "port",
+        "args",
+        "into"
+      ],
+      "construction": {
+        "port": "",
+        "args": {},
+        "into": "result"
+      }
+    },
+    "try": {
+      "strings": [],
+      "bindings": [
+        "error"
+      ],
+      "expressions": [],
+      "programmes": [
+        "try",
+        "catch"
+      ],
+      "fields": [
+        "try",
+        "error",
+        "catch"
+      ],
+      "construction": {
+        "try": [],
+        "error": "fault",
+        "catch": []
+      }
+    }
+  },
+  "execution": {
+    "ordering": "sequential-awaited",
+    "budgetFault": "uncatchable",
+    "hostFault": "identity-unless-explicit-try",
+    "catchProjection": [
+      "name",
+      "message"
+    ],
+    "absence": "undefined-internal-not-transportable",
+    "concurrency": "not-in-this-profile",
+    "transactions": "explicit-host-protocol",
+    "cancellation": "explicit-host-protocol"
+  }
+}
