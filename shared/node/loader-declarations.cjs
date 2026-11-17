@@ -25,7 +25,8 @@ function platformDeclarations() {
     .filter(name => /(?:\.rel|\.loader\.encounter)$/.test(name))
     .map(name => path.join(runtime, 'profiles', name.replace(/\.loader\.encounter$/, '.rel'))));
   const frontGate = ['directory.rel', 'pilot.rel'].map(name => path.join(applications, 'front-gate', name));
-  return [...defaults, ...products, ...profiles, ...frontGate, path.join(runtime, 'release-applications-platform.rel')].sort();
+  const appDev = path.join(applications, 'encounter/bootstrap/application-appdev.rel');
+  return [...defaults, appDev, ...products, ...profiles, ...frontGate, path.join(runtime, 'release-applications-platform.rel')].sort();
 }
 
 async function render(file, text) {

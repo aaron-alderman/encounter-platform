@@ -63,3 +63,8 @@ The [Claimipedia research archive](research/claimipedia/MIGRATION.md) retains it
 original layout. The [Sourcery Platform seed](variants/sourcery-platform-seed/README.md)
 records the initial package boundaries. Media application source is under
 `applications/` with production notes under `media/`.
+
+The Authoring package has two declarations. `bootstrap/application.rel` is
+the standard Authoring entry. `bootstrap/application-appdev.rel` selects the
+AppDev inspection modules, their datasets, and their reviewed grants. Pass
+the selected declaration explicitly to the native Encounter host.
