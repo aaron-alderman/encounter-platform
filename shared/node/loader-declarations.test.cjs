@@ -32,3 +32,13 @@ process loader.declaration:
   ]);
   assert.deepEqual(await synchronize([file], false), {checked:1, updated:0});
 });
+
+test('native Authoring uses the same source bytes as the shared owner', () => {
+  const workspace = path.resolve(__dirname, '../..');
+  for (const module of ['types', 'actions', 'commands', 'application', 'ui']) {
+    const file = 'source/' + module + '.encounter';
+    const shared = fs.readFileSync(path.join(workspace, 'shared/authoring', file));
+    const native = fs.readFileSync(path.join(workspace, 'applications/encounter', file));
+    assert.deepEqual(native, shared, file);
+  }
+});
