@@ -1,0 +1,214 @@
+process-module "temple/surface-process-module/1"
+
+process world.request:
+  let request = $eventInput
+  let snapshot = $request.snapshot
+  let base = $snapshot.revision
+  let savePath = "one-world/one-shipment.rel"
+  let kind = "GameWorldWorkspace"
+  let target = "one-shipment"
+  let saved = at(filter($snapshot.documents, "item", eq($item.path, $savePath)), 0)
+  let workspace = {}
+  when $saved:
+    port rel.decode { text = $saved.text; kind = $kind } → workspace
+  let composition = or(at($workspace, "composition"), null)
+  port kernel.invoke { query = "world.foundryChoices"; input = $snapshot } → foundry
+  let commands = or(at($workspace, "commands"), list())
+  let basis = or(at($workspace, "basis"), null)
+  let priorHash = or(at($workspace, "hash"), null)
+  let fields = $request.fields
+  let operation = $fields.operation
+  let view = null
+  let notice = ""
+  let error = ""
+  try:
+    port game.kernel { kernel = "world"; basis = $basis; priorHash = $priorHash; commands = $commands } → view
+    assert eq($view.status, "accepted")
+      otherwise "The original One World command history could not be replayed."
+    when eq($request.method, "POST"):
+      assert eq($fields.base, concat($base))
+        otherwise "One World changed. Review the current simulation and submit again."
+      when eq($operation, "compose-scene"):
+        call world.compose
+        let composed = $result
+        let error = or(at($composed, "error"), "")
+        when at($composed, "scene"):
+          port record.put { record = $workspace; key = "composition"; value = $composed.scene } → change
+          let reason = "Apply Foundry scene"
+          call hub.persist
+          let workspace = $change
+          let notice = "Foundry scene applied."
+      when not(eq($operation, "compose-scene")):
+        port number.calculate { operation = "less"; values = list(count($commands), 48) } → room
+        assert $room
+          otherwise "This One World session has reached its 48-command replay bound."
+        call world.command
+        let command = $result
+        port game.kernel { kernel = "world"; basis = $view.basis; priorHash = $view.hash; commands = $commands; command = $command } → proposed
+        when eq($proposed.status, "accepted"):
+          let reason = if(eq($operation, "advance"), "Advance simulation", if(eq($operation, "dispatch"), "Dispatch shipment",
+            if(eq($operation, "build-rail"), "Build rail spur", "Revise rail alignment")))
+          let commands = append($commands, list($command))
+          let change = { commands = $commands; basis = $proposed.basis; hash = $proposed.hash; receipt = $proposed.receipt; composition = $composition }
+          call hub.persist
+          let workspace = $change
+          let view = $proposed
+          let notice = concat($reason, " recorded.")
+        when not(eq($proposed.status, "accepted")):
+          let diagnostic = at(at($proposed, "diagnostics"), 0)
+          let error = or(at($diagnostic, "message"), "One World command refused.")
+  catch fault:
+    let error = $fault.message
+  call world.view
+
+process world.command:
+  assert includes(list("advance", "dispatch", "build-rail", "edit-rail"), $operation)
+    otherwise "Unknown One World command."
+  let commandId = concat("command.appdev.", $request.nonce)
+  let revision = $view.revision
+  let result = null
+  when eq($operation, "advance"):
+    port scalar.read { text = $fields.ticks } → ticks
+    let result = { kind = "advance"; expectedRevision = $revision; ticks = $ticks }
+  when eq($operation, "dispatch"):
+    let shipment = at(filter($view.shipments, "row", eq($row.id, $fields.shipment)), 0)
+    assert $shipment
+      otherwise "Choose a shipment from this world."
+    let result = { kind = "dispatchShipment"; commandId = $commandId; expectedRevision = $revision;
+      shipmentId = $shipment.id; expectedQuantity = $shipment.quantity; vehicleId = $shipment.vehicleId; routeId = $shipment.routeId }
+  when eq($operation, "build-rail"):
+    port text.matches { value = $fields.rail; pattern = "^[A-Za-z][A-Za-z0-9_.-]{0,63}$" } → validId
+    assert $validId
+      otherwise "Use a rail project ID beginning with a letter."
+    port scalar.read { text = $fields.endX } → x
+    port scalar.read { text = $fields.endY } → y
+    port scalar.read { text = $fields.endZ } → z
+    port scalar.read { text = $fields.curvature } → curvature
+    let result = { kind = "buildRailSpur"; commandId = $commandId; expectedRevision = $revision;
+      constructionId = $fields.rail; siteId = "site.demo.source"; startNodeId = "node.demo.source.boundary";
+      endX = $x; endY = $y; endZ = $z; curvature = $curvature }
+  when eq($operation, "edit-rail"):
+    let project = at(filter($view.projects, "item", eq($item.id, $fields.project)), 0)
+    assert $project
+      otherwise "Choose a rail project built in this session."
+    port scalar.read { text = $fields.curvature } → curvature
+    port scalar.read { text = $fields.speed } → speed
+    let result = { kind = "editRailAlignment"; commandId = $commandId; expectedRevision = $revision;
+      constructionId = $project.id; expectedProjectRevision = $project.revision; curvature = $curvature; designSpeedKph = $speed }
+
+process world.view:
+  let ready = eq(at($view, "status"), "accepted")
+  let content = list()
+  when $ready:
+    call world.map
+    let map = $result
+    call world.scene
+    let scene = $result
+    call world.foundryForm
+    let foundryForm = $result
+    call world.forms
+    let forms = $result
+    call world.alignments
+    let alignments = $result
+    let rows = map($view.shipments, "row", { tag = "tr"; children = list(
+      { tag = "th"; attrs = { scope = "row" }; children = list($row.name) },
+      { tag = "td"; children = list($row.state) },
+      { tag = "td"; children = list($row.quantity) },
+      { tag = "td"; children = list($row.route) }
+    ) })
+    let receipt = at($workspace, "receipt")
+    let content = list(
+      { tag = "p"; attrs = { class = "asset-id" }; children = list("Simulation tick ", $view.tick, " · Authority revision ", $view.revision) },
+      { tag = "div"; attrs = { class = "workbench-split" }; children = list($forms.dispatch, or($scene, $map)) },
+      $foundryForm,
+      if($scene, { tag = "details"; children = list({ tag = "summary"; children = list("Export corridor schematic") }, $map) }, null),
+      { tag = "table"; attrs = { class = "world-table" }; children = list(
+        { tag = "caption"; children = list("Horizon export shipments") },
+        { tag = "thead"; children = list({ tag = "tr"; children = map(list("Shipment", "State", "Quantity", "Route"), "column",
+          { tag = "th"; attrs = { scope = "col" }; children = list($column) }) }) },
+        { tag = "tbody"; children = $rows }
+      ) },
+      $alignments,
+      $forms.rail,
+      if($receipt, { tag = "p"; attrs = { class = "asset-id" }; children = list("Last authority receipt ", $receipt.id, " · Revision ", $receipt.revision) }, null),
+      { tag = "details"; children = list(
+        { tag = "summary"; children = list("Replay coordinates") },
+        { tag = "p"; attrs = { class = "asset-id" }; children = list("State SHA-256 ", $view.hash) },
+        { tag = "p"; children = list(count($commands), " recorded commands") }
+      ) }
+    )
+  let result = { tag = "section"; attrs = { class = "asset-workbench"; "aria-label" = "One World simulation editor" }; children = list(
+    if($error, { tag = "p"; attrs = { role = "alert"; class = "asset-error" }; children = list($error) }, null),
+    if($notice, { tag = "p"; attrs = { role = "status"; class = "asset-notice" }; children = list($notice) }, null),
+    $content
+  ) }
+
+process world.map:
+  let lines = map($view.map.edges, "edge", { tag = "line"; attrs = {
+    x1 = at($edge.from, 0); y1 = at($edge.from, 1); x2 = at($edge.to, 0); y2 = at($edge.to, 1)
+  }; children = list({ tag = "title"; children = list($edge.id) }) })
+  let nodes = map($view.map.nodes, "node", { tag = "circle"; attrs = { cx = at($node.point, 0); cy = at($node.point, 1); r = "5" };
+    children = list({ tag = "title"; children = list($node.id) }) })
+  let result = { tag = "svg"; attrs = { viewBox = "0 0 320 210"; class = "world-map"; role = "img"; "aria-label" = "Horizon export corridor schematic" };
+    children = list($lines, $nodes) }
+
+process world.forms:
+  let hidden = list(
+    { tag = "input"; attrs = { type = "hidden"; name = "_csrf"; value = $request.csrf } },
+    { tag = "input"; attrs = { type = "hidden"; name = "base"; value = $base } }
+  )
+  let available = filter($view.shipments, "row", eq($row.state, "ready"))
+  let shipments = map($available, "row", { tag = "option"; attrs = { value = $row.id }; children = list($row.name) })
+  let projects = map($view.projects, "row", { tag = "option"; attrs = { value = $row.id }; children = list($row.id, " · r", $row.revision) })
+  let numeric = map(list(
+    { id = "endX"; title = "End X"; value = "260" }, { id = "endY"; title = "End Y"; value = "-360" },
+    { id = "endZ"; title = "End Z"; value = "0" }, { id = "curvature"; title = "Curvature"; value = "0.32" }
+  ), "item", { tag = "label"; children = list($item.title, {
+    tag = "input"; attrs = { name = $item.id; type = "number"; step = "any"; value = $item.value; required = true }
+  }) })
+  let dispatch = { tag = "form"; attrs = { method = "post"; action = "/one-world/"; class = "asset-editor" }; children = list(
+    $hidden,
+    { tag = "fieldset"; attrs = { id = "dispatch"; tabindex = "-1" }; children = list(
+      { tag = "legend"; children = list("Dispatch and simulation clock") },
+      { tag = "label"; children = list("Ready shipment", { tag = "select"; attrs = { name = "shipment" }; children = $shipments }) },
+      { tag = "button"; attrs = { type = "submit"; name = "operation"; value = "dispatch"; disabled = if(count($shipments), null, true) }; children = list("Dispatch shipment") },
+      { tag = "label"; children = list("Ticks to advance", { tag = "input"; attrs = { name = "ticks"; type = "number"; min = "1"; max = "120"; value = "10" } }) },
+      { tag = "button"; attrs = { type = "submit"; name = "operation"; value = "advance" }; children = list("Advance simulation") }
+    ) }
+  ) }
+  let rail = list(
+    { tag = "form"; attrs = { method = "post"; action = "/one-world/"; class = "asset-editor" }; children = list(
+      $hidden,
+      { tag = "fieldset"; attrs = { id = "build-rail"; tabindex = "-1" }; children = list(
+        { tag = "legend"; children = list("Build rail at the Horizon mine") },
+        { tag = "label"; children = list("Rail project ID", { tag = "input"; attrs = { name = "rail"; value = "mine-yard-alpha"; maxlength = "64"; required = true } }) },
+        $numeric,
+        { tag = "button"; attrs = { type = "submit"; name = "operation"; value = "build-rail" }; children = list("Build rail spur") }
+      ) }
+    ) },
+    if(count($projects), { tag = "form"; attrs = { method = "post"; action = "/one-world/"; class = "asset-editor" }; children = list(
+      $hidden,
+      { tag = "fieldset"; children = list(
+        { tag = "legend"; children = list("Revise a built rail alignment") },
+        { tag = "label"; children = list("Rail alignment", { tag = "select"; attrs = { name = "project" }; children = $projects }) },
+        { tag = "label"; children = list("Revised curvature", { tag = "input"; attrs = { name = "curvature"; type = "number"; step = "any"; value = "0"; required = true } }) },
+        { tag = "label"; children = list("Design speed in km/h", { tag = "input"; attrs = { name = "speed"; type = "number"; value = "55"; required = true } }) },
+        { tag = "button"; attrs = { type = "submit"; name = "operation"; value = "edit-rail" }; children = list("Revise rail alignment") }
+      ) }
+    ) }, null)
+  )
+  let result = { dispatch = $dispatch; rail = $rail }
+
+process world.alignments:
+  fold $view.projects as project; drawings starts list():
+    let points = map($project.alignment, "point", concat(at($point, 0), ",", at($point, 1)))
+    port text.join { values = $points; separator = " " } → geometry
+    let drawing = { tag = "figure"; attrs = { class = "world-alignment" }; children = list(
+      { tag = "figcaption"; children = list($project.id, " · r", $project.revision) },
+      { tag = "svg"; attrs = { viewBox = "-1100 -800 2200 1600"; class = "world-map"; role = "img"; "aria-label" = concat($project.id, " rail alignment plan") };
+        children = list({ tag = "polyline"; attrs = { points = $geometry; fill = "none"; "vector-effect" = "non-scaling-stroke" } }) }
+    ) }
+    yield append($drawings, list($drawing)) → drawings
+  let result = if(count($drawings), { tag = "details"; attrs = { open = true }; children = list(
+    { tag = "summary"; children = list("Built rail alignment plans") }, $drawings
+  ) }, null)

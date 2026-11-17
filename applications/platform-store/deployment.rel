@@ -1,0 +1,3 @@
+("application", "stateProfile", "encounter/platform-store-deployment/1")
+("application", "module", "platform-store/deployment.encounter")
+("application", "entry", "cli.main")

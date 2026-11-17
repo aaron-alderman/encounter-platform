@@ -1,0 +1,66 @@
+process-module "temple/surface-process-module/1"
+
+process recipe.applyEdits:
+  let draft = $eventInput
+  port value.describe { value = $draft.recipe } → recipeKind
+  assert $recipeKind.plain
+    otherwise "A recipe draft requires a source recipe record."
+  port number.calculate { operation = "lessEqual"; values = list(count($draft.edits), 64) } → boundedEdits
+  port value.describe { value = $draft.edits } → editsKind
+  assert and($editsKind.array, count($draft.edits), $boundedEdits)
+    otherwise "A recipe draft requires one to 64 edits."
+  fold $draft.edits as edit; recipe starts $draft.recipe:
+    assert includes(list("add", "replace", "remove"), $edit.op)
+      otherwise "Draft edits use add, replace, or remove operations."
+    when not(eq($edit.op, "remove")):
+      port value.describe { value = $edit.value } → replacement
+      assert not(eq($replacement.type, "undefined"))
+        otherwise "Draft edit value is required."
+    port text.matches { value = $edit.path; pattern = "^/[\\s\\S]{0,511}$" } → bounded
+    assert $bounded
+      otherwise "Draft edit path must be a bounded JSON Pointer."
+    port text.slice { value = $edit.path; start = 1 } → pointer
+    port text.split { value = $pointer; pattern = "/" } → keys
+    fold $keys as part; path starts list():
+      port text.replaceAll { value = $part; search = "~1"; replacement = "/" } → decoded
+      port text.replaceAll { value = $decoded; search = "~0"; replacement = "~" } → key
+      yield append($path, list($key)) → path
+    port kernel.invoke { query = "recipe.editAt"; input = { owner = $recipe; edit = $edit; path = $path; depth = 0 } } → next
+    yield $next → recipe
+  let result = $recipe
+
+process recipe.editAt:
+  let change = $eventInput
+  let owner = $change.owner
+  let edit = $change.edit
+  let key = at($change.path, $change.depth)
+  let leaf = eq(add($change.depth, 1), count($change.path))
+  port value.describe { value = $owner } → kind
+  assert or($kind.array, $kind.plain)
+    otherwise "Draft path is not editable."
+  port record.entries { value = $owner } → entries
+  let matching = filter($entries, "entry", eq(at($entry, 0), $key))
+  let exists = count($matching)
+  let inserting = and($leaf, eq($edit.op, "add"))
+  let end = and($kind.array, or(eq($key, "-"), eq($key, concat(count($entries)))))
+  assert or($exists, and($inserting, or($kind.plain, $end)))
+    otherwise "Draft path does not exist."
+  let value = $edit.value
+  when not($leaf):
+    let child = at(at($matching, 0), 1)
+    port kernel.invoke { query = "recipe.editAt"; input = {
+      owner = $child; edit = $edit; path = $change.path; depth = add($change.depth, 1)
+    } } → value
+  fold $entries as entry; updated starts list():
+    let here = eq(at($entry, 0), $key)
+    let removal = and($here, $leaf, eq($edit.op, "remove"))
+    let insertion = and($here, $inserting, $kind.array)
+    let replacement = list($key, $value)
+    let pairs = if($removal, list(), if($insertion, list($replacement, $entry), list(if($here, $replacement, $entry))))
+    yield append($updated, $pairs) → updated
+  when not($exists):
+    let updated = append($updated, list(list($key, $value)))
+  let result = map($updated, "entry", at($entry, 1))
+  when $kind.plain:
+    port record.fromEntries { entries = $updated } → result
+

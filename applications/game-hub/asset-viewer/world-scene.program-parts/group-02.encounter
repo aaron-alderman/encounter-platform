@@ -1,0 +1,1495 @@
+process-module "temple/surface-process-module/1"
+
+process programme.fragments:
+  let result = {
+    node596 = list(
+      "Sequence",
+      {
+        body = list(
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "terrainMeshes" });
+                init = list("List", { elements = list() })
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "Do",
+            {
+              expression = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "model" });
+                property = list("NameReference", { name = "traverse" })
+                }
+                );
+                arguments = list(
+                list(
+                "Procedure",
+                {
+                generator = false;
+                async = false;
+                block = true;
+                id = null;
+                params = list(list("NameReference", { name = "node" }));
+                body = list(
+                "Sequence",
+                {
+                body = list(
+                list(
+                "Branch",
+                {
+                test = list(
+                "ShortCircuit",
+                {
+                operator = "&&";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "node" });
+                property = list("NameReference", { name = "isMesh" })
+                }
+                );
+                right = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("Pattern", { pattern = "^Terrain[ _]chunk"; flags = "" });
+                property = list("NameReference", { name = "test" })
+                }
+                );
+                arguments = list(
+                list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "node" });
+                property = list("NameReference", { name = "name" })
+                }
+                )
+                )
+                }
+                )
+                }
+                );
+                consequent = list(
+                "Do",
+                {
+                expression = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "terrainMeshes" });
+                property = list("NameReference", { name = "push" })
+                }
+                );
+                arguments = list(list("NameReference", { name = "node" }))
+                }
+                )
+                }
+                );
+                alternate = null
+                }
+                )
+                )
+                }
+                )
+                }
+                )
+                )
+                }
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "bounds" });
+                init = list("Construct", { callee = list("NameReference", { name = "Box3" }); arguments = list() })
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "Each",
+            {
+              await = false;
+              left = list(
+                "BindGroup",
+                {
+                kind = "const";
+                terminate = false;
+                declarations = list(list("Binding", { id = list("NameReference", { name = "mesh" }); init = null }))
+                }
+              );
+              right = list("NameReference", { name = "terrainMeshes" });
+              body = list(
+                "Do",
+                {
+                expression = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "bounds" });
+                property = list("NameReference", { name = "expandByObject" })
+                }
+                );
+                arguments = list(list("NameReference", { name = "mesh" }))
+                }
+                )
+                }
+              )
+            }
+          ),
+          list(
+            "Branch",
+            {
+              test = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "bounds" });
+                property = list("NameReference", { name = "isEmpty" })
+                }
+                );
+                arguments = list()
+                }
+              );
+              consequent = list(
+                "Refuse",
+                {
+                argument = list(
+                "Construct",
+                {
+                callee = list("NameReference", { name = "Error" });
+                arguments = list(list("LiteralValue", { value = "The selected scene contains no terrain surface." }))
+                }
+                )
+                }
+              );
+              alternate = null
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "size" });
+                init = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "bounds" });
+                property = list("NameReference", { name = "getSize" })
+                }
+                );
+                arguments = list(
+                list(
+                "Construct",
+                { callee = list("NameReference", { name = "Vector3" }); arguments = list() }
+                )
+                )
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "scale" });
+                init = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "Math" });
+                property = list("NameReference", { name = "min" })
+                }
+                );
+                arguments = list(
+                list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "size" });
+                property = list("NameReference", { name = "x" })
+                }
+                ),
+                list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "size" });
+                property = list("NameReference", { name = "z" })
+                }
+                )
+                )
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "ray" });
+                init = list(
+                "Construct",
+                { callee = list("NameReference", { name = "Raycaster" }); arguments = list() }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "down" });
+                init = list(
+                "Construct",
+                {
+                callee = list("NameReference", { name = "Vector3" });
+                arguments = list(
+                list("LiteralValue", { value = 0 }),
+                list(
+                "Unary",
+                { operator = "-"; prefix = true; argument = list("LiteralValue", { value = 1 }) }
+                ),
+                list("LiteralValue", { value = 0 })
+                )
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          { fragment = "node245" },
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "overlay" });
+                init = list("Construct", { callee = list("NameReference", { name = "Group" }); arguments = list() })
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "existing" });
+                init = list(
+                "Construct",
+                {
+                callee = list("NameReference", { name = "MeshBasicMaterial" });
+                arguments = list(
+                list(
+                "Record",
+                {
+                properties = list(
+                list(
+                "Field",
+                {
+                computed = false;
+                kind = "init";
+                key = list("NameReference", { name = "color" });
+                value = list("LiteralValue", { value = 4015696 })
+                }
+                )
+                )
+                }
+                )
+                )
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "built" });
+                init = list(
+                "Construct",
+                {
+                callee = list("NameReference", { name = "MeshBasicMaterial" });
+                arguments = list(
+                list(
+                "Record",
+                {
+                properties = list(
+                list(
+                "Field",
+                {
+                computed = false;
+                kind = "init";
+                key = list("NameReference", { name = "color" });
+                value = list("LiteralValue", { value = 1268701 })
+                }
+                )
+                )
+                }
+                )
+                )
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          { fragment = "node457" },
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "freight" });
+                init = list(
+                "Construct",
+                {
+                callee = list("NameReference", { name = "MeshBasicMaterial" });
+                arguments = list(
+                list(
+                "Record",
+                {
+                properties = list(
+                list(
+                "Field",
+                {
+                computed = false;
+                kind = "init";
+                key = list("NameReference", { name = "color" });
+                value = list("LiteralValue", { value = 15825682 })
+                }
+                )
+                )
+                }
+                )
+                )
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "wagon" });
+                init = list(
+                "Construct",
+                {
+                callee = list("NameReference", { name = "BoxGeometry" });
+                arguments = list(
+                list(
+                "Calculate",
+                {
+                operator = "*";
+                left = list("NameReference", { name = "scale" });
+                right = list("LiteralValue", { value = 0.034 })
+                }
+                ),
+                list(
+                "Calculate",
+                {
+                operator = "*";
+                left = list("NameReference", { name = "scale" });
+                right = list("LiteralValue", { value = 0.018 })
+                }
+                ),
+                list(
+                "Calculate",
+                {
+                operator = "*";
+                left = list("NameReference", { name = "scale" });
+                right = list("LiteralValue", { value = 0.018 })
+                }
+                )
+                )
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "lift" });
+                init = list(
+                "Calculate",
+                {
+                operator = "*";
+                left = list("NameReference", { name = "scale" });
+                right = list("LiteralValue", { value = 0.015 })
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          { fragment = "node587" },
+          list(
+            "Yield",
+            {
+              argument = list(
+                "Record",
+                {
+                properties = list(
+                list(
+                "Field",
+                {
+                computed = false;
+                kind = "init";
+                key = list("NameReference", { name = "overlay" });
+                value = list("NameReference", { name = "overlay" })
+                }
+                ),
+                list(
+                "Field",
+                {
+                computed = false;
+                kind = "init";
+                key = list("NameReference", { name = "vehicles" });
+                value = list("NameReference", { name = "vehicles" })
+                }
+                )
+                )
+                }
+              )
+            }
+          )
+        )
+      }
+    );
+    node597 = list(
+      "Define",
+      {
+        generator = false;
+        async = false;
+        id = list("NameReference", { name = "simulationOverlay" });
+        params = list(list("NameReference", { name = "model" }), list("NameReference", { name = "motion" }));
+        body = { fragment = "node596" }
+      }
+    );
+    node963 = list(
+      "Sequence",
+      {
+        body = list(
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "angle" });
+                init = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "Math" });
+                property = list("NameReference", { name = "atan" })
+                }
+                );
+                arguments = list(
+                list(
+                "Calculate",
+                {
+                operator = "*";
+                left = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "Math" });
+                property = list("NameReference", { name = "tan" })
+                }
+                );
+                arguments = list(
+                list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "MathUtils" });
+                property = list("NameReference", { name = "degToRad" })
+                }
+                );
+                arguments = list(
+                list(
+                "Calculate",
+                {
+                operator = "/";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "camera" });
+                property = list("NameReference", { name = "fov" })
+                }
+                );
+                right = list("LiteralValue", { value = 2 })
+                }
+                )
+                )
+                }
+                )
+                )
+                }
+                );
+                right = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "Math" });
+                property = list("NameReference", { name = "min" })
+                }
+                );
+                arguments = list(
+                list("LiteralValue", { value = 1 }),
+                list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "camera" });
+                property = list("NameReference", { name = "aspect" })
+                }
+                )
+                )
+                }
+                )
+                }
+                )
+                )
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "distance" });
+                init = list(
+                "Calculate",
+                {
+                operator = "/";
+                left = list(
+                "Calculate",
+                {
+                operator = "*";
+                left = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "Math" });
+                property = list("NameReference", { name = "max" })
+                }
+                );
+                arguments = list(
+                list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "framing" });
+                property = list("NameReference", { name = "radius" })
+                }
+                ),
+                list("NameReference", { name = "minimumRadius" })
+                )
+                }
+                );
+                right = list("LiteralValue", { value = 1.1 })
+                }
+                );
+                right = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "Math" });
+                property = list("NameReference", { name = "sin" })
+                }
+                );
+                arguments = list(list("NameReference", { name = "angle" }))
+                }
+                )
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "Do",
+            {
+              expression = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "controls" });
+                property = list("NameReference", { name = "target" })
+                }
+                );
+                property = list("NameReference", { name = "copy" })
+                }
+                );
+                arguments = list(
+                list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "framing" });
+                property = list("NameReference", { name = "center" })
+                }
+                )
+                )
+                }
+              )
+            }
+          ),
+          list(
+            "Do",
+            {
+              expression = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "camera" });
+                property = list("NameReference", { name = "position" })
+                }
+                );
+                property = list("NameReference", { name = "copy" })
+                }
+                );
+                arguments = list(
+                list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "framing" });
+                property = list("NameReference", { name = "center" })
+                }
+                )
+                )
+                }
+                );
+                property = list("NameReference", { name = "addScaledVector" })
+                }
+                );
+                arguments = list(
+                list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list(
+                "Construct",
+                {
+                callee = list("NameReference", { name = "Vector3" });
+                arguments = list(
+                list("LiteralValue", { value = 1 }),
+                list("LiteralValue", { value = 0.8 }),
+                list("LiteralValue", { value = 1 })
+                )
+                }
+                );
+                property = list("NameReference", { name = "normalize" })
+                }
+                );
+                arguments = list()
+                }
+                ),
+                list("NameReference", { name = "distance" })
+                )
+                }
+              )
+            }
+          ),
+          list(
+            "Do",
+            {
+              expression = list(
+                "Set",
+                {
+                operator = "=";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "camera" });
+                property = list("NameReference", { name = "near" })
+                }
+                );
+                right = list(
+                "Calculate",
+                {
+                operator = "/";
+                left = list("NameReference", { name = "distance" });
+                right = list("LiteralValue", { value = 1000 })
+                }
+                )
+                }
+              )
+            }
+          ),
+          list(
+            "Do",
+            {
+              expression = list(
+                "Set",
+                {
+                operator = "=";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "camera" });
+                property = list("NameReference", { name = "far" })
+                }
+                );
+                right = list(
+                "Calculate",
+                {
+                operator = "*";
+                left = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "Math" });
+                property = list("NameReference", { name = "max" })
+                }
+                );
+                arguments = list(
+                list("NameReference", { name = "distance" }),
+                list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "terrain" });
+                property = list("NameReference", { name = "radius" })
+                }
+                )
+                )
+                }
+                );
+                right = list("LiteralValue", { value = 100 })
+                }
+                )
+                }
+              )
+            }
+          ),
+          list(
+            "Do",
+            {
+              expression = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "camera" });
+                property = list("NameReference", { name = "updateProjectionMatrix" })
+                }
+                );
+                arguments = list()
+                }
+              )
+            }
+          ),
+          list(
+            "Do",
+            {
+              expression = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "controls" });
+                property = list("NameReference", { name = "update" })
+                }
+                );
+                arguments = list()
+                }
+              )
+            }
+          ),
+          list(
+            "Do",
+            {
+              expression = list(
+                "Invoke",
+                { optional = false; callee = list("NameReference", { name = "draw" }); arguments = list() }
+              )
+            }
+          )
+        )
+      }
+    );
+    node964 = list(
+      "Define",
+      {
+        generator = false;
+        async = false;
+        id = list("NameReference", { name = "focus" });
+        params = list(
+          list("NameReference", { name = "framing" }),
+          list("NameReference", { name = "minimumRadius" })
+        );
+        body = { fragment = "node963" }
+      }
+    );
+    node1205 = list(
+      "Sequence",
+      {
+        body = list(
+          list(
+            "Branch",
+            {
+              test = list(
+                "Calculate",
+                {
+                operator = "===";
+                left = list("NameReference", { name = "progress" });
+                right = list("LiteralValue", { value = 1 })
+                }
+              );
+              consequent = list(
+                "Sequence",
+                {
+                body = list(
+                list(
+                "Do",
+                {
+                expression = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "mesh" });
+                property = list("NameReference", { name = "position" })
+                }
+                );
+                property = list("NameReference", { name = "copy" })
+                }
+                );
+                arguments = list(list("NameReference", { name = "position" }))
+                }
+                )
+                }
+                ),
+                list(
+                "Do",
+                {
+                expression = list(
+                "Set",
+                {
+                operator = "=";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "mesh" });
+                property = list("NameReference", { name = "rotation" })
+                }
+                );
+                property = list("NameReference", { name = "y" })
+                }
+                );
+                right = list("NameReference", { name = "heading" })
+                }
+                )
+                }
+                ),
+                list("Continue", { label = null })
+                )
+                }
+              );
+              alternate = null
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "offset" });
+                init = list(
+                "Calculate",
+                {
+                operator = "*";
+                left = list("NameReference", { name = "progress" });
+                right = list(
+                "Calculate",
+                {
+                operator = "-";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "points" });
+                property = list("NameReference", { name = "length" })
+                }
+                );
+                right = list("LiteralValue", { value = 1 })
+                }
+                )
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "index" });
+                init = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "Math" });
+                property = list("NameReference", { name = "min" })
+                }
+                );
+                arguments = list(
+                list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "Math" });
+                property = list("NameReference", { name = "floor" })
+                }
+                );
+                arguments = list(list("NameReference", { name = "offset" }))
+                }
+                ),
+                list(
+                "Calculate",
+                {
+                operator = "-";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "points" });
+                property = list("NameReference", { name = "length" })
+                }
+                );
+                right = list("LiteralValue", { value = 2 })
+                }
+                )
+                )
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "from" });
+                init = list(
+                "Select",
+                {
+                computed = true;
+                optional = false;
+                object = list("NameReference", { name = "points" });
+                property = list("NameReference", { name = "index" })
+                }
+                )
+                }
+                ),
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "to" });
+                init = list(
+                "Select",
+                {
+                computed = true;
+                optional = false;
+                object = list("NameReference", { name = "points" });
+                property = list(
+                "Calculate",
+                {
+                operator = "+";
+                left = list("NameReference", { name = "index" });
+                right = list("LiteralValue", { value = 1 })
+                }
+                )
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "Do",
+            {
+              expression = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "mesh" });
+                property = list("NameReference", { name = "position" })
+                }
+                );
+                property = list("NameReference", { name = "lerpVectors" })
+                }
+                );
+                arguments = list(
+                list("NameReference", { name = "from" }),
+                list("NameReference", { name = "to" }),
+                list(
+                "Calculate",
+                {
+                operator = "-";
+                left = list("NameReference", { name = "offset" });
+                right = list("NameReference", { name = "index" })
+                }
+                )
+                )
+                }
+              )
+            }
+          ),
+          list(
+            "Do",
+            {
+              expression = list(
+                "Set",
+                {
+                operator = "=";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "mesh" });
+                property = list("NameReference", { name = "rotation" })
+                }
+                );
+                property = list("NameReference", { name = "y" })
+                }
+                );
+                right = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "Math" });
+                property = list("NameReference", { name = "atan2" })
+                }
+                );
+                arguments = list(
+                list(
+                "Calculate",
+                {
+                operator = "-";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "from" });
+                property = list("NameReference", { name = "z" })
+                }
+                );
+                right = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "to" });
+                property = list("NameReference", { name = "z" })
+                }
+                )
+                }
+                ),
+                list(
+                "Calculate",
+                {
+                operator = "-";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "to" });
+                property = list("NameReference", { name = "x" })
+                }
+                );
+                right = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "from" });
+                property = list("NameReference", { name = "x" })
+                }
+                )
+                }
+                )
+                )
+                }
+                )
+                }
+              )
+            }
+          )
+        )
+      }
+    );
+    node1206 = list(
+      "Each",
+      {
+        await = false;
+        left = list(
+          "BindGroup",
+          {
+            kind = "const";
+            terminate = false;
+            declarations = list(
+              list(
+                "Binding",
+                {
+                id = list(
+                "DestructureRecord",
+                {
+                properties = list(
+                list(
+                "Field",
+                {
+                computed = false;
+                kind = "init";
+                key = list("NameReference", { name = "mesh" });
+                value = list("NameReference", { name = "mesh" })
+                }
+                ),
+                list(
+                "Field",
+                {
+                computed = false;
+                kind = "init";
+                key = list("NameReference", { name = "points" });
+                value = list("NameReference", { name = "points" })
+                }
+                ),
+                list(
+                "Field",
+                {
+                computed = false;
+                kind = "init";
+                key = list("NameReference", { name = "position" });
+                value = list("NameReference", { name = "position" })
+                }
+                ),
+                list(
+                "Field",
+                {
+                computed = false;
+                kind = "init";
+                key = list("NameReference", { name = "heading" });
+                value = list("NameReference", { name = "heading" })
+                }
+                )
+                )
+                }
+                );
+                init = null
+                }
+              )
+            )
+          }
+        );
+        right = list("NameReference", { name = "moving" });
+        body = { fragment = "node1205" }
+      }
+    )
+  }

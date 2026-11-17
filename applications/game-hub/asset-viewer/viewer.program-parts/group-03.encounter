@@ -1,0 +1,135 @@
+process-module "temple/surface-process-module/1"
+
+process programme.fragments:
+  let result = {
+    node1249 = list(
+      "Sequence",
+      {
+        body = list(
+          list(
+            "Do",
+            {
+              expression = list(
+                "Set",
+                {
+                operator = "=";
+                left = list("NameReference", { name = "repairError" });
+                right = list("NameReference", { name = "undefined" })
+                }
+              )
+            }
+          ),
+          list(
+            "Do",
+            {
+              expression = list(
+                "Set",
+                {
+                operator = "=";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "copy" });
+                property = list("NameReference", { name = "hidden" })
+                }
+                );
+                right = list("LiteralValue", { value = true })
+                }
+              )
+            }
+          ),
+          list(
+            "Do",
+            {
+              expression = list(
+                "Set",
+                {
+                operator = "=";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "copyStatus" });
+                property = list("NameReference", { name = "textContent" })
+                }
+                );
+                right = list("LiteralValue", { value = "" })
+                }
+              )
+            }
+          ),
+          list(
+            "Do",
+            {
+              expression = list(
+                "Set",
+                {
+                operator = "=";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "fix" });
+                property = list("NameReference", { name = "disabled" })
+                }
+                );
+                right = list("LiteralValue", { value = true })
+                }
+              )
+            }
+          ),
+          list(
+            "Branch",
+            {
+              test = list("NameReference", { name = "repair" });
+              consequent = list(
+                "Do",
+                {
+                expression = list(
+                "Set",
+                {
+                operator = "=";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "originalStatus" });
+                property = list("NameReference", { name = "textContent" })
+                }
+                );
+                right = list("LiteralValue", { value = "Rebuilding the preview…" })
+                }
+                )
+                }
+              );
+              alternate = null
+            }
+          ),
+          { fragment = "node1248" }
+        )
+      }
+    );
+    node1250 = list(
+      "Define",
+      {
+        generator = false;
+        async = true;
+        id = list("NameReference", { name = "loadOriginal" });
+        params = list(
+          list(
+            "Default",
+            {
+              left = list("NameReference", { name = "repair" });
+              right = list("LiteralValue", { value = false })
+            }
+          )
+        );
+        body = { fragment = "node1249" }
+      }
+    )
+  }

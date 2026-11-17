@@ -1,0 +1,75 @@
+process-module "temple/surface-process-module/1"
+
+process test.store:
+  port browser.goto { path = "/" } → _
+  port browser.click { selector = "summary"; text = "Publish an Encounter app" } → _
+  port browser.fill { selector = "input[name=app]"; value = "workshop-notes" } → _
+  port browser.fill { selector = "input[name=title]"; value = "Workshop notes" } → _
+  port browser.fill { selector = "input[name=version]"; value = "1.0.0" } → _
+  port browser.read { selector = "textarea[name=source]"; property = "value" } → source
+  port browser.click { selector = "button"; text = "Publish Encounter app" } → _
+  port browser.expect { selector = "[role=status]"; text = "Encounter app published" } → _
+  port browser.click { selector = "button"; text = "Install 1.0.0" } → _
+  port browser.expect { selector = "[role=status]"; text = "Encounter app installed" } → _
+  port browser.click { selector = "a"; text = "Open installed app" } → _
+  port browser.expect { selector = "#app-status"; text = "Opened" } → _
+  port browser.fill { selector = "#app-view input[name=text]"; value = "Retain this note through the upgrade" } → _
+  port browser.click { selector = "button"; text = "Add note" } → _
+  port browser.expect { selector = "#app-status"; text = "Saved" } → _
+  port browser.expect { selector = "#app-view li"; text = "Retain this note through the upgrade" } → _
+  port browser.goto { path = "/runtime/?app=workshop-notes" } → _
+  port browser.expect { selector = "#app-status"; text = "Opened" } → _
+  port browser.expect { selector = "#app-view li"; text = "Retain this note through the upgrade" } → _
+  port browser.goto { path = "/" } → _
+  port browser.click { selector = "summary"; text = "Publish an Encounter app" } → _
+  port browser.fill { selector = "input[name=app]"; value = "workshop-notes" } → _
+  port browser.fill { selector = "input[name=version]"; value = "1.1.0" } → _
+  port text.replaceAll { value = $source; search = "Field notebook"; replacement = "Workshop notes upgraded" } → improved
+  port browser.fill { selector = "textarea[name=source]"; value = $improved } → _
+  port browser.click { selector = "button"; text = "Publish Encounter app" } → _
+  port browser.expect { selector = "[role=status]"; text = "Encounter app published" } → _
+  port browser.goto { path = "/runtime/?app=workshop-notes" } → _
+  port browser.expect { selector = "#app-view h2"; text = "Field notebook" } → _
+  port browser.goto { path = "/" } → _
+  port browser.click { selector = "button"; text = "Install 1.1.0" } → _
+  port browser.goto { path = "/runtime/?app=workshop-notes" } → _
+  port browser.expect { selector = "#app-status"; text = "Opened" } → _
+  port browser.expect { selector = "#app-view h2"; text = "Workshop notes upgraded" } → _
+  port browser.expect { selector = "#app-view li"; text = "Retain this note through the upgrade" } → _
+  port browser.goto { path = "/" } → _
+  port browser.click { selector = "summary"; text = "Publish an Encounter app" } → _
+  port browser.fill { selector = "input[name=app]"; value = "workshop-notes" } → _
+  port browser.fill { selector = "input[name=version]"; value = "2.0.0" } → _
+  port browser.fill { selector = "input[name=stateProfile]"; value = "field-notebook-v2" } → _
+  port browser.click { selector = "button"; text = "Publish Encounter app" } → _
+  port browser.click { selector = "button"; text = "Install 2.0.0" } → _
+  port browser.expect { selector = "[role=alert]"; text = "different state profile" } → _
+  port browser.goto { path = "/runtime/?app=workshop-notes" } → _
+  port browser.expect { selector = "#app-view h2"; text = "Workshop notes upgraded" } → _
+  port browser.screenshot { name = "installed-app-desktop" } → _
+  port browser.goto { path = "/" } → _
+  port browser.click { selector = "summary"; text = "Publish an Encounter app" } → _
+  port browser.fill { selector = "input[name=app]"; value = "second-notebook" } → _
+  port browser.fill { selector = "input[name=version]"; value = "1.0.0" } → _
+  port browser.click { selector = "button"; text = "Publish Encounter app" } → _
+  port browser.click { selector = "li:has(strong:text-is('Field notebook 1.0.0')) button"; text = "Install 1.0.0" } → _
+  port browser.goto { path = "/runtime/?app=second-notebook" } → _
+  port browser.expect { selector = "#app-status"; text = "Opened" } → _
+  port browser.expect { selector = "#app-view li"; count = 0 } → _
+  port browser.goto { path = "/" } → _
+  port browser.click { selector = "summary"; text = "Publish an Encounter app" } → _
+  port browser.fill { selector = "input[name=app]"; value = "blocked-app" } → _
+  port browser.fill { selector = "input[name=version]"; value = "0.0.1" } → _
+  port browser.fill { selector = "input[name=entry]"; value = "blocked.request" } → _
+  let blocked = concat($source, "\nprocess blocked.request:\n  port storage.cas {} → result\n")
+  port browser.fill { selector = "textarea[name=source]"; value = $blocked } → _
+  port browser.click { selector = "button"; text = "Publish Encounter app" } → _
+  port browser.click { selector = "button"; text = "Install 0.0.1" } → _
+  port browser.goto { path = "/runtime/?app=blocked-app" } → _
+  port browser.expect { selector = "#app-status"; text = "port not granted" } → _
+  port browser.goto { path = "/runtime/?app=workshop-notes" } → _
+  port browser.expect { selector = "#app-view li"; text = "Retain this note through the upgrade" } → _
+  port browser.goto { path = "/" } → _
+  port browser.resize { width = 390; height = 844 } → _
+  port browser.screenshot { name = "store-mobile" } → _
+  let result = true

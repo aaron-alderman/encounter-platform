@@ -1,0 +1,16 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = { sections = list({
+    subject = "application";
+    stateProfile = "encounter/platform-store-render/1";
+    module = list("platform-store/runner.encounter", "platform-store/render.encounter",
+      "game-hub/presentation.encounter", "platform-store/presentation.encounter", "encounter-libraries/semantic/notes.encounter",
+      "platform-store/design.encounter", "encounter-libraries/workflows/sourcery-presentation.encounter",
+      "encounter-libraries/workflows/sourcery-notebook-web.encounter", "encounter-libraries/source-presentation/source-widget.encounter",
+      "encounter/algebra/html/html.escape.encounter", "encounter/algebra/html/html.cssText.encounter",
+      "encounter/algebra/html/html.serialize.encounter", "encounter/algebra/css/css.renderPlan.encounter");
+    entry = "cli.main";
+    grant = list("kernel.invoke", "value.describe", "record.entries", "text.matches",
+      "text.replaceAll", "text.join", "value.string", "value.type")
+  }) }

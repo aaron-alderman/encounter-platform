@@ -1,0 +1,318 @@
+process-module "temple/surface-process-module/1"
+
+process programme.definition:
+  let result = {
+    protocol = "encounter/program-projection/1";
+    identity = "world-scene.js";
+    reason = "Preserve the current behaviour while transferring ownership out of generated JavaScript.";
+    target = "world-scene.js";
+    goal = "A typed programme projected through the shared algebra grammar.";
+    tree = list(
+      "Module",
+      {
+        body = list(
+          list(
+            "Use",
+            {
+              specifiers = list(
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Box3" });
+                local = list("NameReference", { name = "Box3" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "BoxGeometry" });
+                local = list("NameReference", { name = "BoxGeometry" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "CurvePath" });
+                local = list("NameReference", { name = "CurvePath" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Group" });
+                local = list("NameReference", { name = "Group" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "LineCurve3" });
+                local = list("NameReference", { name = "LineCurve3" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "MathUtils" });
+                local = list("NameReference", { name = "MathUtils" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Mesh" });
+                local = list("NameReference", { name = "Mesh" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "MeshBasicMaterial" });
+                local = list("NameReference", { name = "MeshBasicMaterial" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Raycaster" });
+                local = list("NameReference", { name = "Raycaster" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Sphere" });
+                local = list("NameReference", { name = "Sphere" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "TubeGeometry" });
+                local = list("NameReference", { name = "TubeGeometry" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Vector3" });
+                local = list("NameReference", { name = "Vector3" })
+                }
+                )
+              );
+              source = list("LiteralValue", { value = "./vendor/build/three.module.js" });
+              attributes = list()
+            }
+          ),
+          list(
+            "Use",
+            {
+              specifiers = list(
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "GLTFLoader" });
+                local = list("NameReference", { name = "GLTFLoader" })
+                }
+                )
+              );
+              source = list("LiteralValue", { value = "./vendor/examples/jsm/loaders/GLTFLoader.js" });
+              attributes = list()
+            }
+          ),
+          list(
+            "Use",
+            {
+              specifiers = list(
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "KTX2Loader" });
+                local = list("NameReference", { name = "KTX2Loader" })
+                }
+                )
+              );
+              source = list("LiteralValue", { value = "./vendor/examples/jsm/loaders/KTX2Loader.js" });
+              attributes = list()
+            }
+          ),
+          list(
+            "Use",
+            {
+              specifiers = list(
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "makePane" });
+                local = list("NameReference", { name = "makePane" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "disposeModel" });
+                local = list("NameReference", { name = "disposeModel" })
+                }
+                )
+              );
+              source = list("LiteralValue", { value = "./viewport.js" });
+              attributes = list()
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "panel" });
+                init = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "document" });
+                property = list("NameReference", { name = "querySelector" })
+                }
+                );
+                arguments = list(list("LiteralValue", { value = ".world-scene" }))
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "status" });
+                init = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "panel" });
+                property = list("NameReference", { name = "querySelector" })
+                }
+                );
+                arguments = list(list("LiteralValue", { value = "[data-scene-status]" }))
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          { fragment = "node597" },
+          { fragment = "node1344" },
+          list(
+            "Do",
+            {
+              expression = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list("NameReference", { name = "openScene" });
+                arguments = list()
+                }
+                );
+                property = list("NameReference", { name = "catch" })
+                }
+                );
+                arguments = list(
+                list(
+                "Procedure",
+                {
+                generator = false;
+                async = false;
+                block = true;
+                id = null;
+                params = list(list("NameReference", { name = "error" }));
+                body = list(
+                "Sequence",
+                {
+                body = list(
+                list(
+                "Do",
+                {
+                expression = list(
+                "Set",
+                {
+                operator = "=";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "status" });
+                property = list("NameReference", { name = "textContent" })
+                }
+                );
+                right = list(
+                "Calculate",
+                {
+                operator = "+";
+                left = list("LiteralValue", { value = "Foundry scene could not be loaded. " });
+                right = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "error" });
+                property = list("NameReference", { name = "message" })
+                }
+                )
+                }
+                )
+                }
+                )
+                }
+                )
+                )
+                }
+                )
+                }
+                )
+                )
+                }
+              )
+            }
+          )
+        )
+      }
+    );
+    fragments = list(
+      "world-scene.program-parts/group-01.encounter",
+      "world-scene.program-parts/group-02.encounter",
+      "world-scene.program-parts/group-03.encounter",
+      "world-scene.program-parts/group-04.encounter",
+      "world-scene.program-parts/group-05.encounter"
+    )
+  }

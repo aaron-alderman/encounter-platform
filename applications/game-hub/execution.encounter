@@ -1,0 +1,62 @@
+process-module "temple/surface-process-module/1"
+
+process hub.operationLabel:
+  let operations = {
+    "save-draft" = "Save draft edit"; inspect = "Inspect"; import = "Import"; validate = "Validate"; build = "Build asset candidate"; improve = "Improve asset";
+    preview = "Preview terrain edit"; commit = "Commit terrain edit"; undo = "Undo terrain edit"; redo = "Redo terrain edit";
+    package = "Package terrain revision"; dispatch = "Dispatch shipment"; advance = "Advance simulation";
+    "compose-scene" = "Apply Foundry scene"; "build-rail" = "Build rail spur"; "edit-rail" = "Revise rail alignment";
+    "publish-asset" = "Publish asset release"; "use-asset" = "Install asset dependency";
+    "publish-game" = "Publish game release"; "install-game" = "Install game release"; reset = "Reset player session";
+    "publish-app" = "Publish Encounter app"; "install-app" = "Install Encounter app"
+  }
+  let result = or(at($operations, $eventInput), "Submitted command")
+
+process hub.executionView:
+  let result = { tag = "section"; attrs = { class = "inspector"; "aria-label" = "Recorded execution" }; children = list(
+    { tag = "p"; attrs = { class = "map-note" }; children = list("Run a command in this workbench to record its execution here.") }
+  ) }
+  when $execution:
+    port application.data { name = "semantic-map" } → index
+    let path = or(at($request, "storePath"), concat("/", $doc.id, "/"))
+    fold $execution.events as event; rows starts list():
+      port kernel.invoke { query = "hub.executionRow"; input = { event = $event; path = $path; sites = $index.sites } } → row
+      yield append($rows, list($row)) → rows
+    let result = { tag = "section"; attrs = { class = "inspector"; "aria-label" = "Recorded execution" }; children = list(
+      { tag = "p"; attrs = { class = "map-note" }; children = list("Latest command in this browser session. Events appear in the order they were recorded.") },
+      { tag = "h2"; children = list($execution.operation) },
+      { tag = "p"; children = list(count($rows), " recorded events") },
+      if($execution.dropped, { tag = "p"; attrs = { role = "status" }; children = list($execution.dropped, " later events omitted by the capture limit.") }, null),
+      { tag = "table"; attrs = { class = "execution-table"; "aria-label" = "Execution events" }; children = list(
+        { tag = "thead"; children = list({ tag = "tr"; children = map(list("#", "Instruction", "Outcome"), "heading",
+          { tag = "th"; attrs = { scope = "col" }; children = list($heading) }) }) },
+        { tag = "tbody"; children = $rows }
+      ) }
+    ) }
+
+process hub.executionRow:
+  let row = $eventInput
+  let event = $row.event
+  port text.join { values = $event.address; separator = "." } → address
+  let id = concat($event.process, "@", $address)
+  let site = at(filter($row.sites, "site", and(eq($site.id, $id), eq($site.kind, $event.kind),
+    if(eq($event.kind, "port-end"), eq($site.port, $event.data.port), true))), 0)
+  port kernel.invoke { query = "semantic.siteLabel"; input = $event } → kind
+  let outcome = "Entered refusal handler"
+  when eq($event.kind, "when"):
+    let outcome = if($event.data.fault, "Condition faulted", if($event.data.taken, "Taken", "Skipped"))
+  when eq($event.kind, "assert"):
+    let outcome = if($event.data.fault, "Check faulted", if($event.data.passed, "Passed", "Failed"))
+  when eq($event.kind, "port-end"):
+    let outcome = if($event.data.ok, if($event.data.revision, concat("Saved revision ", $event.data.revision),
+      or($event.data.status, "Completed")), "Effect faulted")
+  let label = concat($kind, if(eq($event.kind, "port-end"), concat(" · ", $event.data.port,
+    if($event.data.query, concat(" → ", $event.data.query), "")), ""))
+  let source = if($site, { tag = "a"; attrs = { href = concat($row.path, "?view=source&site=", $site.id,
+    "&pin=", $site.source.sha256, "&start=", $site.source.start, "&from=execution") }; children = list($label) }, $label)
+  let result = { tag = "tr"; attrs = { "data-event-kind" = $event.kind }; children = list(
+    { tag = "td"; children = list($event.sequence) },
+    { tag = "td"; children = list($source, { tag = "small"; children = list($event.process, " · ", $address) }) },
+    { tag = "td"; children = list($outcome, if(and(eq($event.kind, "assert"), not($event.data.passed), at($site, "diagnostic")),
+      { tag = "small"; children = list($site.diagnostic) }, null)) }
+  ) }

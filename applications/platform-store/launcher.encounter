@@ -1,0 +1,216 @@
+process-module "temple/surface-process-module/1"
+
+process cli.main:
+  let page = at($eventInput, 0)
+  port text.match { value = $page; pattern = " id=\"front-gate-window\"" } → frontGate
+  let legacyHome = not($frontGate)
+  port text.match { value = $page; pattern = " id=\"notes-store-window\"" } → existing
+  when not($existing):
+    call launcher.store
+    let page = $result
+  port text.match { value = $page; pattern = " id=\"notes-game-hub-window\"" } → gameWindow
+  port text.match { value = $page; pattern = " id=\"notes-game-hub-surface\"" } → gameZone
+  port text.match { value = $page; pattern = "\\.game-zone-pane ul\\{grid-auto-rows:minmax\\(75px,1fr\\)\\}" } → gameCards
+  when not($gameWindow):
+    call launcher.game
+    let page = $result
+  when and($gameWindow, not($gameZone)):
+    call launcher.gameZone
+    let page = $result
+  when and($gameZone, not($gameCards)):
+    call launcher.gameStyles
+  port text.match { value = $page; pattern = " id=\"notes-design-demo-window\"" } → demo
+  when not($demo):
+    call launcher.design
+    let page = $result
+  call desktop.apps
+  fold filter($result, "entry", includes(list("assurance", "performance"), $entry.key)) as app; page starts $page:
+    port text.match { value = $page; pattern = concat(" id=\"", $app.window, "\"") } → mounted
+    when not($mounted):
+      call launcher.toolWindow
+      let page = $result
+    yield $page → page
+  port text.match { value = $page; pattern = "id=\"desktop-launch-check-game-open\"" } → hasChecks
+  when not($hasChecks):
+    call launcher.launchAssurance
+    let page = $result
+  port text.match { value = $page; pattern = "\\.desktop-launch-results\\{" } → hasStyles
+  when not($hasStyles):
+    call design.desktopMultiWindowStyles
+    port text.replaceAll { value = $page; search = "</style>"; replacement = concat($result, "</style>") } → page
+  call desktop.assureApps
+  when or(not($gameZone), not($gameCards)):
+    call launcher.homeFingerprint
+
+process launcher.homeFingerprint:
+  port text.match { value = $result; pattern = "<small class=\"build-hash\">[a-f0-9]{12}</small>" } → previous
+  when $previous:
+    let placeholder = "<small class=\"build-hash\">sourcery-home-build-placeholder</small>"
+    port text.replaceAll { value = $result; search = $previous.text; replacement = $placeholder } → staged
+    port digest.sha256 { text = $staged } → digest
+    port text.slice { value = $digest; start = 0; end = 12 } → fingerprint
+    port text.replaceAll { value = $staged; search = $placeholder; replacement = concat("<small class=\"build-hash\">", $fingerprint, "</small>") } → result
+
+process launcher.game:
+  let shortcutKey = "game"
+  call desktop.hostedShortcut
+  port text.replace { value = $page; pattern = "<a[^>]* href=\"/game/\"[^>]* class=\"app-link\"[^>]*>[\\s\\S]*?</a>"; replacement = $result; flags = "g" } → page
+  port text.replaceAll { value = $page; search = "<code>/game/</code>"; replacement = "<code>#notes-game-hub-window</code>" } → page
+  call game.desktopShell
+  let body = $result
+  call desktop.windowHtml
+  let appWindow = $result
+  port text.match { value = $page; pattern = "<footer class=\"statusbar\"(?: data-window-slot=\"status\")?>[\\s\\S]*?</footer></section>" } → boundary
+  assert $boundary
+    otherwise "The active desktop has no Sourcery Workspace window boundary."
+  port text.replaceAll { value = $page; search = $boundary.text; replacement = concat($boundary.text, $appWindow) } → page
+  call desktop.appTask
+  let input = $result
+  call html.serialize
+  let tray = "<div class=\"tray\">"
+  port text.replaceAll { value = $page; search = $tray; replacement = concat($result, $tray) } → page
+  call game.desktopStyles
+  port text.replaceAll { value = $page; search = "</style>"; replacement = concat($result, "</style>") } → result
+
+process launcher.gameZone:
+  let legacySlot = "<div id=\"notes-game-hub-content\" class=\"desktop-app-content\">"
+  let slot = if(includes($page, $legacySlot), $legacySlot, "<div id=\"notes-game-hub-content\" class=\"desktop-app-content\" data-window-slot=\"content\">")
+  assert includes($page, concat($slot, "</div>"))
+    otherwise "The existing Game Hub window has no empty content slot."
+  call game.desktopShell
+  port text.replaceAll { value = $page; search = concat($slot, "</div>"); replacement = concat($slot, $result, "</div>") } → page
+  port text.replace { value = $page; pattern = "(<button[^>]* data-desktop-launch=\"game\"[^>]*>[\\s\\S]*?<strong>)Game Hub</strong><small>Game workspace</small>";
+    replacement = "$1Game Zone</strong><small>Play, build and manage games</small>"; flags = "g" } → page
+  port text.replace { value = $page; pattern = "(<h2 id=\"notes-game-hub-title\"[^>]*>)Game Hub</h2>"; replacement = "$1Game Zone</h2>" } → page
+  port text.replace { value = $page; pattern = "(<button id=\"notes-game-hub-task\"[^>]* title=\")Game Hub(\"[^>]*>[\\s\\S]*?<span>)Game Hub</span>";
+    replacement = "$1Game Zone$2Game Zone</span>" } → page
+  port text.replaceAll { value = $page; search = "aria-label=\"Minimize Game Hub\""; replacement = "aria-label=\"Minimize Game Zone\"" } → page
+  port text.replaceAll { value = $page; search = "aria-label=\"Close Game Hub\""; replacement = "aria-label=\"Close Game Zone\"" } → page
+  port text.replace { value = $page; pattern = "(<tr data-app-id=\"game\"><th scope=\"row\">)Game Hub</th><td>Game workspace"; replacement = "$1Game Zone</th><td>Play, build and manage games" } → page
+  port text.replace { value = $page; pattern = "(<th scope=\"row\">)Game Hub(</th><td id=\"desktop-launch-check-game-open\")"; replacement = "$1Game Zone$2" } → page
+  call launcher.gameStyles
+  let result = $page
+
+process launcher.gameStyles:
+  port text.match { value = $page; pattern = "#notes-game-hub-window\\{top:clamp\\(20px,7vh,62px\\)[\\s\\S]*?@media\\(max-width:670px\\)\\{#notes-game-hub-window\\{[^}]*\\}\\}" } → oldStyles
+  call game.desktopStyles
+  let styles = $result
+  when $oldStyles:
+    port text.replaceAll { value = $page; search = $oldStyles.text; replacement = $styles } → page
+  when not($oldStyles):
+    port text.replaceAll { value = $page; search = "</style>"; replacement = concat($styles, "</style>") } → page
+
+process launcher.store:
+  let shortcutKey = "store"
+  call desktop.hostedShortcut
+  let shortcut = $result
+  port text.replace { value = $page; pattern = "<a[^>]* href=\"/store/\"[^>]*>[\\s\\S]*?</a>"; replacement = $shortcut; flags = "g" } → replaced
+  when eq($replaced, $page):
+    port text.replace { value = $page; pattern = "(<a[^>]* href=\"/game/\"[^>]*>[\\s\\S]*?</a>)"; replacement = concat("$1", $shortcut); flags = "g" } → replaced
+  let page = $replaced
+  port text.replaceAll { value = $page; search = "Open in a new tab with your approved Sourcery account."; replacement = "Use your approved Sourcery account for hosted apps." } → page
+  port text.replaceAll { value = $page; search = "<code>/store/</code>"; replacement = "<code>#notes-store-window</code>" } → page
+  call desktop.apps
+  let app = at(filter($result, "entry", eq($entry.key, "store")), 0)
+  call store.desktopMarkup
+  let body = $result
+  call desktop.windowHtml
+  let appWindow = $result
+  port text.match { value = $page; pattern = "<footer class=\"statusbar\"(?: data-window-slot=\"status\")?>[\\s\\S]*?</footer></section>" } → boundary
+  assert $boundary
+    otherwise "The active desktop has no Sourcery Workspace window boundary."
+  port text.replaceAll { value = $page; search = $boundary.text; replacement = concat($boundary.text, $appWindow) } → page
+  call desktop.appTask
+  let input = $result
+  call html.serialize
+  let tray = "<div class=\"tray\">"
+  port text.replaceAll { value = $page; search = $tray; replacement = concat($result, $tray) } → page
+  call store.desktopStyles
+  port text.replaceAll { value = $page; search = "</style>"; replacement = concat($result, "</style>") } → result
+
+process launcher.design:
+  call desktop.apps
+  let app = at(filter($result, "entry", eq($entry.key, "design")), 0)
+  let input = { tag = "li"; children = list({ tag = "button"; attrs = { id = $app.id; type = "button"; class = "app-link";
+    "aria-controls" = $app.window; "data-launch-action" = $app.defaultAction }; children = list(
+    { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" }; children = list({ tag = "use"; attrs = { href = concat("#icon-", $app.icon) } }) },
+    { tag = "span"; attrs = { class = "app-label" }; children = list({ tag = "strong"; children = list($app.title) },
+      { tag = "small"; children = list($app.detail) }) }
+  ) }) }
+  call html.serialize
+  let card = $result
+  port text.match { value = $page; pattern = "<li>(<a|<button)[^>]*id=\"notes-design-demo\"[^>]*>[\\s\\S]*?</(a|button)></li>" } → oldCard
+  when $oldCard:
+    port text.replaceAll { value = $page; search = $oldCard.text; replacement = $card } → page
+  when not($oldCard):
+    port text.match { value = $page; pattern = "<li><button[^>]*id=\"notes-performance-launch\"[^>]*>[\\s\\S]*?</button></li>" } → anchor
+    assert $anchor
+      otherwise "The active workspace has no Sourcery Operations card group."
+    port text.replaceAll { value = $page; search = $anchor.text; replacement = concat($anchor.text, $card) } → page
+    port text.match { value = $page; pattern = "Quality and health <span>([0-9]+)</span>" } → countLabel
+    when $countLabel:
+      port scalar.read { text = at($countLabel.groups, 0) } → count
+      port text.replaceAll { value = $page; search = $countLabel.text; replacement = concat("Quality and health <span>", add($count, 1), "</span>") } → page
+  port text.match { value = $page; pattern = "<section[^>]*id=\"notes-design-demo-panel\"[^>]*>[\\s\\S]*?</section>" } → oldPanel
+  when $oldPanel:
+    port text.replaceAll { value = $page; search = $oldPanel.text; replacement = "" } → page
+  port text.match { value = $page; pattern = "<dialog[^>]*id=\"notes-design-demo-dialog\"[^>]*>[\\s\\S]*?</dialog>" } → oldDialog
+  when $oldDialog:
+    port text.replaceAll { value = $page; search = $oldDialog.text; replacement = "" } → page
+  port text.replaceAll { value = $page; search = "<code>#notes-design-demo-panel</code>"; replacement = concat("<code>#", $app.window, "</code>") } → page
+  port text.replaceAll { value = $page; search = "<code>#notes-design-demo-dialog</code>"; replacement = concat("<code>#", $app.window, "</code>") } → page
+  call desktop.appWindow
+  let input = $result
+  call html.serialize
+  let appWindow = $result
+  port text.match { value = $page; pattern = "<footer class=\"statusbar\"(?: data-window-slot=\"status\")?>[\\s\\S]*?</footer></section>" } → boundary
+  assert $boundary
+    otherwise "The active desktop has no Sourcery Workspace window boundary."
+  port text.replaceAll { value = $page; search = $boundary.text; replacement = concat($boundary.text, $appWindow) } → page
+  call desktop.appTask
+  let input = $result
+  call html.serialize
+  let tray = "<div class=\"tray\">"
+  port text.replaceAll { value = $page; search = $tray; replacement = concat($result, $tray) } → page
+  port text.match { value = $page; pattern = "(#tab-hosted:checked~\\.programs>\\.workspace-view,|#notes-design-demo-dialog\\{width:)[\\s\\S]*?(?=#notes-design-demo-content\\{)" } → oldStyles
+  when $oldStyles:
+    call design.workspaceFrameStyles
+    port text.replaceAll { value = $page; search = $oldStyles.text; replacement = $result } → page
+  when not($oldStyles):
+    call design.workspaceStyles
+    port text.replaceAll { value = $page; search = "</style>"; replacement = concat($result, "</style>") } → page
+  port text.replaceAll { value = $page; search = "<p>Open an app in Sourcery Workspace.</p>"; replacement = "<p>Open an Operations tool.</p>" } → result
+
+process launcher.toolWindow:
+  let legacy = concat("notes-", $app.key, "-dialog")
+  port text.match { value = $page; pattern = concat("<dialog[^>]* id=\"", $legacy, "\"[^>]*>[\\s\\S]*?<div class=\"dialog-body\">([\\s\\S]*?)</div><form method=\"dialog\"[\\s\\S]*?</dialog>") } → dialog
+  assert $dialog
+    otherwise "The desktop tool has no content to migrate."
+  let body = at($dialog.groups, 0)
+  call desktop.windowHtml
+  let appWindow = $result
+  port text.replaceAll { value = $page; search = $dialog.text; replacement = "" } → page
+  port text.match { value = $page; pattern = "<footer class=\"statusbar\"(?: data-window-slot=\"status\")?>[\\s\\S]*?</footer></section>" } → boundary
+  assert $boundary
+    otherwise "The active desktop has no Sourcery Workspace window boundary."
+  port text.replaceAll { value = $page; search = $boundary.text; replacement = concat($boundary.text, $appWindow) } → page
+  call desktop.appTask
+  let input = $result
+  call html.serialize
+  let tray = "<div class=\"tray\">"
+  port text.replaceAll { value = $page; search = $tray; replacement = concat($result, $tray) } → page
+  port text.match { value = $page; pattern = concat("<button[^>]* id=\"", $app.id, "\"[^>]*>") } → launch
+  assert $launch
+    otherwise "The desktop tool has no Operations launcher."
+  port text.replaceAll { value = $launch.text; search = " aria-haspopup=\"dialog\""; replacement = "" } → button
+  port text.replaceAll { value = $button; search = concat("aria-controls=\"", $legacy, "\""); replacement = concat("aria-controls=\"", $app.window, "\" data-launch-action=\"", $app.defaultAction, "\"") } → button
+  port text.replaceAll { value = $page; search = $launch.text; replacement = $button } → page
+  port text.replaceAll { value = $page; search = concat("<code>#", $legacy, "</code>"); replacement = concat("<code>#", $app.window, "</code>") } → result
+
+process launcher.launchAssurance:
+  port text.match { value = $page; pattern = "<section aria-labelledby=\"desktop-assurance-title\">[\\s\\S]*?</section>" } → oldAssurance
+  when $oldAssurance:
+    port text.replaceAll { value = $page; search = $oldAssurance.text; replacement = "" } → page
+  call desktop.viewAssuranceMarkup
+  let history = "<section aria-labelledby=\"decision-history-title\">"
+  port text.replaceAll { value = $page; search = $history; replacement = concat($result, $history) } → result

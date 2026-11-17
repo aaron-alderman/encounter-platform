@@ -1,0 +1,128 @@
+process-module "temple/surface-process-module/1"
+
+process world.foundryChoices:
+  let snapshot = $eventInput
+  call asset.inventory
+  fold $result as asset; builds starts list():
+    let path = concat("asset-foundry/", $asset.id, ".rel")
+    let saved = at(filter($snapshot.documents, "entry", eq($entry.path, $path)), 0)
+    let choices = list()
+    when $saved:
+      port rel.decode { text = $saved.text; kind = "GameAssetWorkspace" } → workspace
+      fold distinct(list(at($workspace, "candidate"), at($workspace, "previous"))) as build; available starts list():
+        let high = at(filter(or(at($build, "variants"), list()), "variant", eq($variant.level, "high")), 0)
+        let choice = null
+        when and(eq(at($build, "status"), "accepted"), at($high, "hash")):
+          port text.slice { value = $build.bundleIdentity; start = 0; end = 12 } → short
+          port number.calculate { operation = "lessEqual"; values = list($high.bytes, 16777216) } → downloadable
+          let choice = { id = concat($asset.id, ".", $build.bundleIdentity); label = concat($asset.label, " · ", $short);
+            asset = $asset.id; name = $asset.label; bundle = $build.bundleIdentity; hash = $high.hash;
+            bytes = $high.bytes; downloadable = $downloadable }
+        yield if($choice, append($available, list($choice)), $available) → available
+      let choices = $available
+    yield append($builds, $choices) → builds
+  port storage.history {} → history
+  let retained = filter($history, "entry", and(eq($entry.goal, "GameLandscapeWorkspace"), eq($entry.target, "coastal")))
+  let terrain = filter(map(range(12), "index", at($retained, add($index, -1))), "entry", $entry)
+  port kernel.invoke { query = "store.read"; input = $snapshot } → store
+  let installed = at(filter($store.assets, "item", eq($item.id, $store.dependency)), 0)
+  let builds = if($installed, append(list($installed), filter($builds, "item", not(eq($item.id, $installed.id)))), $builds)
+  let result = { builds = $builds; terrain = $terrain; installed = at($installed, "id") }
+
+process world.compose:
+  let asset = at(filter($foundry.builds, "choice", eq($choice.id, $fields.assetBuild)), 0)
+  let terrain = at(filter($foundry.terrain, "choice", eq(concat($choice.revision), $fields.terrainRevision)), 0)
+  assert and($asset, $terrain)
+    otherwise "Choose a verified asset build and a saved terrain revision."
+  port storage.snapshot { revision = $terrain.revision } → historical
+  let terrainRecord = at(filter($historical.documents, "entry", eq($entry.path, "landscape-foundry/coastal.rel")), 0)
+  assert $terrainRecord
+    otherwise "The selected terrain revision is unavailable."
+  port rel.decode { text = $terrainRecord.text; kind = "GameLandscapeWorkspace" } → landscape
+  let journal = at($landscape, "journal")
+  assert at($journal, "headRevision")
+    otherwise "The selected terrain revision has no saved journal."
+  port scalar.read { text = $fields.placementX } → x
+  port scalar.read { text = $fields.placementZ } → z
+  port game.kernel { kernel = "world"; operation = "compose-scene"; bundle = $asset.bundle; assetHash = $asset.hash;
+    journal = $journal; revision = $journal.headRevision; x = $x; z = $z } → composed
+  let diagnostic = at(at($composed, "diagnostics"), 0)
+  let result = { error = or(at($diagnostic, "message"), "The selected Foundry outputs could not be composed.") }
+  when eq($composed.status, "accepted"):
+    let result = { scene = { asset = $asset; terrain = { revision = $terrain.revision; head = $journal.headRevision };
+      x = $x; y = $composed.y; z = $z; file = $composed.file } }
+
+process world.sceneFile:
+  let item = at(filter($request.snapshot.documents, "entry", eq($entry.path, "one-world/one-shipment.rel")), 0)
+  let result = null
+  when $item:
+    port rel.decode { text = $item.text; kind = "GameWorldWorkspace" } → saved
+    let file = at(at($saved, "composition"), "file")
+    when and($file, eq($file.sha256, $fields.scene)):
+      let result = $file
+  when not($result):
+    let snapshot = $request.snapshot
+    call store.readSnapshot
+    let store = $result
+    let release = at(filter($store.games, "game", eq($game.composition.file.sha256, $fields.scene)), 0)
+    let result = at(at($release, "composition"), "file")
+
+process world.foundryForm:
+  let composition = at($workspace, "composition")
+  let activeAsset = at(at($composition, "asset"), "id")
+  let activeTerrain = at(at($composition, "terrain"), "revision")
+  let assets = map($foundry.builds, "choice", { tag = "option"; attrs = {
+    value = $choice.id; selected = eq($choice.id, or($foundry.installed, $activeAsset))
+  }; children = list($choice.label, if(eq($choice.id, $foundry.installed), " · installed from Store", "")) })
+  let terrains = map($foundry.terrain, "choice", { tag = "option"; attrs = {
+    value = $choice.revision; selected = eq($choice.revision, $activeTerrain)
+  }; children = list("Revision ", $choice.revision, " · ", $choice.reason) })
+  let result = { tag = "section"; attrs = { "aria-label" = "Foundry inputs" }; children = list(
+    { tag = "h2"; children = list("Foundry inputs") },
+    { tag = "a"; attrs = { href = "https://appdev.sourcerytech.com.au/store/" }; children = list("Manage published releases and installed asset") },
+    if(and(count($assets), count($terrains)),
+      { tag = "form"; attrs = { method = "post"; action = "/one-world/"; class = "asset-editor" }; children = list(
+        { tag = "input"; attrs = { type = "hidden"; name = "_csrf"; value = $request.csrf } },
+        { tag = "input"; attrs = { type = "hidden"; name = "base"; value = $base } },
+        { tag = "fieldset"; attrs = { class = "world-scene-fields" }; children = list(
+          { tag = "legend"; children = list("Compose the world scene") },
+          { tag = "label"; children = list("Verified asset build", { tag = "select"; attrs = { name = "assetBuild"; required = true }; children = $assets }) },
+          { tag = "label"; children = list("Saved terrain revision", { tag = "select"; attrs = { name = "terrainRevision"; required = true }; children = $terrains }) },
+          { tag = "label"; children = list("Placement X (m)", { tag = "input"; attrs = { type = "number"; step = "any"; name = "placementX";
+            required = true; value = if($composition, $composition.x, 32) } }) },
+          { tag = "label"; children = list("Placement Z (m)", { tag = "input"; attrs = { type = "number"; step = "any"; name = "placementZ";
+            required = true; value = if($composition, $composition.z, 32) } }) },
+          { tag = "button"; attrs = { type = "submit"; name = "operation"; value = "compose-scene" }; children = list("Apply to One World") }
+        ) }
+      ) },
+      { tag = "p"; children = list("To compose a scene, ",
+        { tag = "a"; attrs = { href = "/asset-foundry/" }; children = list("build a verified asset") }, " and ",
+        { tag = "a"; attrs = { href = "/landscape-foundry/" }; children = list("save a terrain revision") }, ".") }
+    )
+  ) }
+
+process world.scene:
+  let composition = at($workspace, "composition")
+  let result = null
+  when $composition:
+    port json.format { value = $view.sceneMotion } → motion
+    let result = { tag = "section"; attrs = { class = "world-scene"; "aria-label" = "Foundry scene";
+      "data-scene" = $composition.file.sha256; "data-scene-motion" = $motion }; children = list(
+      { tag = "h2"; children = list("Foundry scene") },
+      { tag = "div"; attrs = { class = "asset-controls" }; children = list(
+        { tag = "button"; attrs = { type = "button"; "data-focus-asset" = true; disabled = true }; children = list("Focus asset") },
+        { tag = "button"; attrs = { type = "button"; "data-show-terrain" = true; disabled = true }; children = list("Show full terrain") },
+        { tag = "button"; attrs = { type = "button"; "data-replay-movement" = true; hidden = true }; children = list("Replay shipment movement") }
+      ) },
+      { tag = "canvas"; attrs = { tabindex = "0"; "aria-label" = "Rail and shipments on the selected terrain" } },
+      { tag = "p"; attrs = { role = "status"; "data-scene-status" = true }; children = list("Loading Foundry scene…") },
+      { tag = "p"; children = list("Grey · existing rail. Blue · built rail. Orange · shipment. Route geometry uses a display scale.") },
+      { tag = "p"; children = list($composition.asset.name, " · terrain revision ", $composition.terrain.revision,
+        " · X ", $composition.x, " / Z ", $composition.z, " m") },
+      { tag = "details"; children = list(
+        { tag = "summary"; children = list("Foundry source pins") },
+        { tag = "p"; attrs = { class = "asset-id" }; children = list("Asset bundle ", $composition.asset.bundle) },
+        { tag = "p"; attrs = { class = "asset-id" }; children = list("Terrain ", $composition.terrain.head) }
+      ) },
+      { tag = "script"; attrs = { type = "module"; src = "/asset-viewer/world-scene.js" } }
+    ) }

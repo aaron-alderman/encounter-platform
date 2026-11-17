@@ -1,0 +1,140 @@
+process-module "temple/surface-process-module/1"
+
+process browser.boot:
+  port browser.location {} → location
+  port text.match { value = $location.search; pattern = "[?&]app=([A-Za-z][A-Za-z0-9-]{0,63})(&|$)" } → selected
+  assert $selected
+    otherwise "Choose an installed app from Store."
+  port text.replaceAll { value = $location.path; search = "/runtime/"; replacement = "/app-data/" } → endpoint
+  port state.set { key = "endpoint"; value = $endpoint } → _
+  port state.set { key = "app"; value = at($selected.groups, 0) } → _
+  try:
+    call runner.load
+  catch fault:
+    port browser.write { ref = "#app-status"; name = "textContent"; value = $fault.message } → _
+  port browser.on { ref = "#app-form"; event = "submit"; query = "runner.submit"; preventDefault = true } → _
+  port browser.on { ref = "#app-form"; event = "click"; delegate = "button[data-action]"; query = "runner.click"; preventDefault = true } → _
+  let result = true
+
+process runner.load:
+  port state.get { key = "endpoint" } → endpoint
+  port state.get { key = "app" } → app
+  port browser.request { path = $endpoint; query = { app = $app }; fragment = "#app-package" } → response
+  assert and(eq($response.status, 200), $response.body)
+    otherwise "The installed app package could not be read."
+  port browser.content { ref = "#package"; html = $response.body } → _
+  call runner.checkPackage
+  port browser.property { ref = "#package-source"; name = "value" } → source
+  port browser.property { ref = "#package-entry"; name = "value" } → entry
+  port browser.property { ref = "#package-hash"; name = "value" } → expectedHash
+  port kernel.prepare { text = $source; entry = $entry } → prepared
+  assert eq($prepared.sourceHash, $expectedHash)
+    otherwise "The installed source differs from its release pin."
+  port state.set { key = "admission"; value = $prepared.admission } → _
+  port browser.property { ref = "#package-title"; name = "value" } → title
+  port browser.write { ref = "#app-title"; name = "textContent"; value = $title } → _
+  port browser.property { ref = "#package-state"; name = "value" } → text
+  port rel.decode { text = $text; kind = "EncounterAppState" } → state
+  port state.set { key = "saved"; value = $state } → _
+  let event = {}
+  call runner.evaluate
+  call runner.render
+  port browser.write { ref = "#app-status"; name = "textContent"; value = "Opened" } → _
+
+process runner.submit:
+  let action = "submit"
+  call runner.event
+
+process runner.click:
+  let action = $eventInput.matched.attributes.data-action
+  call runner.event
+
+process runner.event:
+  try:
+    port browser.formFields { ref = "#app-form" } → fields
+    port record.put { record = $fields; key = "action"; value = $action } → event
+    port state.get { key = "saved" } → state
+    call runner.evaluate
+    let appResult = $output
+    port rel.encode { value = $output.state; kind = "EncounterAppState" } → text
+    port browser.write { ref = "#state-value"; name = "value"; value = $text } → _
+    port state.get { key = "endpoint" } → endpoint
+    port browser.request { path = $endpoint; method = "POST"; form = "#state-form"; fragment = "#app-package" } → response
+    assert and(eq($response.status, 200), $response.body)
+      otherwise "The app state could not be saved. Reopen the app to recover."
+    port browser.content { ref = "#package"; html = $response.body } → _
+    call runner.checkPackage
+    port browser.property { ref = "#package-saved"; name = "value" } → saved
+    assert eq($saved, "yes")
+      otherwise "The app or its data changed. Reopen the app before saving again."
+    port state.set { key = "saved"; value = $appResult.state } → _
+    let output = $appResult
+    call runner.render
+    port browser.write { ref = "#app-status"; name = "textContent"; value = "Saved" } → _
+  catch fault:
+    port browser.write { ref = "#app-status"; name = "textContent"; value = $fault.message } → _
+
+process runner.evaluate:
+  port state.get { key = "admission" } → admission
+  port kernel.execute { admission = $admission; input = { state = $state; event = $event } } → output
+  port value.describe { value = $output } → shape
+  assert and($shape.plain, $shape.dataOnly)
+    otherwise "An app must return its state and view."
+  port record.entries { value = $output } → entries
+  assert and(eq(count($entries), 2), some($entries, "item", eq(at($item, 0), "state")), some($entries, "item", eq(at($item, 0), "view")))
+    otherwise "An app must return exactly state and view."
+  port kernel.invoke { query = "runner.checkView"; input = $output.view } → _
+
+process runner.checkPackage:
+  port dom.exists { selector = "#package-source" } → package
+  when not($package):
+    port browser.property { ref = "#app-package"; name = "textContent" } → message
+    let result = raise($message)
+
+process runner.checkView:
+  let node = $eventInput
+  port value.describe { value = $node } → shape
+  when $shape.array:
+    each $node as child:
+      port kernel.invoke { query = "runner.checkView"; input = $child } → _
+  when $shape.plain:
+    assert includes(list("section", "div", "p", "h1", "h2", "h3", "h4", "ul", "ol", "li", "span", "strong", "em", "small", "label", "input", "textarea", "button", "select", "option", "fieldset", "legend", "table", "thead", "tbody", "tr", "th", "td", "br", "pre", "code"), $node.tag)
+      otherwise "This app profile uses native form controls and text views."
+    port record.entries { value = or(at($node, "attrs"), {}) } → attributes
+    each $attributes as attribute:
+      assert includes(list("name", "value", "type", "checked", "selected", "disabled", "placeholder", "min", "max", "step", "maxlength", "rows", "cols", "required", "data-action", "scope"), at($attribute, 0))
+        otherwise "This view attribute is outside the installed app profile."
+    each or(at($node, "children"), list()) as child:
+      port kernel.invoke { query = "runner.checkView"; input = $child } → _
+  let result = true
+
+process runner.render:
+  let input = $output.view
+  call html.serialize
+  port browser.content { ref = "#app-view"; html = $result } → _
+
+process runner.shell:
+  let input = { tag = "html"; attrs = { lang = "en" }; children = list(
+    { tag = "head"; children = list(
+      { tag = "meta"; attrs = { charset = "utf-8" } },
+      { tag = "meta"; attrs = { name = "viewport"; content = "width=device-width, initial-scale=1" } },
+      { tag = "title"; children = list("Installed app | Store") },
+      { tag = "link"; attrs = { rel = "stylesheet"; href = "styles.css" } }
+    ) },
+    { tag = "body"; children = list(
+      { tag = "main"; attrs = { id = "installed-app" }; children = list(
+        { tag = "header"; children = list({ tag = "h1"; attrs = { id = "app-title" }; children = list("Opening installed app") }) },
+        { tag = "nav"; attrs = { class = "project-command-bar"; "aria-label" = "Platform" }; children = list(
+          { tag = "a"; attrs = { href = "https://appdev.sourcerytech.com.au/store/" }; children = list("Back to Store") }
+        ) },
+        { tag = "p"; attrs = { id = "app-status"; class = "feedback"; role = "status" }; children = list("Connecting to Encounter…") },
+        { tag = "form"; attrs = { id = "app-form" }; children = list(
+          { tag = "section"; attrs = { id = "app-view" } }
+        ) },
+        { tag = "section"; attrs = { id = "package"; hidden = true } }
+      ) },
+      { tag = "script"; attrs = { type = "module"; src = "_encounter/browser.mjs" } }
+    ) }
+  ) }
+  call html.serialize
+  let result = concat("<!doctype html>\n", $result)

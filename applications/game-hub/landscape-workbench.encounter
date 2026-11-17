@@ -1,0 +1,173 @@
+process-module "temple/surface-process-module/1"
+
+process landscape.tools:
+  let result = list(
+    { id = "surface.grade-plane"; title = "Grade plane" },
+    { id = "surface.sculpt"; title = "Raise or lower" },
+    { id = "surface.smooth"; title = "Smooth" },
+    { id = "surface.restore"; title = "Restore source" },
+    { id = "material.paint"; title = "Paint material" },
+    { id = "water.coastline"; title = "Water edge" },
+    { id = "vegetation.exclude"; title = "Exclude vegetation" }
+  )
+
+process landscape.request:
+  let request = $eventInput
+  let snapshot = $request.snapshot
+  let base = $snapshot.revision
+  let savePath = "landscape-foundry/coastal.rel"
+  let kind = "GameLandscapeWorkspace"
+  let target = "coastal"
+  let saved = at(filter($snapshot.documents, "item", eq($item.path, $savePath)), 0)
+  let workspace = {}
+  when $saved:
+    port rel.decode { text = $saved.text; kind = $kind } → workspace
+  call landscape.tools
+  let tools = $result
+  let fields = $request.fields
+  let selected = or($fields.tool, "surface.grade-plane")
+  let centreX = or($fields.x, "32")
+  let centreZ = or($fields.z, "32")
+  let width = or($fields.width, "16")
+  let magnitude = or($fields.value, "12")
+  let reasonInput = or($fields.reason, "")
+  let operation = $fields.operation
+  let author = "operator/appdev-game"
+  let view = null
+  let notice = ""
+  let error = ""
+  try:
+    port game.kernel { kernel = "landscape"; operation = "state"; journal = or(at($workspace, "journal"), null) } → view
+    assert eq($view.status, "accepted")
+      otherwise "The source terrain journal could not be replayed."
+    when eq($request.method, "POST"):
+      assert eq($fields.base, concat($base))
+        otherwise "The terrain workspace changed. Reopen the current revision."
+      assert includes(list("preview", "commit", "undo", "redo", "package"), $operation)
+        otherwise "Unknown terrain workbench operation."
+      let group = null
+      when includes(list("preview", "commit"), $operation):
+        call landscape.group
+        let group = $result
+      when eq($operation, "commit"):
+        port text.matches { value = $reasonInput; pattern = "^[\\s\\S]{1,180}$" } → validReason
+        assert and($validReason, $fields.preview)
+          otherwise "Preview the edit and give a reason before committing."
+      port game.kernel { kernel = "landscape"; operation = $operation; journal = $view.journal; group = $group;
+        previewHash = $fields.preview; reason = $reasonInput; author = $author; idempotencyKey = $request.nonce } → proposed
+      when not(eq($proposed.status, "accepted")):
+        let diagnostic = at(at($proposed, "diagnostics"), 0)
+        let error = or(at($diagnostic, "message"), "Terrain operation refused.")
+      when eq($proposed.status, "accepted"):
+        let view = $proposed
+        when eq($operation, "preview"):
+          let notice = "Terrain preview ready. The journal revision is unchanged."
+        when not(eq($operation, "preview")):
+          let reason = if(eq($operation, "commit"), $reasonInput, concat("Landscape ", $operation))
+          let change = { journal = $view.journal; receipt = or(at($view, "receipt"), at($workspace, "receipt"));
+            packaged = if(eq($operation, "package"), $view.packaged, null) }
+          call hub.persist
+          let workspace = $change
+          let notice = if(eq($operation, "package"), "Verified terrain package recorded.", concat("Terrain ", $operation, " recorded."))
+  catch fault:
+    let error = $fault.message
+  call landscape.view
+
+process landscape.group:
+  assert includes(map($tools, "tool", $tool.id), $selected)
+    otherwise "Choose a terrain tool."
+  port scalar.read { text = $centreX } → x
+  port scalar.read { text = $centreZ } → z
+  port scalar.read { text = $width } → size
+  port scalar.read { text = $magnitude } → value
+  port value.describe { value = $x } → xType
+  port value.describe { value = $z } → zType
+  port value.describe { value = $size } → sizeType
+  port value.describe { value = $value } → valueType
+  port number.calculate { operation = "greaterEqual"; values = list($size, 1) } → validSize
+  assert and($xType.finite, $zType.finite, $sizeType.finite, $valueType.finite, $validSize)
+    otherwise "Use numeric coordinates, size of at least one metre, and a numeric tool value."
+  port number.calculate { operation = "divide"; values = list($size, 2) } → half
+  port number.calculate { operation = "subtract"; values = list($x, $half) } → west
+  port number.calculate { operation = "subtract"; values = list($z, $half) } → south
+  let bounds = {
+    min = list($west, at($view.project.bounds.min, 1), $south);
+    max = list(add($x, $half), at($view.project.bounds.max, 1), add($z, $half))
+  }
+  let parameters = if(eq($selected, "surface.grade-plane"), { elevationMetres = $value; slopeX = 0; slopeZ = 0 },
+    if(eq($selected, "surface.sculpt"), { deltaMetres = $value; strength = 1 },
+    if(eq($selected, "surface.smooth"), { strength = $value; passes = 1 },
+    if(eq($selected, "surface.restore"), { strength = $value },
+    if(eq($selected, "water.coastline"), { waterLevelMetres = $value }, { excluded = not(eq($value, 0)) })))))
+  when eq($selected, "material.paint"):
+    port number.calculate { operation = "round"; values = list($value) } → material
+    let parameters = { materialId = $material }
+  let basis = $view.journal.headRevision
+  port rel.encode { value = list($basis, $selected, $bounds, $parameters); kind = "LandscapeOperationIdentity" } → bytes
+  port digest.sha256 { text = $bytes } → digest
+  let identity = concat("operation-group/appdev-", $digest)
+  let result = { identity = $identity; intent = concat($selected, " at ", $x, ", ", $z); basisRevision = $basis;
+    operations = list({ identity = concat($identity, "/operation"); schemaVersion = "1"; ordinal = 0; kind = $selected;
+      targetLane = $view.project.lane; targetLayerIdentity = $view.project.target; bounds = $bounds; parameters = $parameters }) }
+
+process landscape.view:
+  let status = at($view, "status")
+  let options = map($tools, "item", { tag = "option"; attrs = { value = $item.id; selected = if(eq($selected, $item.id), true, null) }; children = list($item.title) })
+  let inputs = map(list(
+    { id = "x"; title = "Centre X"; value = $centreX },
+    { id = "z"; title = "Centre Z"; value = $centreZ },
+    { id = "width"; title = "Size in metres"; value = $width },
+    { id = "value"; title = "Tool value"; value = $magnitude }
+  ), "item", { tag = "label"; children = list($item.title, {
+    tag = "input"; attrs = { name = $item.id; type = "number"; step = "any"; value = $item.value; required = true }
+  }) })
+  let mesh = null
+  let terrainGeometry = ""
+  let history = list()
+  let packed = at($workspace, "packaged")
+  let revision = ""
+  when eq($status, "accepted"):
+    let revision = $view.journal.headRevision
+    port kernel.invoke { query = "hub.mesh"; input = { faces = $view.faces; label = "Coastal terrain wireframe" } } → mesh
+    port json.format { value = $view.meshes } → terrainGeometry
+    let history = map($view.history, "entry", { tag = "li"; children = list($entry.sequence, " · ", $entry.kind, " · ", $entry.revision) })
+  let previewHash = at($view, "previewHash")
+  let result = { tag = "section"; attrs = { class = "asset-workbench"; "aria-label" = "Landscape Foundry Workbench" }; children = list(
+    if($error, { tag = "p"; attrs = { role = "alert"; class = "asset-error" }; children = list($error) }, null),
+    if($notice, { tag = "p"; attrs = { role = "status"; class = "asset-notice" }; children = list($notice) }, null),
+    if(eq($status, "accepted"), list(
+      { tag = "p"; attrs = { class = "asset-id" }; children = list("Terrain revision ", $revision) },
+      { tag = "div"; attrs = { class = "workbench-split" }; children = list(
+        { tag = "form"; attrs = { method = "post"; action = "/landscape-foundry/"; class = "asset-editor terrain-controls" }; children = list(
+          { tag = "input"; attrs = { type = "hidden"; name = "_csrf"; value = $request.csrf } },
+          { tag = "input"; attrs = { type = "hidden"; name = "base"; value = $base } },
+          { tag = "input"; attrs = { type = "hidden"; name = "preview"; value = $previewHash } },
+          { tag = "div"; attrs = { class = "asset-controls" }; children = list(
+            { tag = "button"; attrs = { type = "submit"; name = "operation"; value = "preview" }; children = list("Preview terrain edit") },
+            { tag = "button"; attrs = { type = "submit"; name = "operation"; value = "commit"; disabled = if($previewHash, null, true) }; children = list("Commit terrain edit") }
+          ) },
+          { tag = "fieldset"; children = list(
+            { tag = "legend"; children = list("Terrain operation") },
+            { tag = "label"; attrs = { class = "terrain-full-row" }; children = list("Tool", { tag = "select"; attrs = { name = "tool" }; children = $options }) },
+            $inputs,
+            { tag = "label"; attrs = { class = "terrain-full-row" }; children = list("Commit reason", { tag = "input"; attrs = { name = "reason"; value = $reasonInput; maxlength = "180" } }) }
+          ) },
+          { tag = "div"; attrs = { class = "asset-controls" }; children = list(
+            { tag = "button"; attrs = { type = "submit"; name = "operation"; value = "undo"; disabled = if($view.canUndo, null, true); formnovalidate = true }; children = list("Undo") },
+            { tag = "button"; attrs = { type = "submit"; name = "operation"; value = "redo"; disabled = if($view.canRedo, null, true); formnovalidate = true }; children = list("Redo") },
+            { tag = "button"; attrs = { type = "submit"; name = "operation"; value = "package"; formnovalidate = true }; children = list("Package revision") }
+          ) }
+        ) },
+        { tag = "section"; attrs = { class = "landscape-viewport"; "aria-label" = "Interactive terrain"; "data-terrain-meshes" = $terrainGeometry }; children = list(
+          { tag = "div"; attrs = { "data-terrain-fallback" = true }; children = list($mesh) },
+          { tag = "canvas"; attrs = { hidden = true; tabindex = "0"; "aria-label" = "Coastal terrain 3D view" } },
+          { tag = "p"; attrs = { "data-terrain-placement" = true; role = "status" } },
+          { tag = "p"; children = list("Drag to orbit, scroll or pinch to zoom, and click or tap the surface to place the edit.") },
+          { tag = "p"; children = list($view.chunkCount, " terrain chunks · ", $view.triangles, " triangles · ", $view.dirtyChunks, " affected chunks") },
+          { tag = "script"; attrs = { type = "module"; src = "/asset-viewer/terrain.js" } }
+        ) }
+      ) },
+      if($packed, { tag = "p"; attrs = { class = "asset-id" }; children = list("Verified package ", $packed.bundleIdentity) }, null),
+      { tag = "details"; children = list({ tag = "summary"; children = list("Terrain history") }, { tag = "ol"; children = $history }) }
+    ), null)
+  ) }

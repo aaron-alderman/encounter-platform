@@ -1,0 +1,8 @@
+("application", "stateProfile", "encounter/game-hub-gateway/1")
+("application", "module", "game-hub/catalog.encounter")
+("application", "module", "game-hub/https.encounter")
+("application", "entry", "gateway.route")
+("application", "entry", "gateway.page")
+("application", "entry", "test.routes")
+("application", "grant", "kernel.invoke")
+("application", "grant", "text.indexOf")

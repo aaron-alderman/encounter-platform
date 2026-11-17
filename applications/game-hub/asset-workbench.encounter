@@ -1,0 +1,230 @@
+process-module "temple/surface-process-module/1"
+
+process asset.inventory:
+  let result = list(
+    { id = "triangle"; label = "Example triangle"; project = "asset-foundry" },
+    { id = "intermodal-container"; label = "Intermodal container"; project = "asset-foundry-industrial" },
+    { id = "electric-yard-tug"; label = "Electric yard tug"; project = "asset-foundry-generic-industrial" },
+    { id = "pallet-family"; label = "Pallet family"; project = "asset-foundry-generic-industrial" },
+    { id = "parcel-conveyor"; label = "Parcel conveyor"; project = "asset-foundry-generic-industrial" },
+    { id = "warehouse-dock"; label = "Warehouse dock"; project = "asset-foundry-generic-industrial" },
+    { id = "animated-forklift"; label = "Animated forklift"; project = "horizon-production-foundry" },
+    { id = "articulated-tractor-trailer"; label = "Articulated tractor trailer"; project = "horizon-production-foundry" },
+    { id = "cargo-family"; label = "Cargo family"; project = "horizon-production-foundry" },
+    { id = "modular-warehouse-yard-kit"; label = "Modular warehouse yard kit"; project = "horizon-production-foundry" },
+    { id = "iso-container-family"; label = "ISO container family"; project = "bronze-logistics" },
+    { id = "container-skeletal-trailer"; label = "Container skeletal trailer"; project = "bronze-logistics" },
+    { id = "yard-tractor"; label = "Yard tractor"; project = "bronze-logistics" }
+  )
+
+process asset.selection:
+  let request = $eventInput
+  call asset.inventory
+  let inventory = $result
+  call asset.groups
+  let groups = $result
+  let requestedAsset = at(filter($inventory, "entry", eq($entry.id, $request.fields.asset)), 0)
+  let requestedGroup = at(filter($groups, "entry", eq($entry.id, $request.fields.group)), 0)
+  let unknown = or(and($request.fields.asset, not($requestedAsset)), and($request.fields.group, not($requestedGroup)),
+    and($requestedAsset, $requestedGroup, not(eq($requestedAsset.project, $requestedGroup.id))))
+  let group = or($requestedGroup, at(filter($groups, "entry", eq($entry.id, at($requestedAsset, "project"))), 0), at($groups, 0))
+  let asset = if(and($requestedAsset, eq($requestedAsset.project, $group.id)), $requestedAsset,
+    at(filter($inventory, "entry", eq($entry.project, $group.id)), 0))
+
+process asset.request:
+  call asset.selection
+  let prefix = $group.root
+  let modelPath = concat($prefix, "/assets/", $asset.id, ".gltf")
+  let recipePath = concat($prefix, "/", $asset.id, ".recipe.json")
+  let kind = "GameAssetWorkspace"
+  let target = $asset.id
+  let savePath = concat("asset-foundry/", $asset.id, ".rel")
+  let snapshot = $request.snapshot
+  let base = $snapshot.revision
+  let saved = at(filter($snapshot.documents, "item", eq($item.path, $savePath)), 0)
+  let state = {}
+  when $saved:
+    port rel.decode { text = $saved.text; kind = "GameAssetWorkspace" } → state
+  let source = null
+  let error = if($unknown, "That asset is outside the recovered intake.", "")
+  let notice = ""
+  let report = null
+  let operation = $request.fields.operation
+  try:
+    port game.kernel { kernel = "asset"; operation = "recipe"; asset = $modelPath; recipePath = $recipePath } → source
+    assert at($source, "recipe")
+      otherwise "The original recipe could not be read."
+    let recipe = or(at($state, "draft"), $source.recipe)
+    when eq($request.method, "POST"):
+      assert not($unknown)
+        otherwise "That asset is outside the recovered intake."
+      assert or(not($saved), eq($state.sourceHash, $source.sourceHash))
+        otherwise "The original recipe changed. This draft is retained for review."
+      assert eq($request.fields.base, concat($base))
+        otherwise "The workspace changed. Review the current draft and submit again."
+      assert includes(list("save-draft", "inspect", "import", "validate", "build", "improve"), $operation)
+        otherwise "Unknown Asset Foundry operation."
+      when eq($operation, "save-draft"):
+        let editKind = $request.fields.edit
+        let replacement = null
+        when not(eq($editKind, "remove")):
+          port json.parse { text = $request.fields.value } → replacement
+        let edit = { op = $editKind; path = $request.fields.pointer; value = $replacement }
+        port kernel.invoke { query = "recipe.applyEdits"; input = { recipe = $recipe; edits = list($edit) } } → draft
+        let change = { draft = $draft; sourceHash = $source.sourceHash; candidate = null;
+          previous = or(at($state, "candidate"), at($state, "previous")) }
+        let reason = "Save recipe draft"
+        call hub.persist
+        let state = $change
+        let recipe = $draft
+        let notice = "Draft saved. The original recipe is retained."
+      when not(eq($operation, "save-draft")):
+        let proposed = $recipe
+        when eq($operation, "improve"):
+          call asset.improve
+          let proposed = $result
+        let building = includes(list("build", "improve"), $operation)
+        port game.kernel { kernel = "asset"; operation = if($building, "build", $operation); asset = $modelPath; recipe = $proposed } → report
+        let notice = if(eq($report.status, "accepted"), concat($operation, " accepted"), concat($operation, " did not pass"))
+        when includes(list("import", "validate"), $operation):
+          let reason = if(eq($operation, "import"), "Check asset intake", "Validate asset recipe")
+          let change = { draft = or(at($state, "draft"), null); sourceHash = $source.sourceHash; candidate = or(at($state, "candidate"), null);
+            previous = or(at($state, "previous"), null); intake = if(eq($operation, "import"), $report.status, or(at($state, "intake"), null));
+            validation = if(eq($operation, "validate"), $report.status, or(at($state, "validation"), null)) }
+          call hub.persist
+          let state = $change
+        when and($building, eq($report.status, "accepted")):
+          let existing = at($state, "candidate")
+          let previous = if(eq(at($existing, "bundleIdentity"), $report.bundleIdentity), or(at($state, "previous"), null),
+            or($existing, at($state, "previous")))
+          let change = { draft = if(eq($operation, "improve"), $proposed, or(at($state, "draft"), null)); sourceHash = $source.sourceHash;
+            candidate = $report; previous = $previous; intake = "accepted"; validation = "accepted" }
+          let reason = if(eq($operation, "improve"), "Improve asset and verify candidate", "Record verified asset candidate")
+          call hub.persist
+          let state = $change
+          when eq($operation, "improve"):
+            let notice = "Improved candidate verified and saved."
+  catch fault:
+    let error = $fault.message
+  let recipe = or(at($state, "draft"), at($source, "recipe"))
+  let candidate = at($state, "candidate")
+  let report = or($report, $candidate)
+  let json = ""
+  let defaultValue = ""
+  when $recipe:
+    port json.format { value = $recipe } → json
+    port json.format { value = or(at(at($recipe, "asset"), "label"), "") } → defaultValue
+  call asset.view
+
+process asset.view:
+  call asset.lifecycle
+  let lifecycle = $result
+  let improvement = null
+  when $recipe:
+    call asset.improvementForm
+    let improvement = $result
+  let controls = map(list(
+    { id = "build"; title = "Build verified candidate" }, { id = "inspect"; title = "Inspect asset" },
+    { id = "import"; title = "Check intake" }, { id = "validate"; title = "Validate recipe" }
+  ), "item", {
+    tag = "button"; attrs = { type = "submit"; name = "operation"; value = $item.id; formnovalidate = true }; children = list($item.title)
+  })
+  let editKinds = map(list("replace", "add", "remove"), "edit", {
+    tag = "option"; attrs = { value = $edit }; children = list($edit)
+  })
+  let coordinates = list(
+      { tag = "input"; attrs = { type = "hidden"; name = "_csrf"; value = $request.csrf } },
+      { tag = "input"; attrs = { type = "hidden"; name = "base"; value = $base } },
+      { tag = "input"; attrs = { type = "hidden"; name = "asset"; value = $asset.id } }
+  )
+  let buildForms = if($recipe, { tag = "div"; attrs = { class = "asset-build-forms" }; children = list(
+    { tag = "form"; attrs = { method = "post"; action = "/asset-foundry/"; class = "asset-editor" }; children = list(
+      $coordinates,
+      { tag = "div"; attrs = { class = "asset-controls"; "aria-label" = "Compiler operations" }; children = $controls }
+    ) },
+    { tag = "form"; attrs = { method = "post"; action = "/asset-foundry/"; class = "asset-editor" }; children = list(
+      $coordinates, $improvement
+    ) }
+  ) }, null)
+  let preview = { tag = "div"; attrs = { class = "workbench-split" }; children = list(
+    $buildForms,
+    { tag = "div"; children = list({ tag = "a"; attrs = { class = "notes-button"; href = concat("/asset-foundry/?asset=", $asset.id) };
+      children = list("Open 3D preview") }) }
+  ) }
+  when not(eq($request.fields.preview, "off")):
+    call asset.preview
+    let preview = $result
+  let editForm = if($recipe,
+    { tag = "details"; children = list(
+      { tag = "summary"; children = list("Edit recipe directly") },
+      { tag = "form"; attrs = { method = "post"; action = "/asset-foundry/"; class = "asset-editor" }; children = list(
+        $coordinates,
+          { tag = "fieldset"; children = list(
+            { tag = "legend"; children = list("Recipe draft") },
+            { tag = "p"; children = list("Choose an edit and enter its JSON Pointer. Values use JSON, including quotes for text.") },
+            { tag = "label"; attrs = { for = "edit-kind" }; children = list("Edit") },
+            { tag = "select"; attrs = { id = "edit-kind"; name = "edit" }; children = $editKinds },
+            { tag = "label"; attrs = { for = "recipe-pointer" }; children = list("Recipe path") },
+            { tag = "input"; attrs = { id = "recipe-pointer"; name = "pointer"; value = "/asset/label"; maxlength = "512"; required = true } },
+            { tag = "label"; attrs = { for = "recipe-value" }; children = list("JSON value") },
+            { tag = "textarea"; attrs = { id = "recipe-value"; name = "value"; rows = "3"; maxlength = "512" }; children = list($defaultValue) },
+            { tag = "button"; attrs = { type = "submit"; name = "operation"; value = "save-draft" }; children = list("Save draft edit") }
+          ) }
+      ) }
+    ) }, null)
+  let receipt = null
+  when $report:
+    call asset.report
+    let receipt = $result
+  let savedCandidate = null
+  when and($candidate, not(eq(at($report, "bundleIdentity"), $candidate.bundleIdentity))):
+    let report = $candidate
+    call asset.report
+    let savedCandidate = $result
+  let result = {
+    tag = "section"; attrs = { class = "asset-workbench"; "aria-label" = "Asset Foundry Workbench" }; children = list(
+      if($error, { tag = "p"; attrs = { role = "alert"; class = "asset-error" }; children = list($error) }, null),
+      if($notice, { tag = "p"; attrs = { role = "status"; class = "asset-notice" }; children = list($notice) }, null),
+      { tag = "h2"; attrs = { class = "selected-asset" }; children = list($asset.label) },
+      $preview,
+      $lifecycle,
+      $receipt,
+      $savedCandidate,
+      $editForm,
+      if($recipe, { tag = "details"; children = list(
+        { tag = "summary"; children = list(if(at($state, "draft"), "Current draft recipe", "Original source recipe")) },
+        { tag = "pre"; attrs = { class = "asset-code" }; children = list($json) },
+        { tag = "p"; children = list("Original source SHA-256 ", $source.sourceHash) }
+      ) }, null)
+    )
+  }
+
+process asset.report:
+  let identity = at($report, "bundleIdentity")
+  let metrics = or(at($report, "measurements"), at($report, "counts"))
+  let rows = list()
+  when $metrics:
+    port record.entries { value = $metrics } → entries
+    let rows = map($entries, "entry", { tag = "div"; children = list(
+      { tag = "dt"; children = list(at($entry, 0)) },
+      { tag = "dd"; children = list(at($entry, 1)) }
+    ) })
+  let planned = map(filter(or(at($report, "variants"), list()), "item", eq(at($item, "purpose"), "graphicalLod")), "item",
+    { tag = "li"; children = list($item.level, " · ", $item.measurements.triangles, " planned triangles") })
+  let variants = if(count($planned), { tag = "ul"; children = $planned }, null)
+  when $identity:
+    call asset.variantTable
+    let variants = $result
+  port kernel.invoke { query = "hub.mesh"; input = { faces = or(at($report, "preview"), list()); label = "Wireframe of the verified high-detail mesh" } } → mesh
+  let diagnostics = map(or(at($report, "diagnostics"), list()), "item", {
+    tag = "li"; children = list($item.code, " · ", $item.message)
+  })
+  let result = { tag = "section"; attrs = { class = "asset-report"; "aria-label" = "Compiler result" }; children = list(
+    { tag = "h2"; children = list(if($identity, "Verified candidate", "Compiler result")) },
+    { tag = "p"; children = list("Status ", $report.status) },
+    if(count($diagnostics), { tag = "ul"; children = $diagnostics }, null),
+    if($identity, { tag = "p"; attrs = { class = "asset-id" }; children = list("Bundle SHA-256 ", $identity) }, null),
+    $mesh,
+    if(count($rows), { tag = "dl"; attrs = { class = "asset-metrics" }; children = $rows }, null),
+    $variants
+  ) }

@@ -1,0 +1,10 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = { sections = list({
+    subject = "application";
+    stateProfile = "encounter/platform-store-gateway/1";
+    module = "platform-store/https.encounter";
+    entry = list("gateway.route", "gateway.page", "test.routes");
+    grant = list("kernel.invoke", "text.indexOf")
+  }) }

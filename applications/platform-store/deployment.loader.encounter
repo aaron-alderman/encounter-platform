@@ -1,0 +1,9 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = { sections = list({
+    subject = "application";
+    stateProfile = "encounter/platform-store-deployment/1";
+    module = "platform-store/deployment.encounter";
+    entry = "cli.main"
+  }) }

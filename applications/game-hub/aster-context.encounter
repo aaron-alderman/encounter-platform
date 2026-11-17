@@ -1,0 +1,12 @@
+process-module "temple/surface-process-module/1"
+
+process hub.asterContext:
+  let screen = $eventInput
+  let labels = { workbench = "Workbench"; overview = "Overview"; execution = "Execution"; trace = "Trace";
+    source = "Encounter source"; receipts = "Receipts"; files = "Files" }
+  let view = at($labels, $screen.view)
+  let summary = concat("Game Hub. Document: ", $screen.document.title, ". View: ", $view, ".")
+  when and($screen.execution, includes(list("execution", "trace", "receipts"), $screen.view)):
+    let summary = concat($summary, " Recorded events: ", count($screen.execution.events), ".")
+  let result = { tag = "span"; attrs = { hidden = ""; "data-sourcery-frame-adapter" = "game-hub";
+    "data-sourcery-frame-context" = $summary }; children = list() }

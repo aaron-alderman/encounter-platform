@@ -1,0 +1,12 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    sections = list({
+      subject = "application";
+      stateProfile = "encounter/game-hub-gateway/1";
+      module = list("game-hub/catalog.encounter", "game-hub/https.encounter");
+      entry = list("gateway.route", "gateway.page", "test.routes");
+      grant = list("kernel.invoke", "text.indexOf")
+    })
+  }

@@ -1,0 +1,42 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    sections = list({
+      subject = "application";
+      stateProfile = "encounter/game-hub/1";
+      module = list(
+        "game-hub/catalog.encounter",
+        "game-hub/asset-workbench.encounter",
+        "game-hub/asset-pipeline.encounter",
+        "game-hub/asset-preview.encounter",
+        "game-hub/asset-recipe.encounter",
+        "game-hub/landscape-workbench.encounter",
+        "game-hub/world-workbench.encounter",
+        "game-hub/world-foundry.encounter",
+        "game-hub/store-workbench.encounter",
+        "game-hub/desktop.encounter",
+        "platform-store/desktop.encounter", "platform-store/apps.encounter", "platform-store/notes.encounter",
+        "game-hub/presentation.encounter",
+        "platform-store/presentation.encounter",
+        "platform-store/design.encounter",
+        "encounter-libraries/workflows/sourcery-presentation.encounter",
+        "encounter-libraries/workflows/sourcery-notebook-web.encounter",
+        "encounter-libraries/source-presentation/source-widget.encounter",
+        "game-hub/inspector.encounter",
+        "game-hub/execution.encounter",
+        "encounter-libraries/semantic/notes.encounter",
+        "encounter-libraries/workflows/notebook-presentation.encounter",
+        "encounter/algebra/html/html.escape.encounter",
+        "encounter/algebra/html/html.cssText.encounter",
+        "encounter/algebra/html/html.serialize.encounter",
+        "encounter/algebra/css/css.renderPlan.encounter"
+      );
+      dataset = list("semantic-map", "asset-viewer");
+      entry = list("app.newSession", "app.request", "app.attachment", "app.image", "app.download", "app.previewSource", "app.viewerFile", "ui.styles");
+      grant = list("text.matches", "text.indexOf", "record.entries", "value.describe", "value.string", "value.type", "text.join", "text.replaceAll",
+        "game.kernel", "kernel.invoke", "execution.observe", "record.put", "json.parse", "json.format", "rel.decode", "rel.encode", "storage.cas",
+        "number.calculate", "text.split", "text.slice", "record.fromEntries", "scalar.read", "digest.sha256", "application.data", "source.module", "text.trim", "storage.history", "storage.snapshot", "text.lowerCase")
+    }, { subject = "data.semantic-map"; source = "game-hub/semantic-map.rel" },
+      { subject = "data.asset-viewer"; source = "game-hub/asset-viewer.rel" })
+  }

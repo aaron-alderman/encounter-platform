@@ -1,0 +1,245 @@
+process-module "temple/surface-process-module/1"
+
+process hub.newSession:
+  let result = {}
+
+process hub.request:
+  let request = $eventInput
+  call hub.catalog
+  let docs = $result
+  let requested = if(eq($request.method, "GET"), $request.fields.document, null)
+  let chosen = at(filter($docs, "item", eq($item.id, $requested)), 0)
+  let doc = or($chosen, at(filter($docs, "item", or(
+    eq($request.path, concat("/", $item.id, "/")),
+    eq($request.path, concat("/", $item.id)),
+    includes(or($item.aliases, list()), $request.path)
+  )), 0))
+  let missing = and(not(eq($request.path, "/")), not($doc))
+  let doc = or($doc, at($docs, 0))
+  let hasAttachments = $request.attachments
+  call hub.mappingOwners
+  let editor = at($result, $doc.id)
+  let view = if($editor, "workbench", "overview")
+  let storePage = eq($doc.id, "store")
+  let view = if($storePage, "workbench", $view)
+  when and(eq($request.method, "GET"), includes(if($editor, list("execution", "trace", "source", "receipts", "files"), list("files")), $request.fields.view)):
+    let view = $request.fields.view
+  let session = $request.session
+  let execution = at($session, $doc.id)
+  let workbench = null
+  let storePreview = false
+  when and(eq($view, "workbench"), $storePage):
+    let store = null
+    when eq($request.method, "GET"):
+      port kernel.invoke { query = "store.request"; input = $request } → store
+    when eq($request.method, "POST"):
+      port execution.observe { query = "store.request"; input = $request; processes = $editor } → observed
+      let store = $observed.result
+    let workbench = $store.body
+    let session = $store.session
+    let storePreview = $store.preview
+    when eq($request.method, "POST"):
+      port kernel.invoke { query = "hub.operationLabel"; input = $request.fields.operation } → operation
+      let execution = { operation = $operation; events = $observed.events; dropped = $observed.dropped }
+      port record.put { record = $session; key = $doc.id; value = $execution } → session
+  when and(eq($view, "workbench"), not($storePage)):
+    let input = { editor = $doc.id; request = $request }
+    when eq($request.method, "GET"):
+      port kernel.invoke { query = "hub.editor"; input = $input } → workbench
+    when eq($request.method, "POST"):
+      port execution.observe { query = "hub.editor"; input = $input; processes = $editor } → observed
+      let workbench = $observed.result
+      port kernel.invoke { query = "hub.operationLabel"; input = $request.fields.operation } → operation
+      let execution = { operation = $operation; events = $observed.events; dropped = $observed.dropped }
+      port record.put { record = $session; key = $doc.id; value = $execution } → session
+  when eq($view, "execution"):
+    call hub.executionView
+    let workbench = $result
+  when includes(list("trace", "source"), $view):
+    call hub.inspect
+    let workbench = $result
+  when eq($view, "receipts"):
+    call hub.receipts
+    let workbench = $result
+  call hub.desktop
+  let input = $result
+  call html.serialize
+  let result = { html = concat("<!doctype html>\n", $result); session = $session;
+    assetPreview = or($storePreview, and(eq($view, "workbench"), or(includes(list("one-world", "landscape-foundry"), $doc.id),
+      and(eq($doc.id, "asset-foundry"), not(eq($request.fields.preview, "off")))))) }
+
+process hub.editor:
+  let input = $eventInput
+  when eq($input.editor, "asset-foundry"):
+    port kernel.invoke { query = "asset.request"; input = $input.request } → result
+  when eq($input.editor, "landscape-foundry"):
+    port kernel.invoke { query = "landscape.request"; input = $input.request } → result
+  when eq($input.editor, "one-world"):
+    port kernel.invoke { query = "world.request"; input = $input.request } → result
+
+process app.image:
+  call app.attachment
+
+process app.attachment:
+  let name = $eventInput
+  call hub.catalog
+  fold $result as item; attachment starts null:
+    let image = at(filter($item.images, "image", eq($image.file, $name)), 0)
+    yield if($image, { path = $image.file; bytes = $image.bytes; sha256 = $image.sha256 }, $attachment) → attachment
+  let result = $attachment
+
+process hub.desktop:
+  let entries = filter($docs, "item", eq($item.group, "Worlds & tools"))
+  let worldsAndTools = {
+    tag = "section"; attrs = { class = "folder-group" }; children = list(
+      { tag = "h2"; children = list("Worlds & tools") },
+      { tag = "ul"; children = map($entries, "item", {
+        tag = "li"; children = list({
+          tag = "a"; attrs = { href = if(eq($item.id, "store"), "https://appdev.sourcerytech.com.au/store/", concat("/", $item.id, "/")); "aria-current" = if(eq($item.id, $doc.id), "page", null) };
+          children = list({ tag = "span"; attrs = { class = concat("icon ", $item.icon); "aria-hidden" = "true" } }, $item.title)
+        })
+      }) }
+    )
+  }
+  let options = map($docs, "item", {
+    tag = "option"; attrs = { value = $item.id; selected = eq($item.id, $doc.id) }; children = list($item.title)
+  })
+  port kernel.invoke { query = "notebook.presentation.caption"; input = { title = "Game Hub"; section = "Sourcery game workspace" } } → caption
+  let assetNavigation = null
+  when eq($doc.id, "asset-foundry"):
+    port kernel.invoke { query = "asset.navigation"; input = $request } → assetNavigation
+  call hub.document
+  let document = $result
+  port kernel.invoke { query = "hub.asterContext"; input = { document = $doc; view = $view; execution = $execution } } → marker
+  let result = {
+    tag = "html"; attrs = { lang = "en" }; children = list(
+      { tag = "head"; children = list(
+        { tag = "meta"; attrs = { charset = "utf-8" } },
+        { tag = "meta"; attrs = { name = "viewport"; content = "width=device-width, initial-scale=1" } },
+        { tag = "title"; children = list($doc.title, " | Game Hub") },
+        { tag = "link"; attrs = { rel = "stylesheet"; href = "/styles.css" } }
+      ) },
+      { tag = "body"; children = list(
+        $marker,
+        { tag = "a"; attrs = { class = "skip"; href = "#document" }; children = list("Skip to document") },
+        { tag = "div"; attrs = { class = "desktop" }; children = list(
+          { tag = "header"; attrs = { class = "titlebar" }; children = list(
+            { tag = "a"; attrs = { href = "/"; class = "brand" }; children = list(
+              { tag = "span"; attrs = { class = "brand-mark"; "aria-hidden" = "true" }; children = list($caption.mark) },
+              { tag = "strong"; children = list($caption.title) }
+            ) },
+            { tag = "span"; attrs = { class = "edition" }; children = list($caption.product, " · ", $caption.section) }
+          ) },
+          { tag = "nav"; attrs = { class = "toolbar"; "aria-label" = "Workspace shortcuts" }; children = list(
+            { tag = "a"; attrs = { href = "/" }; children = list("Workspace") },
+            { tag = "a"; attrs = { href = "/design-references/" }; children = list("References") },
+            { tag = "a"; attrs = { href = "/recent-folio/"; "aria-current" = if(eq($doc.id, "recent-folio"), "page", null) }; children = list("Recent Folio") }
+          ) },
+          { tag = "form"; attrs = { method = "get"; action = $request.path; class = "document-picker" }; children = list(
+            { tag = "label"; attrs = { for = "hub-document" }; children = list("Document") },
+            { tag = "select"; attrs = { id = "hub-document"; name = "document" }; children = $options },
+            { tag = "button"; attrs = { type = "submit" }; children = list("Open") }
+          ) },
+          { tag = "div"; attrs = { class = "workspace" }; children = list(
+            { tag = "nav"; attrs = { class = "navigation pane"; "aria-label" = "Worlds and tools" }; children = list(
+              $worldsAndTools,
+              if($assetNavigation, { tag = "section"; attrs = { class = "asset-explorer"; "aria-label" = "Asset explorer" }; children = list(
+                { tag = "h2"; attrs = { class = "asset-tree-heading" }; children = list("Asset explorer") },
+                $assetNavigation.tree
+              ) }, null)
+            ) },
+            if($assetNavigation, { tag = "details"; attrs = { class = "mobile-asset-tree" }; children = list(
+              { tag = "summary"; children = list("Browse assets · ", $assetNavigation.asset.label) },
+              $assetNavigation.tree
+            ) }, null),
+            $document
+          ) },
+          { tag = "footer"; attrs = { class = "statusbar" }; children = list(
+            { tag = "span"; children = list("Ready") },
+            { tag = "span"; children = list($doc.number, " / 0", count($docs), "   ·   ", $doc.title) },
+            { tag = "span"; children = list("Encounter projection") }
+          ) }
+        ) }
+      ) }
+    )
+  }
+
+process hub.document:
+  let path = concat("/", $doc.id, "/")
+  let assetQuery = if($assetNavigation, concat("&asset=", $assetNavigation.asset.id), "")
+  let folio = eq($doc.id, "recent-folio")
+  let tabIds = if($editor, list("workbench", "execution", "trace", "receipts", "files"), if(or($storePage, $folio), list(), list("overview", "files")))
+  let tabIds = if(eq($view, "source"), list("workbench", "execution", "trace", "source", "receipts", "files"), $tabIds)
+  fold $tabIds as id; tabs starts list():
+    port kernel.invoke { query = "notebook.presentation.view"; input = if(eq($id, "trace"), "trace-map", if(eq($id, "execution"), "trace", $id)) } → tab
+    let link = { tag = if(eq($id, "source"), "span", "a");
+      attrs = { "aria-current" = if(eq($id, $view), "page", null); "data-evidence-role" = $tab.role;
+        href = if(eq($id, "source"), null, concat($path, "?view=", $id, $assetQuery)) };
+      children = list($tab.label) }
+    yield append($tabs, list($link)) → tabs
+  let images = $doc.images
+  let gallery = map($images, "image", {
+    tag = "a"; attrs = { class = "attachment"; href = concat("/attachments/", $image.file) }; children = list(
+      { tag = "img"; attrs = { src = concat("/images/", $image.file); alt = $image.alt; loading = "lazy" } },
+      { tag = "span"; children = list($image.title, " ↓") }
+    )
+  })
+  let body = $workbench
+  when eq($view, "workbench"):
+    let body = list(
+      { tag = "p"; attrs = { class = "summary" }; children = list($doc.summary) },
+      if(and(eq($request.method, "POST"), $execution), { tag = "p"; attrs = { class = "execution-notice" }; children = list(
+        { tag = "a"; attrs = { class = "notes-button"; href = concat($path, "?view=execution") }; children = list("View execution trace") }
+      ) }, null),
+      $body
+    )
+  when and(not($folio), includes(list("overview", "files"), $view)):
+    let body = list(
+      { tag = "h2"; children = list($doc.heading) },
+      { tag = "p"; attrs = { class = "summary" }; children = list($doc.summary) },
+      if(and($hasAttachments, count($images)), { tag = "section"; attrs = { class = "gallery"; "aria-label" = "Attachments" }; children = $gallery }, null),
+      { tag = "div"; attrs = { class = "record-note" }; children = list(
+        { tag = "p"; children = list($doc.detail) },
+        if($doc.link, { tag = "a"; attrs = { class = "notes-button"; href = $doc.link }; children = list($doc.linkLabel, " ↗") }, null)
+      ) }
+    )
+  when $folio:
+    let body = list(
+      { tag = "p"; attrs = { class = "summary" }; children = list($doc.summary) },
+      { tag = "div"; attrs = { class = "folio-activities" }; children = map($doc.activities, "activity", {
+        tag = "section"; attrs = { class = "record-note" }; children = list(
+          { tag = "h2"; children = list($activity.title) },
+          { tag = "p"; children = list($activity.detail) },
+          { tag = "a"; attrs = { class = "notes-button"; href = $activity.href }; children = list($activity.action) }
+        )
+      }) }
+    )
+  let result = {
+    tag = "main"; attrs = { id = "document"; class = "reader pane"; tabindex = "-1" }; children = list(
+      if(count($tabs), { tag = "nav"; attrs = { class = "document-tabs"; "aria-label" = "Document views" }; children = $tabs }, null),
+      { tag = "header"; attrs = { class = "pane-title" }; children = list(
+        { tag = "h1"; children = list($doc.title) }, { tag = "span"; children = list($doc.kind, " · ", $doc.status) }
+      ) },
+      { tag = "article"; attrs = { class = "paper"; tabindex = "0"; "aria-label" = "Document content" }; children = list(
+        if($missing, { tag = "p"; attrs = { class = "route-notice" }; children = list("Document not found. Showing One World.") }, null),
+        $body
+      ) }
+    )
+  }
+
+process hub.persist:
+  port rel.encode { value = $change; kind = $kind } → text
+  let documents = append(filter($snapshot.documents, "item", not(eq($item.path, $savePath))),
+    list({ path = $savePath; text = $text }))
+  port storage.cas { base = $base; operationId = $request.nonce; profile = $request.profile; basis = $request.basis;
+    documents = $documents; reason = $reason; target = $target; goal = $kind;
+    source = "game-workspace"; description = $reason } → receipt
+  let base = $receipt.revision
+
+process hub.mesh:
+  let mesh = $eventInput
+  fold or($mesh.faces, list()) as face; faces starts list():
+    let coordinates = map($face, "point", concat(at($point, 0), ",", at($point, 1)))
+    port text.join { values = $coordinates; separator = " " } → points
+    yield append($faces, list({ tag = "polygon"; attrs = { points = $points } })) → faces
+  let result = if(count($faces), { tag = "svg"; attrs = { viewBox = "0 0 260 260"; class = "asset-wireframe"; role = "img"; "aria-label" = $mesh.label }; children = $faces }, null)

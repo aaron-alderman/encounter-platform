@@ -1,0 +1,445 @@
+process-module "temple/surface-process-module/1"
+
+process programme.definition:
+  let result = {
+    protocol = "encounter/program-projection/1";
+    identity = "terrain.js";
+    reason = "Preserve the current behaviour while transferring ownership out of generated JavaScript.";
+    target = "terrain.js";
+    goal = "A typed programme projected through the shared algebra grammar.";
+    tree = list(
+      "Module",
+      {
+        body = list(
+          list(
+            "Use",
+            {
+              specifiers = list(
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Box3" });
+                local = list("NameReference", { name = "Box3" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "BufferGeometry" });
+                local = list("NameReference", { name = "BufferGeometry" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "DoubleSide" });
+                local = list("NameReference", { name = "DoubleSide" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Float32BufferAttribute" });
+                local = list("NameReference", { name = "Float32BufferAttribute" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Group" });
+                local = list("NameReference", { name = "Group" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "MathUtils" });
+                local = list("NameReference", { name = "MathUtils" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Mesh" });
+                local = list("NameReference", { name = "Mesh" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "MeshBasicMaterial" });
+                local = list("NameReference", { name = "MeshBasicMaterial" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "MeshStandardMaterial" });
+                local = list("NameReference", { name = "MeshStandardMaterial" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Raycaster" });
+                local = list("NameReference", { name = "Raycaster" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "RingGeometry" });
+                local = list("NameReference", { name = "RingGeometry" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Sphere" });
+                local = list("NameReference", { name = "Sphere" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Vector2" });
+                local = list("NameReference", { name = "Vector2" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Vector3" });
+                local = list("NameReference", { name = "Vector3" })
+                }
+                )
+              );
+              source = list("LiteralValue", { value = "./vendor/build/three.module.js" });
+              attributes = list()
+            }
+          ),
+          list(
+            "Use",
+            {
+              specifiers = list(
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "makePane" });
+                local = list("NameReference", { name = "makePane" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "disposeModel" });
+                local = list("NameReference", { name = "disposeModel" })
+                }
+                )
+              );
+              source = list("LiteralValue", { value = "./viewport.js" });
+              attributes = list()
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "panel" });
+                init = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "document" });
+                property = list("NameReference", { name = "querySelector" })
+                }
+                );
+                arguments = list(list("LiteralValue", { value = ".landscape-viewport" }))
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "status" });
+                init = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "panel" });
+                property = list("NameReference", { name = "querySelector" })
+                }
+                );
+                arguments = list(list("LiteralValue", { value = "[data-terrain-placement]" }))
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "form" });
+                init = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "document" });
+                property = list("NameReference", { name = "querySelector" })
+                }
+                );
+                arguments = list(list("LiteralValue", { value = ".terrain-controls" }))
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list(
+                "DestructureRecord",
+                {
+                properties = list(
+                list(
+                "Field",
+                {
+                computed = false;
+                kind = "init";
+                key = list("NameReference", { name = "x" });
+                value = list("NameReference", { name = "x" })
+                }
+                ),
+                list(
+                "Field",
+                {
+                computed = false;
+                kind = "init";
+                key = list("NameReference", { name = "z" });
+                value = list("NameReference", { name = "z" })
+                }
+                ),
+                list(
+                "Field",
+                {
+                computed = false;
+                kind = "init";
+                key = list("NameReference", { name = "preview" });
+                value = list("NameReference", { name = "preview" })
+                }
+                )
+                )
+                }
+                );
+                init = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "form" });
+                property = list("NameReference", { name = "elements" })
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "commit" });
+                init = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "form" });
+                property = list("NameReference", { name = "querySelector" })
+                }
+                );
+                arguments = list(list("LiteralValue", { value = "[value=\"commit\"]" }))
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          { fragment = "node1028" },
+          list(
+            "Recover",
+            {
+              block = list(
+                "Sequence",
+                {
+                body = list(
+                list(
+                "Do",
+                {
+                expression = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list("NameReference", { name = "openTerrain" });
+                arguments = list()
+                }
+                )
+                }
+                )
+                )
+                }
+              );
+              handler = list(
+                "Catch",
+                {
+                param = list("NameReference", { name = "error" });
+                body = list(
+                "Sequence",
+                {
+                body = list(
+                list(
+                "Do",
+                {
+                expression = list(
+                "Set",
+                {
+                operator = "=";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "panel" });
+                property = list("NameReference", { name = "querySelector" })
+                }
+                );
+                arguments = list(list("LiteralValue", { value = "canvas" }))
+                }
+                );
+                property = list("NameReference", { name = "hidden" })
+                }
+                );
+                right = list("LiteralValue", { value = true })
+                }
+                )
+                }
+                ),
+                list(
+                "Do",
+                {
+                expression = list(
+                "Set",
+                {
+                operator = "=";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "status" });
+                property = list("NameReference", { name = "textContent" })
+                }
+                );
+                right = list(
+                "Calculate",
+                {
+                operator = "+";
+                left = list("LiteralValue", { value = "3D terrain could not be loaded. " });
+                right = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "error" });
+                property = list("NameReference", { name = "message" })
+                }
+                )
+                }
+                )
+                }
+                )
+                }
+                )
+                )
+                }
+                )
+                }
+              );
+              finalizer = null
+            }
+          )
+        )
+      }
+    );
+    fragments = list(
+      "terrain.program-parts/group-01.encounter",
+      "terrain.program-parts/group-02.encounter",
+      "terrain.program-parts/group-03.encounter"
+    )
+  }
