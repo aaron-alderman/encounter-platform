@@ -1,0 +1,9 @@
+process-module "temple/surface-process-module/1"
+
+process work.asterContext:
+  let items = $eventInput.state.items
+  let completed = filter($items, "item", $item.completed)
+  let open = filter($items, "item", not($item.completed))
+  let summary = concat("Workgarden. Work items: ", count($items), ". Open: ", count($open), ". Completed: ", count($completed), ".")
+  let result = { tag = "span"; attrs = { hidden = ""; "data-sourcery-frame-adapter" = "workgarden";
+    "data-sourcery-frame-context" = $summary }; children = list() }

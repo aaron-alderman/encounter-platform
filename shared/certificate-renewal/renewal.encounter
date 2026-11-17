@@ -1,0 +1,62 @@
+process-module "temple/surface-process-module/1"
+
+process renewal.route:
+  let request = $eventInput
+  let result = { status = 200 }
+  when or(not($request.authorized), not(eq($request.host, $request.loopback))):
+    let result = { status = 403; error = "Renewal access refused" }
+  when and(eq($result.status, 200), or(not(eq($request.method, "POST")), not(eq($request.contentType, "application/json")))):
+    let result = { status = 405; error = "Method refused" }
+  when and(eq($result.status, 200), not(includes(list("/review", "/renew"), $request.path))):
+    let result = { status = 404; error = "Operation unavailable" }
+
+process renewal.review:
+  let input = $eventInput.input
+  let leaf = $eventInput.leaf
+  let issuer = $eventInput.issuer
+  let renewing = $eventInput.renewing
+  port record.entries { value = $input } → fields
+  let requested = if($renewing, $input.requestedAt, $eventInput.reviewAt)
+  let result = { status = 200 }
+  when and(not($renewing), not(eq(count($fields), 1))):
+    let result = { status = 400; error = "Unexpected review fields" }
+  when and($renewing, eq($result.status, 200)):
+    port number.calculate { operation = "subtract"; values = list($eventInput.now, $requested) } → age
+    port number.calculate { operation = "greaterEqual"; values = list($age, 0) } → current
+    port number.calculate { operation = "lessEqual"; values = list($age, 300000) } → timely
+    when not(and(eq(count($fields), 3), $eventInput.validTimestamp, $current, $timely)):
+      let result = { status = 409; error = "Review expired. Review again." }
+  when eq($result.status, 200):
+    port number.calculate { operation = "min"; values = list(add($requested, 2592000000), $issuer.notAfter) } → expiry
+    port time.formatUtc { milliseconds = $expiry; fractional = true } → proposed
+    port number.calculate { operation = "greaterEqual"; values = list($requested, $issuer.notBefore) } → issuerStarted
+    port number.calculate { operation = "greater"; values = list($expiry, $leaf.notAfter) } → extends
+    port number.calculate { operation = "greater"; values = list($expiry, $requested) } → future
+    let plan = { target = $input.target; requestedAt = $requested; currentFingerprint = $leaf.fingerprint;
+      issuerFingerprint = $issuer.fingerprint; currentExpiry = $leaf.expires; issuerExpiry = $issuer.expires;
+      proposedExpiry = $proposed; eligible = and($issuerStarted, $extends, $future) }
+    port json.stringify { value = $plan } → wire
+    port digest.sha256 { text = $wire } → digest
+    let result = { status = 200; plan = $plan; digest = $digest; expiry = $expiry }
+    when and($renewing, or(not(eq($input.digest, $digest)), not($plan.eligible))):
+      let result = { status = 409; error = "The review changed or the issuer cannot extend this certificate." }
+
+process renewal.install:
+  let server = eq($eventInput.target, "server")
+  let result = { verifyBefore = not($server); reload = $server;
+    replaceChain = and($server, $eventInput.managedChain); listenerConfirmations = 2 }
+
+process renewal.profile:
+  let input = $eventInput
+  let result = null
+  when and(eq($input.target, "desktop"), eq($input.purpose, "sslclient"),
+    eq($input.extensions, "extendedKeyUsage=clientAuth\n")):
+    let result = { purpose = "client"; dnsName = null }
+  when and(eq($input.target, "server"), eq($input.purpose, "sslserver")):
+    port text.match { value = $input.extensions; pattern = "\\AsubjectAltName=DNS:((?:\\*\\.)?[a-z0-9-]+(?:\\.[a-z0-9-]+)+)\\nextendedKeyUsage=serverAuth\\n\\z" } → matched
+    when $matched:
+      let result = { purpose = "server"; dnsName = at($matched.groups, 0) }
+
+process renewal.listener:
+  let input = $eventInput
+  let result = and(eq($input.status, 200), eq($input.expected, $input.observed))

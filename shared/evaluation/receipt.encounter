@@ -1,0 +1,49 @@
+process-module "temple/surface-process-module/1"
+
+process evaluation.receipt:
+  let packet = $eventInput
+  assert eq($packet.protocol, "encounter/evaluation/1")
+    otherwise "Unknown evaluation protocol."
+  assert includes(list("collected", "reviewed"), $packet.phase)
+    otherwise "Unknown evaluation phase."
+  let trials = $packet.trials
+  assert and(isArray($trials), eq(count($trials), 8))
+    otherwise "Expected the eight pilot trials."
+  let north = filter($trials, "trial", eq($trial.application, "north-river"))
+  let usewords = filter($trials, "trial", eq($trial.application, "usewords-lightning"))
+  assert eq(map($north, "trial", $trial.arm), $packet.suite.northRiver.order)
+    otherwise "The North River comparison must retain both selector orders."
+  let reference = at($north, 0)
+  each $north as trial:
+    assert and(eq($trial.caseId, $packet.suite.northRiver.id), eq($trial.comparison, $reference.comparison), eq($trial.model, $reference.model))
+      otherwise "North River arms must share case, model, image, rejected reply, mandatory context and budget."
+  each $packet.suite.usewords as scenario:
+    let pair = filter($usewords, "trial", eq($trial.caseId, $scenario.id))
+    assert eq(map($pair, "trial", $trial.arm), list("fast", "deep"))
+      otherwise "Each Usewords brief must run in both slots."
+    assert eq(at(at($pair, 0), "comparison"), at(at($pair, 1), "comparison"))
+      otherwise "Usewords slots must share the exact brief and runtime."
+  each $trials as trial:
+    assert eq(count(filter($trials, "other", eq($other.id, $trial.id))), 1)
+      otherwise "Duplicate trial identity."
+    assert includes(list("pass", "refused", "error"), $trial.validation.status)
+      otherwise "Missing deterministic validation outcome."
+  let judgments = $packet.judgments
+  when eq($packet.phase, "collected"):
+    assert eq($judgments, list())
+      otherwise "Collected evidence has no judgments."
+  when eq($packet.phase, "reviewed"):
+    assert and(count($packet.judge.identity), eq(count($judgments), count(filter($trials, "trial", count($trial.reply)))))
+      otherwise "Each available reply requires one attributed judgment."
+    each $judgments as judgment:
+      let matches = filter($trials, "trial", eq($trial.sha256, $judgment.trialSha256))
+      assert and(eq(count($matches), 1), eq(count(filter($judgments, "other", eq($other.trialSha256, $judgment.trialSha256))), 1), eq($judgment.rubricSha256, $packet.rubricSha256))
+        otherwise "Judgment must bind one exact trial and rubric."
+      let trial = at($matches, 0)
+      let criteria = if(eq($trial.application, "north-river"), $packet.suite.rubric.northRiver, $packet.suite.rubric.usewords)
+      assert eq(map($judgment.scores, "score", $score.id), map($criteria, "criterion", $criterion.id))
+        otherwise "Judgment must cover the declared rubric."
+      each $judgment.scores as score:
+        assert and(includes(list(0, 1, 2), $score.value), count($score.evidence), includes($trial.reply, $score.evidence), count($score.reason))
+          otherwise "Every score requires a bounded rating, an exact reply quote and a reason."
+  let result = $packet

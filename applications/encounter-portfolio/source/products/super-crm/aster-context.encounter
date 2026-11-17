@@ -1,0 +1,26 @@
+process-module "temple/surface-process-module/1"
+
+# Project the same screen model used by Super CRM's renderer. The result
+# contains workflow state and counts, without copying customer records.
+process crm.asterContext:
+  let screen = $eventInput
+  let accounts = $screen.state.accounts
+  let accountIds = map($accounts, "account", $account.id)
+  let cases = filter($screen.state.cases, "entry", includes($accountIds, $entry.account))
+  let review = at($screen.session, "occurrenceReview")
+  let reviewing = and($review, not(eq(at($screen, "occurrenceMode"), "read")),
+    eq($review.base, $screen.revision), count(filter($cases, "entry", eq($entry.id, $review.target))),
+    includes(list("schedule", "cancel"), $review.kind))
+  let view = if($reviewing, if(eq($review.kind, "schedule"), "Schedule review", "Cancellation review"), "Account and case overview")
+  port kernel.invoke { query = "crm.stages" } → stages
+  fold $stages as stage; summary starts "":
+    let total = count(filter($cases, "entry", eq($entry.stage, $stage)))
+    yield concat($summary, $stage, ": ", $total, ". ") → summary
+  let result = concat("Super CRM. ", $view, ". Accounts: ", count($accounts), ". Cases: ", count($cases), ". ", $summary)
+  when $reviewing:
+    let result = concat($result, "The change is awaiting confirmation.")
+
+process crm.asterContextMarker:
+  port kernel.invoke { query = "crm.asterContext"; input = $eventInput } → summary
+  let result = { tag = "span"; attrs = { hidden = ""; "data-sourcery-frame-adapter" = "super-crm";
+    "data-sourcery-frame-context" = $summary }; children = list() }

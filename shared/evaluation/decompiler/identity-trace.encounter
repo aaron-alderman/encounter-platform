@@ -1,0 +1,56 @@
+process-module "temple/surface-process-module/1"
+
+process decompiler.identityTrace:
+  let trace = $eventInput
+  fold $trace.cases as case; rows starts "":
+    port kernel.invoke { query = "decompiler.identityObservation"; input = $case } → observation
+    yield concat($rows, $observation) → rows
+  port kernel.invoke { query = "evaluation.escape"; input = $trace.scope } → scope
+  port kernel.invoke { query = "evaluation.escape"; input = $trace.previewBuild } → build
+  let result = concat(
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+    "<title>Identity Management · Semantic Decompiler</title><link rel=\"stylesheet\" href=\"/decompiler/notebook.css\"></head><body><div class=\"frame\">",
+    "<header class=\"titlebar\"><b>Semantic Decompiler</b><span>Assurance · Read only</span></header>",
+    "<div class=\"pathbar\"><a href=\"?platform=1\">North River evidence</a> / Identity Management</div>",
+    "<main class=\"document\"><header class=\"doc-head\"><span class=\"label\">Reviewed browser trace</span><h1>Identity Management</h1><p>", $scope, "</p></header>",
+    "<div class=\"decision\"><strong>", $trace.compiler.references, " source references</strong> · ",
+    $trace.compiler.checksPerProposal, " projected route checks per accepted input · ",
+    $trace.observedBrowser.httpRequests, " HTTP requests during the recorded submissions.</div>",
+    "<section aria-labelledby=\"comparison\"><h2 id=\"comparison\">Compiler mappings and browser observations</h2>", $rows, "</section>",
+    "<section aria-labelledby=\"provenance\"><h2 id=\"provenance\">Evidence pins</h2><dl>",
+    "<dt>Home preview build</dt><dd><code>", $build, "</code></dd>",
+    "<dt>Release fingerprint</dt><dd><code>", $trace.releasePin, "</code></dd>",
+    "<dt>Home fingerprint observed in the browser</dt><dd><code>", $trace.homeFingerprint, "</code></dd>",
+    "<dt>Compiler source snapshot SHA-256</dt><dd><code>", $trace.sourceSnapshotSha256, "</code></dd>",
+    "<dt>Browser trace SHA-256</dt><dd><code>", $trace.sha256, "</code></dd></dl>",
+    "<a href=\"?case=identity-management&amp;download=trace\" download=\"identity-management-trace.rel\">Download trace (.rel)</a></section></main></div></body></html>")
+
+process decompiler.identityObservation:
+  let row = $eventInput
+  port kernel.invoke { query = "evaluation.escape"; input = $row.path } → path
+  port kernel.invoke { query = "evaluation.escape"; input = $row.expected } → expected
+  port kernel.invoke { query = "evaluation.escape"; input = $row.outcome } → outcome
+  port kernel.invoke { query = "decompiler.identityList"; input = $row.counts } → counts
+  port kernel.invoke { query = "decompiler.identityList"; input = $row.moves } → expectedMoves
+  port kernel.invoke { query = "decompiler.identityList"; input = $row.moveIds } → observedMoves
+  port kernel.invoke { query = "decompiler.identityList"; input = $row.gaps } → expectedGaps
+  port kernel.invoke { query = "decompiler.identityList"; input = $row.gapIds } → observedGaps
+  port kernel.invoke { query = "decompiler.identityList"; input = $row.effects } → effects
+  port kernel.invoke { query = "decompiler.identityList"; input = $row.mutations } → mutations
+  let result = concat(
+    "<article class=\"diff-site\"><h3><code>", $path, "</code></h3><div class=\"compare-grid\">",
+    "<div class=\"compare-card\"><h4>Expected from the Compiler</h4><p>", $expected, "</p></div>",
+    "<div class=\"compare-card\"><h4>Observed in the browser</h4><p>", $outcome, "</p><p>", $counts, "</p></div></div>",
+    "<p><strong>Mapping</strong> · ", $row.mapping, " &nbsp; <strong>Browser boundary</strong> · ", $row.boundary, "</p>",
+    "<details class=\"event\"><summary>Contract IDs and browser effects</summary><dl>",
+    "<dt>Expected move IDs</dt><dd><code>", $expectedMoves, "</code></dd>",
+    "<dt>Observed move IDs</dt><dd><code>", $observedMoves, "</code></dd>",
+    "<dt>Expected coverage gap IDs</dt><dd><code>", $expectedGaps, "</code></dd>",
+    "<dt>Observed coverage gap IDs</dt><dd><code>", $observedGaps, "</code></dd>",
+    "<dt>Browser bridge effects</dt><dd><code>", $effects, "</code></dd>",
+    "<dt>DOM mutation targets</dt><dd><code>", $mutations, "</code></dd>",
+    "<dt>Navigation</dt><dd>", if($row.stayedInHome, "Stayed in Home", "Left Home"), "</dd></dl></details></article>")
+
+process decompiler.identityList:
+  port text.join { values = $eventInput; separator = " · " } → list
+  port kernel.invoke { query = "evaluation.escape"; input = if(eq($list, ""), "—", $list) } → result

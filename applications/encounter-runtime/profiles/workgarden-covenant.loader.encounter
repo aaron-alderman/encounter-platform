@@ -1,0 +1,21 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    notes = list("All clauses apply. Text literals, null checks and path comparisons lower to Temple3 predicates.");
+    sections = list(
+      { subject = "identity"; equalsActor = "profile" },
+      { subject = "delta.nextPredicate"; isNull = "" },
+      { subject = "delta.read"; equalsPath = "delta.consume" },
+      { subject = "delta.consume.0"; equalsPath = "basis.cells.0.id" },
+      { subject = "delta.consume.1"; isNull = "" },
+      { subject = "delta.create.1"; isNull = "" },
+      { subject = "basis.cells.1"; isNull = "" },
+      { subject = "context.request.basis"; equalsPath = "delta.basisStateRoot" },
+      { subject = "context.statement.relation"; equalsRelation = "profile" },
+      { subject = "context.statement.publicInputs.command.op"; equalsText = "create" },
+      { subject = "context.statement.publicInputs.before"; equalsPath = "basis.cells.0.value" },
+      { subject = "context.statement.publicInputs.after"; equalsPath = "delta.create.0.value" },
+      { subject = "context.statement"; verifyWith = "context.proof" }
+    )
+  }

@@ -1,0 +1,185 @@
+process-module "temple/surface-process-module/1"
+
+process heldOut.suite:
+  let result = {
+    model = "qwen2.5:3b"; digest = "357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b";
+    cases = list(
+      { id = "employee-link"; title = "Employee link mistaken for report work";
+        objective = "Require each timesheet entry to reference a known employee and let managers group totals by employee.";
+        query = "display the employee totals dashboard employee reference constraint";
+        seeds = list("model-contract", "dependency-rule");
+        patches = list({ id = "model"; field = "change"; value = "Display the employee totals dashboard before defining the entry fields." });
+        expectation = "Define an employee reference and check that a missing or unknown employee is refused.";
+        order = list("lexical", "pagerank") },
+      { id = "session-check"; title = "Session check declares a report check";
+        objective = "Keep employee and manager sessions separate so an employee cannot open the manager report.";
+        query = "separate authenticated sessions employee manager cross-account access refusal";
+        seeds = list("session-contract", "repair-boundary");
+        patches = list({ id = "sessions"; field = "checkKind"; value = "report-values" });
+        expectation = "Exercise separate sessions and explicitly check that an employee is refused manager access.";
+        order = list("pagerank", "lexical") },
+      { id = "import-and-entry"; title = "Import and entry targets are swapped";
+        objective = "Preview a CSV of employees without saving invalid rows, then let an employee submit time against their own record.";
+        query = "employee CSV import preview invalid row timesheet entry validation owner";
+        seeds = list("import-contract", "entry-contract");
+        patches = list({ id = "import"; field = "target"; value = "entry-command" }, { id = "entry"; field = "target"; value = "csv-import" });
+        expectation = "Keep CSV preview and invalid-row handling in import, and employee time validation in entry.";
+        order = list("lexical", "pagerank") }
+    )
+  }
+
+process heldOut.index:
+  let base = $eventInput
+  let units = filter($base.units, "unit", not(eq($unit.id, "diagnostic")))
+  let units = append($units, list(
+    { id = "session-contract"; title = "session-contract"; text = "Exercise separate employee and manager sessions. Account access must refuse actions outside the authenticated role."; optional = false; path = "north-river/live-scope.encounter"; process = "nr.liveRules" },
+    { id = "import-contract"; title = "import-contract"; text = "Preview employee CSV import and check row validation before saving."; optional = false; path = "north-river/live-scope.encounter"; process = "nr.liveRules" },
+    { id = "entry-contract"; title = "entry-contract"; text = "Author time entry as a separate command and check entry validation."; optional = false; path = "north-river/live-scope.encounter"; process = "nr.liveRules" },
+    { id = "session-example"; title = "session-example"; text = "In independent sessions, open the manager report with a manager account, then verify that the same report request is refused for an employee."; optional = true; path = "north-river/live-scope.encounter"; process = "nr.liveRules" },
+    { id = "import-example"; title = "import-example"; text = "Preview an employee CSV with a missing required value. Show its row diagnostic and verify that the invalid row is not saved."; optional = true; path = "north-river/live-scope.encounter"; process = "nr.liveRules" }
+  ))
+  let edges = filter($base.edges, "edge", not(or(eq($edge.from, "diagnostic"), eq($edge.to, "diagnostic"))))
+  let edges = append($edges, list(
+    { from = "session-contract"; to = "session-example"; relation = "checks"; weight = 3 },
+    { from = "session-contract"; to = "entry-control"; relation = "checks"; weight = 2 },
+    { from = "import-contract"; to = "import-example"; relation = "checks"; weight = 3 },
+    { from = "entry-contract"; to = "entry-control"; relation = "checks"; weight = 3 }
+  ))
+  let result = { query = ""; seeds = list(); mixing = $base.mixing; budgetBytes = $base.budgetBytes; units = $units; edges = $edges }
+
+process heldOut.check:
+  let run = $eventInput
+  assert eq($run.initialIssues, $run.expectedIssues)
+    otherwise "The initial refusal did not flag the expected number of steps."
+  assert or(and(eq($run.outcome, "admissible"), eq($run.remainingIssues, 0), $run.unaffectedPreserved), and(eq($run.outcome, "blocked"), not($run.unaffectedPreserved)))
+    otherwise "The recorded repair outcome conflicts with the scope or preservation evidence."
+  let result = $run.outcome
+
+process heldOut.reject:
+  let case = $eventInput
+  fold $case.patches as patch; steps starts $case.baseline.steps:
+    port record.put { record = at($steps, $patch.id); key = $patch.field; value = $patch.value } → step
+    port record.put { record = $steps; key = $patch.id; value = $step } → updated
+    yield $updated → steps
+  port record.put { record = $case.baseline; key = "steps"; value = $steps } → result
+
+process heldOut.pins:
+  let result = {
+    "employee-link" = "ffac037e355d886337495e8f85e04e8ab8fecad68069bbee1f7e02d6a45a08bb";
+    "session-check" = "0a97c856500c90a26b0b68cca5934fdf73a985c2498763c4858f3de65bbd403e";
+    "import-and-entry" = "fbc9f69746d50acf8d5f563cf15ac9ee6ba6ebb96d2ace679c1a2ea6d6add42b"
+  }
+  when eq($eventInput, "access-refusal"):
+    let result = {
+      "employee-link" = "01f107be41de7d6596871e8f1e5670d1b12c659ffabde49c2a9d23ee12ac668f";
+      "session-check" = "471619d801b8dd28b8b9dea466214ab17e66955a53744af13cb4521b1c651865";
+      "import-and-entry" = "87e5df19549f92cfcbaf49e0e7745cee070914ab724a8b2ac2b210c8ef673b3d"
+    }
+
+process heldOut.review:
+  let reviews = list(
+    { reply = "c9af01b5b10f4b1076dc9bf485b63dd094ec7769100ebed6010efafe2e48db25"; assessment = "Meets"; note = "Defines the required employee reference and explicitly checks that a missing or unknown employee is refused." },
+    { reply = "6bcbf26b1fe5470436fea10aa53f100303110c06ba4549c809448b99ebfd3739"; assessment = "Meets"; note = "Calls for separate employee and manager sessions and explicitly checks the employee denial on the manager report. The change also repeats an unrelated report-filter observation." },
+    { reply = "9606962cd3c7b944d996ba2a61b5f3c9abedcfe62bfbb422ea4e25eaadfa52dc"; assessment = "Partial"; note = "The planned check explicitly denies an employee access to the manager report. The change remains about preserving identity while filtering a report and omits exercising separate sessions." },
+    { reply = "c1b5104661257c10f7ebdc1714b2bda243d64fc0eb4508158efeec4f7bf2d7d7"; assessment = "Partial"; note = "Defines the required employee reference and checks a known employee, but gives no explicit missing or unknown employee refusal." },
+    { reply = "dd9cf423f3622335a91cac80c31f43791648926992efe8330a4d7753e4486be7"; assessment = "Partial"; note = "The change names the required reference and the refusal. The planned check describes a relationship generally and omits the negative test." },
+    { reply = "646b73f58a639afaee81e92bd5a79c9407bb819e7abb3e643aa52852037b2969"; assessment = "Missed"; note = "Proposes changing a report filter and repeats the diagnostic as its check. It omits the separate-session access test." },
+    { reply = "ddcb541e731b0e63b5c801e35bebd0be1c40ddec1cf9559ae495e50fdbefeaa1"; assessment = "Partial"; note = "The change specifies the right role boundary. The check switches to employee identity linkage and omits the manager access refusal." },
+    { reply = "9dfb4817a79a3a1a12ddfb47bf9ed018389ae5207e241e61c02053b139ae3388"; assessment = "Partial"; note = "Separates CSV row handling from entry ownership and specifies a duplicate-ID refusal. It leaves preview without saving implicit." },
+    { reply = "c7ae3aee6d9d0afd3008e8beee72de6dc59f0b54e5c16eb207440558581c8537"; assessment = "Partial"; note = "Separates CSV row handling from entry ownership and specifies a duplicate-ID refusal. It leaves preview without saving implicit." }
+  )
+  let selected = filter($reviews, "review", eq($review.reply, $eventInput))
+  assert eq(count($selected), 1)
+    otherwise "Expected exactly one assessment for this captured reply."
+  let result = at($selected, 0)
+
+process heldOut.assign:
+  call heldOut.suite
+  let suite = $result
+  let scenario = at(filter($suite.cases, "case", eq($case.id, $eventInput)), 0)
+  assert $scenario
+    otherwise "Select a held-out case from the benchmark suite."
+  let result = { scenario = $scenario; model = $suite.model; digest = $suite.digest }
+
+process heldOut.rubric:
+  let result = {
+    id = "north-river-repair-quality/1";
+    criterion = "Does the reply satisfy the case expectation with a concrete repair and a check that tests the stated outcome?";
+    zero = "The repair misses the expectation.";
+    one = "The repair addresses part of the expectation or omits a concrete check.";
+    two = "The repair and check meet the expectation."
+  }
+
+process heldOut.judgment:
+  let review = $eventInput
+  let score = $review.score
+  assert includes(list(0, 1, 2), $score.value)
+    otherwise "Expected a score from zero to two."
+  assert and(count($score.quote), includes($review.reply, $score.quote), count($score.reason))
+    otherwise "Judgment requires an exact reply quote and a reason."
+  let disagreement = not(eq(eq($score.value, 2), eq($review.outcome, "admissible")))
+  let result = { value = $score.value; quote = $score.quote; reason = $score.reason; runtime = $review.outcome; disagreement = $disagreement }
+
+process heldOut.experiment:
+  let cases = list(
+    { id = "report-date-window"; title = "Report declares an entry check";
+      objective = "Show each employee's minutes within the manager's selected date range, with both boundary dates included.";
+      query = "manager report totals inclusive start date end date employee minutes";
+      seeds = list("report-contract", "dependency-rule");
+      patches = list({ id = "report"; field = "checkKind"; value = "entry-validation" });
+      expectation = "Describe a report date-range check that includes entries on both boundary dates and excludes entries outside the range." },
+    { id = "entry-positive-minutes"; title = "Time entry declares a report target";
+      objective = "Allow employees to submit their own time and reject entries with zero or negative minutes.";
+      query = "timesheet entry command validation refuse zero negative minutes employee";
+      seeds = list("entry-contract", "repair-boundary");
+      patches = list({ id = "entry"; field = "target"; value = "report-projection" });
+      expectation = "Keep the repair in the time-entry command and explicitly check refusal of zero or negative minutes." }
+  )
+  let result = { id = "north-river-fresh-repairs/1"; cases = $cases; trials = list(
+    { id = "first"; seed = 41; temperature = 0.2; numPredict = 1100; order = list("lexical", "pagerank") },
+    { id = "second"; seed = 73; temperature = 0.2; numPredict = 1100; order = list("pagerank", "lexical") }
+  ) }
+
+process heldOut.experimentAssignment:
+  let requested = $eventInput
+  call heldOut.suite
+  let suite = $result
+  call heldOut.experiment
+  let experiment = $result
+  let case = at(filter($experiment.cases, "case", eq($case.id, $requested.caseId)), 0)
+  let trial = at(filter($experiment.trials, "trial", eq($trial.id, $requested.trialId)), 0)
+  assert and($case, $trial)
+    otherwise "Unknown experiment case or trial."
+  port record.put { record = $case; key = "order"; value = $trial.order } → scenario
+  let result = { scenario = $scenario; model = $suite.model; digest = $suite.digest; generation = { seed = $trial.seed; temperature = $trial.temperature; numPredict = $trial.numPredict } }
+
+process heldOut.experimentSummary:
+  let pairs = $eventInput
+  call heldOut.experiment
+  let plan = $result
+  fold $plan.cases as case; expected starts 0:
+    yield add($expected, count($plan.trials)) → expected
+  assert eq(count($pairs), $expected)
+    otherwise "The experiment must include each case and trial."
+  each $plan.cases as case:
+    each $plan.trials as trial:
+      let rows = filter($pairs, "pair", and(eq($pair.caseId, $case.id), eq($pair.trialId, $trial.id)))
+      assert eq(count($rows), 1)
+        otherwise "Expected exactly one pair for each case and trial."
+      let row = at($rows, 0)
+      assert and(eq($row.generation.seed, $trial.seed), eq($row.generation.temperature, $trial.temperature),
+        eq($row.generation.numPredict, $trial.numPredict), eq($row.order, $trial.order),
+        eq(map($row.arms, "arm", $arm.arm), list("lexical", "pagerank")))
+        otherwise "The experiment pair differs from its generation settings or selector order."
+  let reference = at($pairs, 0)
+  assert every($pairs, "pair", eq($pair.pins, $reference.pins))
+    otherwise "All experiment pairs must share the same image, model, runtime, selector, index and rubric."
+  let arms = list("lexical", "pagerank")
+  fold $arms as arm; totals starts list():
+    fold $pairs as pair; tally starts { admitted = 0; score = 0; disagreements = 0; modelUs = 0; terminalUs = 0 }:
+      let run = at(filter($pair.arms, "run", eq($run.arm, $arm)), 0)
+      yield { admitted = add($tally.admitted, if(eq($run.outcome, "admissible"), 1, 0)); score = add($tally.score, $run.score);
+        disagreements = add($tally.disagreements, if($run.disagreement, 1, 0));
+        modelUs = add($tally.modelUs, $run.modelUs); terminalUs = add($tally.terminalUs, $run.terminalUs) } → tally
+    yield append($totals, list({ arm = $arm; count = count($pairs); totals = $tally })) → totals
+  let result = { experiment = $plan.id; pins = $reference.pins; pairs = $pairs; arms = $totals }

@@ -1,0 +1,124 @@
+process-module "temple/surface-process-module/1"
+
+process decompiler.expression:
+  let node = $eventInput
+  let tag = at($node, 0)
+  let result = $tag
+  when eq($tag, "ref"):
+    port text.join { values = at($node, 1); separator = "." } → name
+    let result = concat("＄", $name)
+  when eq($tag, "literal"):
+    port decompiler.literal { value = at($node, 1) } → result
+  when eq($tag, "record"):
+    let result = "{ … }"
+  when eq($tag, "apply"):
+    fold at($node, 2) as arg; expressions starts list():
+      port kernel.invoke { query = "decompiler.expression"; input = $arg } → rendered
+      yield append($expressions, list($rendered)) → expressions
+    port text.join { values = $expressions; separator = ", " } → args
+    let result = concat(at($node, 1), "(", $args, ")")
+
+process decompiler.event:
+  let event = $eventInput
+  let status = ""
+  let detail = ""
+  when eq($event.kind, "when"):
+    let status = if($event.data.fault, "Predicate fault", if($event.data.taken, "Branch taken", "Branch skipped"))
+  when eq($event.kind, "assert"):
+    let status = if($event.data.fault, "Assertion fault", if($event.data.passed, "Check passed", "Check refused"))
+  when eq($event.kind, "catch"):
+    let status = "Refusal caught"
+    let detail = $event.data.diagnostic
+  when eq($event.kind, "port-end"):
+    let status = concat(if($event.data.ok, "Returned", "Failed"), " · ", $event.data.port)
+    when at($event.data, "query"):
+      let status = concat($status, " → ", $event.data.query)
+    when eq(at(at($event.data, "result"), "kind"), "list"):
+      let detail = concat("Returned ", $event.data.result.count, " entries.")
+    when eq(at(at($event.data, "result"), "kind"), "text"):
+      let detail = concat("Observed text: ", $event.data.result.value, if($event.data.result.truncated, "…", ""))
+    when and(eq(at($event.data, "query"), "nr.reportWording"), eq($event.data.result, null)):
+      let detail = "The wording check found no misplaced report text."
+    when eq($event.data.port, "storage.cas"):
+      let revision = at($event.data, "revision")
+      let detail = if($event.data.ok, concat("Storage returned revision ", $revision, "."), "Storage refused the write.")
+  when $event.predicate:
+    port kernel.invoke { query = "decompiler.expression"; input = $event.predicate } → detail
+  port kernel.invoke { query = "evaluation.escape"; input = $status } → heading
+  port kernel.invoke { query = "evaluation.escape"; input = $detail } → description
+  port kernel.invoke { query = "evaluation.escape"; input = $event.process } → owner
+  port kernel.invoke { query = "evaluation.escape"; input = $event.origin.file } → file
+  port text.join { values = $event.address; separator = "." } → address
+  let observations = ""
+  let operands = at($event.data, "operands")
+  when $operands:
+    fold $operands as operand; items starts "":
+      port text.join { values = $operand.ref; separator = "." } → path
+      port decompiler.literal { value = $operand.observed } → observed
+      port kernel.invoke { query = "evaluation.escape"; input = concat("＄", $path, " = ", $observed) } → text
+      yield concat($items, "<li><code>", $text, "</code></li>") → items
+    when $items:
+      let observations = concat("<ul>", $items, "</ul>")
+  let refusal = ""
+  when and(eq($event.kind, "assert"), not(at($event.data, "passed"))):
+    port kernel.invoke { query = "evaluation.escape"; input = $event.diagnostic } → diagnostic
+    let refusal = concat("<p><strong>Declared refusal</strong> ", $diagnostic, "</p>")
+  let result = concat("<details class=\"event\"><summary><span>", $event.sequence, " · ", $heading,
+    "</span><code>", $owner, "</code></summary><p><code>", $description, "</code></p>", $observations, $refusal,
+    "<p class=\"source\">", $file, ":", $event.origin.line, " · compiled address <code>", $address, "</code></p></details>")
+
+process decompiler.phase:
+  let phase = $eventInput
+  let scope = at(filter($phase.events, "event", and(eq($event.kind, "port-end"), eq(at($event.data, "query"), "nr.liveScope"))), 0)
+  let issues = at(at(at($scope, "data"), "result"), "count")
+  let key = if($phase.repair, "repair", "refusal")
+  let title = if($phase.repair, "Replacement checked", "Original proposal refused")
+  let wording = at(filter($phase.events, "event", and(eq($event.kind, "port-end"), eq(at($event.data, "query"), "nr.reportWording"), eq(at(at($event.data, "result"), "kind"), "text"))), 0)
+  let excerpt = at(at(at($wording, "data"), "result"), "value")
+  port kernel.invoke { query = "evaluation.escape"; input = or($excerpt, "") } → flagged
+  let note = if(eq($issues, 0), "Scope check returned no issues.", concat("Scope check returned ", $issues, " issue."))
+  when $excerpt:
+    let note = concat($note, " The model step’s report-wording check returned “", $flagged, "”.")
+  let processes = list("app.agentResult", "nr.liveScope", "nr.reportWording", "nr.liveMergeRepair", "nr.liveRepair", "nr.persist")
+  let focus = filter($phase.events, "event", and(not(eq($event.kind, "port-start")), or(
+    includes($processes, $event.process),
+    and(eq($event.kind, "assert"), not(at($event.data, "passed")))
+  )))
+  let other = filter($phase.events, "event", and(not(includes($processes, $event.process)), or(
+    eq($event.kind, "when"), and(eq($event.kind, "assert"), at($event.data, "passed"))
+  )))
+  fold $focus as event; entries starts "":
+    port kernel.invoke { query = "decompiler.event"; input = $event } → row
+    yield concat($entries, $row) → entries
+  fold $other as event; remaining starts "":
+    port kernel.invoke { query = "decompiler.event"; input = $event } → row
+    yield concat($remaining, $row) → remaining
+  let result = concat("<section id=\"", $key, "\"><h2>", $title, "</h2><p>", $note, " Showing ", count($focus),
+    " decision and effect observations from ", count($phase.events), " recorded events.</p><div class=\"timeline\">", $entries, "</div><details class=\"more\"><summary>Additional checks and branches (", count($other), ")</summary>", $remaining, "</details></section>")
+
+process decompiler.page:
+  let capture = $eventInput
+  port kernel.invoke { query = "evaluation.escape"; input = $capture.objective } → objective
+  port kernel.invoke { query = "evaluation.escape"; input = $capture.model } → modelName
+  fold $capture.phases as phase; sections starts "":
+    port kernel.invoke { query = "decompiler.phase"; input = $phase } → view
+    yield concat($sections, $view) → sections
+  let result = concat(
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>North River · Semantic Decompiler</title><link rel=\"stylesheet\" href=\"/decompiler/notebook.css\"></head><body><div class=\"frame\">",
+    "<header class=\"titlebar\"><b>▤ Encounter Notebook</b><span>North River · Assurance</span></header><div class=\"pathbar\"><a href=\"/\">Model Evaluation</a> / North River / Repair trace · <a href=\"/decompiler\">Compare selectors</a></div>",
+    "<div class=\"workspace\"><nav aria-label=\"Notebook navigator\"><span class=\"label\">Navigator</span><b>North River</b><a href=\"#overview\" aria-current=\"page\">Run overview</a><a href=\"#refusal\">Original refusal</a><a href=\"#repair\">Replacement check</a><a href=\"#docket\">Evidence docket</a></nav>",
+    "<main class=\"document\" id=\"overview\"><div class=\"doc-head\"><span class=\"label\">Admitted image · Recorded execution</span><h1>Semantic decompiler</h1><p>", $objective, "</p></div>",
+    "<div class=\"decision\"><span class=\"label\">Observed outcome</span><h2>", if(eq($capture.outcome, "admissible"), "Repair entered the question stage", "Repair remained blocked"), "</h2>",
+    "<p>The initial proposal was replayed into the admitted image. One live Ollama repair followed. ",
+    if($capture.reportPreserved, "The browser check confirmed the report step was preserved.", ""), "</p></div>",
+    "<p>Each entry joins a runtime observation to its compiled instruction and the source process. Expand an entry for its predicate, observed operands, or effect result.</p>",
+    $sections, "</main><aside class=\"docket\" id=\"docket\"><span class=\"label\">Evidence docket</span><h2>Run evidence</h2><p>", if(eq($capture.arm, "lexical"), "Lexical", "PageRank"), " · ", $modelName,
+    "</p><dl><dt>Admitted image SHA-256</dt><dd><code>", $capture.image, "</code></dd><dt>Programme SHA-256</dt><dd><code>", $capture.programme,
+    "</code></dd><dt>Runtime SHA-256</dt><dd><code>", $capture.runtime, "</code></dd><dt>Trace receipt SHA-256</dt><dd><code>", $capture.trace,
+    "</code></dd><dt>Reviewed manifest SHA-256</dt><dd><code>", $capture.manifestSha256, "</code></dd></dl><a class=\"button\" href=\"/decompiler/image.rel.gz\">Download admitted image</a><a class=\"button\" href=\"/decompiler/trace.rel.gz\">Download full trace</a>",
+    "<a class=\"button\" href=\"/decompiler/encounter.gz\">Download pinned runtime (Linux)</a><a class=\"button\" href=\"/decompiler/manifest.rel\">Download capture manifest</a>",
+    "</aside></div><footer>Encounter Notebook · Synthetic North River repair capture</footer></div></body></html>"
+  )
+
+process decompiler.styles:
+  let result = ":root{color-scheme:light;--room:#243440;--ink:#222d31;--quiet:#4b5c60;--paper:#fff9e9;--line:#a5ae9e;--blue:#214c63;--red:#8a2d25;font:14px/1.48 system-ui,sans-serif;background:var(--room);color:var(--ink)}*{box-sizing:border-box}body{margin:0}.frame{max-width:1450px;margin:10px auto;border:1px solid #b5b7a3;background:#e0e1d1;box-shadow:0 7px 30px #13212caa}.titlebar{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:7px 12px;background:linear-gradient(90deg,#244456,#2d5a68);color:#fff4d8}.pathbar,footer{padding:7px 12px;background:#eeeede;border-block:1px solid var(--line);font-size:12px}.workspace{display:grid;grid-template-columns:174px minmax(0,1fr) 246px;min-height:490px}nav,.docket,.document{min-width:0;padding:12px}nav{background:#dfe6d8;border-inline-end:1px solid var(--line)}nav b{display:block;font:20px Georgia,serif;margin:4px 0 12px}nav a,.button{display:block;padding:.4rem;color:var(--blue)}nav a[aria-current]{background:#f0e1ae;border:1px solid #a19366}.document{background:var(--paper);padding:13px clamp(10px,2vw,25px) 20px}.doc-head{border-bottom:1px solid var(--line);margin-bottom:11px}.label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:750;color:var(--quiet)}h1,h2{font-family:Georgia,serif;font-weight:500}h1{font-size:clamp(26px,4vw,42px);margin:.15em 0}h2{font-size:24px;margin:.3em 0}p{margin:.5em 0}.decision{border:1px solid var(--line);border-inline-start:4px solid var(--blue);background:#f8f2df;padding:11px 12px}.document section{margin:1.4rem 0}.event{border-top:1px solid #b5baa7;padding:.45rem .3rem}.event summary{cursor:pointer;display:flex;gap:.55rem;flex-wrap:wrap;justify-content:space-between;color:#224858}.event summary span{font-weight:700}.event[open]{background:#f6edd3}.event .source,.docket{color:#40535a}.docket{background:#ede9d8;border-inline-start:1px solid var(--line)}dt{font-weight:650}dd{margin:0 0 .65rem}.button{margin:.4rem 0;background:#faf3dd;border:1px solid var(--line)}code{overflow-wrap:anywhere;white-space:normal}:focus-visible{outline:2px solid #2a697e;outline-offset:2px}.compare-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}.compare-card,.diff-site{min-width:0;background:#f8f2df;border:1px solid var(--line);padding:12px}.compare-card h3,.diff-site h4{margin:.2rem 0}.compare-card h4{margin:.65rem 0 .15rem}.document pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#fffdf2;padding:8px;border:1px solid var(--line);font-size:12px}.diff-site{margin:.6rem 0}@media(max-width:900px){.workspace{grid-template-columns:142px minmax(0,1fr) 195px}}@media(max-width:730px){.compare-grid{grid-template-columns:1fr}.frame{margin:0}.workspace{grid-template-columns:1fr}nav{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;border:0;border-bottom:1px solid var(--line)}nav b,nav .label{display:none}.docket{border-inline:0;border-top:1px solid var(--line)}}"

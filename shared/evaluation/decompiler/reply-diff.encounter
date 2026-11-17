@@ -1,0 +1,38 @@
+process-module "temple/surface-process-module/1"
+
+process desk.replyValue:
+  let value = $eventInput
+  let result = "<em class=\"rich-note\">Missing from this reply</em>"
+  when $value.present:
+    port kernel.invoke { query = "desk.jsonReply"; input = $value.text } → tokens
+    let result = concat("<mark class=\"reply-change\">", $tokens, "</mark>")
+
+process desk.replyDifference:
+  let field = $eventInput
+  port kernel.invoke { query = "desk.richInline"; input = { role = "heading"; text = $field.path } } → title
+  port kernel.invoke { query = "evaluation.escape"; input = $field.path } → path
+  port kernel.invoke { query = "desk.replyValue"; input = $field.lexical } → lexical
+  port kernel.invoke { query = "desk.replyValue"; input = $field.pagerank } → pagerank
+  let result = concat("<div data-reply-difference=\"", $path, "\"><pre data-value=\"lexical\">", $title, "\n\n", $lexical,
+    "</pre><pre data-value=\"pagerank\">", $title, "\n\n", $pagerank, "</pre></div>")
+
+process desk.compareReplies:
+  port evaluation.replyPairs { lexical = $eventInput.lexical; pagerank = $eventInput.pagerank } → input
+  let fields = filter($input.pairs, "pair", not(eq($pair.lexical.key, $pair.pagerank.key)))
+  let result = { invalid = $input.invalid; fields = map($fields, "pair", { path = $pair.path;
+    lexical = { present = $pair.lexical.present; text = $pair.lexical.text };
+    pagerank = { present = $pair.pagerank.present; text = $pair.pagerank.text } }) }
+
+process desk.replyDifferences:
+  let pair = $eventInput
+  let lexical = at(filter($pair, "arm", eq($arm.arm, "lexical")), 0)
+  let pagerank = at(filter($pair, "arm", eq($arm.arm, "pagerank")), 0)
+  port kernel.invoke { query = "desk.compareReplies"; input = { lexical = $lexical.reply; pagerank = $pagerank.reply } } → diff
+  let message = "The replies contain the same JSON values."
+  when count($diff.invalid):
+    port text.join { values = $diff.invalid; separator = " and " } → names
+    let message = concat("Field comparison is unavailable. Invalid JSON from ", $names, ". Turn off Differences only to read the recorded replies.")
+  fold $diff.fields as field; fields starts "":
+    port kernel.invoke { query = "desk.replyDifference"; input = $field } → row
+    yield concat($fields, $row) → fields
+  let result = concat("<div data-reply-diff-status hidden>", $message, "</div>", $fields)

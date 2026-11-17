@@ -1,0 +1,19 @@
+[package]
+name = "appdev-temple-connector"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_Networking_WinHttp",
+  "Win32_Security",
+  "Win32_System_Console",
+  "Win32_System_Registry",
+  "Win32_System_Threading",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+strip = true

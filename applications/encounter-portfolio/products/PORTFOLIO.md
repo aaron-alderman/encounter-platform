@@ -15,12 +15,15 @@ run through the shared Encounter host.
 | 24208 | World | `world` | Legacy material-development baseline and four counterfactuals over up to 40 epochs |
 | 24209 | Sourcery Desktop | `sourcery-desktop` | Browser workspace for claims, evidence, revisions, withdrawal and copyable REL export |
 
-To launch one locally from the Encounter root, substitute its port and directory:
+To launch one locally, run the following from the Platform repository root. Use the port and manifest directory from the table for the product you want.
 
 ```powershell
+Set-Location applications/encounter-portfolio
 $env:ENCOUNTER_PORT = '24201'
 node bootstrap/server.cjs .local/foundry-mine-to-port products/foundry-mine-to-port/application.rel
 ```
+
+Run `node test/run.cjs` from `applications/encounter-portfolio` for browser verification with the Node host. To verify with the native Encounter host, set `ENCOUNTER_RUST_HOST` and `ENCOUNTER_RUST_FAULT_HOST` to the corresponding test executables described in the [runtime verification guide](../../encounter-runtime/README.md).
 
 For the server previews, keep this SSH command running from Windows:
 

@@ -4,6 +4,12 @@ This source baseline records four packages from aaron-dev: Encounter Authoring, 
 
 Package paths under `applications/` retain the sibling layout used by the release catalogue and browser transport. Each package owns its existing application declaration and verification assertions. The included vendor files are measured foundation inputs.
 
+## Repository ownership
+
+- The [Encounter repository](https://github.com/aaron-alderman/encounter) owns native runtime development and its implementation tests. Platform owns the release catalogue and its packaging and verification adapters. The existing Platform runtime snapshot still supports reproducing older releases.
+- Platform owns Home, [Portfolio](applications/encounter-portfolio/products/PORTFOLIO.md) and [Work Boards](applications/encounter-work-boards/README.md). Edit their product declarations and application modules in `applications/`.
+- Platform owns the shared authoring and rendering modules under `shared/` and the application libraries under `applications/encounter-libraries/`. Their consumers select these sources in their application declarations.
+
 ## Front Gate
 
 [Front Gate](applications/front-gate/README.md) is the aaron-dev entry point for

@@ -184,6 +184,8 @@ cargo build --locked --offline --release
 ```
 
 Use the runtime digest from the trusted build for `PLATFORM_BINARY_SHA256`.
+To package a binary built from the Encounter repository, pass its absolute path
+in place of `target/release/encounter` and use the digest from that build.
 The packager checks the platform loader projections and verifies the
 Harborboard and Super CRM guard locks against the shared Encounter guard
 release before admitting their compiled images.

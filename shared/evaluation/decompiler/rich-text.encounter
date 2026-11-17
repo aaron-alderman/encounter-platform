@@ -1,0 +1,72 @@
+process-module "temple/surface-process-module/1"
+
+process desk.richInline:
+  let item = $eventInput
+  port kernel.invoke { query = "evaluation.escape"; input = $item.text } → safe
+  port kernel.invoke { query = "notebook.presentation.emphasis"; input = $item.role } → emphasis
+  let result = if($emphasis, concat("<", $emphasis.tag, " class=\"", $emphasis.class, "\">", $safe, "</", $emphasis.tag, ">"), $safe)
+  when includes(list("json-key", "json-string", "json-number", "json-literal"), $item.role):
+    let result = concat("<code class=\"rich-", $item.role, "\">", $safe, "</code>")
+  when eq($item.role, "change"):
+    let result = concat("<strong class=\"rich-change\">", $safe, "</strong>")
+
+process desk.jsonReply:
+  port evaluation.jsonTokens { text = $eventInput } → tokens
+  fold $tokens as token; html starts "":
+    port kernel.invoke { query = "desk.richInline"; input = $token } → rendered
+    yield concat($html, $rendered) → html
+  let result = $html
+
+process desk.richLine:
+  let item = $eventInput
+  let line = $item.text
+  let role = "plain"
+  let headings = list("OUTCOME", "SCOPE", "OLLAMA", "SESSION ACCESS-REFUSAL INVARIANT", "ORIGINAL REFUSAL", "LIVE REPLACEMENT",
+    "REQUEST", "EXPECTED REPAIR", "RETRIEVAL QUERY", "RUN ORDER", "MODEL", "IMAGE", "RUNTIME", "TRACE", "MANIFEST")
+  when and(not(eq($item.field, "reply")), includes($headings, $line)):
+    let role = "heading"
+  when and(eq($item.field, "overview"), includes(list("Admitted to the question stage", "Passed", "REPLY REVIEW · Meets"), $line)):
+    let role = "positive"
+  when and(eq($item.field, "overview"), eq($line, "REPLY REVIEW · Partial")):
+    let role = "warning"
+  when and(eq($item.field, "overview"), includes(list("Blocked", "Refused", "REPLY REVIEW · Missed"), $line)):
+    let role = "negative"
+  when and(eq($item.field, "overview"), $item.review):
+    let role = "note"
+  when and(eq($item.field, "context"), includes($line, " OPTIONAL BYTES")):
+    let role = "heading"
+  when and(eq($item.field, "effects"), includes($line, "storage.cas")):
+    let role = "code"
+  when and(eq($item.field, "pins"), not(eq($role, "heading"))):
+    let role = "code"
+  let prefix = 0
+  when and(includes(list("context", "mandatory"), $item.field), eq(at($line, 0), "[")):
+    port text.indexOf { value = $line; search = "]"; from = 0 } → close
+    let prefix = add($close, 1)
+  when $prefix:
+    port text.slice { value = $line; start = 0; end = $prefix } → head
+    port text.slice { value = $line; start = $prefix } → body
+    port kernel.invoke { query = "desk.richInline"; input = { role = "code"; text = $head } } → label
+    port kernel.invoke { query = "evaluation.escape"; input = $body } → safe
+    let result = concat($label, $safe)
+  when not($prefix):
+    port kernel.invoke { query = "desk.richInline"; input = { role = $role; text = $line } } → result
+
+process desk.richField:
+  let field = $eventInput
+  when eq($field.id, "reply"):
+    port kernel.invoke { query = "desk.jsonReply"; input = $field.text } → result
+  when not(eq($field.id, "reply")):
+    port evaluation.split { text = $field.text; separator = "\n" } → lines
+    fold $lines as line; state starts { html = ""; first = true; review = false }:
+      port kernel.invoke { query = "desk.richLine"; input = { field = $field.id; text = $line; review = $state.review } } → rendered
+      yield { html = concat($state.html, if($state.first, "", "\n"), $rendered); first = false;
+        review = and(eq($field.id, "overview"), includes(list("REPLY REVIEW · Meets", "REPLY REVIEW · Partial", "REPLY REVIEW · Missed"), $line)) } → state
+    let links = ""
+    when eq($field.id, "overview"):
+      let links = "\n\n<a href=\"#context\">Optional context</a> · <a href=\"#reply\">Recorded reply</a> · <a href=\"#trace\">Execution trace</a>"
+    when eq($field.id, "brief"):
+      let links = "\n\n<a href=\"#mandatory\">Mandatory context</a> · <a href=\"#overview\">Compare outcomes</a>"
+    when eq($field.id, "pins"):
+      let links = "\n\n<a href=\"#files\">Replay and downloads</a>"
+    let result = concat($state.html, $links)
