@@ -1,0 +1,257 @@
+process-module "temple/surface-process-module/1"
+
+process inspector.link:
+  let node = at($nodes, $target)
+  let result = { tag = "a"; attrs = {
+    href = concat("/?view=inspect&app=", $inspectedApp.key, "&alias=", $mode, "&id=", $target, "#inspection-selection");
+    "aria-current" = if(eq($selected, $target), "page", null)
+  }; children = list($node.label) }
+
+process inspector.page:
+  call desktop.inspectorCoverage
+  let coverage = $result
+  call desktop.apps
+  let apps = $result
+  let appKey = or($eventInput.app, "temple-manager")
+  let appPicker = { tag = "nav"; attrs = { class = "links inspection-apps"; "aria-label" = "Inspectable Catalogue apps" }; children =
+    map(filter($apps, "entry", includes($coverage, $entry.key)), "entry", {
+      tag = "a"; attrs = { href = concat("/?view=inspect&app=", $entry.key);
+        "aria-current" = if(eq($entry.key, $appKey), "true", null) }; children = list($entry.title)
+    }) }
+  let inspectedApp = at(filter($apps, "entry", eq($entry.key, $appKey)), 0)
+  let result = list(
+    { tag = "h1"; children = list("App inspector") },
+    $appPicker,
+    { tag = "p"; children = list(if($inspectedApp, concat($inspectedApp.title, " has no inspection coverage."), "This app ID is absent from the Home Catalogue.")) }
+  )
+  when and($inspectedApp, includes($coverage, $appKey)):
+    call inspector.app
+
+process inspector.app:
+  port application.data { name = "temple-manager" } → windowFacts
+  let temple = eq($inspectedApp.key, "temple-manager")
+  let fileManager = eq($inspectedApp.key, "file-manager")
+  let fileViewer = eq($inspectedApp.key, "file-viewer")
+  let serviceManager = eq($inspectedApp.key, "service-manager")
+  let managerApp = or($fileManager, $fileViewer, $serviceManager)
+  let modes = list(
+    { id = "signed-in"; label = "Signed in" },
+    { id = "browser"; label = "Signed out" },
+    { id = "loading"; label = "Loading" },
+    { id = "unavailable"; label = "Unavailable" }
+  )
+  let modeLabel = "Record state"
+  when $fileManager:
+    let modes = list(
+      { id = "home-folder"; label = "Home folder" },
+      { id = "folder"; label = "Sample folder" },
+      { id = "file-preview"; label = "File preview" },
+      { id = "file-search"; label = "Search results" },
+      { id = "run-receipt"; label = "Run receipt" },
+      { id = "scheduled-receipt"; label = "Scheduled receipt" },
+      { id = "unavailable"; label = "Unavailable" }
+    )
+    let modeLabel = "File Manager state"
+  let mode = if(some($modes, "variant", eq($variant.id, $eventInput.mode)), $eventInput.mode, if($fileManager, "folder", "signed-in"))
+  when $fileViewer:
+    let mode = if(includes(list("run-receipt", "scheduled-receipt"), $eventInput.mode), $eventInput.mode, "sample")
+  when $serviceManager:
+    let mode = if(includes(list("services", "services-unit", "services-offline", "schedules", "scheduled-run"), $eventInput.mode), $eventInput.mode, "runs")
+    let modes = list({ id = "services"; label = "Services" }, { id = "schedules"; label = "Schedules" }, { id = "runs"; label = "Runs" })
+    let modeLabel = "Service Manager view"
+  let servicesView = includes(list("services", "services-unit", "services-offline"), $mode)
+  let scheduled = includes(list("schedules", "scheduled-run", "scheduled-receipt"), $mode)
+  let receiptMode = includes(list("run-receipt", "scheduled-receipt"), $mode)
+  let facts = list()
+  when $temple:
+    port application.data { name = "temple-refresh" } → refreshFacts
+    let facts = append($windowFacts, $refreshFacts)
+  when eq($inspectedApp.key, "about"):
+    port application.data { name = "about-build" } → aboutFacts
+    let facts = $aboutFacts
+  when $managerApp:
+    port application.data { name = "file-manager" } → facts
+  when or($serviceManager, $receiptMode):
+    port application.data { name = "service-manager" } → receiptFacts
+    let facts = append($facts, $receiptFacts)
+  let nodes = {}
+  fold $facts as fact; nodes starts $nodes:
+    assert eq($fact.pol, "is")
+      otherwise "Inspection facts must be positive."
+    let fields = or(at($nodes, $fact.s), {})
+    assert eq(at($fields, $fact.p), at({}, "absent"))
+      otherwise "Duplicate inspection field."
+    port record.put { record = $fields; key = $fact.p; value = $fact.o } → fields
+    port record.put { record = $nodes; key = $fact.s; value = $fields } → next
+    yield $next → nodes
+  let catalogue = at($nodes, "home")
+  let runReceipt = null
+  let scheduledReceipt = null
+  when $scheduled:
+    port kernel.invoke { query = "inspector.scheduledReceipt"; input = null } → scheduledReceipt
+    let runReceipt = $scheduledReceipt
+  when and(or($serviceManager, $receiptMode), not(or($scheduled, $servicesView))):
+    call files.publishedReceipts
+    let runReceipt = at(filter($result, "entry", eq($entry.run.id, "qualification")), 0)
+    assert $runReceipt
+      otherwise "The published qualification receipt is absent."
+  let serviceObservation = null
+  when $servicesView:
+    call inspector.serviceObservation
+    let serviceObservation = $result
+  let defaultNode = if($temple, "surface", concat("id-", $inspectedApp.window))
+  let requested = or($eventInput.id, $defaultNode)
+  call inspector.window
+  let window = $result
+  let tree = { tag = "ul"; attrs = { class = "inspection-branches" }; children = list($window.tree) }
+  fold $window.rows as entry; nodes starts $nodes:
+    assert eq(at($nodes, $entry.id), at({}, "absent"))
+      otherwise "Duplicate surface node identity."
+    port record.put { record = $nodes; key = $entry.id; value = $entry.detail } → updated
+    yield $updated → nodes
+  let selected = if(at(at($nodes, $requested), "label"), $requested, $defaultNode)
+  let detail = at($nodes, $selected)
+  let variants = if(or($temple, $fileManager, $serviceManager), { tag = "nav"; attrs = { "aria-label" = $modeLabel; class = "links inspection-variants" }; children = map($modes, "variant", {
+    tag = "a"; attrs = { href = concat("/?view=inspect&app=", $inspectedApp.key, "&alias=", $variant.id);
+      "aria-current" = if(or(eq($variant.id, $mode), and(eq($mode, "scheduled-run"), eq($variant.id, "runs")), and($servicesView, eq($variant.id, "services"))), "true", null) }; children = list($variant.label)
+  }) }, null)
+  let caseId = if($temple, "case", if($fileManager, "file-case", "about-case"))
+  when $fileManager:
+    let caseId = or(at($detail, "flow"), at({ "home-folder" = "folder-case"; "file-search" = "search-case"; unavailable = "index-case" }, $mode), $caseId)
+  when $fileViewer:
+    let caseId = "viewer-detail-case"
+  when $receiptMode:
+    let caseId = or(at($detail, "flow"), if($fileViewer, "receipt-viewer-case", "receipt-file-case"))
+  when $serviceManager:
+    let caseId = if(eq($mode, "schedules"), "schedule-case", if($scheduled, "scheduled-run-case", "run-case"))
+    when $servicesView:
+      let caseId = if($serviceObservation.unit, "unit-status-case", "app-status-case")
+  let flowCase = at($nodes, $caseId)
+  port text.split { value = $flowCase.flow; pattern = " " } → flow
+  let flowTitle = if($temple, "Refresh flow", if($managerApp, $flowCase.label, "Open About this build"))
+  let editorFlow = list("edit-binding", "edit-event", "edit-show", "edit-save", "edit-commit")
+  when includes(append(list("edit-note", "edit-project"), $editorFlow), $selected):
+    let flow = $editorFlow
+    let flowTitle = "Editor flow"
+  fold $flow as target; stages starts list():
+    let target = if(and($scheduled, eq($target, "receipt-source")), "scheduled-receipt-source", $target)
+    call inspector.link
+    let node = at($nodes, $target)
+    let next = append($stages, list({ tag = "li"; attrs = {}; children = list($result, concat(" · ", $node.kind)) }))
+    yield $next → stages
+
+  let properties = list(
+    { tag = "dt"; attrs = {}; children = list("Kind") },
+    { tag = "dd"; attrs = {}; children = list($detail.kind) },
+    { tag = "dt"; attrs = {}; children = list("Type") },
+    { tag = "dd"; attrs = {}; children = list($detail.type) }
+  )
+  let relationTarget = if(and($scheduled, eq($selected, "receipt-file")), "scheduled-receipt-source", $detail.target)
+  when and($servicesView, eq($selected, "front-gate-observation"), $serviceObservation.unit):
+    let relationTarget = "unit-status-projection"
+  when at(at($nodes, or($relationTarget, "no-target")), "label"):
+    let target = $relationTarget
+    call inspector.link
+    let properties = append($properties, list(
+      { tag = "dt"; attrs = {}; children = list($detail.relation) },
+      { tag = "dd"; attrs = {}; children = list($result) }
+    ))
+  when at($detail, "surface"):
+    let surfaceApp = or(at($detail, "surfaceApp"), $inspectedApp.key)
+    let surfaceMode = $detail.surfaceMode
+    let surface = $detail.surface
+    when and($scheduled, includes(list("run-open", "receipt-viewer-handoff"), $selected)):
+      let surfaceMode = "scheduled-receipt"
+    when and($servicesView, eq($selected, "service-status-render")):
+      let surfaceMode = $mode
+    when and($scheduled, eq($selected, "run-return")):
+      let surfaceMode = "scheduled-run"
+      let surface = "scheduled-run-row"
+    let href = concat("/?view=inspect&app=", $surfaceApp, "&alias=", $surfaceMode, "&id=", $surface, "#inspection-selection")
+    let properties = append($properties, list(
+      { tag = "dt"; attrs = {}; children = list("Surface") },
+      { tag = "dd"; attrs = {}; children = list({ tag = "a"; attrs = { href = $href }; children = list($detail.surfaceLabel) }) }
+    ))
+  let details = list(
+    { tag = "h2"; attrs = { id = "inspection-selection"; tabindex = "-1" }; children = list($detail.label) },
+    if($detail.description, { tag = "p"; attrs = {}; children = list($detail.description) }, null),
+    { tag = "dl"; attrs = {}; children = $properties }
+  )
+  let shape = at($detail, "shape")
+  when eq($selected, "viewer-data"):
+    let shape = at(at($nodes, "file-data"), "shape")
+  when and($servicesView, eq($selected, "service-selection")):
+    let shape = concat("data-manager-action: service-item\ndata-manager-item: ", $serviceObservation.id)
+  when and($servicesView, eq($selected, "front-gate-observation")):
+    let shape = $serviceObservation.shape
+  when eq($selected, "timer-data"):
+    let timer = $scheduledReceipt.timer
+    let shape = concat("timer: ", $timer.name, "\nscope: ", $timer.scope, "\nservice: ", $timer.service, "\nlast trigger (AWST): ", $timer.last)
+  when eq($selected, "invocation-match"):
+    let execution = $scheduledReceipt.file.execution
+    let shape = concat("scope: ", $execution.scope, "\nservice: ", $execution.service, "\ntimer: ", $execution.timer,
+      "\nlast trigger (AWST): ", $execution.lastTrigger, "\ninvocation ID: ", $execution.invocationId)
+  when includes(list("run-data", "scheduled-run-data"), $selected):
+    let run = $runReceipt.run
+    let shape = concat("run: ", $run.id, "\noutcome: ", $run.state, "\nreceipt: ", $run.receipt, "\nreceiptFolder: ", $run.receiptFolder, "\nreceiptPath: ", $run.receiptPath)
+  when eq($selected, "receipt-file"):
+    let file = $runReceipt.file
+    let shape = concat("id: ", $file.id, "\nparent: ", $file.parent, "\npath: ", $file.path, "\nkind: ", $file.kind,
+      "\npermission: ", $file.permission, "\nviewer: ", $file.viewer, "\nbytes: ", $file.bytes)
+  when eq($selected, "receipt-preview"):
+    let details = append($details, list(
+      { tag = "h3"; children = list("Published receipt") },
+      { tag = "pre"; attrs = { tabindex = "0"; role = "region"; "aria-label" = "Published receipt text" }; children = list($runReceipt.file.text) }
+    ))
+  when $shape:
+    let details = append($details, list(
+      { tag = "h3"; attrs = {}; children = list("Data shape") },
+      { tag = "pre"; attrs = {}; children = list({ tag = "code"; attrs = {}; children = list($shape) }) }
+    ))
+  when $detail.tag:
+    port record.entries { value = $detail.attrs } → fields
+    let fields = filter($fields, "field", not(eq(at($field, 1), null)))
+    let lines = map($fields, "field", concat(at($field, 0), " = ", at($field, 1)))
+    port text.join { values = $lines; separator = "\n" } → attributes
+    let details = append($details, list(
+      { tag = "h3"; attrs = {}; children = list("Surface definition") },
+      { tag = "pre"; attrs = {}; children = list({ tag = "code"; attrs = {}; children = list(concat("<", $detail.tag, ">", if($attributes, concat("\n", $attributes), ""))) }) }
+    ))
+  call source.encounterLightPolicy
+  let spPolicy = $result.presentation
+  let lexPolicy = $result.lexical
+  let lexGrammar = $result.grammar
+  port text.split { value = $detail.lines; pattern = "–" } → coordinates
+  port scalar.read { text = at($coordinates, 0) } → sourceFirstLine
+  port digest.sha256 { text = $detail.excerpt } → sourceHash
+  port kernel.invoke { query = "sp.present"; input = {
+    text = $detail.excerpt; expectedHash = $sourceHash; file = $detail.source;
+    language = "encounter"; theme = "light"; lineNumbers = true; sourceFirstLine = $sourceFirstLine
+  } } → highlighted
+  port record.put { record = $highlighted.tree.attrs; key = "tabindex"; value = null } → codeAttributes
+  let details = append($details, list(
+    { tag = "p"; attrs = { class = "inspection-source-location" }; children = list({ tag = "code"; attrs = {}; children = list($detail.source) }, concat(" · lines ", $detail.lines)) },
+    { tag = "pre"; attrs = { class = "source-widget-read"; tabindex = "0"; role = "region"; "aria-label" = "Encounter source" };
+      children = list({ tag = $highlighted.tree.tag; attrs = $codeAttributes; children = $highlighted.tree.children }) }
+  ))
+  let result = list({ tag = "div"; attrs = { class = "inspector-workbench" }; children = list(
+    { tag = "header"; attrs = { class = "inspection-heading" }; children = list(
+      { tag = "h1"; attrs = {}; children = list($inspectedApp.title) },
+      { tag = "p"; attrs = {}; children = list(if($temple, concat("Read-only inspection · Home release ", $catalogue.release), concat(if($managerApp, if($servicesView, "Sample Front Gate observation · Home release ", if($scheduled, "Recorded timer sample · Home release ", if(or($receiptMode, $serviceManager), "Published run receipt · Home release ", "Published source sample · Home release "))), "Read-only inspection · Home build "), if($managerApp, at(at($nodes, "file-case"), "release"), $flowCase.release)))) },
+      $appPicker
+    ) },
+    { tag = "div"; attrs = { class = "inspection-layout" }; children = list(
+      { tag = "section"; attrs = { class = "inspection-navigation"; "aria-labelledby" = "inspection-tree" }; children = list(
+        { tag = "h2"; attrs = { id = "inspection-tree" }; children = list("Surface tree") },
+        $variants,
+        { tag = "div"; attrs = { class = "inspection-tree-scroll"; role = "region"; "aria-label" = "Tree and flow"; tabindex = "0" }; children = list(
+          $tree,
+          { tag = "section"; attrs = { class = "inspection-flow"; "aria-labelledby" = "inspection-flow" }; children = list(
+            { tag = "h2"; attrs = { id = "inspection-flow" }; children = list($flowTitle) },
+            { tag = "ol"; attrs = {}; children = $stages }
+          ) }
+        ) }
+      ) },
+      { tag = "section"; attrs = { class = "inspection-detail"; "aria-labelledby" = "inspection-selection"; tabindex = "0" }; children = $details }
+    ) }
+  ) })

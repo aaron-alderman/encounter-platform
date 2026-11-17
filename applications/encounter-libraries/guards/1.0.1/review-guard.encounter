@@ -1,0 +1,10 @@
+process-module "temple/surface-process-module/1"
+
+# Shared by Super CRM and Claimipedia. Applications supply the authority decision.
+process guarded.review:
+  let input = $eventInput
+  let current = eq($input.base, $input.head)
+  let exact = and($input.reviewed, eq($input.reviewed, $input.candidate))
+  let result = { current = $current; exact = $exact; allowed = and($current, $exact, eq($input.approved, true)) }
+
+# Isolated guard upgrade rehearsal 1.0.1.

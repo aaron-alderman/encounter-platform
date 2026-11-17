@@ -1,0 +1,18 @@
+process-module "temple/surface-process-module/1"
+
+process attention.project:
+  let state = $eventInput
+  assert includes(list("blocked", "pending", "waiting", "reviewable", "complete"), $state.standing)
+    otherwise "ATTENTION: Unknown standing."
+  let kind = "working"
+  when and($state.canDecide, includes(list("waiting", "reviewable"), $state.standing)):
+    let kind = "decision"
+  when eq($state.standing, "complete"):
+    let kind = "checked"
+  when eq($state.standing, "blocked"):
+    let kind = "critical"
+  let result = {
+    standing = $state.standing;
+    primary = { kind = $kind; label = $state.label; reason = $state.reason; next = $state.next };
+    supporting = "ordinary"; evidence = "reference"
+  }

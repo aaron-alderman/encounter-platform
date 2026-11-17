@@ -1,0 +1,50 @@
+process-module "temple/surface-process-module/1"
+
+# Sourcery Notes desktop roles shared by the notebook and its entry chrome.
+process sourcery.presentation.tokens:
+  let result = concat(
+    ":root{--sourcery-font:Tahoma,Verdana,sans-serif;--sourcery-ink:#16172a;--sourcery-muted:#494b59;--sourcery-accent:#080c62;--sourcery-gold:#ffd54e;",
+    "--sourcery-frame:#d4d0c8;--sourcery-paper:#fffef3;--sourcery-panel:#f4f2e7;--sourcery-line:#d7d3c0;--sourcery-selected:#dde5ff;",
+    "--sourcery-table-header:#ece3b9;--sourcery-table-grid-line:#c5c3bf;--sourcery-table-frame:#827e74;",
+    "--sourcery-info-paper:#eef2ff;--sourcery-info-ink:#39508d;--sourcery-success-paper:#e6f2e6;--sourcery-success-ink:#285c37;",
+    "--sourcery-warning-paper:#fff1de;--sourcery-warning-ink:#79430e;--sourcery-error-paper:#fbe6e4;--sourcery-error-ink:#712722;",
+    "--sourcery-title:linear-gradient(90deg,#080950,#173994 73%,#3974bc);--sourcery-title-ink:#ffffff;",
+    "--sourcery-banner-start:#111443;--sourcery-banner-end:#252b68;--sourcery-banner-ink:#f9f6e9;--sourcery-banner-highlight:#ffdf66;",
+    "--sourcery-view-control:#c5c3bf;--sourcery-window-shadow:8px 9px 0 #10294156;--sourcery-window-frame-width:4px;",
+    "--sourcery-desktop:repeating-linear-gradient(0deg,#ffffff06 0 1px,transparent 1px 4px),radial-gradient(ellipse at 45% 5%,#3c8292 0%,#296c7d 48%,#16495d 100%);",
+    "--sourcery-raised:inset 1px 1px #fff,inset -1px -1px #29282c,inset 2px 2px #efede8,inset -2px -2px #88868a;",
+    "--sourcery-inset:inset 1px 1px #79777c,inset -1px -1px #fff;--sourcery-shadow:6px 7px #10294156}"
+  )
+
+process sourcery.presentation.dataTableStyles:
+  let result = concat(
+    ".sourcery-data-table{width:100%;border-collapse:collapse;font-size:var(--sourcery-table-font-size,12px)}",
+    ".sourcery-data-table caption{text-align:start;padding-block:4px}",
+    ".sourcery-data-table thead{background:var(--sourcery-table-header,#ece3b9)}",
+    ".sourcery-data-table :is(th,td){padding:var(--sourcery-table-cell-padding,6px);text-align:start;vertical-align:var(--sourcery-table-cell-align,top);border-bottom:1px solid var(--sourcery-line,#d7d3c0)}",
+    ".sourcery-data-table[data-table-layout=grid]{border:2px solid var(--sourcery-table-frame,#827e74);background:var(--sourcery-paper)}",
+    ".sourcery-data-table[data-table-layout=grid] :is(th,td){border:1px solid var(--sourcery-table-grid-line,#c5c3bf)}",
+    ".sourcery-data-table[data-table-layout=grid] thead th{border-block-end:2px solid var(--sourcery-table-frame,#827e74)}",
+    ".sourcery-data-table[data-table-layout=grid] tbody th[scope=row]{background:var(--sourcery-panel)}")
+
+process sourcery.presentation.feedbackStyles:
+  let result = concat(
+    ":is(.sourcery-feedback,:where(#notes-inbox-content .platform-notice)){padding:var(--sourcery-feedback-padding,7px 9px);overflow-wrap:anywhere;background:var(--sourcery-feedback-paper,var(--sourcery-info-paper));color:var(--sourcery-feedback-ink,var(--sourcery-info-ink));border-inline-start:3px solid currentColor}",
+    ".sourcery-feedback[data-feedback=success],#notes-inbox-content .platform-notice[role=status]{--sourcery-feedback-paper:var(--sourcery-success-paper);--sourcery-feedback-ink:var(--sourcery-success-ink)}",
+    ".sourcery-feedback[data-feedback=warning]{--sourcery-feedback-paper:var(--sourcery-warning-paper);--sourcery-feedback-ink:var(--sourcery-warning-ink)}",
+    ".sourcery-feedback[data-feedback=error],#notes-inbox-content .platform-notice[role=alert]{--sourcery-feedback-paper:var(--sourcery-error-paper);--sourcery-feedback-ink:var(--sourcery-error-ink)}",
+    ".sourcery-feedback:empty{padding:0;border:0;margin:0}")
+
+process sourcery.presentation.decision:
+  let panel = $eventInput
+  fold $panel.properties as property; rows starts list():
+    let pair = list({ tag = "dt"; attrs = {}; children = list($property.label) },
+      { tag = "dd"; attrs = { role = if(at($property, "status"), "status", null) }; children = list($property.value) })
+    yield append($rows, $pair) → rows
+  let result = { tag = "section"; attrs = $panel.attrs; children = list(
+    if($panel.title, { tag = "h2"; attrs = {}; children = list($panel.title) }, null),
+    if(count($rows), { tag = "dl"; attrs = { class = "decision-properties" }; children = $rows }, null),
+    { tag = "fieldset"; attrs = { class = "decision-fields" }; children = append(
+      list({ tag = "legend"; attrs = {}; children = list($panel.legend) }), $panel.body) },
+    if(count($panel.commands), { tag = "footer"; attrs = { class = "decision-commands" }; children = $panel.commands }, null)
+  ) }

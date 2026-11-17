@@ -1,0 +1,115 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    sections = list(
+      {
+        subject = "application";
+        module = "source/types.encounter";
+        stateProfile = "encounter/authoring-loop/1"
+      },
+      {
+        subject = "application";
+        module = list(
+          "source/actions.encounter",
+          "source/commands.encounter",
+          "source/transitions.encounter",
+          "source/occurrence-guard.encounter",
+          "source/dependency-guard.encounter",
+          "source/application.encounter",
+          "source/authoring.encounter",
+          "source/ui.encounter",
+          "source/presentation.encounter",
+          "algebra/presentation/sourcery-presentation.encounter",
+          "algebra/presentation/source-algebra.encounter",
+          "algebra/presentation/encounter-light-policy.encounter",
+          "source/app-inspector.encounter",
+          "source/inspector-surface.encounter",
+          "inspection/home/desktop-launch.encounter",
+          "inspection/home/managers.encounter",
+          "inspection/home/file-manager.encounter",
+          "inspection/home/window-shell.encounter",
+          "algebra/html/html.escape.encounter",
+          "algebra/html/html.cssText.encounter",
+          "algebra/html/html.serialize.encounter",
+          "algebra/css/css.renderPlan.encounter"
+        );
+        entry = list(
+          "app.request",
+          "app.newSession",
+          "ui.styles"
+        );
+        grant = list(
+          "value.describe",
+          "value.string",
+          "value.type",
+          "record.entries",
+          "record.get",
+          "record.put",
+          "text.trim",
+          "text.join",
+          "text.slice",
+          "text.split",
+          "text.matches",
+          "text.match",
+          "text.indexOf",
+          "text.lowerCase",
+          "text.replaceAll",
+          "number.calculate",
+          "rel.encode",
+          "rel.decode",
+          "scalar.read",
+          "scalar.quoteValue",
+          "digest.sha256",
+          "source.observe",
+          "source.catalogue",
+          "storage.snapshot",
+          "storage.operation",
+          "storage.history",
+          "storage.cas",
+          "kernel.invoke",
+          "encounter.execute",
+          "application.data",
+          "json.parse",
+          "json.stringify"
+        );
+        dataset = list("temple-refresh", "temple-manager", "about-build", "file-manager", "service-manager", "scheduled-receipt")
+      },
+      {
+        subject = "data.temple-refresh";
+        source = "inspection/temple-refresh.rel";
+        format = "rel-facts";
+        sha256 = "340e56f5efaf6c9ba40c9f30d50e9b80a9162a3964ae44ac7cb17382687c7154"
+      },
+      {
+        subject = "data.temple-manager";
+        source = "inspection/temple-manager.rel";
+        format = "rel-facts";
+        sha256 = "07c832a6cac24076bd641b1c74dc577d88e3b55f61c8f95b78b53ec81bdec4cc"
+      },
+      {
+        subject = "data.about-build";
+        source = "inspection/about-build.rel";
+        format = "rel-facts";
+        sha256 = "21fb3730f4ea00435e03d52e69a3ff841d186251048f7d8edbefe5952e7948c0"
+      },
+      {
+        subject = "data.file-manager";
+        source = "inspection/file-manager.rel";
+        format = "rel-facts";
+        sha256 = "65f82af034bf9e1b7c1b01bbc33fdc92a6b2d34e2113640bf6b82e95de926a2a"
+      },
+      {
+        subject = "data.service-manager";
+        source = "inspection/service-manager.rel";
+        format = "rel-facts";
+        sha256 = "17f680c65c638584a1759490dcb28ee0a2c4a780b39df2502178debfbc0162af"
+      },
+      {
+        subject = "data.scheduled-receipt";
+        source = "inspection/scheduled-receipt.rel";
+        format = "rel-facts";
+        sha256 = "a112c64aa977233b8ae7b310248ede27e4e95ab981b26aba9652c9638bd2510f"
+      }
+    )
+  }

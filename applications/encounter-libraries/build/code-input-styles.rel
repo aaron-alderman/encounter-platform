@@ -1,0 +1,5 @@
+("application", "stateProfile", "sourcery/code-input-styles/1")
+("application", "module", "applications/encounter-libraries/workflows/code-input.encounter")
+("application", "module", "applications/encounter/algebra/css/css.renderPlan.encounter")
+("application", "module", "applications/encounter-libraries/build/code-input-styles.encounter")
+("application", "entry", "cli.main")

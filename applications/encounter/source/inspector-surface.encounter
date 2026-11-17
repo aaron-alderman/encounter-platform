@@ -1,0 +1,475 @@
+process-module "temple/surface-process-module/1"
+
+process inspector.publishedFile:
+  let sample = at($nodes, "file-sample")
+  let source = at($nodes, "file-source")
+  let root = "Platform/Releases/Home"
+  port text.split { value = $sample.path; pattern = "/" } → parts
+  port text.indexOf { value = $sample.path; search = concat($root, "/"); from = 0 } → rootAt
+  assert eq($rootAt, 0)
+    otherwise "The fixture file must belong to the published Home release."
+  let name = at($parts, add(count($parts), -1))
+  port scalar.read { text = $sample.bytes } → bytes
+  port text.split { value = $source.lines; pattern = "–" } → coordinates
+  port scalar.read { text = at($coordinates, 0) } → firstLine
+  # Keep a small published sample index with a root, a child and the sample’s folder.
+  fold range(add(count($parts), -1)) as index; trail starts { path = ""; id = null; folders = list() }:
+    let segment = at($parts, add($index, -1))
+    let path = if($trail.path, concat($trail.path, "/", $segment), $segment)
+    let next = { path = $path; id = $trail.id; folders = $trail.folders }
+    when or(includes(list($root, concat($root, "/spec")), $path), eq($index, add(count($parts), -1))):
+      port digest.sha256 { text = $path } → id
+      let entry = { id = $id; parent = $trail.id; name = $segment; path = $path; kind = "Folder"; permission = $sample.permission }
+      let next = { path = $path; id = $id; folders = append($trail.folders, list($entry)) }
+    yield $next → trail
+  port digest.sha256 { text = $sample.path } → id
+  let sampleFile = { id = $id; parent = $trail.id; name = $name; kind = "release-artifact"; path = $sample.path;
+    permission = $sample.permission; bytes = $bytes; viewer = "text"; text = $source.excerpt; sourceFirstLine = $firstLine }
+  let result = { file = $sampleFile; folders = $trail.folders }
+
+process inspector.fileSample:
+  call inspector.publishedFile
+  let sampleFile = $result.file
+  let folders = if(eq($mode, "unavailable"), list(), $result.folders)
+  let rows = append($folders, if(count($folders), list($sampleFile), list()))
+  let folder = null
+  when count($folders):
+    let folder = at($folders, if(eq($mode, "home-folder"), 0, add(count($folders), -1)))
+  let file = if(eq($mode, "file-preview"), $sampleFile, null)
+  let scopes = filter($folders, "entry", not($entry.parent))
+  let searchScope = ""
+  let searchQuery = if(eq($mode, "file-search"), $sampleFile.name, "")
+  let returnToRun = false
+  let sizes = {}
+  port kernel.invoke { query = "files.tree"; input = null } → fileTree
+  port kernel.invoke { query = "files.searchForm"; input = null } → searchForm
+  port kernel.invoke { query = "files.previewSurface"; input = null } → detail
+  when $searchQuery:
+    port kernel.invoke { query = "files.searchSurface"; input = null } → detail
+  let result = { index = list($searchForm, $fileTree); detail = $detail; folders = $folders }
+
+process inspector.scheduledReceipt:
+  port application.data { name = "scheduled-receipt" } → facts
+  fold $facts as fact; receipt starts { fields = {}; rows = list(); text = "" }:
+    assert and(eq($fact.s, "execution"), eq($fact.pol, "is"), not(at($receipt.fields, $fact.p)))
+      otherwise "Invalid scheduled receipt field."
+    port record.put { record = $receipt.fields; key = $fact.p; value = $fact.o } → fields
+    port scalar.quoteValue { value = $fact.o } → literal
+    let row = { subject = $fact.s; predicate = $fact.p; object = $fact.o; polarity = $fact.pol }
+    yield { fields = $fields; rows = append($receipt.rows, list($row));
+      text = concat($receipt.text, "(\"execution\", \"", $fact.p, "\", ", $literal, ")\n") } → receipt
+  let fields = $receipt.fields
+  let invocationId = at($fields, "invocation-id")
+  let trigger = at($fields, "last-trigger")
+  port scalar.read { text = at($fields, "duration-seconds") } → duration
+  let execution = { invocationId = $invocationId; scope = $fields.scope; service = $fields.service; timer = $fields.timer;
+    lastTrigger = $trigger; started = $fields.started; result = $fields.result; duration = $duration }
+  let root = "Platform/Scheduled run receipts"
+  let name = concat($invocationId, ".rel")
+  let path = concat($root, "/", $name)
+  port digest.sha256 { text = $root } → folderId
+  port digest.sha256 { text = $path } → fileId
+  let permission = "Platform steward"
+  let bytes = count($receipt.text)
+  let folder = { id = $folderId; name = "Scheduled run receipts"; path = $root; kind = "Folder"; permission = $permission;
+    bytes = $bytes; uniqueBytes = $bytes; fileCount = 1 }
+  let relations = { rows = $receipt.rows; filter = ""; matches = count($receipt.rows); total = count($receipt.rows) }
+  let file = { id = $fileId; parent = $folderId; path = $path; name = $name; kind = "receipt"; bytes = $bytes;
+    permission = $permission; viewer = "text"; execution = $execution; text = $receipt.text; rel = $relations }
+  let timer = { id = concat($execution.scope, "-", $execution.timer); name = $execution.timer;
+    service = $execution.service; scope = $execution.scope; last = $trigger; state = "Timer" }
+  let receiptFiles = list($file)
+  call services.runs
+  let run = at(filter($result, "entry", eq($entry.receipt, $fileId)), 0)
+  assert $run
+    otherwise "The scheduled execution has no indexed run."
+  let result = { run = $run; file = $file; folder = $folder; timer = $timer }
+
+process inspector.receiptSurface:
+  let snapshot = { platform = true }
+  when $scheduled:
+    let snapshot = { platform = true; collections = { "Platform/Scheduled run receipts" = list($scheduledReceipt.folder, $scheduledReceipt.file) } }
+  call files.catalogue
+  let rows = $result
+  let folders = filter($rows, "row", eq($row.kind, "Folder"))
+  let folder = at(filter($folders, "row", eq($row.id, $runReceipt.file.parent)), 0)
+  let file = $runReceipt.file
+  let returnToRun = true
+  let sizes = {}
+  let searchQuery = ""
+  let searchScope = ""
+  let scopes = $folders
+  port kernel.invoke { query = "files.tree"; input = null } → tree
+  port kernel.invoke { query = "files.searchForm"; input = null } → search
+  port kernel.invoke { query = "files.previewSurface"; input = null } → detail
+  let result = { index = list($search, $tree); detail = $detail; folders = $folders }
+
+process inspector.serviceObservation:
+  let listening = at($nodes, "sample-listening-app")
+  let offline = at($nodes, "sample-offline-app")
+  let internal = at($nodes, "sample-internal-service")
+  let sample = if(eq($mode, "services-offline"), $offline, $listening)
+  let unit = eq($mode, "services-unit")
+  let id = if($unit, concat($internal.scope, "-", $internal.name), concat("app-", $sample.name))
+  let status = { time = at(at($nodes, "service-observation-sample"), "time"); services = list(
+    { id = $listening.id; name = $listening.name; group = $listening.group; detail = $listening.detail; online = true },
+    { id = $offline.id; name = $offline.name; group = $offline.group; detail = $offline.detail; online = false });
+    units = list({ scope = $internal.scope; names = list($internal.name) }, { scope = "user"; names = list() }) }
+  let port = 24220
+  call frontGate.inspectionObservations
+  let projected = $result
+  # Keep only the registered apps in this sample reading.
+  let services = filter($projected.services, "entry", includes(list($listening.name, $offline.name), $entry.name))
+  let snapshot = { services = $services; units = $projected.units; time = $projected.time }
+  let shape = concat("schema: encounter/front-gate-status/1\ntime (AWST): ", $status.time, "\n",
+    if($unit, concat("units[].scope: ", $internal.scope, "\nunits[].names[]: ", $internal.name),
+      concat("services[].id: ", $sample.id, "\nservices[].name: ", $sample.name, "\nservices[].online: ", if(eq($mode, "services-offline"), "false", "true"))))
+  let projectedApp = at(filter($snapshot.services, "entry", eq($entry.name, $sample.name)), 0)
+  let state = if($unit, "Running", $projectedApp.status)
+  let result = { snapshot = $snapshot; id = $id; unit = $unit; shape = $shape; state = $state;
+    offlineId = concat("app-", $offline.name);
+    unitId = concat($internal.scope, "-", $internal.name) }
+
+process inspector.window:
+  let app = $inspectedApp
+  let documentSlots = null
+  let renderedRecords = list()
+  let renderedAbout = list()
+  let renderedFiles = null
+  let renderedViewer = list()
+  let renderedRuns = {}
+  when eq($app.key, "temple-manager"):
+    let releaseId = $catalogue.release
+    call managers.slots
+    let documentSlots = $result
+    let custody = { mode = $mode; owner = null; records = {} }
+    call managers.templeDetails
+    let renderedRecords = $result
+  when eq($app.key, "about"):
+    let build = "Preview build"
+    call desktop.aboutBody
+    let renderedAbout = $result
+  when $managerApp:
+    let releaseId = at(at($nodes, "file-case"), "release")
+    call managers.slots
+    let documentSlots = $result
+  when $fileManager:
+    when $receiptMode:
+      port kernel.invoke { query = "inspector.receiptSurface"; input = null } → renderedFiles
+    when not($receiptMode):
+      port kernel.invoke { query = "inspector.fileSample"; input = null } → renderedFiles
+  when $serviceManager:
+    let view = if($servicesView, "services", if(eq($mode, "schedules"), "schedules", "runs"))
+    let selected = at(at($runReceipt, "run"), "id")
+    when eq($view, "schedules"):
+      let selected = $scheduledReceipt.timer.id
+    let snapshot = null
+    when $servicesView:
+      let selected = $serviceObservation.id
+      let snapshot = $serviceObservation.snapshot
+    let receiptFiles = list()
+    when $scheduled:
+      let snapshot = { schedules = list($scheduledReceipt.timer) }
+      let receiptFiles = list($scheduledReceipt.file)
+    let returnRun = null
+    port kernel.invoke { query = "services.inspectionSurface"; input = null } → renderedRuns
+  when $fileViewer:
+    let file = at($runReceipt, "file")
+    when not($receiptMode):
+      port kernel.invoke { query = "inspector.publishedFile"; input = null } → fixture
+      let file = $fixture.file
+    let sourceProcess = null
+    port kernel.invoke { query = "files.viewerSurface"; input = null } → renderedViewer
+  port kernel.invoke { query = "desktop.appWindow"; input = null } → frame
+  let windowTypeId = at($frame.attrs, "data-window-type")
+  port kernel.invoke { query = "windowShell.typeById"; input = null } → inspectionWindowType
+  port kernel.invoke { query = "inspector.surfaceNode"; input = { element = $frame; path = "0"; sourceKey = "source-window" } } → result
+
+# Skip list wrappers and browser disclosure markup while preserving branch ownership.
+process inspector.fileChildren:
+  fold $eventInput as element; children starts list():
+    let flattened = list($element)
+    let tag = at($element, "tag")
+    when and(includes(list("ul", "ol", "li", "summary", "thead", "tbody"), $tag), not(at(at($element, "attrs"), "class"))):
+      port kernel.invoke { query = "inspector.fileChildren"; input = or(at($element, "children"), list()) } → flattened
+    yield append($children, filter($flattened, "node", at($node, "tag"))) → children
+  let result = $children
+
+process inspector.surfaceNode:
+  let element = $eventInput.element
+  let path = $eventInput.path
+  let attrs = or(at($element, "attrs"), {})
+  let tag = $element.tag
+  let slot = or(at($attrs, "data-window-slot"), "no-slot")
+  let htmlId = at($attrs, "id")
+  let recordKey = at($attrs, "data-temple-record")
+  let editor = at($attrs, "data-first-run")
+  let command = at($attrs, "data-document-command")
+  let popover = at($attrs, "popovertarget")
+  let pane = and(eq($app.key, "temple-manager"), eq($htmlId, concat($app.key, "-detail")))
+  let fileIndex = and(eq($app.key, "file-manager"), eq($htmlId, "file-manager-index"))
+  let fileDetail = and(eq($app.key, "file-manager"), eq($htmlId, "file-manager-detail"))
+  let runPane = and($serviceManager, includes(list("service-manager-tabs", "service-manager-index", "service-manager-detail"), $htmlId))
+  let viewerDetail = and($fileViewer, eq($htmlId, "file-viewer-detail"))
+  let aboutContent = and(eq($app.key, "about"), eq($htmlId, $app.content))
+  let parentSource = $eventInput.sourceKey
+  let sourceKey = or(at({ title = "source-title"; menu = "source-menu-bar"; banner = "source-banner"; content = "source-content-slot" }, $slot), $parentSource)
+  let children = or(at($element, "children"), list())
+  when $pane:
+    let sourceKey = "source-pane"
+    let children = $renderedRecords
+  when $aboutContent:
+    let children = $renderedAbout
+  when $fileIndex:
+    let sourceKey = "source-pane"
+    let children = $renderedFiles.index
+  when $fileDetail:
+    let sourceKey = "source-pane"
+    let children = $renderedFiles.detail
+  when $viewerDetail:
+    let sourceKey = "source-pane"
+    let children = $renderedViewer
+  when $runPane:
+    let sourceKey = if(eq($htmlId, "service-manager-tabs"), "source-content", "source-pane")
+    let children = at($renderedRuns, at({ "service-manager-tabs" = "tabs"; "service-manager-index" = "index"; "service-manager-detail" = "detail" }, $htmlId))
+  let labelledBy = at($attrs, "aria-labelledby")
+  let title = at(filter($children, "child", and($labelledBy, eq(at(at($child, "attrs"), "id"), $labelledBy))), 0)
+  let text = at($children, 0)
+  when and(eq($app.key, "file-manager"), eq($tag, "details")):
+    let text = or(at(at($text, "attrs"), "aria-label"), at(at($text, "children"), 0))
+  port value.type { value = $text } → textKind
+  let semanticName = or(at($attrs, "aria-label"), at(at($title, "children"), 0), at({ title = "Title bar"; banner = "Banner"; content = "Content" }, $slot))
+  let className = or(at($attrs, "class"), "no-class")
+  let structuralName = at({ "window-controls" = "Window controls"; "manager-panel" = "Record panel";
+    "manager-panes manager-single-pane" = "Pane layout"; "banner-icon" = "Banner icon" }, $className)
+  let label = or($semanticName, $structuralName, at({ pre = "Saved text preview"; p = "Text"; svg = "Icon"; use = "Icon reference" }, $tag))
+  when and(eq($textKind, "string"), not($label)):
+    let label = $text
+  let label = or($label, concat("<", $tag, ">"))
+  when eq($htmlId, $app.window):
+    let label = $app.title
+  when at($attrs, "popover"):
+    let label = concat($label, " panel")
+  when eq(at($attrs, "role"), "status"):
+    let label = "Record status"
+  let id = if($htmlId, concat("id-", $htmlId), concat("node-", $path))
+  let target = null
+  let relation = null
+  let shape = null
+  let flow = null
+  let description = if(eq($textKind, "string"), $text, null)
+  let kind = if(includes(list("button", "a"), $tag), "Control", if($recordKey, "Data", "Surface"))
+  let type = if(eq($htmlId, $app.window), $inspectionWindowType.title, concat("HTML ", $tag))
+  when and(eq($app.key, "about"), eq($htmlId, $app.window)):
+    let target = "about-binding"
+    let relation = "Opens via"
+  when includes(list("about-build-id", "about-build-fingerprint"), $htmlId):
+    let kind = "Data"
+    let label = if(eq($htmlId, "about-build-id"), "Build ID value", "Home fingerprint value")
+    let description = "Published as part of the Home page."
+    let target = "about-data"
+    let relation = "Displays"
+  when $pane:
+    let id = "surface"
+    let description = "The named pane receives the record-detail renderer for the selected record state."
+  when eq($command, "temple-refresh"):
+    let id = if($popover, "menu-refresh", "refresh")
+    let target = "binding"
+    let relation = "Binds to"
+    let description = if($popover, "Closes the File popover and refreshes the saved records.", "Reloads saved records. Disabled while loading.")
+  when $editor:
+    let id = concat("edit-", $editor)
+    let target = "edit-binding"
+    let relation = "Binds to"
+    let shape = concat("data-first-run: ", $editor)
+    let description = "Opens the shared Formation editor for this record."
+  when $recordKey:
+    let target = "data"
+    let relation = "Reads from"
+    let shape = concat("records.", $recordKey, "?.text: Text")
+    let description = "Shows saved text or the empty-state text for this record."
+  when eq(at($attrs, "href"), "/settings/identity/"):
+    let id = "signin"
+    let target = "signin-event"
+    let relation = "Navigates via"
+  when and($popover, not(eq(at($attrs, "popovertargetaction"), "hide"))):
+    let target = concat("id-", $popover)
+    let relation = "Toggles popover"
+    let shape = concat("Browser-native click\npopovertarget: #", $popover)
+  let titleAction = if(eq($htmlId, $app.maximize), "maximize", if(eq($htmlId, $app.minimize), "minimize", if(or(eq($htmlId, $app.close), at($attrs, "data-desktop-close")), "close", null)))
+  when $titleAction:
+    let target = concat($titleAction, "-binding")
+    let relation = "Binds to"
+    let description = null
+  when or(at($attrs, "data-window-control"), eq($className, "window-controls")):
+    let sourceKey = "source-title-controls"
+  when $managerApp:
+    port kernel.invoke { query = "inspector.managerNode"; input = null } → fileNode
+    let id = $fileNode.id
+    let sourceKey = $fileNode.sourceKey
+    let label = $fileNode.label
+    let type = $fileNode.type
+    let description = $fileNode.description
+    let target = $fileNode.target
+    let relation = $fileNode.relation
+    let flow = $fileNode.flow
+    let shape = $fileNode.shape
+    let children = $fileNode.children
+  let source = at($nodes, $sourceKey)
+  let detail = { label = $label; kind = $kind; type = $type; description = $description; target = $target; relation = $relation;
+    shape = $shape; flow = $flow;
+    source = $source.source; lines = $source.lines; excerpt = $source.excerpt; tag = $tag; attrs = $attrs }
+  let linkMode = $mode
+  when $servicesView:
+    let item = at($attrs, "data-manager-item")
+    when eq(at($attrs, "data-manager-action"), "service-item"):
+      let linkMode = if(eq($item, $serviceObservation.unitId), "services-unit", if(eq($item, $serviceObservation.offlineId), "services-offline", "services"))
+  when and($serviceManager, eq($mode, "scheduled-run"), eq($id, "run-row")):
+    let linkMode = "runs"
+  let link = { tag = "a"; attrs = { href = concat("/?view=inspect&app=", $app.key, "&alias=", $linkMode, "&id=", $id, "#inspection-selection");
+    "aria-current" = if(eq($requested, $id), "page", null) }; children = list($label) }
+  let childSource = $sourceKey
+  when eq($slot, "menu"):
+    let childSource = "source-menus"
+  when eq($slot, "content"):
+    let childSource = "source-content"
+  when $pane:
+    let childSource = "source-details"
+  when $aboutContent:
+    let childSource = "source-about-body"
+  when $fileIndex:
+    let childSource = "source-files-tree"
+  when $fileDetail:
+    let childSource = if(eq($mode, "file-search"), "source-file-search-results", "source-file-preview")
+  when $viewerDetail:
+    let childSource = "viewer-render"
+  when $runPane:
+    let childSource = "source-service-panel"
+  let elements = filter($children, "child", at($child, "tag"))
+  when $managerApp:
+    port kernel.invoke { query = "inspector.fileChildren"; input = $elements } → elements
+  fold range(count($elements)) as index; branch starts { links = list(); rows = list() }:
+    let input = { element = at($elements, add($index, -1)); path = concat($path, "-", $index); sourceKey = $childSource }
+    port kernel.invoke { query = "inspector.surfaceNode"; input = $input } → child
+    yield { links = append($branch.links, list($child.tree)); rows = append($branch.rows, $child.rows) } → branch
+  let treeContent = $link
+  when count($branch.links):
+    let containsSelection = some($branch.rows, "row", eq($row.id, $requested))
+    let open = or($containsSelection, not(or(eq($tag, "svg"), eq($slot, "banner"))))
+    let treeContent = { tag = "details"; attrs = { open = $open }; children = list(
+      { tag = "summary"; attrs = {}; children = list(
+        { tag = "span"; attrs = { class = "inspection-toggle"; "aria-hidden" = "true" }; children = list() },
+        $link
+      ) },
+      { tag = "ul"; attrs = {}; children = $branch.links }
+    ) }
+  let result = { tree = { tag = "li"; attrs = {}; children = list($treeContent) };
+    rows = append(list({ id = $id; detail = $detail }), $branch.rows) }
+
+process inspector.managerNode:
+  let action = at($attrs, "data-manager-action")
+  let branch = at({
+    "file-tree" = { label = "Folder navigation"; type = "Folder tree · HTML ul"; source = "source-files-tree"; target = "folder-data"; relation = "Shows"; flow = "folder-case" };
+    "file-breadcrumbs" = { type = "Breadcrumb trail · HTML nav"; source = "source-file-breadcrumbs"; flow = "folder-case" };
+    "sourcery-data-table file-contents-table" = { id = "folder-contents"; type = "Folder listing · HTML table"; source = "source-file-list"; target = "folder-data"; relation = "Lists children of"; flow = "folder-case" };
+    "file-index-properties" = { label = "Indexed properties"; type = "Index metadata · HTML dl"; source = "source-file-metadata"; relation = "Displays" };
+    "file-encounter-viewer" = { id = "inline-preview"; label = "Inline Encounter preview"; type = "Encounter source preview · HTML section"; source = "source-encounter-viewer"; target = "file-content"; relation = "Renders through"; flow = "file-case" };
+    "file-list-hint" = { source = "source-file-list"; flow = "folder-case" }
+  }, $className)
+  let definition = or($branch, {})
+  when $viewerDetail:
+    let definition = { type = "File Viewer preview pane · HTML section"; target = if($receiptMode, "receipt-viewer-read", "viewer-read"); relation = "Loads through" }
+  when and($fileViewer, eq($className, "file-encounter-viewer")):
+    let definition = { id = "viewer-encounter-preview"; label = "Encounter preview"; type = "Encounter source preview · HTML section";
+      source = "source-encounter-viewer"; target = "viewer-render"; relation = "Renders through" }
+  when and($fileViewer, eq($tag, "h3"), eq($sourceKey, "viewer-render")):
+    let definition = { type = "Indexed file heading · HTML h3"; source = "source-file-location"; target = if($receiptMode, "receipt-file", "viewer-data"); relation = "Names" }
+  when eq($command, "viewer-open"):
+    let definition = { type = "Choose file command · HTML button"; source = "source-menus"; target = "viewer-open-event"; relation = "Dispatches to" }
+  when eq($command, "viewer-refresh"):
+    let definition = { type = "Reload file command · HTML button"; source = "source-menus"; target = if($receiptMode, "receipt-reload-event", "viewer-reload-event"); relation = "Dispatches to" }
+  let shape = $shape
+  when eq($className, "file-index-properties"):
+    let definition = { label = $branch.label; type = $branch.type; source = $branch.source; relation = $branch.relation;
+      target = if($receiptMode, "receipt-file", if(eq($mode, "file-preview"), "file-data", "folder-data"));
+      flow = if($receiptMode, "receipt-file-case", if(eq($mode, "file-preview"), "file-case", "folder-case")) }
+  when eq($action, "folder"):
+    let destinationId = at($attrs, "data-manager-item")
+    let destination = at(filter($renderedFiles.folders, "entry", eq($entry.id, $destinationId)), 0)
+    when $destination:
+      let shape = concat("destination: ", $destination.path, "\nid: ", $destination.id, "\nkind: ", $destination.kind)
+    let fromTree = eq($className, "file-tree-label")
+    let fromRow = eq($className, "file-entry-name")
+    let fromCrumb = and(not($fromTree), not($fromRow), eq($sourceKey, "source-file-breadcrumbs"))
+    let definition = {
+      type = concat(if($fromTree, "Folder tree button", if($fromRow, "Folder row", if($fromCrumb, "Breadcrumb button", "Folder return button"))), " · HTML button");
+      source = if($fromTree, "source-file-tree-folder", if($fromRow, "source-file-row", if($fromCrumb, "source-file-breadcrumbs", "source-file-preview")));
+      target = "folder-binding"; relation = "Binds to"; flow = "folder-case"
+    }
+  when eq($action, "file"):
+    let definition = { id = "sample-file"; type = "Encounter file row · HTML button"; source = "source-file-row";
+      target = "file-binding"; relation = "Binds to"; flow = "file-case" }
+  when eq($action, "open-viewer"):
+    let definition = { label = "Open in File Viewer"; type = "File Viewer handoff · HTML button"; source = "source-file-viewer-link";
+      target = if($receiptMode, "receipt-viewer-binding", "viewer-binding"); relation = "Binds to"; flow = if($receiptMode, "receipt-handoff-case", "viewer-case") }
+  when eq($action, "search-detail"):
+    let definition = { label = "Open matching file"; type = "Search result · HTML button"; source = "source-file-search-results";
+      target = "hit-binding"; relation = "Binds to"; flow = "hit-case" }
+  when or(eq($action, "file-search"), eq($sourceKey, "source-file-search"), eq($htmlId, "file-search-results")):
+    let searchSource = if(eq($htmlId, "file-search-results"), "source-file-search-results", "source-file-search")
+    let definition = { label = at({ "file-search" = "File search"; "file-search-query" = "Filename or path"; "file-search-scope" = "Collection selector" }, or($htmlId, "no-id"));
+      type = at({ form = "File search form · HTML form"; input = "Search query · HTML input"; select = "Collection scope · HTML select" }, $tag);
+      source = $searchSource; target = if(or(eq($tag, "form"), eq($tag, "button")), "search-binding", null); relation = "Submits via"; flow = "search-case" }
+  when and($fileManager, eq($command, "refresh")):
+    let definition = { type = "Index refresh command · HTML button"; source = "source-menus"; target = "index-binding"; relation = "Binds to"; flow = "index-case" }
+  when and(eq($tag, "pre"), eq($sourceKey, "source-encounter-viewer")):
+    let definition = { id = "preview-source"; label = "Source code widget"; type = "Read-only Encounter code widget · HTML pre";
+      source = "source-encounter-viewer"; target = "file-source"; relation = "Displays"; flow = "file-case" }
+    let children = list()
+    let description = null
+  when and(eq($tag, "h3"), eq($sourceKey, "source-file-preview")):
+    let definition = { type = "Indexed location · HTML h3"; source = "source-file-location";
+      target = if($receiptMode, "receipt-file", if(eq($mode, "file-preview"), "file-data", "folder-data")); relation = "Names" }
+  when and(eq($tag, "tr"), eq(at(at($children, 0), "tag"), "td")):
+    let definition = { label = "Index row"; type = "File index row · HTML tr"; source = "source-file-row" }
+  when and(not($servicesView), eq($action, "service-item")):
+    let item = at($attrs, "data-manager-item")
+    let rowId = if(eq($mode, "schedules"), "timer-row", if(eq($item, "qualification"), "run-row", "scheduled-run-row"))
+    let definition = { id = $rowId; type = if(eq($mode, "schedules"), "Systemd timer · HTML button", "Published run · HTML button");
+      source = "source-run-row"; target = if(eq($mode, "schedules"), "timer-selection", if(eq($item, "qualification"), "run-selection", "scheduled-run-data"));
+      relation = if(eq($rowId, "scheduled-run-row"), "Selects", "Binds to") }
+  when and($servicesView, eq($action, "service-item")):
+    let item = at($attrs, "data-manager-item")
+    let rowType = if(eq($item, $serviceObservation.unitId), "Systemd service", "Registered app")
+    let definition = { type = concat($rowType, " · HTML button"); source = "source-run-row"; target = "service-selection"; relation = "Binds to" }
+  when and($servicesView, eq(at($attrs, "data-observation-role"), "state")):
+    let definition = { id = "service-state"; label = "Service status"; type = "Observed state · HTML td"; source = "source-service-status"; target = "front-gate-observation"; relation = "Reads from" }
+    let shape = concat("State: ", $serviceObservation.state)
+  when and($servicesView, or(eq($action, "refresh"), eq($command, "refresh"))):
+    let definition = { type = "Refresh observations · HTML button"; source = if($command, "source-menus", "source-service-slots"); target = "front-gate-refresh"; relation = "Refreshes through" }
+  when and(eq($action, "service-view"), eq(at($attrs, "data-manager-item"), "services")):
+    let definition = { type = "Services view · HTML button"; source = "source-service-panel"; target = "services-view-event"; relation = "Binds to" }
+  when and(eq($action, "service-view"), eq(at($attrs, "data-manager-item"), "runs")):
+    let definition = { type = "Runs view · HTML button"; source = "source-service-panel"; target = "runs-view-event"; relation = "Binds to" }
+  when and(eq($action, "service-view"), eq(at($attrs, "data-manager-item"), "schedules")):
+    let definition = { type = "Schedules view · HTML button"; source = "source-service-panel"; target = "schedules-view-event"; relation = "Binds to" }
+  when eq($action, "invocation"):
+    let definition = { id = "last-execution"; type = "Last execution · HTML button"; source = "source-last-execution"; target = "invocation-click"; relation = "Binds to" }
+  when and($scheduled, eq($className, "file-rel-viewer")):
+    let definition = { id = "receipt-preview"; label = "Run receipt preview"; type = "REL receipt · HTML section"; source = "source-rel-receipt"; target = "receipt-file"; relation = "Displays" }
+    # Keep the filter and table in the surface, with raw receipt text available in the details.
+    let children = filter($children, "child", not(eq(at($child, "tag"), "details")))
+  when eq($action, "receipt"):
+    let definition = { id = "run-receipt-button"; type = "Run receipt handoff · HTML button"; source = "source-service-receipt-button"; target = "run-receipt-binding"; relation = "Binds to" }
+  when eq($action, "back-run"):
+    let definition = { type = "Return to run · HTML button"; source = "source-file-preview"; target = "run-return"; relation = "Dispatches to" }
+  when and($receiptMode, not($scheduled), eq($tag, "pre")):
+    let definition = { id = "receipt-preview"; label = "Run receipt preview"; type = "Plain-text receipt · HTML pre"; source = "file-content"; target = "receipt-file"; relation = "Displays" }
+    let description = null
+  when eq(at($attrs, "role"), "status"):
+    let label = or($description, "Status")
+  let result = {
+    id = or(at($definition, "id"), $id); label = or(at($definition, "label"), $label); type = or(at($definition, "type"), $type);
+    sourceKey = or(at($definition, "source"), $sourceKey); target = or(at($definition, "target"), $target);
+    relation = or(at($definition, "relation"), $relation); flow = at($definition, "flow"); shape = $shape; description = $description; children = $children
+  }

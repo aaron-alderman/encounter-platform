@@ -1,0 +1,18 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process assurance.libraryIntegrity:
+  let files = list(
+    list("source/presentation/source-algebra.encounter", "927be102d80170a4eb2dc6d4d9f7f28589ed0f484121bdf1838275e3f930c2db"),
+    list("source/journeys.encounter", "b4033c4459ee30f13c37c3025df72ff46eaaa1d8ee8b0d8857c02e5be04d231c"),
+    list("source/journeys.rel", "442d8de068114d980c48b94ce160bc075c2745e8edcb96204f91daf85779d52b"),
+    list("source/journeys-contracts.rel", "d9d131a4d74c0cf63e3008765cfd50d4b75255c22777f0bd199f094c7fe41ca7")
+  )
+  each $files as file:
+    assert eq(at($data.identity, at($file, 0)), at($file, 1))
+      otherwise "ASSURANCE-LIBRARY: A shared module differs from its qualified source bytes."
+  each list(list("source/journeys.encounter", $data.journeyCanonical.codeText), list("source/journeys.rel", $data.journeyCanonical.factText), list("source/journeys-contracts.rel", $data.journeyCanonical.contractText)) as input:
+    port digest.sha256 { text = at($input, 1) } → digest
+    assert eq($digest, at($data.identity, at($input, 0)))
+      otherwise "ASSURANCE-LIBRARY: The journey runtime consumed different bytes from the measured source."
+  let result = 7

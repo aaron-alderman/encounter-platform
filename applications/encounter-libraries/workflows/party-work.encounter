@@ -1,0 +1,160 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process pc.room:
+  port kernel.invoke { query = "ws.id"; input = $eventInput.matterId } → valid
+  port kernel.invoke { query = "cw.member"; input = $eventInput.actor } → actor
+  assert $actor.canChange
+    otherwise "PC-PARTY: A contributing party is required."
+  let result = { protocol = "usewords/preparation/1"; programHash = $data.programHash; matterId = $eventInput.matterId; actor = $actor.id; revision = 0; drafts = list() }
+
+process pc.roomCheck:
+  let room = $eventInput
+  port kernel.invoke { query = "mw.exact"; input = { value = $room; keys = list("protocol", "programHash", "matterId", "actor", "revision", "drafts") } } → valid
+  assert and(eq($room.protocol, "usewords/preparation/1"), eq($room.programHash, $data.programHash))
+    otherwise "PC-ROOM: Preparation belongs to another runtime."
+  port kernel.invoke { query = "cw.member"; input = $room.actor } → actor
+  assert $actor.canChange
+    otherwise "PC-PARTY: Observers have no preparation room in this profile."
+  port kernel.invoke { query = "ws.id"; input = $room.matterId } → valid
+  port text.matches { value = concat("", $room.revision); pattern = "^[0-9]{1,4}$" } → numeric
+  port value.describe { value = $room.revision } → revisionType
+  assert and($numeric, eq($revisionType.type, "number"), isArray($room.drafts))
+    otherwise "PC-ROOM: Invalid revision or drafts."
+  port number.calculate { operation = "lessEqual"; values = list(count($room.drafts), 6) } → bounded
+  assert $bounded
+    otherwise "PC-LIMIT: Six preparation drafts per party and matter."
+  each $room.drafts as draft:
+    port kernel.invoke { query = "mw.exact"; input = { value = $draft; keys = list("item", "privateNote") } } → valid
+    port kernel.invoke { query = "mw.itemCheck"; input = $draft.item } → valid
+    port kernel.invoke { query = "mw.text"; input = { value = $draft.privateNote; required = false; maximum = 2400 } } → valid
+    assert eq(count(filter($room.drafts, "d", eq($d.item.id, $draft.item.id))), 1)
+      otherwise "PC-DRAFT: Duplicate preparation identifier."
+  let result = true
+
+process pc.saveDraft:
+  let room = $eventInput.room
+  port kernel.invoke { query = "pc.roomCheck"; input = $room } → valid
+  assert and(eq($room.actor, $eventInput.actor), eq($room.matterId, $eventInput.matterId))
+    otherwise "PC-SCOPE: Preparation is outside this party or matter."
+  assert eq($eventInput.expectedRevision, $room.revision)
+    otherwise "PC-CONFLICT: Preparation changed; reload it before saving."
+  let drafts = append(filter($room.drafts, "d", not(eq($d.item.id, $eventInput.draft.item.id))), list($eventInput.draft))
+  port record.put { record = $room; key = "drafts"; value = $drafts } → room
+  port record.put { record = $room; key = "revision"; value = add($room.revision, 1) } → room
+  port kernel.invoke { query = "pc.roomCheck"; input = $room } → valid
+  let result = $room
+
+process pc.share:
+  let board = $eventInput.board
+  let room = $eventInput.room
+  port kernel.invoke { query = "pc.roomCheck"; input = $room } → valid
+  assert and(eq($room.actor, $eventInput.actor), eq($room.matterId, $board.head.document.matter.id))
+    otherwise "PC-SCOPE: Only this party's preparation can be shared into this matter."
+  let draft = at(filter($room.drafts, "d", eq($d.item.id, $eventInput.id)), 0)
+  assert $draft
+    otherwise "PC-DRAFT: Select a saved preparation draft."
+  # Deliberate allowlist: neither notes nor room metadata are disclosed.
+  let result = { kind = "matter-item"; matterId = $room.matterId; item = $draft.item; origin = { kind = "participant"; label = $room.actor; briefHash = null; sourceHash = null }; baseRevision = $board.head.revision }
+
+process pc.binding:
+  let board = $eventInput.board
+  let target = $eventInput.target
+  port kernel.invoke { query = "mw.exact"; input = { value = $target; keys = list("kind", "id") } } → valid
+  assert at($board.head.document, "matter")
+    otherwise "PC-MATTER: A matter is required."
+  assert includes(list("record", "item"), $target.kind)
+    otherwise "PC-TARGET: Choose the matter record or an incorporated item."
+  let value = $board.head.document.matter
+  when eq($target.kind, "record"):
+    assert eq($target.id, null)
+      otherwise "PC-TARGET: A record target has no item identifier."
+  when eq($target.kind, "item"):
+    let value = at(filter($board.head.document.matter.items, "r", eq($r.item.id, $target.id)), 0)
+    assert $value
+      otherwise "PC-TARGET: The target is not incorporated in this matter."
+  port kernel.invoke { query = "uw.hash"; input = $value } → hash
+  let result = { hash = $hash; value = $value }
+
+process pc.attest:
+  let board = $eventInput.board
+  let request = $eventInput.request
+  let assertions = $board.assertions
+  when eq($request.action, "attest"):
+    port kernel.invoke { query = "mw.exact"; input = { value = $request; keys = list("action", "actor", "expectedBoardRevision", "id", "meaning", "target", "bindingHash", "comment") } } → valid
+    port kernel.invoke { query = "ws.id"; input = $request.id } → valid
+    port number.calculate { operation = "lessEqual"; values = list(count($assertions), 15) } → bounded
+    assert $bounded
+      otherwise "PC-LIMIT: Sixteen personal statements per board."
+    assert eq(count(filter($assertions, "a", eq($a.id, $request.id))), 0)
+      otherwise "PC-STATEMENT: Statement identifiers are unique."
+    assert includes(list("record-accuracy", "represents-me", "agree-to-proposal", "dispute"), $request.meaning)
+      otherwise "PC-MEANING: Inclusion, position ownership, proposal agreement and dispute are distinct."
+    port kernel.invoke { query = "pc.binding"; input = { board = $board; target = $request.target } } → binding
+    assert eq($request.bindingHash, $binding.hash)
+      otherwise "PC-STALE: Statement must name the exact current target."
+    when eq($request.meaning, "record-accuracy"):
+      assert eq($request.target.kind, "record")
+        otherwise "PC-MEANING: Record accuracy applies to the matter snapshot."
+    when not(eq($request.meaning, "record-accuracy")):
+      assert eq($request.target.kind, "item")
+        otherwise "PC-MEANING: Choose an incorporated item for this statement."
+      when eq($request.meaning, "represents-me"):
+        assert eq($binding.value.item.kind, "position")
+          otherwise "PC-MEANING: Only a position can represent a party."
+      when eq($request.meaning, "agree-to-proposal"):
+        assert eq($binding.value.item.kind, "option")
+          otherwise "PC-MEANING: Agreement applies only to an incorporated possible proposal."
+    port kernel.invoke { query = "mw.text"; input = { value = $request.comment; required = true; maximum = 1000 } } → valid
+    assert eq(count(filter($assertions, "a", and($a.active, eq($a.actor, $request.actor), eq($a.meaning, $request.meaning), eq($a.target, $request.target), eq($a.bindingHash, $request.bindingHash)))), 0)
+      otherwise "PC-STATEMENT: Withdraw the existing statement before making another with the same meaning and target."
+    let assertions = append($assertions, list({ id = $request.id; actor = $request.actor; meaning = $request.meaning; target = $request.target; bindingHash = $request.bindingHash; comment = $request.comment; active = true; withdrawn = null }))
+  when eq($request.action, "withdraw-attestation"):
+    port kernel.invoke { query = "mw.exact"; input = { value = $request; keys = list("action", "actor", "expectedBoardRevision", "id", "comment") } } → valid
+    let statement = at(filter($assertions, "a", eq($a.id, $request.id)), 0)
+    assert and($statement, $statement.active, eq($statement.actor, $request.actor))
+      otherwise "PC-AUTHORITY: Only the author can withdraw their active statement."
+    port kernel.invoke { query = "mw.text"; input = { value = $request.comment; required = true; maximum = 1000 } } → valid
+    port record.put { record = $statement; key = "active"; value = false } → statement
+    port record.put { record = $statement; key = "withdrawn"; value = $request.comment } → statement
+    let assertions = map($assertions, "a", if(eq($a.id, $request.id), $statement, $a))
+  let result = $assertions
+
+process pc.packet:
+  let board = $eventInput
+  let matter = $board.head.document.matter
+  assert $matter
+    otherwise "PC-MATTER: A matter is required."
+  port kernel.invoke { query = "mm.get"; input = $matter } → management
+  port kernel.invoke { query = "uw.hash"; input = $matter } → recordHash
+  fold $board.assertions as a; assertions starts list():
+    port kernel.invoke { query = "pc.binding"; input = { board = $board; target = $a.target } } → binding
+    port record.put { record = $a; key = "current"; value = and($a.active, eq($a.bindingHash, $binding.hash)) } → statement
+    yield append($assertions, list($statement)) → assertions
+  let recordAcceptedBy = map(filter($assertions, "a", and($a.current, eq($a.meaning, "record-accuracy"))), "a", $a.actor)
+  port kernel.invoke { query = "cw.receipt"; input = $board } → history
+  let body = { programHash = $data.programHash; matter = $matter; recordHash = $recordHash; boardRevision = $board.revision; assertions = $assertions; recordAcceptedBy = $recordAcceptedBy; mutualRecordAcceptance = and(includes($recordAcceptedBy, "alice"), includes($recordAcceptedBy, "bob")); disputes = filter($assertions, "a", and($a.current, eq($a.meaning, "dispute"))); unresolvedQuestions = filter($matter.items, "r", eq($r.item.kind, "issue")); evidenceNeeds = $management.requests; sharedProposals = map($board.proposals, "p", { id = $p.id; author = $p.content.author; title = $p.content.title; status = $p.status; contentHash = $p.contentHash }); history = $history; interpretation = "Record accuracy does not endorse positions, accept proposals, prove claims, attest real identities or establish legal execution. Evidence requests and answers remain unverified. No private preparation is included. Silence is not agreement." }
+  port kernel.invoke { query = "uw.hash"; input = $body } → hash
+  let result = { protocol = "usewords/matter-packet/1"; body = $body; sha256 = $hash }
+
+process pc.checkPacket:
+  let packet = $eventInput
+  assert eq($packet.protocol, "usewords/matter-packet/1")
+    otherwise "PC-PACKET: Unknown packet format."
+  port kernel.invoke { query = "cw.reconstruct"; input = $packet.body.history } → board
+  port kernel.invoke { query = "pc.packet"; input = $board } → reproduced
+  assert eq($packet, $reproduced)
+    otherwise "PC-PACKET: Packet does not reproduce from its exact shared history."
+  let result = { ok = true; recordHash = $reproduced.body.recordHash; packetHash = $reproduced.sha256; mutualRecordAcceptance = $reproduced.body.mutualRecordAcceptance; identities = "local personas; real identity requires an authenticated receiver" }
+
+process pc.packetView:
+  let packet = $eventInput
+  let body = $packet.body
+  let matter = $body.matter
+  port json.stringify { value = $packet; space = 2 } → encoded
+  fold $matter.items as r; items starts list():
+    yield append($items, list({ tag = "article"; attrs = { }; children = list({ tag = "h3"; attrs = { }; children = list(concat($r.item.kind, ": ", $r.item.title)) }, { tag = "p"; attrs = { }; children = list($r.item.body) }, { tag = "p"; attrs = { }; children = list(concat("Standing: ", $r.standing, " · contributed by ", $r.origin.label, if($r.item.voice, concat(" · perspective: ", $r.item.voice), ""))) }) })) → items
+  let statements = map($body.assertions, "a", { tag = "li"; attrs = { }; children = list(concat($a.actor, " · ", $a.meaning, " · ", if(eq($a.target.kind, "record"), "matter record", $a.target.id), " · ", if(not($a.active), "withdrawn", if($a.current, "current target", "earlier target, not current")), " · ", $a.comment, if($a.withdrawn, concat(" · withdrawal: ", $a.withdrawn), ""))) })
+  let requests = map($body.evidenceNeeds, "r", { tag = "li"; attrs = { }; children = list(concat($r.title, " · ", $r.assignee, " · ", $r.status, if($r.response, concat(" · ", $r.response), ""))) })
+  let input = { tag = "html"; attrs = { lang = "en" }; children = list({ tag = "head"; attrs = { }; children = list({ tag = "meta"; attrs = { charset = "utf-8" }; children = list() }, { tag = "title"; attrs = { }; children = list(concat("Matter packet — ", $matter.title)) }) }, { tag = "body"; attrs = { }; children = list({ tag = "h1"; attrs = { }; children = list($matter.title) }, { tag = "p"; attrs = { }; children = list($matter.description) }, { tag = "p"; attrs = { }; children = list(concat("Lifecycle: ", $matter.status, ". Mutual record accuracy acceptance: ", $body.mutualRecordAcceptance, ". Parties are simulated personas, not authenticated identities.")) }, { tag = "p"; attrs = { }; children = list($body.interpretation) }, { tag = "h2"; attrs = { }; children = list("Issues, positions and possible proposals") }, { tag = "section"; attrs = { }; children = $items }, { tag = "h2"; attrs = { }; children = list("Explicit personal statements and disputes") }, { tag = "ul"; attrs = { }; children = $statements }, { tag = "h2"; attrs = { }; children = list("Evidence needs and outstanding responses") }, { tag = "p"; attrs = { }; children = list("These are recorded requests and responses, not a verification of evidentiary sufficiency. Open questions and disputed claims remain open.") }, { tag = "ul"; attrs = { }; children = $requests }, { tag = "h2"; attrs = { }; children = list("Reproducibility") }, { tag = "p"; attrs = { }; children = list(concat("Packet SHA-256: ", $packet.sha256, " · record SHA-256: ", $body.recordHash, " · runtime: ", $body.programHash)) }, { tag = "details"; attrs = { }; children = list({ tag = "summary"; attrs = { }; children = list("Exact shared packet and history") }, { tag = "pre"; attrs = { }; children = list($encoded) }) }) }) }
+  call html.serialize
