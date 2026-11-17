@@ -1,0 +1,48 @@
+process-module "temple/surface-process-module/1"
+
+process claimipedia.aster.view:
+  let request = $eventInput.request
+  let submitted = eq($request.method, "POST")
+  let raw = if($submitted, at($request.fields, "question"), "")
+  port text.slice { value = if($raw, $raw, ""); start = 0; end = 240 } → bounded
+  port text.trim { value = $bounded } → question
+  let form = { tag = "form"; attrs = { class = "cp-form"; method = "post"; action = "/aster" }; children = list(
+    { tag = "input"; attrs = { type = "hidden"; name = "_csrf"; value = $request.csrf }; children = list() },
+    { tag = "label"; attrs = {}; children = list("Your question", {
+      tag = "textarea"; attrs = { name = "question"; "aria-label" = "Your question"; required = true; maxlength = 240; rows = 3 }; children = list($question)
+    }) },
+    { tag = "button"; attrs = { type = "submit" }; children = list("Search the corpus") }
+  ) }
+  let content = list($form)
+  let notice = ""
+  when and($submitted, not($question)):
+    let notice = "Enter a question to search the corpus."
+  when $question:
+    port kernel.invoke { query = "claimipedia.reader.catalogue" } → catalogue
+    port kernel.invoke { query = "claimipedia.search.records"; input = $catalogue } → records
+    port kernel.invoke { query = "claimipedia.search.corpus"; input = { records = $records; query = $question } } → search
+    port kernel.invoke { query = "claimipedia.aster.results"; input = $search } → results
+    let content = append($content, $results)
+  let result = { content = $content; notice = $notice; session = $request.session }
+
+process claimipedia.aster.results:
+  let search = $eventInput
+  let items = map($search.ranked, "row", { tag = "li"; attrs = {}; children = list(
+    { tag = "h3"; attrs = {}; children = list(
+      { tag = "a"; attrs = { href = concat("/?claim=", $row.claim.id) }; children = list($row.claim.expression) }
+    ) },
+    { tag = "p"; attrs = {}; children = list($row.claim.scope) },
+    { tag = "p"; attrs = {}; children = list("Matched terms · ", map($row.matched, "term", concat($term, " "))) },
+    if(count($row.claim.evidence), { tag = "ul"; attrs = { "aria-label" = "Linked evidence" }; children = map($row.claim.evidence, "item", {
+      tag = "li"; attrs = {}; children = list(
+        { tag = "a"; attrs = { href = concat("/?claim=", $row.claim.id, "#", $item.subject) }; children = list(concat($item.direction, " · ", $item.kind, " · ", $item.id)) },
+        { tag = "p"; attrs = {}; children = list($item.provenance) }
+      )
+    }) }, { tag = "p"; attrs = {}; children = list("No linked evidence in this release.") })
+  ) })
+  let message = if($search.matches, concat("Showing ", count($search.ranked), " of ", $search.matches, " released claims."),
+    "No released claims match. Try a distinctive term, phrase, or claim identifier.")
+  let result = list(
+    { tag = "p"; attrs = { role = "status" }; children = list($message) },
+    { tag = "ol"; attrs = { "aria-label" = "Relevant released claims" }; children = $items }
+  )

@@ -1,0 +1,521 @@
+process-module "temple/surface-process-module/1"
+
+# Component names, element roles and styles share one catalogue. The stylesheet
+# and the page validator both consume it. Page builders supply content only.
+process claimipedia.design.components:
+  let result = list(
+    { name = "cp-shell"; tag = "body"; css = concat(
+      "--ink: #102b31; --muted: #536b64; --paper: #f3f0e7; --panel: #fffdf8;\n",
+      "--line: #bed3cf; --deep: #0b2730; --teal: #31c8bf; --teal-soft: #9be5df;\n",
+      "--amber: #f2a21a; --link: #11645f; --space: clamp(1rem,4vw,3rem);\n",
+      "--mono: ui-monospace,monospace; font: 1rem/1.5 ui-sans-serif,system-ui,sans-serif;\n",
+      "background: var(--paper); color: var(--ink); min-height: 100vh; overflow-wrap: anywhere;\n",
+      "& a { color: var(--link); text-underline-offset: .18em; }\n",
+      "& :focus-visible { outline: 3px solid #a85d16; outline-offset: 3px; }\n",
+      "& button { font: inherit; color: white; cursor: pointer; padding: .45rem .7rem; background: #0b6460; border: 1px solid #0b6460; border-radius: 0; min-height: 2.75rem; font-weight: 750; }\n",
+      "& button:hover { background: var(--deep); }\n",
+      "& input:not([type=hidden]), & textarea, & select { font: inherit; min-height: 2.75rem; width: 100%; min-width: 0; max-width: 100%; padding: .45rem .7rem; border: 1px solid #809f9b; background: var(--panel); color: var(--ink); border-radius: 0; }\n",
+      "& label { display: grid; gap: .25rem; font-weight: 600; min-width: 0; }\n",
+      "& h1, & h2, & h3, & h4, & p { margin: 0 0 .65rem; }\n",
+      "& ul { padding: 0; list-style: none; } & li { margin-block: .55rem; }\n",
+      "& p:last-child { margin-bottom: 0; }\n"
+    ) },
+    { name = "cp-skip"; tag = "a"; css = concat(
+      "position: absolute; left: 1rem; top: 1rem; z-index: 1; padding: .5rem 1rem;\n",
+      "background: var(--panel); transform: translateY(-250%);\n",
+      "&:focus { transform: none; }\n"
+    ) },
+    { name = "cp-brand"; tag = "header"; css = concat(
+      "display: flex; align-items: center; flex-wrap: wrap; gap: .35rem 1rem; min-height: 4.8rem;\n",
+      "padding: .65rem 1.25rem; border: 0; border-bottom: 1px solid #31c8bf55;\n",
+      "background: linear-gradient(180deg,#0d2c31,#0a2429); color: #fff; box-shadow: 0 .45rem 1.6rem #0410142b;\n",
+      "& a { display: inline-flex; align-items: center; gap: .55rem; color: #fff; text-decoration: none; }\n",
+      "& a > span { display: grid; gap: .15rem; line-height: 1; }\n",
+      "& strong { font-size: 1.22rem; font-weight: 720; letter-spacing: .01em; }\n",
+      "& small { color: var(--teal-soft); font-size: .58rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }\n",
+      "& > span { margin-inline-start: auto; color: #c2d7d8; font-size: .76rem; }\n",
+      "& svg { display: block; width: 2.15rem; height: 2.5rem; flex: none; }\n",
+      "& :focus-visible { outline-color: var(--amber); }\n",
+      "@media (max-width: 520px) { & > span { margin-inline-start: 2.7rem; } }\n"
+    ) },
+    { name = "cp-nav"; tag = "nav"; css = concat(
+      "display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; padding: .55rem var(--space);\n",
+      "border-bottom: 1px solid #0d555948; background: #f4f1e9; box-shadow: 0 .35rem 1.2rem #0a252914;\n",
+      "& a { padding: .55rem .75rem; color: #183f43; text-decoration: none; font-size: .87rem; }\n",
+      "& a:hover, & a[aria-current] { background: #d9eeea; color: #0a4f50; box-shadow: inset 0 -3px var(--amber); }\n"
+    ) },
+    { name = "cp-main"; tag = "main"; css = concat(
+      "max-width: 88rem; margin: auto; padding: 1rem var(--space) 4rem;\n"
+    ) },
+    { name = "cp-workspace-nav"; tag = "nav"; css = concat(
+      "display: flex; flex-wrap: wrap; align-items: center; gap: .35rem 1rem; padding: .65rem 0; border-bottom: 1px solid #bed3cf;\n",
+      "& a { padding: .25rem .45rem; color: #11645f; font-size: .9rem; }\n",
+      "& a[aria-current=page] { background: #d9eeea; font-weight: 750; text-decoration: none; }\n",
+      ".cp-shell > & { padding-inline: var(--space); background: var(--panel); }\n"
+    ) },
+    { name = "cp-workspace-head"; tag = "header"; css = concat(
+      "padding: 1rem 0; margin: 0 0 .5rem; border-bottom: 1px solid var(--line);\n",
+      "& h1 { font-size: clamp(1.7rem,4vw,2.65rem); line-height: 1.15; }\n",
+      "& p { color: var(--muted); }\n"
+    ) },
+    { name = "cp-workspace-grid"; tag = "div"; css = concat(
+      "display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; margin-block: 1.25rem; align-items: start;\n",
+      "@media(max-width: 48rem) { grid-template-columns: minmax(0,1fr); }\n"
+    ) },
+    { name = "cp-workspace-panel"; tag = "section"; css = concat(
+      "min-width: 0; margin: 0; padding: clamp(1rem,2.5vw,1.5rem); background: var(--panel); border: 1px solid var(--line);\n",
+      ".cp-main > & { margin-block: 1rem; }\n",
+      "& > h2 { font-size: 1.25rem; } & > ul > li > h3 { font-size: 1rem; }\n",
+      "& > ul { margin: .75rem 0; }\n",
+      "& > :is(ul,ol) > li { margin: 0; padding: .7rem 0; border-top: 1px solid var(--line); }\n",
+      "& > :is(ul,ol) > li > p { color: var(--muted); }\n"
+    ) },
+    { name = "cp-workspace-links"; tag = "ul"; css = concat(
+      "& li { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .2rem .65rem; align-items: baseline; }\n",
+      "& small { color: var(--muted); } & li > strong ~ a { grid-column: 1/-1; }\n",
+      "@media(max-width: 28rem) { & li { grid-template-columns: minmax(0,1fr); } }\n"
+    ) },
+    { name = "cp-page-head"; tag = "header"; css = concat(
+      "margin: 0; padding: clamp(1.5rem,6vw,5rem); border: 0;\n",
+      "background: linear-gradient(130deg,#071c24 0,#0b3037 72%,#17443f 100%); color: #f4fbf9;\n",
+      "& h1 { max-width: 13ch; margin: .2rem 0; font: 800 clamp(2.6rem,7vw,6.5rem)/.95 system-ui,sans-serif; letter-spacing: -.055em; }\n",
+      "& p:not(.cp-eyebrow) { max-width: 58rem; margin: .75rem 0 0; color: #c0d7d8; font-size: clamp(1rem,1.7vw,1.25rem); line-height: 1.65; }\n"
+    ) },
+    { name = "cp-eyebrow"; tag = "p"; css = concat(
+      "margin: 0; color: var(--teal-soft); font-size: .74rem; font-weight: 850; letter-spacing: .14em; text-transform: uppercase;\n"
+    ) },
+    { name = "cp-badge"; tag = "span"; css = concat(
+      "display: inline-flex; padding: .25rem .45rem; border: 1px solid currentColor; color: #176861;\n",
+      "font-size: .68rem; font-weight: 850; letter-spacing: .05em; text-transform: uppercase;\n",
+      "&[data-state=local] { background: #fff1d4; color: #74501b; }\n"
+    ) },
+    { name = "cp-panel"; tag = "section"; css = concat(
+      "padding: clamp(1rem,4vw,2.8rem); border: 1px solid #c6d4d0; background: var(--panel); margin-block: 1rem;\n",
+      "& h2 { max-width: 22ch; font: 800 clamp(1.65rem,3.5vw,3.15rem)/1.03 system-ui,sans-serif; letter-spacing: -.025em; }\n",
+      "& h3 { margin-top: 1.3rem; }\n",
+      "& h4 { margin: 0; }\n",
+      "& ul { margin-block: .65rem 0; }\n",
+      "& > ul > li { padding: .75rem; border-top: 1px solid #c8d6d2; background: #fbfaf4; }\n",
+      "& > ul > li:first-child { border-top: .25rem solid var(--teal); }\n"
+    ) },
+    { name = "cp-notice"; tag = "p"; css = concat(
+      "padding: 1.1rem 1.25rem; border-inline-start: .4rem solid var(--amber); background: #fff1d4; color: #4f4432;\n"
+    ) },
+    { name = "cp-feedback"; tag = "p"; css = concat(
+      "padding: .75rem 1rem; border-inline-start: .25rem solid #18746d; background: #dcefeb;\n",
+      "&[role=alert] { background: #fbe6e4; color: #712722; border-color: #a34035; }\n"
+    ) },
+    { name = "cp-form"; tag = "form"; css = concat(
+      "display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .85rem;\n",
+      "align-items: end; margin: .65rem 0;\n",
+      "& label { align-self: start; }\n",
+      "& label:has(textarea) { grid-column: 1/-1; }\n",
+      "& textarea { resize: vertical; }\n",
+      "& button { justify-self: start; }\n",
+      "&:not(:has(label)) { grid-template-columns: 1fr; }\n",
+      "@media(max-width:36rem) {\n",
+      "  grid-template-columns: minmax(0,1fr);\n",
+      "  & button { width: 100%; }\n",
+      "}\n"
+    ) },
+    { name = "cp-results"; tag = "ul"; css = concat(
+      "display: grid; grid-template-columns: minmax(0,1fr); gap: .75rem; max-width: 76rem; margin: 1rem 0; padding: 0; list-style: none;\n"
+    ) },
+    { name = "cp-result"; tag = "li"; css = concat(
+      "display: grid; grid-template-columns: minmax(0,1fr) minmax(11rem,auto); gap: .65rem 2rem;\n",
+      "margin: 0; padding: 1rem 1.15rem; background: var(--panel); border: 0;\n",
+      "border-inline-start: .28rem solid #318a83; border-radius: 0; box-shadow: 0 8px 24px #09282d0c;\n",
+      "&:target { border-inline-start-color: var(--amber); background: #fff7e4; }\n",
+      "& h2 { margin: .15rem 0 .55rem; font: 750 clamp(1.15rem,2vw,1.5rem)/1.3 system-ui,sans-serif; letter-spacing: -.025em; }\n",
+      "& h2 a { color: #102f34; }\n",
+      "& > div:last-child { display: grid; align-content: start; justify-items: start; gap: .35rem; }\n",
+      "& > div:last-child > a { font: 700 .78rem/1.5 var(--mono); }\n",
+      "& p { color: var(--muted); }\n",
+      "@media (max-width: 700px) { grid-template-columns: minmax(0,1fr); }\n"
+    ) },
+    { name = "cp-breadcrumb"; tag = "nav"; css = concat(
+      "display: flex; flex-wrap: wrap; gap: .35rem .6rem; margin: 0 0 1rem;\n",
+      "padding: .65rem .8rem; border: 1px solid #b9cfca; background: #fbfaf4;\n",
+      "color: #536b64; font: 760 .76rem/1.3 system-ui,sans-serif;\n"
+    ) },
+    { name = "cp-reading-path"; tag = "ol"; css = concat(
+      "display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 1px;\n",
+      "margin: 0 0 1.5rem; padding: 0; background: #367d79; list-style: none;\n",
+      "& li { display: grid; grid-template-columns: 1.75rem minmax(0,1fr); align-content: start; gap: .25rem .6rem; margin: 0; padding: 1rem; border: 0; border-radius: 0; background: #0c2d34; color: #f1faf8; }\n",
+      "& li:nth-child(odd) { box-shadow: inset 0 3px var(--teal); }\n",
+      "& li:nth-child(even) { box-shadow: inset 0 3px var(--amber); }\n",
+      "& span { grid-row: 1/3; color: var(--teal-soft); font: 850 .76rem/1.7 var(--mono); }\n",
+      "& small { color: #aec8cc; line-height: 1.45; }\n",
+      "@media (max-width: 760px) { grid-template-columns: repeat(2,minmax(0,1fr)); }\n"
+    ) },
+    { name = "cp-search-form"; tag = "form"; css = concat(
+      "display: grid; grid-template-columns: minmax(0,34rem) auto; justify-content: start; align-items: end;\n",
+      "gap: 1rem; margin: 0 0 .75rem; padding: 1rem; border: 1px solid #c5d4d0; background: #fbfaf4;\n",
+      "@media (max-width: 520px) { grid-template-columns: minmax(0,1fr); justify-content: stretch; }\n"
+    ) },
+    { name = "cp-record-head"; tag = "header"; css = concat(
+      "display: grid; grid-template-columns: minmax(0,1.45fr) minmax(15rem,.55fr);\n",
+      "gap: clamp(1rem,5vw,4rem); align-items: end; margin: 0 0 1rem;\n",
+      "padding: clamp(1.5rem,6vw,5.5rem); border: 0; color: #f6fbfa;\n",
+      "background: linear-gradient(132deg,#071c24 0,#0a2e35 72%,#12413d 100%);\n",
+      "& h1 { max-width: 24ch; margin: .4rem 0 1rem; font: 800 clamp(2.1rem,4.8vw,5rem)/.98 system-ui,sans-serif; letter-spacing: -.05em; }\n",
+      "& p:not(.cp-eyebrow) { max-width: 58ch; color: #c2d7d8; }\n",
+      "@media (max-width: 760px) { grid-template-columns: minmax(0,1fr); }\n"
+    ) },
+    { name = "cp-vitals"; tag = "dl"; css = concat(
+      "display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1px; margin: 0; background: #ffffff2e;\n",
+      "& div { min-height: 5.3rem; padding: 1rem; background: #08252b; }\n",
+      "& dt { color: #8dd9d3; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .09em; }\n",
+      "& dd { margin: .35rem 0 0; font-weight: 750; color: #f6fbfa; }\n",
+      ".cp-workspace-head > & { background: var(--line); }\n",
+      ".cp-workspace-head > & div { background: var(--panel); }\n",
+      ".cp-workspace-head > & dt { color: var(--link); }\n",
+      ".cp-workspace-head > & dd { color: var(--ink); }\n"
+    ) },
+    { name = "cp-map"; tag = "section"; css = concat(
+      "padding: clamp(1rem,3vw,2rem); margin: 1rem 0; background: #0c2d34; color: #effafa;\n",
+      "& > p { color: #c0d7d8; }\n",
+      "& [data-relation=Supports] { --relationship: #5edbd0; }\n",
+      "& [data-relation=Challenges] { --relationship: #f2a21a; }\n",
+      "& [data-relation=Qualifies] { --relationship: #a4b9e2; }\n",
+      "& [data-relation=DependsOn] { --relationship: #d8c6f2; }\n",
+      "& [data-relation=Supersedes] { --relationship: #f09d9a; }\n",
+      "&[data-focused=yes] .cp-map-edge:not([data-active]) { opacity: .16; }\n",
+      "&[data-focused=yes] .cp-map-node:not([data-related]) { opacity: .52; }\n"
+    ) },
+    { name = "cp-map-switch"; tag = "nav"; css = concat(
+      "display: flex; flex-wrap: wrap; gap: .5rem; margin: .8rem 0 1rem;\n",
+      "& a { padding: .4rem .75rem; border: 1px solid #57918e; color: #d5f9f5; text-decoration: none; }\n",
+      "& a:hover, & a[aria-current] { background: #dcece8; color: #0b3037; border-color: var(--teal); }\n"
+    ) },
+    { name = "cp-map-layout"; tag = "div"; css = concat(
+      "display: grid; grid-template-columns: minmax(0,1fr); align-items: start; gap: 1rem;\n",
+      "@media (min-width: 1050px) { &[data-focused=yes] { grid-template-columns: minmax(15rem,.35fr) minmax(0,1fr); } }\n"
+    ) },
+    { name = "cp-map-scroll"; tag = "div"; css = concat(
+      "min-width: 0; overflow: auto; border: 1px solid #367d79; background: #0b252f;\n",
+      "@media (min-width: 1050px) { position: sticky; top: 1rem; }\n"
+    ) },
+    { name = "cp-map-svg"; tag = "svg"; css = "display: block; width: 100%; min-width: 720px; height: auto;" },
+    { name = "cp-map-compass"; tag = "g"; css = "stroke: #9be5df; stroke-opacity: .28; fill: none; pointer-events: none;" },
+    { name = "cp-map-gridline"; tag = "path"; css = "stroke: #9be5df; stroke-opacity: .11; fill: none;" },
+    { name = "cp-map-grid-dot"; tag = "circle"; css = "fill: #9be5df; fill-opacity: .28;" },
+    { name = "cp-map-zone"; tag = "rect"; css = concat(
+      "fill: #16434c; fill-opacity: .38; stroke: #427674; stroke-width: 1;\n",
+      "&[data-active=yes] { stroke: var(--amber); stroke-width: 2; }\n"
+    ) },
+    { name = "cp-map-label"; tag = "text"; css = "fill: #c0e3e2; font: 700 16px system-ui,sans-serif; pointer-events: none;" },
+    { name = "cp-map-edge"; tag = "path"; css = concat(
+      "fill: none; stroke: var(--relationship,#92b1b2); stroke-width: 1.3; opacity: .66; marker-end: url(#atlas-arrow); pointer-events: none;\n",
+      "&[data-relation=Qualifies] { stroke-dasharray: 3 3; }\n",
+      "&[data-relation=DependsOn] { stroke-dasharray: 6 3; }\n",
+      "&[data-active=yes] { stroke-width: 2.6; opacity: 1; }\n"
+    ) },
+    { name = "cp-map-edge-link"; tag = "a"; css = concat(
+      "cursor: pointer;\n",
+      ".cp-map &:is(:hover,:focus-visible) .cp-map-edge { opacity: 1; stroke-width: 3; }\n"
+    ) },
+    { name = "cp-map-edge-hit"; tag = "path"; css = "fill: none; stroke: transparent; stroke-width: 9; pointer-events: stroke;" },
+    { name = "cp-map-node"; tag = "a"; css = concat(
+      "cursor: pointer;\n",
+      "&:hover, &:focus-visible { opacity: 1 !important; outline: none; }\n",
+      "&:hover .cp-map-dot, &:focus-visible .cp-map-dot, &[aria-current] .cp-map-dot { fill: var(--amber); stroke: #fff3d8; stroke-width: 2.5; }\n",
+      "&[data-related=yes]:not([aria-current]) .cp-map-dot { fill: #9be5df; stroke: #fff; }\n"
+    ) },
+    { name = "cp-map-hit"; tag = "circle"; css = "fill: transparent; pointer-events: all;" },
+    { name = "cp-map-dot"; tag = "circle"; css = "fill: #0e3039; stroke: #8ce1d8; stroke-width: 1.6; pointer-events: none;" },
+    { name = "cp-map-legend"; tag = "ul"; css = concat(
+      "display: flex; flex-wrap: wrap; gap: .35rem 1rem; margin: .65rem 0 1rem;\n",
+      "& li { display: flex; align-items: center; gap: .4rem; margin: 0; padding: 0; border: 0; background: none; font-size: .78rem; }\n",
+      "& li::before { content: ''; width: 1.2rem; border-top: 2px solid var(--relationship); }\n",
+      "& li[data-relation=Qualifies]::before, & li[data-relation=DependsOn]::before { border-top-style: dashed; }\n"
+    ) },
+    { name = "cp-map-selection"; tag = "section"; css = concat(
+      "min-width: 0; margin: 0; padding: 1rem; background: #fffdf8; color: var(--ink); border-top: .25rem solid var(--amber);\n",
+      "& h3 { font-size: 1.2rem; line-height: 1.25; } & h4 { margin-bottom: .3rem; }\n",
+      "& li { display: grid; gap: .25rem; margin-block: .35rem; padding: .6rem; border: 1px solid #bed3cf; border-radius: 0; }\n",
+      "& small { color: var(--muted); } & li p { margin: 0; font-size: .88rem; }\n",
+      "& li:target { border-color: #a85d16; background: #fff1d4; }\n"
+    ) },
+    { name = "cp-atlas"; tag = "section"; css = concat(
+      "padding: clamp(1rem,4vw,2.5rem); margin: 0 0 1.5rem; background: #0c2d34; color: #effafa;\n",
+      "& h2 { font-size: clamp(1.45rem,3vw,2.2rem); }\n",
+      "& p { max-width: 64ch; color: #c0d7d8; }\n"
+    ) },
+    { name = "cp-regions"; tag = "ul"; css = concat(
+      "display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1px; margin: 1rem 0 0; background: #367d79;\n",
+      "@media (max-width: 780px) { grid-template-columns: repeat(2,minmax(0,1fr)); }\n",
+      "@media (max-width: 430px) { grid-template-columns: minmax(0,1fr); }\n"
+    ) },
+    { name = "cp-trail"; tag = "section"; css = concat(
+      "padding: 1rem var(--space); margin: 0; border-inline-start: .35rem solid var(--teal); background: #dcece8;\n",
+      "& h2 { margin-bottom: .2rem; font-size: 1.1rem; }\n",
+      "& p { margin-bottom: .3rem; }\n",
+      "& a { font-weight: 750; }\n"
+    ) },
+    { name = "cp-region"; tag = "li"; css = concat(
+      "margin: 0; border: 0; border-radius: 0; padding: 1rem; background: #10363e;\n",
+      "box-shadow: inset 0 3px var(--teal);\n",
+      "& a { color: #d5f9f5; } & a:focus-visible { outline-color: var(--amber); }\n",
+      "&:has([aria-current]) { box-shadow: inset 0 3px var(--amber); background: #18424a; }\n",
+      "& small { color: var(--teal-soft); }\n"
+    ) },
+    { name = "cp-comparison"; tag = "div"; css = concat(
+      "padding: .75rem 1rem; margin: .5rem 0; border-inline-start: .2rem solid var(--line);\n",
+      "background: var(--paper);\n"
+    ) },
+    { name = "cp-evidence-source"; tag = "pre"; css = "white-space: pre-wrap; overflow-wrap: anywhere; padding: 1rem; border: 1px solid var(--line); background: var(--panel);" }
+  )
+
+process claimipedia.design.stylesheet:
+  call claimipedia.design.components
+  let rules = map($result, "component", concat(".", $component.name, " {\n", $component.css, "\n}"))
+  port text.join { values = $rules; separator = "\n" } → css
+  call claimipedia.design.placements
+  fold $result as placement; slots starts list():
+    port text.join { values = at($placement, 1); separator = ", " } → parents
+    yield append($slots, list(concat(at($placement, 0), " in ", $parents))) → slots
+  port text.join { values = $slots; separator = "\n" } → contract
+  let result = concat("/* Approved component slots\n", $contract, "\n*/\n*{box-sizing:border-box}body{margin:0}\n", $css)
+
+process ui.styles:
+  call claimipedia.design.approvedStyles
+
+process claimipedia.design.approvedStyles:
+  call claimipedia.design.stylesheet
+  let stylesheet = $result
+  call claimipedia.design.approvalPin
+  let pin = $result
+  port digest.sha256 { text = $stylesheet } → actual
+  assert eq($actual, $pin)
+    otherwise "Claimipedia design: the stylesheet and placements require an updated approval."
+  let result = $stylesheet
+
+process claimipedia.design.approvalPin:
+  port application.data { name = "style-approval" } → facts
+  let pins = filter($facts, "fact", and(eq($fact.s, "claimipedia.design.baseline"), eq($fact.p, "stylesheetSha256"), eq($fact.pol, "is")))
+  assert eq(count($pins), 1)
+    otherwise "Claimipedia design: exactly one style approval is required."
+  let result = at(at($pins, 0), "o")
+
+# The approved slots for structural styles are independent of HTML tag names.
+process claimipedia.design.placements:
+  let result = list(
+    list("cp-shell", list("html")),
+    list("cp-brand", list("cp-shell")),
+    list("cp-skip", list("cp-shell")),
+    list("cp-main", list("cp-shell")),
+    list("cp-nav", list("cp-shell")),
+    list("cp-workspace-nav", list("cp-shell", "cp-main")),
+    list("cp-workspace-head", list("cp-main")),
+    list("cp-page-head", list("cp-main")),
+    list("cp-record-head", list("cp-main")),
+    list("cp-vitals", list("cp-record-head", "cp-workspace-head")),
+    list("cp-workspace-grid", list("cp-main")),
+    list("cp-workspace-panel", list("cp-main", "cp-workspace-grid")),
+    list("cp-panel", list("cp-main")),
+    list("cp-result", list("cp-results")),
+    list("cp-region", list("cp-regions")),
+    list("cp-map-layout", list("cp-map")),
+    list("cp-map-scroll", list("cp-map-layout")),
+    list("cp-map-svg", list("cp-map-scroll"))
+  )
+
+# Only these tags and attributes may reach the Claimipedia HTML serializer.
+process claimipedia.design.elements:
+  let result = {
+    html = list("lang");
+    head = list();
+    meta = list("charset", "name", "content");
+    title = list();
+    link = list("rel", "href");
+    body = list();
+    header = list();
+    nav = list("aria-label");
+    main = list("id", "tabindex");
+    section = list("id", "data-focused");
+    div = list("tabindex", "aria-label", "data-focused");
+    h1 = list();
+    h2 = list();
+    h3 = list();
+    h4 = list();
+    p = list("role");
+    span = list("data-state", "id");
+    strong = list();
+    small = list();
+    ol = list("aria-label");
+    dl = list("aria-label");
+    dt = list();
+    dd = list();
+    svg = list("xmlns", "viewBox", "width", "height", "aria-hidden", "aria-label");
+    defs = list();
+    pattern = list("id", "width", "height", "patternUnits");
+    marker = list("id", "viewBox", "refX", "refY", "markerWidth", "markerHeight", "orient");
+    ellipse = list("cx", "cy", "rx", "ry");
+    rect = list("x", "y", "width", "height", "data-active");
+    text = list("x", "y");
+    g = list("fill", "stroke-linecap", "stroke-linejoin");
+    path = list("d", "stroke", "stroke-width", "stroke-dasharray", "opacity", "fill", "data-relation", "data-active", "data-relationship");
+    circle = list("cx", "cy", "r", "fill");
+    a = list("href", "rel", "aria-current", "aria-label", "data-related", "tabindex");
+    ul = list("aria-label");
+    li = list("id", "data-relation");
+    form = list("method", "action", "aria-label");
+    label = list();
+    input = list("type", "name", "value", "maxlength", "min", "max", "step", "required", "aria-labelledby");
+    textarea = list("name", "maxlength", "required", "readonly", "rows", "aria-label", "aria-labelledby");
+    select = list("name", "required", "aria-labelledby");
+    option = list("value", "selected");
+    details = list();
+    summary = list();
+    pre = list("aria-label");
+    button = list("type")
+  }
+
+process claimipedia.design.check:
+  port value.describe { value = $node } → shape
+  when $shape.array:
+    each $node as child:
+      let node = $child
+      call claimipedia.design.check
+  when and(not($shape.array), not($shape.null), eq($shape.type, "object")):
+    port record.entries { value = $node } → fields
+    assert every($fields, "field", includes(list("tag", "attrs", "children"), at($field, 0)))
+      otherwise "Claimipedia design: undeclared element field."
+    port record.get { record = $elements; key = $node.tag } → allowed
+    assert not(eq($allowed, null))
+      otherwise "Claimipedia design: undeclared element."
+    let style = at($node.attrs, "class")
+    let tag = $node.tag
+    when $parentTag:
+      assert and(
+        or(not(includes(list("ul", "ol"), $parentTag)), eq($tag, "li")),
+        or(not(eq($tag, "li")), includes(list("ul", "ol"), $parentTag)),
+        or(not(eq($tag, "option")), eq($parentTag, "select")),
+        or(not(eq($tag, "summary")), eq($parentTag, "details")),
+        or(not(includes(list("p", "h1", "h2", "h3", "h4", "small", "strong"), $parentTag)), includes(list("a", "span", "small", "strong"), $tag)),
+        not(and($insideForm, eq($tag, "form"))),
+        not(and($insideLink, includes(list("a", "button", "input", "select", "textarea"), $tag)))
+      )
+        otherwise "Claimipedia design: invalid semantic nesting."
+    when eq($tag, "form"):
+      assert includes(list("cp-form", "cp-search-form"), $style)
+        otherwise "Claimipedia design: form requires an approved named style."
+    port record.entries { value = $node.attrs } → attrs
+    each $attrs as attr:
+      let name = at($attr, 0)
+      let value = at($attr, 1)
+      assert or(eq($name, "class"), includes($allowed, $name))
+        otherwise "Claimipedia design: undeclared attribute."
+      when eq($name, "class"):
+        port record.get { record = $components; key = $value } → componentTag
+        assert eq($componentTag, $node.tag)
+          otherwise "Claimipedia design: undeclared class for this element."
+        let slots = at($placements, $value)
+        when and($parentTag, $slots):
+          assert includes($slots, $parentSlot)
+            otherwise "Claimipedia design: named style is outside its approved parent."
+      let corpusItem = false
+      when includes(list("href", "action"), $name):
+        port text.slice { value = $value; start = 0; end = 34 } → reviewPrefix
+        when eq($reviewPrefix, "/steward/corpus-view/corpusReview."):
+          port text.slice { value = $value; start = 34; end = 160000 } → slug
+          port text.matches { value = $slug; pattern = "^[a-zA-Z][a-zA-Z0-9-]*$" } → corpusItem
+      when eq($name, "action"):
+        assert or(eq($value, "/"), and(eq($value, "/aster"), eq($node.attrs.method, "post")), $corpusItem)
+          otherwise "Claimipedia design: undeclared form action."
+      when and(eq($node.tag, "a"), eq($name, "href")):
+        port text.slice { value = $value; start = 0; end = 2 } → prefix
+        port text.matches { value = $value; pattern = "^https?://[^\\s]+$" } → web
+        port text.slice { value = $value; start = 0; end = 8 } → anchorPrefix
+        port text.slice { value = $value; start = 0; end = 9 } → stewardPrefix
+        port text.slice { value = $value; start = 0; end = 15 } → enterPrefix
+        port text.slice { value = $value; start = 0; end = 13 } → attachmentPrefix
+        assert or($web, $corpusItem, eq($attachmentPrefix, "/attachments/"), eq($anchorPrefix, "/#claim-"), eq($stewardPrefix, "/steward?"), eq($enterPrefix, "/steward/enter?"), includes(list("/", "#claim-content", "/aster", "/ecology", "/ecology#member.sourcery", "/ecology#member.temple", "/ecology#member.migration", "/ecology#ecology-handoffs", "/steward", "/steward/enter", "/steward/leave", "/steward/corpus-view", "../?view=atlas&focus=clm_GAMES_SHARED_FACT_SPACE_PROJECTION", "../?claim=clm_GAMES_SHARED_FACT_SPACE_PROJECTION"), $value), eq($prefix, "/?"))
+          otherwise "Claimipedia design: undeclared link destination."
+    when eq($node.tag, "link"):
+      assert and(eq($node.attrs.rel, "stylesheet"), eq($node.attrs.href, "/styles.css"))
+        otherwise "Claimipedia design: undeclared stylesheet."
+    let parentTag = $tag
+    let parentSlot = or($style, $tag)
+    let insideForm = or($insideForm, eq($tag, "form"))
+    let insideLink = or($insideLink, eq($tag, "a"))
+    let node = $node.children
+    call claimipedia.design.check
+  let result = true
+
+process claimipedia.design.render:
+  let input = $eventInput
+  let urlPrefix = ""
+  call claimipedia.design.project
+
+process claimipedia.design.project:
+  call claimipedia.design.components
+  port record.fromEntries { entries = map($result, "component", list($component.name, $component.tag)) } → components
+  call claimipedia.design.elements
+  let elements = $result
+  call claimipedia.design.placements
+  port record.fromEntries { entries = $result } → placements
+  let parentTag = ""
+  let parentSlot = ""
+  let insideForm = false
+  let insideLink = false
+  let node = $input
+  call claimipedia.design.check
+  call html.serialize
+  let result = concat("<!doctype html>", $result)
+
+process claimipedia.design.panel:
+  let spec = $eventInput
+  let result = { tag = "section"; attrs = { class = if(at($spec, "compact"), "cp-workspace-panel", "cp-panel") }; children = append(list(
+    { tag = "h2"; attrs = {}; children = list($spec.title) }
+  ), $spec.content) }
+
+process claimipedia.design.workspacePage:
+  let view = $eventInput
+  let heading = { tag = "header"; attrs = { class = "cp-workspace-head" }; children = list(
+    { tag = "h1"; attrs = {}; children = list($view.page.title) },
+    { tag = "p"; attrs = {}; children = list($view.page.summary) }
+  ) }
+  let page = { title = concat($view.page.title, " · Claimipedia"); nav = $view.page.nav; content = append(list($heading), $view.page.content) }
+  port kernel.invoke { query = "claimipedia.design.page"; input = { page = $page; notice = $view.notice; error = $view.error; urlPrefix = at($view, "urlPrefix") } } → result
+
+# Claimipedia identity v2 mark from the transferred claimipedia-mark.svg.
+process claimipedia.design.mark:
+  let result = { tag = "svg"; attrs = { "xmlns" = "http://www.w3.org/2000/svg"; "viewBox" = "0 0 256 300"; "aria-hidden" = "true" }; children = list({ tag = "g"; attrs = { "fill" = "none"; "stroke-linecap" = "round"; "stroke-linejoin" = "round" }; children = list({ tag = "path"; attrs = { "d" = "M128 18C88 26 51 36 23 50v83c0 72 37 123 105 160 68-37 105-88 105-160V50c-28-14-65-24-105-32Z"; "stroke" = "#25b8b0"; "stroke-width" = "6" }; children = list() },
+    { tag = "path"; attrs = { "d" = "M128 38C96 45 67 53 43 64v65c0 59 30 101 85 134 55-33 85-75 85-134V64c-24-11-53-19-85-26Z"; "stroke" = "#25b8b0"; "stroke-width" = "2"; "stroke-dasharray" = "8 7"; "opacity" = ".62" }; children = list() },
+    { tag = "path"; attrs = { "d" = "M48 119c35 1 49 31 80 40 37 10 61 6 87-12"; "stroke" = "#2fc4bc"; "stroke-width" = "7" }; children = list() },
+    { tag = "path"; attrs = { "d" = "M49 165c29-24 56-31 79-19 36 18 57 55 86 56"; "stroke" = "#31c8bf"; "stroke-width" = "7" }; children = list() },
+    { tag = "path"; attrs = { "d" = "M49 194c33-47 58-62 79-48 30 19 54 29 86 9"; "stroke" = "#ef9f16"; "stroke-width" = "7" }; children = list() },
+    { tag = "path"; attrs = { "d" = "M48 148c31-18 55-19 80-2 32 21 56 8 86-35"; "stroke" = "#ef9f16"; "stroke-width" = "7" }; children = list() }) },
+    { tag = "path"; attrs = { "d" = "m128 58 10 20 22 3-16 16 4 22-20-10-20 10 4-22-16-16 22-3Z"; "fill" = "#f5a51c" }; children = list() },
+    { tag = "circle"; attrs = { "cx" = "128"; "cy" = "90"; "r" = "5"; "fill" = "#fff8e7" }; children = list() }) }
+
+process claimipedia.design.page:
+  let view = $eventInput
+  call claimipedia.design.approvedStyles
+  let urlPrefix = at($view, "urlPrefix")
+  let head = { tag = "head"; attrs = {}; children = list(
+    { tag = "meta"; attrs = { charset = "utf-8" }; children = list() },
+    { tag = "meta"; attrs = { name = "viewport"; content = "width=device-width, initial-scale=1" }; children = list() },
+    { tag = "title"; attrs = {}; children = list($view.page.title) },
+    { tag = "link"; attrs = { rel = "stylesheet"; href = "/styles.css" }; children = list() }
+  ) }
+  let skip = { tag = "a"; attrs = { class = "cp-skip"; href = "#claim-content" }; children = list("Skip to content") }
+  call claimipedia.design.mark
+  let mark = $result
+  let lockup = { tag = "span"; attrs = {}; children = list(
+    { tag = "strong"; attrs = {}; children = list("Claimipedia") },
+    { tag = "small"; attrs = {}; children = list(if($urlPrefix, "Corpus stewardship", "Many perspectives. Reasons made visible.")) }
+  ) }
+  let brand = { tag = "header"; attrs = { class = "cp-brand" }; children = list(
+    { tag = "a"; attrs = { href = "/" }; children = list($mark, $lockup) },
+    { tag = "span"; attrs = {}; children = list(if($urlPrefix,
+      { tag = "a"; attrs = { href = "/steward/leave" }; children = list("Return to reader") },
+      if(at($view.page, "reader"), "Released corpus", "Steward workspace"))) }
+  ) }
+  let feedback = if($view.notice, { tag = "p"; attrs = { class = "cp-feedback"; role = if($view.error, "alert", "status") }; children = list($view.notice) }, null)
+  let main = { tag = "main"; attrs = { class = "cp-main"; id = "claim-content"; tabindex = -1 }; children = append(list($feedback), $view.page.content) }
+  let body = { tag = "body"; attrs = { class = "cp-shell" }; children = list($skip, $brand, $view.page.nav, $main) }
+  let input = { tag = "html"; attrs = { lang = "en" }; children = list($head, $body) }
+  call claimipedia.design.project

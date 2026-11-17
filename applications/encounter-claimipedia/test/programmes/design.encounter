@@ -1,0 +1,358 @@
+process-module "temple/surface-process-module/1"
+
+process test.design.claims-browser:
+  port browser.open { width = 1280; height = 900 } → opened
+  let page = $opened.page
+  port browser.observe { page = $page; locator = list({ role = "heading"; name = "Claims under inquiry" }); property = "count" } → heading
+  port browser.observe { page = $page; locator = list({ css = ".cp-results" }); property = "computed"; name = "display" } → layout
+  port browser.observe { page = $page; locator = list({ css = ".cp-brand a" }); property = "computed"; name = "color" } → brand
+  assert and(eq($opened.status, 200), eq($heading, 1), eq($layout, "grid"), eq($brand, "rgb(255, 255, 255)"))
+    otherwise "Claim search must use the Claimipedia shell and its loaded component stylesheet."
+  port browser.act { page = $page; action = "press"; value = "Tab" } → _
+  port browser.observe { page = $page; locator = list({ css = ".cp-skip:focus-visible" }); property = "count" } → focused
+  port browser.observe { page = $page; locator = list({ css = ".cp-skip:focus-visible" }); property = "computed"; name = "outline-width" } → outline
+  assert and(eq($focused, 1), eq($outline, "3px"))
+    otherwise "Keyboard entry must expose the skip link and visible focus."
+  port browser.act { page = $page; action = "press"; value = "Enter" } → _
+  port browser.observe { page = $page; locator = list({ css = "main:focus" }); property = "count" } → skipped
+  assert eq($skipped, 1)
+    otherwise "The skip link must move focus to the main content."
+  port browser.act { page = $page; action = "navigate"; value = "/?q=zz-no-such-claim-zz" } → empty
+  port browser.observe { page = $page; locator = list({ text = "No claims match. Try a claim identifier or a shorter phrase." }); property = "count" } → hint
+  assert and(eq($empty.status, 200), eq($hint, 1))
+    otherwise "The empty search result must give a recovery hint."
+  port browser.act { page = $page; action = "navigate"; value = "/?q=clm_01_RIVER_NITRATE" } → _
+  port browser.observe { page = $page; locator = list({ css = ".cp-result .cp-badge" }); property = "text" } → badge
+  assert eq($badge, "RELEASED CLAIM")
+    otherwise "Search must identify released wording."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "clm_01_RIVER_NITRATE" }); action = "click"; event = "navigation" } → detail
+  port browser.observe { page = $page; locator = list({ css = ".cp-panel" }); property = "count" } → panels
+  port browser.observe { page = $page; locator = list({ css = ".cp-notice" }); property = "text" } → boundary
+  assert and(eq($detail.status, 200), eq($panels, 4), eq($boundary, "Drafts and accepted working wording are private to this workspace. The released record above retains its published wording and evidence."))
+    otherwise "Claim detail must render shared panels and identify the local draft boundary."
+  port browser.act { page = $page; action = "resize"; width = 320; height = 760 } → _
+  port browser.observe { page = $page; property = "overflow" } → overflow
+  assert not($overflow)
+    otherwise "Claim detail must fit a narrow phone viewport."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Back to claim search" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; property = "overflow" } → overflow
+  assert not($overflow)
+    otherwise "Claim search must fit a narrow phone viewport."
+
+process test.design.refuses-outside-catalogue:
+  let entry = "claimipedia.design.render"
+  let grants = list("record.entries", "record.fromEntries", "record.get", "value.describe", "value.string", "value.type", "text.matches", "text.replaceAll", "text.join", "text.slice")
+  port front.open { grants = $grants } → front
+  let files = list("source/products/claimipedia/design.encounter", "algebra/html/html.serialize.encounter", "algebra/html/html.escape.encounter", "algebra/html/html.cssText.encounter")
+  fold $files as file; candidates starts list():
+    port file.text { file = $file } → text
+    port front.hydrate { front = $front; file = $file; text = $text } → hydration
+    yield append($candidates, list($hydration)) → candidates
+  port front.link { front = $front; candidates = $candidates; roots = list($entry) } → linked
+  port front.admit { front = $front; linked = $linked; entries = list($entry) } → admission
+  let cases = list(
+    { node = { tag = "p"; attrs = { class = "invented" }; children = list("probe") }; message = "Claimipedia design: undeclared class for this element." },
+    { node = { tag = "p"; attrs = { class = "cp-panel" }; children = list("probe") }; message = "Claimipedia design: undeclared class for this element." },
+    { node = { tag = "p"; attrs = { style = "margin:1px" }; children = list("probe") }; message = "Claimipedia design: undeclared attribute." },
+    { node = { tag = "form"; attrs = { action = "/" }; children = list() }; message = "Claimipedia design: form requires an approved named style." },
+    { node = { tag = "p"; attrs = {}; children = list({ tag = "ul"; attrs = {}; children = list() }) }; message = "Claimipedia design: invalid semantic nesting." },
+    { node = { tag = "ul"; attrs = {}; children = list({ tag = "div"; attrs = {}; children = list() }) }; message = "Claimipedia design: invalid semantic nesting." },
+    { node = { tag = "div"; attrs = {}; children = list({ tag = "section"; attrs = { class = "cp-workspace-panel" }; children = list() }) }; message = "Claimipedia design: named style is outside its approved parent." },
+    { node = { tag = "form"; attrs = { class = "cp-form"; action = "/" }; children = list({ tag = "div"; attrs = {}; children = list({ tag = "form"; attrs = { class = "cp-form"; action = "/" }; children = list() }) }) }; message = "Claimipedia design: invalid semantic nesting." },
+    { node = { tag = "style"; attrs = {}; children = list("p{color:red}") }; message = "Claimipedia design: undeclared element." },
+    { node = { tag = "link"; attrs = { rel = "stylesheet"; href = "/custom.css" }; children = list() }; message = "Claimipedia design: undeclared stylesheet." }
+  )
+  each $cases as probe:
+    let input = { tag = "section"; attrs = { class = "cp-panel" }; children = list(list($probe.node)) }
+    port observe.attempt { operation = "front.run"; arguments = { front = $front; admission = $admission; entry = $entry; input = $input } } → attempt
+    assert and(not($attempt.ok), eq($attempt.message, $probe.message))
+      otherwise "The shared renderer must refuse the exact out-of-contract nested element."
+
+process test.design.steward-collections-use-approved-shell:
+  port browser.open { width = 390; height = 844 } → opened
+  let page = $opened.page
+  each list("claims", "surfaces", "frontier", "research", "evidence", "evidence-library", "research-inbox", "checkpoints", "application-records") as collection:
+    port browser.act { page = $page; action = "navigate"; value = concat("/steward/?collection=", $collection) } → route
+    port browser.observe { page = $page; locator = list({ css = "body.cp-shell > main.cp-main > header.cp-workspace-head > h1" }); property = "computed"; name = "font-size" } → size
+    port browser.observe { page = $page; locator = list({ css = "form:not(.cp-form):not(.cp-search-form)" }); property = "count" } → unnamed
+    port browser.observe { page = $page; property = "overflow" } → overflow
+    assert and(eq($route.status, 200), eq($size, "27.2px"), eq($unnamed, 0), not($overflow))
+      otherwise "Every steward collection must use the same compact heading, named forms, and mobile-safe shell."
+
+process test.design.surface-index:
+  port browser.open { width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Surface index" }); action = "click"; event = "navigation" } → indexed
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Workspace collections" }, { role = "link" }); property = "count" } → collections
+  port browser.observe { page = $page; locator = list({ role = "link"; name = "Claimipedia on aaronalderman.com" }); property = "attribute"; name = "href" } → microsite
+  assert and(eq($indexed.status, 200), eq($collections, 9), eq($microsite, "https://aaronalderman.com/claimipedia/"))
+    otherwise "The index must distinguish the nine workspace collections from published surfaces."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Browse the historical surface register" }); action = "click"; event = "navigation" } → registered
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Historical surfaces" }, { role = "listitem" }); property = "count" } → entries
+  assert and(eq($registered.status, 200), eq($entries, 307))
+    otherwise "The historical view must show every registered surface."
+  port browser.act { page = $page; locator = list({ label = "Search by name, route, kind or status" }); action = "fill"; value = "Prepared journeys" } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Search" }); action = "click"; event = "navigation" } → filtered
+  port browser.observe { page = $page; locator = list({ role = "heading"; name = "Prepared journeys" }); property = "count" } → journeys
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Historical surfaces" }, { role = "link" }); property = "count" } → routeLinks
+  assert and(eq($filtered.status, 200), eq($journeys, 1), eq($routeLinks, 0))
+    otherwise "The register must be searchable and keep historical route evidence separate from launch links."
+
+process test.design.style-catalogue-and-deviation-review:
+  port browser.open { width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; action = "navigate"; value = "/steward/?collection=platform" } → _
+  let tabs = { role = "navigation"; name = "Manage Claimipedia sections" }
+  port browser.act { page = $page; locator = list($tabs, { role = "link"; name = "Style catalogue" }); action = "click"; event = "navigation" } → catalogue
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Approved style catalogue" }, { role = "link" }); property = "count" } → styles
+  port browser.observe { page = $page; locator = list({ text = "Approved direct parents · cp-main, cp-workspace-grid" }); property = "count" } → placements
+  port browser.observe { page = $page; locator = list({ role = "link"; name = "Steward workspace home" }); property = "attribute"; name = "href" } → example
+  assert and(eq($catalogue.status, 200), eq($styles, 48), eq($placements, 1), eq($example, "/steward/"))
+    otherwise "The catalogue must show the live approved registry, a valid example, and the selected style's actual parent slots."
+  port browser.act { page = $page; locator = list({ label = "Proposed deviation and affected surfaces" }); action = "fill"; value = "Use denser workspace panels for the research inbox." } → _
+  port browser.act { page = $page; locator = list({ label = "Why a deviation is needed" }); action = "fill"; value = "Make long queues easier to scan." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Propose style deviation" }); action = "click"; event = "navigation" } → proposed
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Proposed style deviations" }); property = "text" } → queue
+  assert and(eq($proposed.status, 200), includes($queue, "Awaiting review"))
+    otherwise "A proposal must enter the steward queue."
+  port browser.act { page = $page; locator = list({ label = "Review disposition" }); action = "select"; value = "Recommend for source approval" } → _
+  port browser.act { page = $page; locator = list({ label = "Review rationale" }); action = "fill"; value = "Compare keyboard and mobile behavior before changing the approved baseline." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Record style review" }); action = "click"; event = "navigation" } → reviewed
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Style review history" }, { role = "listitem" }); property = "count" } → history
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Proposed style deviations" }); property = "text" } → disposition
+  port browser.observe { page = $page; property = "overflow" } → overflow
+  assert and(eq($reviewed.status, 200), eq($history, 2), includes($disposition, "Recommend for source approval"), not($overflow))
+    otherwise "A local recommendation must retain both records and fit a phone-width workspace."
+
+process test.design.released-atlas-journey:
+  port browser.open { declaration = "products/claimipedia/reader.rel"; width = 390; height = 844 } → opened
+  let page = $opened.page
+  let statement = "A simulation makes a bounded world of assumptions, mechanisms, state transitions, interventions, and possible consequences inspectable; its value lies in disciplined counterfactual exploration rather than in pretending to reproduce the whole world."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Claim atlas" }); action = "click"; event = "navigation" } → atlas
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Definitional" }); action = "press"; value = "Enter"; event = "navigation" } → region
+  port browser.act { page = $page; locator = list({ role = "link"; name = $statement }); action = "click"; event = "navigation" } → detail
+  port browser.observe { page = $page; locator = list({ text = "/application-evidence/sourcery-game-loadout.jpg#sha256=b14a1e9271a173734c8d68211adcd3e3df29723132cc5e5519d9431768b8b0e5" }); property = "count" } → evidence
+  port browser.observe { page = $page; locator = list({ role = "button"; name = "Save draft revision" }); property = "count" } → draft
+  assert and(eq($opened.status, 200), eq($atlas.status, 200), eq($region.status, 200), eq($detail.status, 200), eq($evidence, 1), eq($draft, 0))
+    otherwise "A keyboard-accessible atlas region must open the released dossier and its evidence."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "clm_GAMES_SHARED_FACT_SPACE_PROJECTION" }); action = "click"; event = "navigation" } → related
+  port browser.observe { page = $page; locator = list({ role = "link"; name = "Back to the atlas" }); property = "attribute"; name = "href" } → back
+  assert and(eq($related.status, 200), eq($back, "/?view=atlas&region=Definitional#claim-clm_SIMULATION_COUNTERFACTUAL_EXPLORATION"))
+    otherwise "Following a released relationship must retain the starting atlas region and claim."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Back to the atlas" }); action = "click"; event = "navigation" } → returned
+  port browser.observe { page = $page; locator = list({ css = "#claim-clm_SIMULATION_COUNTERFACTUAL_EXPLORATION:target" }); property = "count" } → target
+  port browser.observe { page = $page; property = "overflow" } → overflow
+  assert and(eq($returned.status, 200), eq($target, 1), not($overflow))
+    otherwise "The atlas must restore the starting position on a phone."
+  port browser.act { page = $page; action = "navigate"; value = "/?q=bounded+world+of+assumptions" } → search
+  port browser.act { page = $page; locator = list({ role = "link"; name = $statement }); action = "click"; event = "navigation" } → detail
+  port browser.observe { page = $page; locator = list({ role = "link"; name = "Back to claim search" }); property = "attribute"; name = "href" } → back
+  assert and(eq($search.status, 200), eq($detail.status, 200), eq($back, "/?q=bounded%20world%20of%20assumptions#claim-clm_SIMULATION_COUNTERFACTUAL_EXPLORATION"))
+    otherwise "Search and atlas must return to the same canonical claim and restore their own filters."
+  port browser.act { page = $page; action = "navigate"; value = "/?collection=research-inbox" } → private
+  port browser.observe { page = $page; locator = list({ role = "alert" }); property = "text" } → notice
+  assert and(eq($private.status, 200), eq($notice, "Workspace collections open through the steward entry."))
+    otherwise "A direct reader URL must leave private collections outside the released projection."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Steward entry" }); action = "click"; event = "navigation" } → gate
+  port browser.observe { page = $page; locator = list({ role = "link"; name = "Enter the steward workspace" }); property = "attribute"; name = "href" } → enter
+  assert and(eq($gate.status, 200), eq($enter, "/steward/enter"))
+    otherwise "The public navigation must lead to the explicit steward entry."
+
+process test.design.steward-prefixed-workflow:
+  port browser.open { width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; action = "navigate"; value = "/steward/?claim=clm_01_RIVER_NITRATE" } → detail
+  port browser.observe { page = $page; locator = list({ role = "link"; name = "Surface index" }); property = "attribute"; name = "href" } → index
+  assert and(eq($detail.status, 200), eq($index, "/steward/?collection=surfaces"))
+    otherwise "The steward navigation must stay inside its own route prefix."
+  port browser.act { page = $page; locator = list({ label = "Draft statement" }); action = "fill"; value = "Local test wording for the steward route." } → _
+  port browser.act { page = $page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Verify the mounted steward workflow." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Save draft revision" }); action = "click"; event = "navigation" } → saved
+  port browser.observe { page = $page; locator = list({ role = "status" }); property = "text" } → notice
+  assert and(eq($saved.status, 200), eq($notice, "Draft version 2 saved."))
+    otherwise "A steward form must submit within the mounted workspace and save to its store."
+
+process test.design.steward-corpus-workspace:
+  port browser.open { width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; action = "navigate"; value = "/steward/" } → home
+  port browser.observe { page = $page; locator = list({ role = "heading"; name = "Corpus workspace" }); property = "count" } → heading
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Review priorities" }, { role = "link" }); property = "count" } → priorities
+  port browser.observe { page = $page; locator = list({ role = "navigation"; name = "Steward navigation" }, { role = "link" }); property = "count" } → navigation
+  port browser.observe { page = $page; property = "overflow" } → overflow
+  assert and(eq($home.status, 200), eq($heading, 1), eq($priorities, 2), eq($navigation, 5), not($overflow))
+    otherwise "The steward entry must open a compact, mobile-safe management home with review actions."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Invitation as third-order authority" }); action = "press"; value = "Enter"; event = "navigation" } → review
+  port browser.observe { page = $page; locator = list({ role = "heading"; name = "Invitation as third-order authority" }); property = "count" } → item
+  assert and(eq($review.status, 200), eq($item, 1))
+    otherwise "The steward can enter a concrete pending review directly from the home."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Workspace home" }); action = "click"; event = "navigation" } → _
+  port browser.act { page = $page; locator = list({ label = "Claim ID or wording" }); action = "fill"; value = "clm_01_RIVER_NITRATE" } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Find claim" }); action = "click"; event = "navigation" } → inventory
+  port browser.observe { page = $page; locator = list({ role = "heading"; name = "Claim records" }); property = "count" } → records
+  assert and(eq($inventory.status, 200), eq($records, 1))
+    otherwise "Searching from the workspace must open the steward claim inventory."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "clm_01_RIVER_NITRATE" }); action = "click"; event = "navigation" } → claim
+  port browser.observe { page = $page; locator = list({ css = "main > section:first-of-type > h2" }); property = "text" } → first
+  assert and(eq($claim.status, 200), eq($first, "Local working corpus and drafts"))
+    otherwise "Opening a claim in the workspace must put the draft workflow first."
+
+process test.design.platform-management:
+  port browser.open { width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; action = "navigate"; value = "/steward/" } → _
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Manage Claimipedia" }); action = "press"; value = "Enter"; event = "navigation" } → home
+  let tabs = { role = "navigation"; name = "Manage Claimipedia sections" }
+  port browser.act { page = $page; locator = list($tabs, { role = "link"; name = "Product roadmap" }); action = "click"; event = "navigation" } → roadmap
+  port browser.observe { page = $page; locator = list({ css = "ol[aria-label='Released product workstreams'] > li" }); property = "count" } → workstreams
+  port browser.observe { page = $page; locator = list({ css = "ul[aria-label='Recorded prerequisites'] > li" }); property = "count" } → dependencies
+  assert and(eq($home.status, 200), eq($roadmap.status, 200), eq($workstreams, 14), eq($dependencies, 9))
+    otherwise "The steward roadmap must show all released workstreams and their recorded prerequisites."
+  port browser.act { page = $page; locator = list($tabs, { role = "link"; name = "Capability audit" }); action = "click"; event = "navigation" } → audit
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Capability audit" }, { role = "listitem" }); property = "count" } → findings
+  assert and(eq($audit.status, 200), eq($findings, 10))
+    otherwise "The capability audit must list each sourced finding."
+  port browser.act { page = $page; locator = list($tabs, { role = "link"; name = "Self-Inquiry" }); action = "click"; event = "navigation" } → _
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Atlas relationship coverage" }); action = "click"; event = "navigation" } → detail
+  port browser.act { page = $page; locator = list({ label = "Local research note" }); action = "fill"; value = "Repeat the projection count after the next release." } → _
+  port browser.act { page = $page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Track a platform coverage follow-up." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Save local note" }); action = "click"; event = "navigation" } → saved
+  port browser.act { page = $page; locator = list($tabs, { role = "link"; name = "Self-Inquiry" }); action = "click"; event = "navigation" } → returned
+  port browser.observe { page = $page; locator = list({ text = "Steward note recorded" }); property = "count" } → note
+  port browser.observe { page = $page; property = "overflow" } → overflow
+  assert and(eq($detail.status, 200), eq($saved.status, 200), eq($returned.status, 200), eq($note, 1), not($overflow))
+    otherwise "A steward must be able to record a local follow-up on a platform observation at phone width."
+
+process test.design.spatial-claim-atlas:
+  port browser.open { declaration = "products/claimipedia/reader.rel"; width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Claim atlas" }); action = "click"; event = "navigation" } → atlas
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-node" }); property = "count" } → stations
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-edge" }); property = "count" } → edges
+  assert and(eq($atlas.status, 200), eq($stations, 119), eq($edges, 87))
+    otherwise "The atlas must draw a station for each released claim and a line for each released relationship."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "A simulation makes a bounded world of assumptions, mechanisms, state transitions, interventions, and possible consequences inspectable; its value lies in disciplined counterfactual exploration rather than in pretending to reproduce the whole world. · Definitional" }); action = "press"; value = "Enter"; event = "navigation" } → focus
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-edge[data-active=yes]" }); property = "count" } → active
+  port browser.observe { page = $page; locator = list({ text = "Outgoing Qualifies" }); property = "count" } → outgoing
+  assert and(eq($focus.status, 200), eq($active, 2), eq($outgoing, 1))
+    otherwise "A focused station must expose the released direction and highlight its two incident relationships."
+  port browser.act { page = $page; locator = list({ role = "list"; name = "Connected claims on the atlas" }, { role = "link"; name = "One governed fact space can support factual views, deliberate simplifications, simulations, gamified explanations, and games through shared state-transition and projection architecture while preserving their different epistemic statuses." }); action = "click"; event = "navigation" } → neighbour
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-node[aria-current=location]" }); property = "attribute"; name = "aria-label" } → selected
+  assert and(eq($neighbour.status, 200), eq($selected, "One governed fact space can support factual views, deliberate simplifications, simulations, gamified explanations, and games through shared state-transition and projection architecture while preserving their different epistemic statuses. · Descriptive"))
+    otherwise "Following a relationship must move selection to the connected claim on the same atlas."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Open released claim and evidence" }); action = "click"; event = "navigation" } → dossier
+  port browser.observe { page = $page; locator = list({ role = "link"; name = "Back to the atlas" }); property = "attribute"; name = "href" } → back
+  assert and(eq($dossier.status, 200), eq($back, "/?view=atlas&focus=clm_GAMES_SHARED_FACT_SPACE_PROJECTION#atlas-map"))
+    otherwise "The dossier must carry the map selection on the return route."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Back to the atlas" }); action = "click"; event = "navigation" } → returned
+  port browser.observe { page = $page; property = "overflow" } → overflow
+  assert and(eq($returned.status, 200), not($overflow))
+    otherwise "The map must scroll within its frame at phone width."
+
+process test.design.atlas-map-modes:
+  port browser.open { declaration = "products/claimipedia/reader.rel"; width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; action = "navigate"; value = "/?view=atlas&region=Causal" } → atlas
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Dependencies" }); action = "click"; event = "navigation" } → dependencies
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-edge[data-relation=DependsOn]" }); property = "count" } → links
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-edge:not([data-relation=DependsOn])" }); property = "count" } → unrelated
+  assert and(eq($atlas.status, 200), eq($dependencies.status, 200), eq($links, 15), eq($unrelated, 0))
+    otherwise "The dependency overview must draw the six relationship records and nine direct dependency facts."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "A schema-valid answer can still be wrong: type safety and bounded execution do not confer truth, wisdom, or moral authority. · Definitional" }); action = "press"; value = "Enter"; event = "navigation" } → focus
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-zone" }); property = "count" } → lanes
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-edge" }); property = "count" } → incident
+  port browser.observe { page = $page; locator = list({ role = "link"; name = "Open released claim and evidence" }); property = "attribute"; name = "href" } → dossier
+  assert and(eq($focus.status, 200), eq($lanes, 3), eq($incident, 1), eq($dossier, "/?view=atlas&region=Causal&map=dependencies&focus=clm_WRW_SCHEMA_TRUTH&from=clm_WRW_SCHEMA_TRUTH&claim=clm_WRW_SCHEMA_TRUTH"))
+    otherwise "Focus must lay out the three direction lanes and retain region and map choice for the dossier."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Revision lineage" }); action = "click"; event = "navigation" } → lineage
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-node[aria-current=location]" }); property = "count" } → selected
+  port browser.observe { page = $page; locator = list({ text = "This claim has no released connections in this map." }); property = "count" } → empty
+  assert and(eq($lineage.status, 200), eq($selected, 1), eq($empty, 1))
+    otherwise "Changing maps must preserve the station and show when it has no matching links."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Clear selection" }); action = "click"; event = "navigation" } → overview
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-edge[data-relation=Supersedes]" }); property = "count" } → successors
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Arguments" }); action = "click"; event = "navigation" } → arguments
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-edge" }); property = "count" } → reasons
+  assert and(eq($overview.status, 200), eq($successors, 2), eq($arguments.status, 200), eq($reasons, 70))
+    otherwise "The lineage and argument maps must show their own released relationship sets."
+
+process test.design.reader-retires-north-river-fixture:
+  port browser.open { declaration = "products/claimipedia/reader.rel"; width = 390; height = 844 } → opened
+  let page = $opened.page
+  each list("clm_01_RIVER_NITRATE", "clm_02_RIVER_FLOW", "clm_03_INSTRUMENT_CALIBRATION") as id:
+    port browser.act { page = $page; action = "navigate"; value = concat("/?claim=", $id) } → detail
+    port browser.observe { page = $page; locator = list({ role = "alert" }); property = "text" } → unavailable
+    assert and(eq($detail.status, 200), eq($unavailable, "No claim in this reader has that identifier."))
+      otherwise "A historical fixture URL must resolve to the reader's unavailable-claim state."
+  port browser.act { page = $page; action = "navigate"; value = "/?q=North+River" } → search
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Released claims" }, { role = "listitem" }); property = "count" } → results
+  assert and(eq($search.status, 200), eq($results, 0))
+    otherwise "The public search must exclude the fixture."
+  port browser.act { page = $page; action = "navigate"; value = "/?view=atlas&map=dependencies&focus=clm_01_RIVER_NITRATE" } → atlas
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-edge" }); property = "count" } → edges
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-node[aria-current=location]" }); property = "count" } → focus
+  assert and(eq($atlas.status, 200), eq($edges, 15), eq($focus, 0))
+    otherwise "The old atlas selection must open the overview without the three fixture dependencies."
+  port browser.act { page = $page; action = "navigate"; value = "/?view=atlas" } → overview
+  port browser.observe { page = $page; locator = list({ role = "link"; name = "Follow the simulation trail" }); property = "count" } → trail
+  assert and(eq($overview.status, 200), eq($trail, 1))
+    otherwise "The first trail must lead into the visible corpus."
+
+process test.design.relationship-records-and-parallel-paths:
+  port browser.open { declaration = "products/claimipedia/reader.rel"; width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; action = "navigate"; value = "/?view=atlas&map=arguments&focus=clm_GRAND_THESIS_SPIN_2_3" } → atlas
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-edge[data-relationship=REL_PHYSICS_SPECULATIVE_ONTOLOGICAL_DUAL_BREAKS]" }); property = "attribute"; name = "d" } → first
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-edge[data-relationship=REL_PHYSICS_SPIN23_WEINSTEIN_GEOMETRIC_UNITY]" }); property = "attribute"; name = "d" } → parallel
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-edge[data-relationship=rel_GT_03_TEMPLE_SPIN]" }); property = "attribute"; name = "d" } → reciprocal
+  port text.indexOf { value = $reciprocal; search = " Q " } → curve
+  assert and(eq($atlas.status, 200), $first, $parallel, not(eq($first, $parallel)), not(eq($curve, -1)))
+    otherwise "Parallel and reciprocal records must draw separate curves."
+  port browser.observe { page = $page; locator = list({ role = "link"; name = "Qualifies · REL_PHYSICS_SPECULATIVE_ONTOLOGICAL_DUAL_BREAKS" }); property = "attribute"; name = "href" } → href
+  port browser.act { page = $page; action = "navigate"; value = $href } → _
+  port browser.observe { page = $page; locator = list({ css = "#atlas-relationship-REL_PHYSICS_SPECULATIVE_ONTOLOGICAL_DUAL_BREAKS:target" }); property = "text" } → reason
+  port text.indexOf { value = $reason; search = "Speculative ontological correspondence" } → boundary
+  assert not(eq($boundary, -1))
+    otherwise "A line must lead to the matching relationship and its recorded reason."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Open released claim and evidence" }); action = "click"; event = "navigation" } → dossier
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Released connections" }); property = "text" } → reasons
+  port text.indexOf { value = $reasons; search = "Discovery/provenance projection" } → provenance
+  assert and(eq($dossier.status, 200), not(eq($provenance, -1)))
+    otherwise "A dossier must show the source record's reason alongside the relationship type."
+
+process test.design.direct-released-relationships:
+  port browser.open { declaration = "products/claimipedia/reader.rel"; width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; action = "navigate"; value = "/?view=atlas&map=dependencies&focus=clm_CLAIMIPEDIA_WS2_PROJECTION" } → atlas
+  port browser.observe { page = $page; locator = list({ css = ".cp-map-edge" }); property = "count" } → edges
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Connected claims on the atlas" }, { text = "The release explicitly records that the source claim depends on the target." }); property = "count" } → provenance
+  assert and(eq($atlas.status, 200), eq($edges, 2), eq($provenance, 2))
+    otherwise "The focused workstream must show incoming and outgoing released dependency facts."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Open released claim and evidence" }); action = "click"; event = "navigation" } → dossier
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Released connections" }, { role = "link"; name = "clm_CLAIMIPEDIA_WS1_CORPUS" }); property = "count" } → dependency
+  assert and(eq($dossier.status, 200), eq($dependency, 1))
+    otherwise "The released dossier must link to the workstream's dependency."
+
+process test.design.corpus-review-queue:
+  port browser.open { width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; action = "navigate"; value = "/steward/corpus-view" } → queue
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Corpus review queue" }, { role = "link" }); property = "count" } → items
+  port browser.observe { page = $page; locator = list({ role = "navigation"; name = "Steward navigation" }, { role = "link"; name = "Corpus review" }); property = "attribute"; name = "aria-current" } → current
+  port browser.observe { page = $page; locator = list({ css = "header.cp-workspace-head h1" }); property = "text" } → heading
+  assert and(eq($queue.status, 200), eq($items, 28), eq($current, "page"), eq($heading, "Corpus review"))
+    otherwise "The canonical queue must show every audit item in the shared steward shell."
+  port browser.observe { page = $page; locator = list({ role = "link"; name = "Invitation as third-order authority" }); property = "attribute"; name = "href" } → itemLink
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Invitation as third-order authority" }); action = "click"; event = "navigation" } → detail
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Released claims in review order" }, { role = "link" }); property = "count" } → endpoints
+  port browser.observe { page = $page; locator = list({ css = "form.cp-form" }); property = "attribute"; name = "action" } → formAction
+  assert and(eq($detail.status, 200), eq($endpoints, 2), eq($itemLink, "/steward/corpus-view/corpusReview.ai-invitation"), eq($formAction, $itemLink))
+    otherwise "A proposed relationship and its note form must use the same stable item path."
+  port browser.act { page = $page; locator = list({ label = "Local research note" }); action = "fill"; value = "Check the scope of invitation before recording a relationship." } → _
+  port browser.act { page = $page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Steward review of this candidate." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Save local note" }); action = "click"; event = "navigation" } → saved
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Back to the corpus review queue" }); action = "click"; event = "navigation" } → returned
+  port browser.observe { page = $page; locator = list({ text = "Review note recorded"; exact = false }); property = "count" } → reviewed
+  port browser.observe { page = $page; property = "overflow" } → overflow
+  assert and(eq($saved.status, 200), eq($returned.status, 200), eq($reviewed, 1), not($overflow))
+    otherwise "A steward's local note must persist against the exact queue item."

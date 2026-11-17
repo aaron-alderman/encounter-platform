@@ -1,0 +1,102 @@
+process-module "temple/surface-process-module/1"
+
+process claimipedia.publicationContext:
+  let input = $eventInput
+  let rows = at($input.state, "publication")
+  let rows = if($rows, $rows, list())
+  let working = $input.lineage.working
+  let payload = null
+  let pin = ""
+  let approval = null
+  let staged = null
+  when and($working, not($input.lineage.pending)):
+    let payload = {
+      protocol = "claimipedia/editorial-publication-candidate/1"; claim = $input.claim.id;
+      releasedVersion = $input.claim.version; revision = $working.id; previous = $working.previous;
+      statement = $working.statement; scope = $working.scope;
+      scientificAdmission = false; publicationAuthorized = false
+    }
+    port rel.encode { value = $payload; kind = "ClaimipediaPublicationCandidate" } → bytes
+    port digest.sha256 { text = $bytes } → pin
+    let matching = filter($rows, "row", and(eq($row.claim, $input.claim.id), eq($row.revision, $working.id), eq($row.sha256, $pin)))
+    let approval = at(filter($matching, "row", eq($row.kind, "editorial-approval")), 0)
+    let staged = at(filter($matching, "row", eq($row.kind, "publication-candidate")), 0)
+  let result = { rows = $rows; payload = $payload; pin = $pin; approval = $approval; staged = $staged }
+
+process claimipedia.publicationSave:
+  let change = $eventInput
+  let request = $change.request
+  let fields = $request.fields
+  let operator = at($request, "operator")
+  let approving = eq($fields.action, "approve-publication")
+  assert and($change.claim, at($operator, "id"), eq(at($operator, "role"), if($approving, "reviewer", "curator")))
+    otherwise "A verified operator with the required editorial role must record this decision."
+  port scalar.read { text = $fields.base } → base
+  port kernel.invoke { query = "claimipedia.lineage"; input = $change } → lineage
+  port kernel.invoke { query = "claimipedia.publicationContext"; input = { state = $change.state; lineage = $lineage; claim = $change.claim } } → context
+  let reviewed = { revision = at($fields, "revision"); sha256 = at($fields, "pin") }
+  let candidate = { revision = at($context.payload, "revision"); sha256 = $context.pin }
+  let approval = $context.approval
+  let approved = or($approving, and(not(eq(at($approval, "id"), at({}, "absent"))), eq(at($approval, "id"), at($fields, "approval")), not(eq(at($approval, "operator"), $operator.id))))
+  port kernel.invoke { query = "guarded.review"; input = { base = $base; head = $change.snapshot.revision; reviewed = $reviewed; candidate = $candidate; approved = if($approved, true, false) } } → guard
+  assert $guard.current
+    otherwise "The draft store changed. Reopen the claim and try again."
+  assert $context.payload
+    otherwise "Only the current locally accepted revision can enter publication review."
+  assert $guard.exact
+    otherwise "The publication revision or its content changed. Reopen the claim and review it again."
+  assert $guard.allowed
+    otherwise "The exact revision needs independent editorial approval before staging."
+  assert if($approving, not($approval), not($context.staged))
+    otherwise "That exact editorial decision is already recorded."
+  port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "reason"); limit = 800 } } → reason
+  let kind = if($approving, "editorial-approval", "publication-candidate")
+  let record = {
+    id = concat($kind, ".", $request.nonce); kind = $kind; claim = $change.claim.id;
+    revision = $candidate.revision; sha256 = $candidate.sha256; operator = $operator.id;
+    reason = $reason; scientificAdmission = false; publicationAuthorized = false
+  }
+  when not($approving):
+    port record.put { record = $record; key = "approval"; value = $approval.id } → record
+    port record.put { record = $record; key = "payload"; value = $context.payload } → record
+  port record.put { record = $change.state; key = "publication"; value = append(list($record), $context.rows) } → state
+  let notice = if($approving, "Editorial approval recorded for this exact revision.", "Private publication candidate staged.")
+  port kernel.invoke { query = "claimipedia.commit"; input = { request = $request; state = $state; base = $base; reason = $reason; target = $candidate.revision; notice = $notice } } → result
+
+process claimipedia.publicationView:
+  let input = $eventInput
+  let screen = $input.screen
+  let claim = $screen.selected
+  let role = at($screen, "operatorRole")
+  let result = list()
+  when $input.lineage.working:
+    port kernel.invoke { query = "claimipedia.publicationContext"; input = { state = $screen.state; lineage = $input.lineage; claim = $claim } } → context
+    let result = list(
+      { tag = "h3"; attrs = {}; children = list("Editorial publication review") },
+      { tag = "p"; attrs = {}; children = list("Staging records a private publication candidate. Scientific admission and public release require separate authority.") }
+    )
+    when not($context.payload):
+      let result = append($result, list({ tag = "p"; attrs = {}; children = list("Resolve the pending draft before reviewing a publication candidate.") }))
+    when $context.payload:
+      let approval = $context.approval
+      let status = if($context.staged, "Private candidate staged", if($approval, "Editorial approval recorded", "Editorial approval required"))
+      let result = append($result, list({ tag = "p"; attrs = {}; children = list(concat($status, " · ", $context.payload.revision)) }))
+      when $context.staged:
+        port kernel.invoke { query = "claimipedia.admissionHandoffView"; input = { screen = $screen; publication = $context } } → handoff
+        let result = append($result, $handoff)
+      let approving = and(eq($role, "reviewer"), not($approval))
+      let staging = and(eq($role, "curator"), not($context.staged))
+      when or($approving, $staging):
+        let action = if($approving, "approve-publication", "stage-publication")
+        let button = if($approving, "Approve for private staging", "Stage publication candidate")
+        let reason = { name = "reason"; label = "Editorial decision reason"; type = "text"; maxlength = 800; required = true }
+        port kernel.invoke { query = "portfolio.field"; input = { field = $reason; labelId = "editorial-decision-reason" } } → control
+        let fields = list(
+          { tag = "input"; attrs = { type = "hidden"; name = "target"; value = $claim.id }; children = list() },
+          { tag = "input"; attrs = { type = "hidden"; name = "revision"; value = $context.payload.revision }; children = list() },
+          { tag = "input"; attrs = { type = "hidden"; name = "pin"; value = $context.pin }; children = list() },
+          { tag = "input"; attrs = { type = "hidden"; name = "approval"; value = if($approval, $approval.id, "") }; children = list() },
+          $control
+        )
+        port kernel.invoke { query = "work.form"; input = { csrf = $screen.csrf; revision = $screen.revision; action = $action; fields = $fields; button = $button; style = "cp-form" } } → form
+        let result = append($result, list($form))

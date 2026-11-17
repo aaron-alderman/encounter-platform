@@ -1,0 +1,20 @@
+process-module "temple/surface-process-module/1"
+
+process test.boundary.one-suite:
+  port file.names {} → files
+  each $files as entry:
+    port text.lowerCase { value = $entry.file } → file
+    port diagnostic.context { value = $entry.file } → ignored
+    assert not($entry.link)
+      otherwise "Verification must inventory ordinary application files."
+    port text.matches { value = $file; pattern = "\\.(?:mjs|json)(?:\\.|$)|\\.(?:js|cjs|ts)\\.(?:txt|bak|old|disabled|rel)$" } → forbidden
+    assert not($forbidden)
+      otherwise "The worktree contains a forbidden file or renamed executable."
+    port text.matches { value = $file; pattern = "^(?:test/.*\\.(?:cjs|js|ts))$|\\.(?:test|spec)\\.(?:cjs|js|ts)$" } → nativeTest
+    when $nativeTest:
+      assert includes(list("test/run.cjs", "test/transport.cjs", "test/browser-transport.cjs"), $file)
+        otherwise "The application contains a native test entry point."
+      port file.text { file = $entry.file } → source
+      port text.matches { value = $source; pattern = "['\"](?:node:)?(?:assert|test)(?:/strict)?['\"]" } → assertion
+      assert not($assertion)
+        otherwise "Test transport must leave all pass and refusal decisions to Encounter."

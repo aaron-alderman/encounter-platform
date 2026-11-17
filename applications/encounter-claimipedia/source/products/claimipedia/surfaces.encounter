@@ -1,0 +1,106 @@
+process-module "temple/surface-process-module/1"
+
+# These public entry points are kept separately from the historical route
+# catalogue. A route in the catalogue does not confer publication access.
+process claimipedia.surface.publicEntries:
+  let result = list(
+    { href = "https://claimipedia.com/"; label = "Claimipedia release assurance"; summary = "The public entry point and release boundary." },
+    { href = "https://claimipedia.com/assurance/kenotic"; label = "Kenotic assurance"; summary = "The published assurance reader." },
+    { href = "https://claimipedia.com/assurance/kenotic/story"; label = "The story"; summary = "The narrative entrance to the assurance sequence." },
+    { href = "https://claimipedia.com/assurance/kenotic/curiosity"; label = "Curiosity"; summary = "The published curiosity surface." },
+    { href = "https://claimipedia.com/assurance/kenotic/authoring"; label = "Authoring"; summary = "The published authoring surface." },
+    { href = "https://claimipedia.com/assurance/kenotic/relationship"; label = "Relationship"; summary = "The published relationship surface." },
+    { href = "https://claimipedia.com/articles/spin-3-2-from-first-principles"; label = "Spin(3,2) from first principles"; summary = "The published research article." },
+    { href = "https://claimipedia.com/articles/spin-2-3-from-first-principles"; label = "Spin(2,3) from first principles"; summary = "The published research article." },
+    { href = "https://claimipedia.com/letters/eric-weinstein"; label = "Letter to Eric Weinstein"; summary = "The published correspondence surface." },
+    { href = "https://aaronalderman.com/claimipedia/"; label = "Claimipedia on aaronalderman.com"; summary = "The separate public introduction and worked claim example." }
+  )
+
+process claimipedia.surface.links:
+  let result = { tag = "ul"; attrs = { "aria-label" = $eventInput.label }; children = map($eventInput.entries, "entry", {
+    tag = "li"; attrs = {}; children = list(
+      { tag = "h3"; attrs = {}; children = list({ tag = "a"; attrs = { href = $entry.href }; children = list($entry.label) }) },
+      { tag = "p"; attrs = {}; children = list($entry.summary) }
+    )
+  }) }
+
+process claimipedia.surface.field:
+  let field = $eventInput.field
+  let facts = filter($eventInput.facts, "fact", eq($fact.p, $field))
+  port record.fromEntries { entries = map($facts, "fact", list($fact.s, $fact.o)) } → result
+
+process claimipedia.surface.catalogue:
+  let request = $eventInput
+  port application.data { name = "surface-register" } → raw
+  let facts = filter($raw, "fact", eq($fact.pol, "is"))
+  let subjects = map(filter($facts, "fact", and(eq($fact.p, "isa"), eq($fact.o, "ContentSurface"))), "fact", $fact.s)
+  port kernel.invoke { query = "claimipedia.surface.field"; input = { facts = $facts; field = "title" } } → titles
+  port kernel.invoke { query = "claimipedia.surface.field"; input = { facts = $facts; field = "canonicalPath" } } → paths
+  port kernel.invoke { query = "claimipedia.surface.field"; input = { facts = $facts; field = "routeType" } } → types
+  port kernel.invoke { query = "claimipedia.surface.field"; input = { facts = $facts; field = "semanticKind" } } → kinds
+  port kernel.invoke { query = "claimipedia.surface.field"; input = { facts = $facts; field = "lifecycle" } } → lifecycles
+  port kernel.invoke { query = "claimipedia.surface.field"; input = { facts = $facts; field = "visibility" } } → visibility
+  let rawQuery = at($request.fields, "q")
+  port text.trim { value = if($rawQuery, $rawQuery, "") } → query
+  port text.slice { value = $query; start = 0; end = 180 } → query
+  port text.lowerCase { value = $query } → needle
+  fold $subjects as subject; matches starts list():
+    let item = { title = at($titles, $subject); path = at($paths, $subject); routeType = at($types, $subject); kind = at($kinds, $subject); lifecycle = at($lifecycles, $subject); visibility = at($visibility, $subject) }
+    port text.lowerCase { value = concat($item.title, " ", $item.path, " ", $item.kind, " ", $item.routeType, " ", $item.lifecycle, " ", $item.visibility) } → text
+    port text.indexOf { value = $text; search = $needle } → index
+    yield if(eq($index, -1), $matches, append($matches, list($item))) → matches
+  let form = { tag = "form"; attrs = { method = "get"; action = "/"; class = "cp-search-form"; "aria-label" = "Search the historical register" }; children = list(
+    { tag = "input"; attrs = { type = "hidden"; name = "collection"; value = "surfaces" }; children = list() },
+    { tag = "input"; attrs = { type = "hidden"; name = "catalogue"; value = "legacy" }; children = list() },
+    { tag = "label"; attrs = {}; children = list("Search by name, route, kind or status", { tag = "input"; attrs = { type = "search"; name = "q"; value = $query; maxlength = 180 }; children = list() }) },
+    { tag = "button"; attrs = { type = "submit" }; children = list("Search") }
+  ) }
+  let summary = { tag = "p"; attrs = {}; children = list(concat(count($matches), " of ", count($subjects), " registered surfaces")) }
+  let rows = { tag = "ul"; attrs = { class = "cp-results"; "aria-label" = "Historical surfaces" }; children = map($matches, "item", {
+    tag = "li"; attrs = { class = "cp-result" }; children = list(
+      { tag = "div"; attrs = {}; children = list(
+        { tag = "h2"; attrs = {}; children = list($item.title) },
+        { tag = "p"; attrs = {}; children = list($item.path) }
+      ) },
+      { tag = "div"; attrs = {}; children = list(
+        { tag = "span"; attrs = { class = "cp-badge" }; children = list($item.lifecycle) },
+        { tag = "small"; attrs = {}; children = list(concat($item.kind, " · ", $item.routeType, " · ", $item.visibility)) }
+      ) }
+    )
+  }) }
+  let result = list($form, $summary, $rows)
+
+process claimipedia.surfaces:
+  let request = $eventInput
+  let legacy = eq(at($request.fields, "catalogue"), "legacy")
+  let title = if($legacy, "Historical surface register", "Surface index")
+  let lede = if($legacy, "Browse the transferred Claimipedia registry. Route types and visibility describe the historical record.", "Open a collection in this workspace, view a published surface, or look up a route in the historical Claimipedia register.")
+  let hero = { tag = "header"; attrs = { class = "cp-workspace-head" }; children = list(
+    { tag = "h1"; attrs = {}; children = list($title) },
+    { tag = "p"; attrs = {}; children = list($lede) }
+  ) }
+  let content = list()
+  when $legacy:
+    port kernel.invoke { query = "claimipedia.surface.catalogue"; input = $request } → catalogue
+    let back = { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = "/?collection=surfaces" }; children = list("Back to the surface index") }) }
+    let content = append(list($back), $catalogue)
+  when not($legacy):
+    call claimipedia.collectionEntries
+    port kernel.invoke { query = "claimipedia.surface.links"; input = { label = "Workspace collections"; entries = $result } } → workspace
+    port kernel.invoke { query = "claimipedia.design.panel"; input = { compact = true; title = "Editable workspace"; content = list($workspace) } } → editable
+    call claimipedia.surface.publicEntries
+    port kernel.invoke { query = "claimipedia.surface.links"; input = { label = "Published surfaces"; entries = $result } } → publicLinks
+    port kernel.invoke { query = "claimipedia.design.panel"; input = { compact = true; title = "Published surfaces"; content = list($publicLinks) } } → published
+    let status = { tag = "p"; attrs = { class = "cp-notice" }; children = list("The public release gate currently limits access to routes such as the original Claims, Journeys and Learning surfaces.") }
+    let browse = { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = "/?collection=surfaces&catalogue=legacy" }; children = list("Browse the historical surface register") }) }
+    port kernel.invoke { query = "claimipedia.design.panel"; input = { compact = true; title = "Historical interface register"; content = list($status, $browse) } } → registry
+    let content = list($editable, $published, $registry)
+    when eq($request.path, "/steward/"):
+      port kernel.invoke { query = "claimipedia.ecology.links"; input = "" } → ecologyLinks
+      let tools = { tag = "ul"; attrs = { "aria-label" = "Ecology tools" }; children = map($ecologyLinks, "link", { tag = "li"; attrs = {}; children = list($link) }) }
+      port kernel.invoke { query = "claimipedia.design.panel"; input = { compact = true; title = "Ecology and orientation"; content = list($tools) } } → ecology
+      let content = append($content, list($ecology))
+  port kernel.invoke { query = "claimipedia.collections"; input = { design = true; path = $request.path; current = "/?collection=surfaces" } } → nav
+  let page = { title = concat($title, " · Claimipedia"); nav = $nav; content = append(list($hero), $content) }
+  port kernel.invoke { query = "claimipedia.design.page"; input = { page = $page; notice = ""; error = false; urlPrefix = if(eq($request.path, "/steward/"), "/steward", "") } } → html
+  let result = { html = $html; session = $request.session }

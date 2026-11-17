@@ -1,0 +1,53 @@
+process-module "temple/surface-process-module/1"
+
+# Worldwright's atlas geography (region cards, first trails, and region bearing)
+# projected onto released Claimipedia claim types. These regions describe the
+# kind of proposition, never its status, truth or strength of evidence.
+process claimipedia.atlas.regions:
+  let result = list(
+    { type = "Descriptive"; x = 18; y = 25; question = "What is reported to be the case?" },
+    { type = "Causal"; x = 345; y = 25; question = "What is said to make a difference?" },
+    { type = "Predictive"; x = 672; y = 25; question = "What is expected to happen?" },
+    { type = "Definitional"; x = 18; y = 258; question = "What do these terms mean here?" },
+    { type = "Procedural"; x = 345; y = 258; question = "How is the work meant to proceed?" },
+    { type = "Normative"; x = 672; y = 258; question = "What is said to be worth doing?" },
+    { type = "Other"; x = 18; y = 491; question = "Which released claims have another or unrecorded type?" }
+  )
+
+process claimipedia.atlas.region:
+  let region = $eventInput
+  let href = concat("/?view=atlas&region=", $region.type, if(eq($region.mode, "regions"), "", concat("&map=", $region.mode)), "#atlas-map")
+  let result = { tag = "li"; attrs = { class = "cp-region" }; children = list(
+    { tag = "h3"; attrs = {}; children = list({ tag = "a"; attrs = { href = $href; "aria-current" = if($region.selected, "page", null) }; children = list($region.type) }) },
+    { tag = "p"; attrs = {}; children = list($region.question) },
+    { tag = "small"; attrs = {}; children = list(concat($region.total, " released claims")) }
+  ) }
+
+process claimipedia.atlas.view:
+  let context = $eventInput
+  let region = $context.region
+  let claims = $context.claims
+  call claimipedia.atlas.regions
+  let regions = $result
+  fold $regions as item; tiles starts list():
+    let total = count(filter($claims, "claim", eq($claim.type, $item.type)))
+    let tile = null
+    when or($total, eq($item.type, $region)):
+      port kernel.invoke { query = "claimipedia.atlas.region"; input = { type = $item.type; question = $item.question; total = $total; mode = $context.mode.id; selected = eq($region, $item.type) } } → tile
+    yield append($tiles, list($tile)) → tiles
+  let map = { tag = "section"; attrs = { class = "cp-atlas" }; children = list(
+    { tag = "h2"; attrs = {}; children = list("Regions of the claim atlas") },
+    { tag = "p"; attrs = {}; children = list("Regions group released claims by their recorded type. Follow a claim to see the evidence and connections that cross these boundaries.") },
+    { tag = "ul"; attrs = { class = "cp-regions"; "aria-label" = "Claim regions" }; children = $tiles }
+  ) }
+  let trail = null
+  when and(not($region), eq($context.mode.id, "regions")):
+    let start = at(filter($claims, "claim", eq($claim.id, "clm_SIMULATION_COUNTERFACTUAL_EXPLORATION")), 0)
+    let link = concat("/?view=atlas&region=", $start.type, "&from=", $start.id, "&claim=", $start.id)
+    let trail = { tag = "section"; attrs = { class = "cp-trail" }; children = list(
+      { tag = "h2"; attrs = {}; children = list("A first trail") },
+      { tag = "p"; attrs = {}; children = list("Start with what a simulation can help us explore. Read the claim, examine the attached records, then follow a qualification to the shared fact-space claim.") },
+      { tag = "a"; attrs = { href = $link }; children = list("Follow the simulation trail") }
+    ) }
+  port kernel.invoke { query = "claimipedia.atlas.map"; input = $context } → chart
+  let result = list($chart, $trail, $map)

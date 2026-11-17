@@ -1,0 +1,178 @@
+process-module "temple/surface-process-module/1"
+
+process frontier.fields:
+  let result = list(
+    { name = "steelman"; label = "Assessment"; limit = 12000 },
+    { name = "currentWarrant"; label = "Current warrant"; limit = 3000 },
+    { name = "test"; label = "Proposed test"; limit = 12000 },
+    { name = "reversal"; label = "Reversal conditions"; limit = 12000 }
+  )
+
+process frontier.save:
+  let input = $eventInput
+  let request = $input.request
+  let fields = $request.fields
+  let assessment = $input.assessment
+  assert and($assessment, eq($fields.action, "edit-assessment"))
+    otherwise "Choose a Frontier assessment to edit."
+  port scalar.read { text = $fields.base } → base
+  assert eq($base, $input.snapshot.revision)
+    otherwise "The local corpus changed. Reopen the assessment and try again."
+  let history = at($input.state, "frontier")
+  let history = if($history, $history, list())
+  let head = at(filter($history, "row", eq($row.assessment, $assessment.id)), 0)
+  let previous = if($head, $head.id, $assessment.id)
+  assert eq($fields.previous, $previous)
+    otherwise "This assessment changed. Reopen it before editing."
+  port kernel.invoke { query = "frontier.fields" } → definitions
+  fold $definitions as field; entries starts list():
+    port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, $field.name); limit = $field.limit } } → text
+    yield append($entries, list(list($field.name, $text))) → entries
+  port record.fromEntries { entries = $entries } → values
+  port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "reason"); limit = 800 } } → reason
+  let revision = { id = concat("frontier.", $request.nonce); assessment = $assessment.id; previous = $previous; values = $values; reason = $reason }
+  port record.put { record = $input.state; key = "frontier"; value = append(list($revision), $history) } → state
+  port kernel.invoke { query = "claimipedia.commit"; input = { request = $request; state = $state; base = $base; reason = $reason; target = $assessment.id; notice = "Local Frontier assessment revision saved." } } → result
+
+process frontier.search:
+  let screen = $eventInput
+  let q = at($screen.fields, "q")
+  port text.trim { value = if($q, $q, "") } → query
+  port text.slice { value = $query; start = 0; end = 180 } → query
+  port text.lowerCase { value = $query } → needle
+  port record.fromEntries { entries = map($screen.data.sources, "source", list($source.id, $source.author)) } → authors
+  fold $screen.data.claims as row; matches starts list():
+    let head = at(filter($screen.history, "edit", eq($edit.assessment, $row.id)), 0)
+    let current = if($head, $head.values, $row)
+    port text.join { values = $row.flags; separator = " " } → flags
+    port text.lowerCase { value = concat($row.id, " ", at($authors, $row.sourceId), " ", $row.family, " ", $row.attributedClaim, " ", $current.steelman, " ", $current.currentWarrant, " ", $current.test, " ", $current.reversal, " ", $row.spin23Relation, " ", $flags) } → searchable
+    port text.indexOf { value = $searchable; search = $needle } → index
+    yield if(eq($index, -1), $matches, append($matches, list({ id = $row.id; expression = $row.attributedClaim; warrant = $current.currentWarrant }))) → matches
+  port kernel.invoke { query = "portfolio.recent"; input = { rows = $matches; limit = 24 } } → visible
+  let results = map($visible, "row", { tag = "li"; attrs = {}; children = list(
+    { tag = "a"; attrs = { href = concat("/?collection=frontier&assessment=", $row.id) }; children = list($row.id) },
+    { tag = "p"; attrs = {}; children = list($row.expression) },
+    { tag = "p"; attrs = {}; children = list($row.warrant) }
+  ) })
+  let form = { tag = "form"; attrs = { method = "get"; action = "/"; class = "cp-search-form" }; children = list(
+    { tag = "input"; attrs = { name = "collection"; type = "hidden"; value = "frontier" }; children = list() },
+    { tag = "label"; attrs = {}; children = list("Search Frontier assessments", { tag = "input"; attrs = { name = "q"; type = "search"; value = $query; maxlength = 180 }; children = list() }) },
+    { tag = "button"; attrs = { type = "submit" }; children = list("Search") }
+  ) }
+  let result = list($form, { tag = "p"; attrs = {}; children = list(concat(count($matches), " matches · showing ", count($visible))) }, { tag = "ul"; attrs = { "aria-label" = "Frontier assessment search results" }; children = $results })
+
+process frontier.reviewedLeanLink:
+  let assessment = $eventInput
+  port application.data { name = "reviewed-lean-links" } → links
+  let link = at(filter($links, "item", and(eq($item.assessment, $assessment.id),
+    eq($item.sourceId, $assessment.sourceId), eq($item.attributedClaim, $assessment.attributedClaim))), 0)
+  let result = null
+  when $link:
+    let base = concat("https://github.com/prove2me/formalpedia/blob/", $link.commit, "/")
+    let hypotheses = map($link.hypotheses, "hypothesis", { tag = "li"; attrs = {}; children = list(
+      { tag = "strong"; attrs = {}; children = list($hypothesis.label) }, " · ", $hypothesis.note
+    ) })
+    let remaining = map($link.remaining, "obligation", { tag = "li"; attrs = {}; children = list($obligation) })
+    let reviewSource = if($link.reviewSource,
+      { tag = "a"; attrs = { href = $link.reviewSource }; children = list("Source paper") }, null)
+    let result = { tag = "section"; attrs = {}; children = list(
+      { tag = "h3"; attrs = {}; children = list("Reviewed Lean link") },
+      { tag = "p"; attrs = {}; children = list("Supported mathematical subclaim") },
+      { tag = "p"; attrs = {}; children = list($link.subclaim) },
+      { tag = "p"; attrs = {}; children = list(
+        { tag = "a"; attrs = { href = concat("/?collection=formalpedia&theorem=", $link.recordId) }; children = list($link.theorem) }
+      ) },
+      { tag = "details"; attrs = {}; children = list(
+        { tag = "summary"; attrs = {}; children = list("Exact Lean declaration and sources") },
+        { tag = "pre"; attrs = { class = "cp-evidence-source"; "aria-label" = "Lean declaration" }; children = list($link.declaration) },
+        { tag = "p"; attrs = {}; children = list($link.toolchain, " · Mathlib ", $link.mathlib) },
+        { tag = "p"; attrs = {}; children = list(
+          { tag = "a"; attrs = { href = concat($base, $link.statementPath) }; children = list("Pinned Lean statement") },
+          " · ", { tag = "a"; attrs = { href = concat($base, $link.proofPath) }; children = list("Pinned accepted proof") }
+        ) }
+      ) },
+      { tag = "h4"; attrs = {}; children = list("Lean hypotheses and model") },
+      { tag = "ul"; attrs = {}; children = $hypotheses },
+      { tag = "h4"; attrs = {}; children = list("Still needs justification") },
+      { tag = "ul"; attrs = {}; children = $remaining },
+      { tag = "p"; attrs = {}; children = list("Scope review by ", $link.reviewedBy, " · ", $link.reviewedOn,
+        if($reviewSource, " · ", null), $reviewSource) }
+    ) }
+
+process frontier.detail:
+  let screen = $eventInput
+  let row = $screen.assessment
+  let source = at(filter($screen.data.sources, "source", eq($source.id, $row.sourceId)), 0)
+  let history = filter($screen.history, "edit", eq($edit.assessment, $row.id))
+  let head = at($history, 0)
+  let current = if($head, $head.values, $row)
+  let previous = if($head, $head.id, $row.id)
+  let sourceUrl = $source.url
+  port text.matches { value = $sourceUrl; pattern = "^https?://[^\\s]+$" } → web
+  let reference = if($web, { tag = "a"; attrs = { href = $sourceUrl; rel = "noreferrer" }; children = list($source.title) }, concat($source.title, " · ", $sourceUrl))
+  let provenance = list(
+    { tag = "h2"; attrs = {}; children = list($row.id) },
+    { tag = "p"; attrs = {}; children = list(concat($row.family, " · ", $row.spin23Relation)) },
+    { tag = "h3"; attrs = {}; children = list("Attributed claim") },
+    { tag = "p"; attrs = {}; children = list($row.attributedClaim) },
+    { tag = "p"; attrs = {}; children = list($source.author, " · ", $reference, " · ", $source.id) },
+    { tag = "p"; attrs = {}; children = list(concat($source.sourcePosture, " · ", at($source, "capturedAt"))) },
+    { tag = "p"; attrs = {}; children = list($source.attributionNote) },
+    { tag = "p"; attrs = {}; children = list(concat("Intake disposition: ", if(at($row, "intakeDisposition"), at($row, "intakeDisposition"), $screen.data.status))) },
+    { tag = "h3"; attrs = {}; children = list("Missing middle") },
+    { tag = "ul"; attrs = {}; children = map($row.missingMiddle, "item", { tag = "li"; attrs = {}; children = list($item) }) }
+  )
+  let hidden = map(list(list("collection", "frontier"), list("assessment", $row.id), list("previous", $previous)), "coordinate", { tag = "input"; attrs = { type = "hidden"; name = at($coordinate, 0); value = at($coordinate, 1) }; children = list() })
+  port kernel.invoke { query = "frontier.fields" } → definitions
+  fold $definitions as field; fields starts $hidden:
+    let spec = { name = $field.name; label = $field.label; type = "textarea"; maxlength = $field.limit; required = true; value = at($current, $field.name) }
+    port kernel.invoke { query = "portfolio.field"; input = { field = $spec; labelId = concat("frontier-", $field.name) } } → element
+    yield append($fields, list($element)) → fields
+  port kernel.invoke { query = "portfolio.field"; input = { field = { name = "reason"; label = "Revision reason"; type = "text"; maxlength = 800; required = true }; labelId = "frontier-reason" } } → reason
+  port kernel.invoke { query = "work.form"; input = { csrf = $screen.csrf; revision = $screen.revision; action = "edit-assessment"; fields = append($fields, list($reason)); button = "Save assessment revision"; style = "cp-form" } } → form
+  let imported = map($definitions, "field", { tag = "p"; attrs = {}; children = list(concat($field.label, ": ", at($row, $field.name))) })
+  let revisions = map($history, "edit", { tag = "li"; attrs = {}; children = append(list(
+    { tag = "p"; attrs = {}; children = list(concat($edit.id, " · Previous version: ", $edit.previous)) },
+    { tag = "p"; attrs = {}; children = list(concat("Reason: ", $edit.reason)) }
+  ), map($definitions, "field", { tag = "p"; attrs = {}; children = list(concat($field.label, ": ", at($edit.values, $field.name))) })) })
+  port kernel.invoke { query = "portfolio.section"; input = { title = "Assessment history"; content = list(
+    { tag = "ul"; attrs = { "aria-label" = "Local assessment revisions" }; children = $revisions },
+    { tag = "details"; attrs = {}; children = append(list({ tag = "summary"; attrs = {}; children = list("Imported assessment") }), $imported) }
+  ) } } → historyPanel
+  let arms = filter($screen.data.researchArms, "arm", includes($arm.sourceClaims, $row.id))
+  let links = map($arms, "arm", { tag = "li"; attrs = {}; children = list(
+    { tag = "a"; attrs = { href = concat("/?collection=research&arm=", $arm.id) }; children = list($arm.title) }
+  ) })
+  let related = if(count($links), { tag = "ul"; attrs = { "aria-label" = "Related research arms" }; children = $links }, null)
+  let back = { tag = "a"; attrs = { href = "/?collection=frontier" }; children = list("Back to Frontier assessment search") }
+  port kernel.invoke { query = "frontier.reviewedLeanLink"; input = $row } → leanLink
+  let result = append(list($back), append($provenance, list($leanLink, $related, $form, $historyPanel)))
+
+process frontier.request:
+  let request = $eventInput
+  port application.data { name = "frontier" } → data
+  let snapshot = $request.snapshot
+  port kernel.invoke { query = "claimipedia.load"; input = $snapshot } → state
+  let id = at($request.fields, "assessment")
+  let assessment = at(filter($data.claims, "row", eq($row.id, $id)), 0)
+  let notice = if(and($id, not($assessment)), "No Frontier assessment has that identifier.", "")
+  let error = and($id, not($assessment))
+  when eq($request.method, "POST"):
+    try:
+      port kernel.invoke { query = "frontier.save"; input = { request = $request; snapshot = $snapshot; state = $state; assessment = $assessment } } → notice
+    catch fault:
+      let notice = $fault.message
+      let error = true
+    port storage.snapshot {} → snapshot
+    port kernel.invoke { query = "claimipedia.load"; input = $snapshot } → state
+  let history = at($state, "frontier")
+  let screen = { data = $data; fields = $request.fields; assessment = $assessment; history = if($history, $history, list()); csrf = $request.csrf; revision = $snapshot.revision }
+  let body = list()
+  when $assessment:
+    port kernel.invoke { query = "frontier.detail"; input = $screen } → body
+  when not($assessment):
+    port kernel.invoke { query = "frontier.search"; input = $screen } → body
+  port kernel.invoke { query = "claimipedia.collections"; input = { design = true; path = $request.path; current = concat("/?collection=", $request.fields.collection) } } → nav
+  let page = { title = "Frontier Claims"; summary = concat(count($data.claims), " attributed assessments · ", $data.authorityBoundary); nav = $nav; content = $body }
+  port kernel.invoke { query = "claimipedia.design.workspacePage"; input = { page = $page; notice = $notice; error = $error; urlPrefix = if(eq($request.path, "/steward/"), "/steward", "") } } → html
+  let result = { html = $html; session = $request.session }

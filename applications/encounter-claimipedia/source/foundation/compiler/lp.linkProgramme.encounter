@@ -1,0 +1,51 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lp.linkProgramme:
+  fold at($eventInput, "programme") as statement; checked starts true:
+    port record.entries { value = $statement } → statementEntries
+    let statementKeys = map($statementEntries, "pair", at($pair, 0))
+    when at($statement, "port"):
+      when not(includes(at($lpPolicy, "directPorts"), at($statement, "port"))):
+        port kernel.invoke {
+          query = "lp.fail";
+          input = {
+            code = "PROC-TEXT-LINK";
+            summary = "Native port is not in the selected inspection profile.";
+            token = { start = 0; end = 0; line = 1; column = 1 }
+          }
+        } → unused
+      when eq(at($statement, "port"), "kernel.invoke"):
+        let query = at(at($statement, "args"), "query")
+        port value.describe { value = $query } → queryType
+        when not(
+          and(
+            eq(at($queryType, "type"), "string"),
+            not(eq(at($query, 0), at($lpPolicy, "referenceSigil"))),
+            at($lpDependencies, $query)
+          )
+        ):
+          port kernel.invoke {
+            query = "lp.fail";
+            input = {
+              code = "PROC-TEXT-LINK";
+              summary = "A static declared callee is required.";
+              token = { start = 0; end = 0; line = 1; column = 1 }
+            }
+          } → unused
+    when includes($statementKeys, "call"):
+      when not(at($lpDependencies, at($statement, "call"))):
+        port kernel.invoke {
+          query = "lp.fail";
+          input = {
+            code = "PROC-TEXT-LINK";
+            summary = "A direct call requires a declared callee.";
+            token = { start = 0; end = 0; line = 1; column = 1 }
+          }
+        } → unused
+    fold list("then", "steps", "try", "catch") as childField; childrenChecked starts true:
+      when includes($statementKeys, $childField):
+        port kernel.invoke { query = "lp.linkProgramme"; input = { programme = at($statement, $childField) } } → nested
+      yield true → childrenChecked
+    yield true → checked
+  let result = true

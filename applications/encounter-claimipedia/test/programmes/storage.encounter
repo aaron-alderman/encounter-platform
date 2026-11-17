@@ -1,0 +1,86 @@
+process-module "temple/surface-process-module/1"
+
+process storage.fixture:
+  port workspace.open {} → directory
+  let profile = "native-revision/1"
+  let documents = list({ path = "fixture.txt"; text = "Native storage fixture only" })
+  let input = { base = 0; operationId = "fixture-operation"; profile = $profile; basis = "test-fixture-basis"; documents = $documents; reason = "Test atomic bytes"; target = "Disposable store"; goal = "Qualify the storage mechanism"; source = "test.fixture"; description = "One mechanism transaction" }
+
+process test.storage.cas:
+  call storage.fixture
+  port store.open { directory = $directory; profile = $profile } → store
+  port store.cas { store = $store; input = $input } → first
+  port store.cas { store = $store; input = $input } → replay
+  assert and(eq($first.revision, 1), eq($replay, $first))
+    otherwise "An identical operation must replay the original revision."
+  let operation = "store.cas"
+  port record.put { record = $input; key = "reason"; value = "Different meaning" } → changed
+  let arguments = { store = $store; input = $changed }
+  let diagnostic = "identity reused"
+  call check.refused
+  port record.put { record = $input; key = "operationId"; value = "new-operation" } → changed
+  let arguments = { store = $store; input = $changed }
+  let diagnostic = "conflict"
+  call check.refused
+  port store.history { store = $store } → history
+  assert eq(count($history), 1)
+    otherwise "Refused changes must leave exactly the accepted revision."
+  port store.close { store = $store } → ignored
+  port store.open { directory = $directory; profile = $profile } → store
+  port store.operation { store = $store; id = $input.operationId } → found
+  port store.snapshot { store = $store } → snapshot
+  assert and(eq($found.revision, 1), eq($snapshot.documents, $documents))
+    otherwise "Cold reopening must preserve the operation and exact documents."
+
+process storage.crash-case:
+  call storage.fixture
+  port store.crash { directory = $directory; cut = $cut; input = $input } → exit
+  assert and(not(eq($exit.code, 0)), eq($exit.reached, $cut))
+    otherwise "The worker must die at the requested transaction cut."
+  port store.open { directory = $directory; profile = $profile } → store
+  port store.snapshot { store = $store } → snapshot
+  port store.operation { store = $store; id = $input.operationId } → found
+  when eq($cut, "before-commit"):
+    assert and(eq($found, null), eq($snapshot.revision, 0), eq($snapshot.documents, list()))
+      otherwise "A pre-COMMIT crash must roll back the revision and documents."
+    port store.cas { store = $store; input = $input } → accepted
+    assert eq($accepted.revision, 1)
+      otherwise "An explicit retry after rollback must create the first revision."
+  when eq($cut, "after-commit"):
+    assert and(eq($found.revision, 1), eq($snapshot.revision, 1), eq($snapshot.documents, $documents))
+      otherwise "A post-COMMIT crash must preserve the revision and documents."
+
+process test.storage.crash-before:
+  let cut = "before-commit"
+  call storage.crash-case
+
+process test.storage.crash-after:
+  let cut = "after-commit"
+  call storage.crash-case
+
+process test.storage.unknown-outcome:
+  call storage.fixture
+  port store.open { directory = $directory; profile = $profile; cut = "after-commit" } → store
+  let operation = "store.cas"
+  let arguments = { store = $store; input = $input }
+  let diagnostic = "Lost response"
+  call check.refused
+  port store.operation { store = $store; id = $input.operationId } → found
+  port store.cas { store = $store; input = $input } → replay
+  port store.history { store = $store } → history
+  assert and(eq($found.revision, 1), eq($replay, $found), eq(count($history), 1))
+    otherwise "The retained operation must resolve a lost response without a second commit."
+
+process test.storage.incompatible-profile:
+  call storage.fixture
+  port store.open { directory = $directory; profile = $profile } → store
+  port store.cas { store = $store; input = $input } → accepted
+  port store.close { store = $store } → ignored
+  let operation = "store.open"
+  let arguments = { directory = $directory; profile = "another-profile" }
+  let diagnostic = "profile differs"
+  call check.refused
+  port store.open { directory = $directory; profile = $profile } → store
+  port store.operation { store = $store; id = $input.operationId } → found
+  assert eq($found, $accepted)
+    otherwise "A profile refusal must preserve the original state."

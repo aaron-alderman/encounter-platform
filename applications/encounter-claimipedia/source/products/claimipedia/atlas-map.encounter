@@ -1,0 +1,261 @@
+process-module "temple/surface-process-module/1"
+
+# Worldwright's atlas-grid.svg geometry, composed as typed SVG so it goes
+# through Claimipedia's projection gate. Colors come from the shared palette.
+process claimipedia.atlas.canvas:
+  let result = list(
+    { tag = "defs"; attrs = {}; children = list(
+      { tag = "pattern"; attrs = { id = "atlas-grid"; width = 40; height = 40; patternUnits = "userSpaceOnUse" }; children = list(
+        { tag = "path"; attrs = { d = "M40 0H0V40"; class = "cp-map-gridline" }; children = list() },
+        { tag = "circle"; attrs = { cx = 0; cy = 0; r = 1; class = "cp-map-grid-dot" }; children = list() }
+      ) },
+      { tag = "marker"; attrs = { id = "atlas-arrow"; viewBox = "0 0 8 8"; refX = 15; refY = 4; markerWidth = 5; markerHeight = 5; orient = "auto" }; children = list(
+        { tag = "path"; attrs = { d = "M0 0L8 4L0 8Z"; fill = "context-stroke" }; children = list() }
+      ) }
+    ) },
+    { tag = "path"; attrs = { fill = "url(#atlas-grid)"; d = "M0 0h1000v500H0z" }; children = list() },
+    { tag = "g"; attrs = { class = "cp-map-compass" }; children = list(
+      { tag = "ellipse"; attrs = { cx = 500; cy = 250; rx = 370; ry = 170 }; children = list() },
+      { tag = "ellipse"; attrs = { cx = 500; cy = 250; rx = 280; ry = 125 }; children = list() },
+      { tag = "circle"; attrs = { cx = 500; cy = 250; r = 210 }; children = list() },
+      { tag = "path"; attrs = { d = "M500 20v460M30 250h940"; "stroke-dasharray" = "2 8" }; children = list() },
+      { tag = "path"; attrs = { d = "m930 40 6 20 20 6-20 6-6 20-6-20-20-6 20-6Z" }; children = list() }
+    ) }
+  )
+
+process claimipedia.atlas.positions:
+  let context = $eventInput
+  port kernel.invoke { query = "claimipedia.atlas.regions" } → regions
+  fold $regions as region; places starts list():
+    let members = filter($context.claims, "claim", eq($claim.type, $region.type))
+    fold $members as claim; points starts list():
+      let index = count($points)
+      port number.calculate { operation = "remainder"; values = list($index, 8) } → column
+      port number.calculate { operation = "divide"; values = list($index, 8) } → quotient
+      port number.calculate { operation = "floor"; values = list($quotient) } → row
+      port number.calculate { operation = "multiply"; values = list($column, 34) } → dx
+      port number.calculate { operation = "multiply"; values = list($row, 25) } → dy
+      yield append($points, list({ id = $claim.id; subject = $claim.subject; expression = $claim.expression; type = $region.type; x = add(add($region.x, 33), $dx); y = add(add($region.y, 69), $dy) })) → points
+    yield append($places, $points) → places
+  let result = $places
+
+process claimipedia.atlas.relationships:
+  let spec = $eventInput
+  let facts = $spec.facts
+  port record.fromEntries { entries = map($spec.points, "point", list($point.subject, $point)) } → bySubject
+  let sourceFacts = filter($facts, "fact", eq($fact.p, "source"))
+  let targetFacts = filter($facts, "fact", eq($fact.p, "target"))
+  port record.fromEntries { entries = map($sourceFacts, "fact", list($fact.s, $fact.o)) } → sources
+  port record.fromEntries { entries = map($targetFacts, "fact", list($fact.s, $fact.o)) } → targets
+  let relations = filter($facts, "fact", and(eq($fact.p, "isa"), eq($fact.o, "Relationship")))
+  let types = filter($facts, "fact", eq($fact.p, "relationType"))
+  port record.fromEntries { entries = map($types, "fact", list($fact.s, $fact.o)) } → kinds
+  let identifiers = filter($facts, "fact", eq($fact.p, "identifier"))
+  port record.fromEntries { entries = map($identifiers, "fact", list($fact.s, $fact.o)) } → ids
+  let provenance = filter($facts, "fact", eq($fact.p, "provenance"))
+  port record.fromEntries { entries = map($provenance, "fact", list($fact.s, $fact.o)) } → reasons
+  fold $relations as relation; edges starts list():
+    let source = at($bySubject, at($sources, $relation.s))
+    let target = at($bySubject, at($targets, $relation.s))
+    let kind = at($kinds, $relation.s)
+    let id = at($ids, $relation.s)
+    let edge = { source = $source; target = $target; kind = $kind; id = if($id, $id, $relation.s); provenance = at($reasons, $relation.s) }
+    yield if(and($source, $target, $kind), append($edges, list($edge)), $edges) → edges
+  port kernel.invoke { query = "claimipedia.directRelationships"; input = $facts } → direct
+  fold $direct as relation; directEdges starts list():
+    let source = at($bySubject, $relation.source)
+    let target = at($bySubject, $relation.target)
+    let edge = { source = $source; target = $target; kind = $relation.kind; id = $relation.id; provenance = $relation.provenance }
+    yield if(and($source, $target), append($directEdges, list($edge)), $directEdges) → directEdges
+  let result = append($edges, $directEdges)
+
+process claimipedia.atlas.modes:
+  let result = list(
+    { id = "regions"; label = "Regions"; description = "See all released connections across the recorded claim types."; kinds = list("Supports", "Challenges", "Qualifies", "DependsOn", "Supersedes") },
+    { id = "dependencies"; label = "Dependencies"; description = "Follow what a claim depends on, or see which other claims depend on it."; kinds = list("DependsOn") },
+    { id = "arguments"; label = "Arguments"; description = "Follow support, challenges and qualifications in either direction."; kinds = list("Supports", "Challenges", "Qualifies") },
+    { id = "lineage"; label = "Revision lineage"; description = "Follow recorded supersession links between claims, from newer claims toward the claims they supersede."; kinds = list("Supersedes") }
+  )
+
+process claimipedia.atlas.modeLinks:
+  let context = $eventInput
+  call claimipedia.atlas.modes
+  let base = concat("/?view=atlas", if($context.region, concat("&region=", $context.region), ""))
+  let focus = if($context.focus, concat("&focus=", $context.focus.id), "")
+  let result = { tag = "nav"; attrs = { class = "cp-map-switch"; "aria-label" = "Atlas maps" }; children = map($result, "mode", {
+    tag = "a"; attrs = {
+      href = concat($base, if(eq($mode.id, "regions"), "", concat("&map=", $mode.id)), $focus, "#atlas-map");
+      "aria-current" = if(eq($mode.id, $context.mode.id), "page", null)
+    }; children = list($mode.label)
+  }) }
+
+# In the focused relationship maps, a claim with both directions has a
+# single station in the middle lane. The underlying edges keep their direction.
+process claimipedia.atlas.lanes:
+  let spec = $eventInput
+  let focus = $spec.focus
+  let incoming = distinct(map(filter($spec.edges, "edge", eq($edge.target.id, $focus)), "edge", $edge.source.id))
+  let outgoing = distinct(map(filter($spec.edges, "edge", eq($edge.source.id, $focus)), "edge", $edge.target.id))
+  let both = filter($incoming, "id", and(not(eq($id, $focus)), includes($outgoing, $id)))
+  let lanes = list(
+    { label = "Incoming"; ids = filter($incoming, "id", not(includes($outgoing, $id))); x = 18 },
+    { label = "Selected and reciprocal"; ids = append(list($focus), $both); x = 345 },
+    { label = "Outgoing"; ids = filter($outgoing, "id", not(includes($incoming, $id))); x = 672 }
+  )
+  port record.fromEntries { entries = map($spec.points, "point", list($point.id, $point)) } → byId
+  fold $lanes as lane; places starts list():
+    fold $lane.ids as id; points starts list():
+      let claim = at($byId, $id)
+      port number.calculate { operation = "multiply"; values = list(count($points), 43) } → dy
+      yield append($points, list({ id = $claim.id; expression = $claim.expression; type = $claim.type; x = add($lane.x, 155); y = add(105, $dy) })) → points
+    yield append($places, $points) → places
+  port record.fromEntries { entries = map($places, "point", list($point.id, $point)) } → moved
+  let edges = map($spec.edges, "edge", {
+    source = at($moved, $edge.source.id); target = at($moved, $edge.target.id); kind = $edge.kind;
+    id = $edge.id; provenance = $edge.provenance
+  })
+  let zones = map($lanes, "lane", { label = $lane.label; x = $lane.x; y = 25; height = 450; active = eq($lane.x, 345) })
+  let result = { points = $places; edges = $edges; zones = $zones }
+
+process claimipedia.atlas.focusLink:
+  let context = $eventInput.context
+  let id = $eventInput.id
+  let result = concat("/?", $context.filters, "&focus=", $id, "#atlas-map")
+
+process claimipedia.atlas.station:
+  let spec = $eventInput
+  let point = $spec.point
+  let current = eq(at($spec.context.focus, "id"), $point.id)
+  let relevant = or($current, includes($spec.nearby, $point.id))
+  port kernel.invoke { query = "claimipedia.atlas.focusLink"; input = { context = $spec.context; id = $point.id } } → href
+  let result = { tag = "a"; attrs = {
+    class = "cp-map-node"; href = $href; "aria-label" = concat($point.expression, " · ", $point.type);
+    "aria-current" = if($current, "location", null); "data-related" = if($relevant, "yes", null)
+  }; children = list(
+    { tag = "title"; attrs = {}; children = list($point.expression) },
+    { tag = "circle"; attrs = { cx = $point.x; cy = $point.y; r = 13; class = "cp-map-hit" }; children = list() },
+    { tag = "circle"; attrs = { cx = $point.x; cy = $point.y; r = if($current, 8, 5); class = "cp-map-dot" }; children = list() }
+  ) }
+
+# Route parallel and reciprocal records around the same midpoint. The
+# undirected peer group shares an ordering, so reversing an edge retains its
+# own curve while the path and arrow still run from source to target.
+process claimipedia.atlas.edge:
+  let spec = $eventInput
+  let edge = $spec.edge
+  let source = $edge.source
+  let target = $edge.target
+  let start = concat("M ", $source.x, " ", $source.y)
+  let end = concat($target.x, " ", $target.y)
+  let path = concat($start, " L ", $end)
+  let peers = $spec.peers
+  when not(eq(count($peers), 1)):
+    fold $peers as peer; cursor starts { index = 0; found = false }:
+      let found = or($cursor.found, eq($peer.id, $edge.id))
+      yield { index = add($cursor.index, if($found, 0, 1)); found = $found } → cursor
+    port number.calculate { operation = "subtract"; values = list(add(add($cursor.index, $cursor.index), 1), count($peers)) } → centred
+    port number.calculate { operation = "multiply"; values = list($centred, 15) } → offset
+    port number.calculate { operation = "subtract"; values = list($target.x, $source.x) } → dx
+    port number.calculate { operation = "subtract"; values = list($target.y, $source.y) } → dy
+    port number.calculate { operation = "multiply"; values = list($dx, $dx) } → horizontalDistance
+    port number.calculate { operation = "multiply"; values = list($dy, $dy) } → verticalDistance
+    port number.calculate { operation = "greaterEqual"; values = list($horizontalDistance, $verticalDistance) } → horizontal
+    port number.calculate { operation = "divide"; values = list(add($source.x, $target.x), 2) } → mx
+    port number.calculate { operation = "divide"; values = list(add($source.y, $target.y), 2) } → my
+    let cx = add($mx, if($horizontal, 0, $offset))
+    let cy = add($my, if($horizontal, $offset, 0))
+    let path = concat($start, " Q ", $cx, " ", $cy, " ", $end)
+  let active = or(eq($source.id, $spec.focus), eq($target.id, $spec.focus))
+  let focus = if($active, $spec.focus, $source.id)
+  let href = concat("/?", $spec.filters, "&focus=", $focus, "#atlas-relationship-", $edge.id)
+  let label = concat($edge.kind, " · ", $edge.id)
+  let result = { tag = "a"; attrs = { class = "cp-map-edge-link"; href = $href; "aria-label" = $label; tabindex = -1 }; children = list(
+    { tag = "title"; attrs = {}; children = list($label) },
+    { tag = "path"; attrs = { class = "cp-map-edge"; d = $path; "data-relation" = $edge.kind; "data-active" = if($active, "yes", null); "data-relationship" = $edge.id }; children = list() },
+    { tag = "path"; attrs = { class = "cp-map-edge-hit"; d = $path }; children = list() }
+  ) }
+
+process claimipedia.atlas.selection:
+  let spec = $eventInput
+  let context = $spec.context
+  let claim = $context.focus
+  let dossier = concat("/?", $context.filters, "&focus=", $claim.id, "&from=", $claim.id, "&claim=", $claim.id)
+  fold $spec.connections as edge; links starts list():
+    let incoming = eq($edge.target.id, $claim.id)
+    let other = if($incoming, $edge.source, $edge.target)
+    port kernel.invoke { query = "claimipedia.atlas.focusLink"; input = { context = $context; id = $other.id } } → href
+    port kernel.invoke { query = "claimipedia.relationship.context"; input = { id = $edge.id; provenance = $edge.provenance } } → recordContext
+    let item = { tag = "li"; attrs = { id = concat("atlas-relationship-", $edge.id) }; children = append(list(
+      { tag = "small"; attrs = {}; children = list(concat(if($incoming, "Incoming ", "Outgoing "), $edge.kind)) },
+      { tag = "a"; attrs = { href = $href }; children = list($other.expression) }
+    ), $recordContext) }
+    yield append($links, list($item)) → links
+  let routes = if(count($links), { tag = "ul"; attrs = { "aria-label" = "Connected claims on the atlas" }; children = $links },
+    { tag = "p"; attrs = {}; children = list("This claim has no released connections in this map.") })
+  let result = { tag = "section"; attrs = { class = "cp-map-selection" }; children = list(
+    { tag = "p"; attrs = {}; children = list(concat("You are here · ", $claim.type)) },
+    { tag = "h3"; attrs = {}; children = list($claim.expression) },
+    { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = $dossier }; children = list("Open released claim and evidence") }) },
+    { tag = "h4"; attrs = {}; children = list("Follow a connection") },
+    $routes,
+    { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = concat("/?", $context.filters, "#atlas-map") }; children = list("Clear selection") }) }
+  ) }
+
+process claimipedia.atlas.map:
+  let context = $eventInput
+  let focus = at($context.focus, "id")
+  let regional = eq($context.mode.id, "regions")
+  port kernel.invoke { query = "claimipedia.atlas.positions"; input = $context } → points
+  port kernel.invoke { query = "claimipedia.atlas.relationships"; input = { points = $points; facts = $context.facts } } → allEdges
+  let edges = $allEdges
+  when not($regional):
+    let edges = filter($allEdges, "edge", includes($context.mode.kinds, $edge.kind))
+    let endpoints = append(map($edges, "edge", $edge.source.id), map($edges, "edge", $edge.target.id))
+    let points = filter($points, "point", or(eq($point.id, $focus), includes($endpoints, $point.id)))
+  let connections = filter($edges, "edge", or(eq($edge.source.id, $focus), eq($edge.target.id, $focus)))
+  let nearby = map($connections, "edge", if(eq($edge.source.id, $focus), $edge.target.id, $edge.source.id))
+  call claimipedia.atlas.canvas
+  let canvas = $result
+  port kernel.invoke { query = "claimipedia.atlas.regions" } → regions
+  let occupied = filter($regions, "region", some($points, "point", eq($point.type, $region.type)))
+  let viewBox = if(some($occupied, "region", eq($region.type, "Other")), "0 0 1000 740", "0 0 1000 500")
+  let zones = map($occupied, "region", { label = $region.type; x = $region.x; y = $region.y; height = 211; active = eq($context.region, $region.type) })
+  when and($focus, not($regional)):
+    port kernel.invoke { query = "claimipedia.atlas.lanes"; input = { points = $points; edges = $connections; focus = $focus } } → layout
+    let points = $layout.points
+    let edges = $layout.edges
+    let zones = $layout.zones
+    let viewBox = "0 0 1000 500"
+  let zoneNodes = map($zones, "zone", { tag = "g"; attrs = {}; children = list(
+    { tag = "rect"; attrs = { class = "cp-map-zone"; x = $zone.x; y = $zone.y; width = 310; height = $zone.height; "data-active" = if($zone.active, "yes", null) }; children = list() },
+    { tag = "text"; attrs = { class = "cp-map-label"; x = add($zone.x, 17); y = add($zone.y, 30) }; children = list($zone.label) }
+  ) })
+  fold $edges as edge; lines starts list():
+    let peers = filter($edges, "peer", or(
+      and(eq($peer.source.id, $edge.source.id), eq($peer.target.id, $edge.target.id)),
+      and(eq($peer.source.id, $edge.target.id), eq($peer.target.id, $edge.source.id))
+    ))
+    port kernel.invoke { query = "claimipedia.atlas.edge"; input = { edge = $edge; peers = $peers; filters = $context.filters; focus = $focus } } → line
+    yield append($lines, list($line)) → lines
+  let stationContext = { filters = $context.filters; focus = $context.focus }
+  fold $points as point; stations starts list():
+    port kernel.invoke { query = "claimipedia.atlas.station"; input = { context = $stationContext; point = $point; nearby = $nearby } } → station
+    yield append($stations, list($station)) → stations
+  let svg = { tag = "svg"; attrs = { class = "cp-map-svg"; xmlns = "http://www.w3.org/2000/svg"; viewBox = $viewBox; "aria-label" = "Spatial map of released claims" }; children = append($canvas, append($zoneNodes, append($lines, $stations))) }
+  let chart = { tag = "div"; attrs = { class = "cp-map-scroll"; tabindex = 0; "aria-label" = "Scrollable claim map" }; children = list($svg) }
+  let selection = null
+  when $focus:
+    port kernel.invoke { query = "claimipedia.atlas.selection"; input = { context = $context; connections = $connections } } → selection
+  let frame = { tag = "div"; attrs = { class = "cp-map-layout"; "data-focused" = if($focus, "yes", null) }; children = list($selection, $chart) }
+  let legend = { tag = "ul"; attrs = { class = "cp-map-legend"; "aria-label" = "Relationship legend" }; children = map($context.mode.kinds, "kind", {
+    tag = "li"; attrs = { "data-relation" = $kind }; children = list(if(eq($kind, "DependsOn"), "Depends on", $kind))
+  }) }
+  port kernel.invoke { query = "claimipedia.atlas.modeLinks"; input = $context } → switch
+  let result = { tag = "section"; attrs = { class = "cp-map"; id = "atlas-map"; "data-focused" = if($focus, "yes", null) }; children = list(
+    { tag = "h2"; attrs = {}; children = list(if($regional, "Claim map", concat($context.mode.label, " map"))) },
+    $switch,
+    { tag = "p"; attrs = {}; children = list($context.mode.description) },
+    { tag = "p"; attrs = {}; children = list(concat(count($points), " released claims · ", count($edges), " recorded connections. ", if(and(not($regional), not($focus)), "Select a station to separate incoming and outgoing connections. ", "Select a station to trace its connections. "), "Select a line to read the relationship record. Scroll the map to see more on a narrow screen.")) },
+    $legend,
+    $frame
+  ) }

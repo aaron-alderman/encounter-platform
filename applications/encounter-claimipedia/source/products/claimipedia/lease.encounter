@@ -1,0 +1,105 @@
+process-module "temple/surface-process-module/1"
+
+process lease.window:
+  let input = $eventInput
+  port number.calculate { operation = "less"; values = list($input.now, $input.expiresAt) } → beforeExpiry
+  port number.calculate { operation = "greaterEqual"; values = list($input.now, $input.issuedAt) } → issued
+  let result = and($beforeExpiry, $issued)
+
+process lease.current:
+  let input = $eventInput
+  port kernel.invoke { query = "triage.history"; input = { id = $input.id; state = $input.state } } → reviews
+  port kernel.invoke { query = "packet.history"; input = { id = $input.id; state = $input.state } } → packets
+  let decision = at($reviews, 0)
+  let packet = at(filter($packets, "row", eq($row.decision, at($decision, "id"))), 0)
+  let rows = at($input.state, "frontier")
+  let events = filter(if($rows, $rows, list()), "row", and(eq(at($row, "kind"), "evidence-check"), eq(at($row, "opportunity"), $input.id)))
+  let head = at(filter($events, "row", eq($row.packet, at($packet, "id"))), 0)
+  let active = false
+  when and(eq(at($head, "event"), "lease"), $input.now):
+    port kernel.invoke { query = "lease.window"; input = { now = $input.now; issuedAt = $head.issuedAt; expiresAt = $head.expiresAt } } → active
+  let result = { packet = $packet; events = $events; head = $head; active = $active }
+
+process lease.save:
+  let change = $eventInput
+  let request = $change.request
+  let fields = $request.fields
+  let action = at($fields, "action")
+  let issuing = eq($action, "issue-evidence-lease")
+  let operator = at($request, "operator")
+  assert and($change.selected, eq(at($operator, "role"), if($issuing, "reviewer", "worker")), at($request, "now"))
+    otherwise "A verified operator with the required lease role must record this action."
+  port scalar.read { text = $fields.base } → base
+  assert eq($base, $request.snapshot.revision)
+    otherwise "The local corpus changed. Reopen the opportunity and try again."
+  port kernel.invoke { query = "lease.current"; input = { id = $change.id; state = $change.state; now = $request.now } } → current
+  let packet = $current.packet
+  let head = $current.head
+  assert and($packet, eq(at($fields, "packet"), $packet.id), eq(at($fields, "previous"), if($head, $head.id, $packet.id)))
+    otherwise "Use the current frozen packet and lease coordinates."
+  port digest.sha256 { text = $packet.text } → pin
+  assert eq($pin, $packet.sha256)
+    otherwise "The frozen packet bytes differ from their recorded pin."
+  let eventId = concat("evidence-check.", $request.nonce)
+  let row = null
+  let reason = ""
+  let notice = ""
+  when $issuing:
+    assert and(not($current.active), not(eq(at($head, "verified"), true)))
+      otherwise "This packet already has an active or completed evidence check."
+    port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "worker"); limit = 80 } } → worker
+    assert eq(at($fields, "confirm"), "issue")
+      otherwise "Explicitly confirm the one-shot lease."
+    port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "rationale"); limit = 1600 } } → reason
+    let row = { kind = "evidence-check"; event = "lease"; id = $eventId; opportunity = $change.id; packet = $packet.id; packetSha256 = $pin; previous = if($head, $head.id, $packet.id); worker = $worker; issuedBy = $operator.id; issuedAt = $request.now; expiresAt = add($request.now, 900000); reason = $reason; scope = "verify-pinned-file-once" }
+    let notice = "One-shot evidence lease issued."
+  when not($issuing):
+    assert and($current.active, eq($head.worker, $operator.id), eq($head.packetSha256, $pin))
+      otherwise "This worker needs the current unexpired lease."
+    assert at($request, "attachments")
+      otherwise "Mount the verified transfer before running this check."
+    port rel.decode { text = $packet.text; kind = "ClaimipediaResearchPacket" } → document
+    let evidence = $document.evidence
+    port attachment.verify { path = $evidence.path; bytes = $evidence.bytes; sha256 = $evidence.sha256 } → verified
+    let reason = "Check exact mounted evidence bytes against the frozen packet."
+    let row = { kind = "evidence-check"; event = "receipt"; id = $eventId; opportunity = $change.id; packet = $packet.id; packetSha256 = $pin; previous = $head.id; lease = $head.id; worker = $operator.id; checkedAt = $request.now; evidenceId = $evidence.id; evidenceSha256 = $evidence.sha256; verified = $verified; scientificAdmission = false; publicationAuthorized = false }
+    let notice = if($verified, "Evidence bytes verified. Lease consumed.", "Evidence verification failed. Lease consumed.")
+  let rows = at($change.state, "frontier")
+  port record.put { record = $change.state; key = "frontier"; value = append(list($row), if($rows, $rows, list())) } → state
+  port kernel.invoke { query = "claimipedia.commit"; input = { request = $request; state = $state; base = $base; reason = $reason; target = $change.id; notice = $notice } } → result
+
+process lease.detail:
+  let screen = $eventInput
+  let request = $screen.request
+  port kernel.invoke { query = "lease.current"; input = { id = $screen.id; state = $screen.state; now = at($request, "now") } } → current
+  let packet = $current.packet
+  let head = $current.head
+  let operator = at($request, "operator")
+  let issue = and($packet, eq(at($operator, "role"), "reviewer"), not($current.active), not(eq(at($head, "verified"), true)))
+  let run = and($current.active, eq(at($operator, "role"), "worker"), eq(at($head, "worker"), at($operator, "id")))
+  let form = null
+  when or($issue, $run):
+    let hidden = map(list(list("collection", "research-inbox"), list("checkpoint", $screen.id), list("packet", $packet.id), list("previous", if($head, $head.id, $packet.id))), "pair", {
+      tag = "input"; attrs = { type = "hidden"; name = at($pair, 0); value = at($pair, 1) }; children = list()
+    })
+    let fields = $hidden
+    when $issue:
+      port kernel.invoke { query = "portfolio.field"; input = { field = { name = "worker"; label = "Worker operator ID"; type = "text"; required = true; maxlength = 80 }; labelId = "lease-worker" } } → worker
+      port kernel.invoke { query = "portfolio.field"; input = { field = { name = "rationale"; label = "Lease rationale"; type = "textarea"; required = true; maxlength = 1600 }; labelId = "lease-reason" } } → reason
+      let confirm = { tag = "label"; attrs = {}; children = list("Confirm a single evidence check", { tag = "input"; attrs = { type = "checkbox"; name = "confirm"; value = "issue"; required = true }; children = list() }) }
+      let fields = append($fields, list($worker, $reason, $confirm))
+    port kernel.invoke { query = "work.form"; input = { csrf = $request.csrf; revision = $request.snapshot.revision; action = if($issue, "issue-evidence-lease", "run-evidence-check"); fields = $fields; button = if($issue, "Issue evidence lease", "Run pinned evidence check"); style = "cp-form" } } → form
+  let events = map($current.events, "row", { tag = "li"; attrs = {}; children = list(
+    { tag = "p"; attrs = {}; children = list(if(eq($row.event, "lease"), concat("Lease issued to ", $row.worker, " by ", at($row, "issuedBy")), if(at($row, "verified"), "Evidence integrity verified", "Evidence integrity check failed"))) },
+    { tag = "p"; attrs = {}; children = list(concat($row.id, " · Previous: ", $row.previous)) },
+    { tag = "p"; attrs = {}; children = list(concat("Packet SHA-256: ", $row.packetSha256)) },
+    { tag = "p"; attrs = {}; children = list(if(eq($row.event, "lease"), concat("Expires at Unix milliseconds: ", at($row, "expiresAt")), concat("Evidence SHA-256: ", at($row, "evidenceSha256")))) }
+  ) })
+  let result = list()
+  when or($packet, count($events)):
+    let result = list(
+      { tag = "h3"; attrs = {}; children = list("Supervised evidence check") },
+      { tag = "p"; attrs = {}; children = list("A separate lease allows a named worker to check one pinned file within 15 minutes.") },
+      $form,
+      { tag = "ul"; attrs = { "aria-label" = "Evidence check history" }; children = $events }
+    )

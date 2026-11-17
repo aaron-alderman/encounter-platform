@@ -1,0 +1,98 @@
+process-module "temple/surface-process-module/1"
+
+process claimipedia.admissionHandoffHead:
+  let context = $eventInput
+  let result = at(filter($context.rows, "row", and(eq($row.kind, "scientific-admission-handoff"),
+    eq($row.candidate, $context.staged.id), eq($row.sha256, $context.pin))), 0)
+
+process claimipedia.admissionHandoff:
+  let change = $eventInput
+  let request = $change.request
+  let fields = $request.fields
+  let operator = at($request, "operator")
+  assert $change.claim
+    otherwise "Choose a released claim."
+  port scalar.read { text = $fields.base } → base
+  port kernel.invoke { query = "claimipedia.lineage"; input = $change } → lineage
+  port kernel.invoke { query = "claimipedia.publicationContext"; input = { state = $change.state; lineage = $lineage; claim = $change.claim } } → context
+  let staged = $context.staged
+  let approval = $context.approval
+  let reviewed = { id = at($fields, "candidate"); revision = at($fields, "revision"); sha256 = at($fields, "pin") }
+  let candidate = { id = at($staged, "id"); revision = at($staged, "revision"); sha256 = $context.pin }
+  let exactStage = and($staged, $approval, eq($staged.approval, $approval.id), eq($staged.payload, $context.payload))
+  port kernel.invoke { query = "guarded.review"; input = { base = $base; head = $change.snapshot.revision; reviewed = $reviewed; candidate = $candidate; approved = if($exactStage, true, false) } } → guard
+  assert $guard.current
+    otherwise "The draft store changed. Reopen the claim and try again."
+  assert $guard.allowed
+    otherwise "Choose the current, exactly staged publication candidate."
+  port kernel.invoke { query = "claimipedia.admissionHandoffHead"; input = $context } → handoff
+  when eq($fields.action, "publish-candidate"):
+    port kernel.invoke { query = "claimipedia.admissionReceiptHead"; input = { publication = $context; handoff = $handoff } } → admission
+    assert $admission
+      otherwise "Independent scientific admission is required before public publication."
+    assert false
+      otherwise "Public release requires separate publication authority."
+  let curator = and(at($operator, "id"), eq(at($operator, "role"), "curator"))
+  when eq($fields.action, "intake-scientific-receipt"):
+    assert $curator
+      otherwise "A verified curator must import the scientific admission receipt."
+    port kernel.invoke { query = "claimipedia.admissionReceiptSave"; input = { change = $change; publication = $context; handoff = $handoff; base = $base } } → result
+  when eq($fields.action, "record-scientific-handoff"):
+    assert $curator
+      otherwise "A verified curator must record the scientific admission handoff."
+    assert not($handoff)
+      otherwise "A scientific admission handoff already exists for this exact candidate."
+    port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "reason"); limit = 800 } } → reason
+    let id = concat("scientific-admission-handoff.", $request.nonce)
+    let packet = {
+      protocol = "claimipedia/scientific-admission-handoff/1"; id = $id;
+      candidate = $staged.id; candidateSha256 = $context.pin; approval = $approval.id;
+      payload = $staged.payload; requestedBy = $operator.id; reason = $reason;
+      scientificAdmission = false; publicationAuthorized = false
+    }
+    port rel.encode { value = $packet; kind = "ClaimipediaScientificAdmissionHandoff" } → bytes
+    port digest.sha256 { text = $bytes } → hash
+    let record = {
+      id = $id; kind = "scientific-admission-handoff"; claim = $change.claim.id; revision = $staged.revision;
+      candidate = $staged.id; sha256 = $context.pin; packet = $bytes; packetSha256 = $hash;
+      scientificAdmission = false; publicationAuthorized = false
+    }
+    port record.put { record = $change.state; key = "publication"; value = append(list($record), $context.rows) } → state
+    let notice = "Scientific admission handoff recorded. Awaiting an independent decision."
+    port kernel.invoke { query = "claimipedia.commit"; input = { request = $request; state = $state; base = $base; reason = $reason; target = $staged.id; notice = $notice } } → result
+
+process claimipedia.admissionHandoffView:
+  let input = $eventInput
+  let screen = $input.screen
+  let context = $input.publication
+  port kernel.invoke { query = "claimipedia.admissionHandoffHead"; input = $context } → handoff
+  port kernel.invoke { query = "claimipedia.admissionReceiptHead"; input = { publication = $context; handoff = $handoff } } → admission
+  let message = if($admission, "Independent scientific admission recorded. Public release requires separate authority.", "Public publication is blocked pending independent scientific admission.")
+  let result = list({ tag = "p"; attrs = {}; children = list($message) })
+  when and(not($handoff), eq(at($screen, "operatorRole"), "curator")):
+    let reason = { name = "reason"; label = "Scientific handoff reason"; type = "text"; maxlength = 800; required = true }
+    port kernel.invoke { query = "portfolio.field"; input = { field = $reason; labelId = "scientific-handoff-reason" } } → control
+    let fields = list(
+      { tag = "input"; attrs = { type = "hidden"; name = "target"; value = $screen.selected.id }; children = list() },
+      { tag = "input"; attrs = { type = "hidden"; name = "candidate"; value = $context.staged.id }; children = list() },
+      { tag = "input"; attrs = { type = "hidden"; name = "revision"; value = $context.staged.revision }; children = list() },
+      { tag = "input"; attrs = { type = "hidden"; name = "pin"; value = $context.pin }; children = list() },
+      $control
+    )
+    port kernel.invoke { query = "work.form"; input = { csrf = $screen.csrf; revision = $screen.revision; action = "record-scientific-handoff"; fields = $fields; button = "Record scientific admission handoff"; style = "cp-form" } } → form
+    let result = append($result, list($form))
+  when $handoff:
+    port digest.sha256 { text = $handoff.packet } → hash
+    assert eq($hash, $handoff.packetSha256)
+      otherwise "The retained scientific admission handoff packet differs from its pin."
+    let details = { tag = "details"; attrs = {}; children = list(
+      { tag = "summary"; attrs = {}; children = list("View scientific admission handoff REL") },
+      { tag = "pre"; attrs = { class = "cp-evidence-source" }; children = list($handoff.packet) }
+    ) }
+    let result = append($result, list(
+      { tag = "p"; attrs = {}; children = list(if($admission, "Scientific admission handoff retained.", "Scientific admission handoff awaiting an independent decision.")) },
+      { tag = "p"; attrs = {}; children = list(concat("Handoff SHA-256: ", $hash)) },
+      $details
+    ))
+    port kernel.invoke { query = "claimipedia.admissionReceiptView"; input = { screen = $screen; publication = $context; handoff = $handoff; admission = $admission } } → intake
+    let result = append($result, $intake)

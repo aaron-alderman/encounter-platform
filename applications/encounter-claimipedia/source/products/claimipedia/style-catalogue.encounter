@@ -1,0 +1,193 @@
+process-module "temple/surface-process-module/1"
+
+process claimipedia.styleCatalogue.examples:
+  let style = $eventInput
+  let result = { href = "/"; label = "Steward workspace home" }
+  port text.slice { value = $style; start = 0; end = 7 } → prefix
+  when or(eq($prefix, "cp-map-"), includes(list("cp-map", "cp-atlas", "cp-regions", "cp-region", "cp-trail", "cp-page-head"), $style)):
+    let result = { href = "../?view=atlas&focus=clm_GAMES_SHARED_FACT_SPACE_PROJECTION"; label = "Reader atlas with a selected claim" }
+  when includes(list("cp-record-head", "cp-eyebrow", "cp-panel", "cp-vitals", "cp-nav"), $style):
+    let result = { href = "../?claim=clm_GAMES_SHARED_FACT_SPACE_PROJECTION"; label = "Released claim dossier" }
+  when includes(list("cp-results", "cp-result", "cp-badge", "cp-breadcrumb", "cp-search-form"), $style):
+    let result = { href = "/?collection=claims"; label = "Steward claim records" }
+  when includes(list("cp-form", "cp-notice", "cp-feedback", "cp-comparison"), $style):
+    let result = { href = "/?claim=clm_GAMES_SHARED_FACT_SPACE_PROJECTION"; label = "Claim editing and draft review" }
+  when eq($style, "cp-evidence-source"):
+    let result = { href = "/?collection=evidence-library&q=external-selector-and-invariant-robustness"; label = "Evidence library with a verified text record" }
+  when eq($style, "cp-reading-path"):
+    let result = { href = "/steward/leave"; label = "Reader entry · return to the public reader" }
+
+process claimipedia.styleCatalogue.pending:
+  let head = $eventInput
+  let id = at($head, "id")
+  let result = false
+  when $id:
+    port text.slice { value = $id; start = 0; end = 15 } → prefix
+    let result = eq($prefix, "style-proposal.")
+
+process claimipedia.styleCatalogue.save:
+  let input = $eventInput
+  let request = $input.request
+  let fields = $request.fields
+  let action = at($fields, "action")
+  let proposal = eq($action, "propose-style-deviation")
+  assert and($input.style, includes(list("propose-style-deviation", "review-style-deviation"), $action))
+    otherwise "Choose an approved style and a review action."
+  port scalar.read { text = $fields.base } → base
+  assert eq($base, $request.snapshot.revision)
+    otherwise "The workspace changed. Reopen the style before saving."
+  let head = $input.head
+  let previous = if($head, $head.id, $input.coordinate)
+  assert eq(at($fields, "previous"), $previous)
+    otherwise "The proposal changed. Reopen the style before saving."
+  port kernel.invoke { query = "claimipedia.styleCatalogue.pending"; input = $head } → pending
+  let reason = at($fields, "decision")
+  let parent = $previous
+  let notice = "Local deviation review recorded."
+  when $proposal:
+    assert not($pending)
+      otherwise "Review the current proposal before opening another for this style."
+    port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "rationale"); limit = 800 } } → reason
+    let parent = $input.pin
+    let notice = "Style deviation proposed for steward review."
+  when not($proposal):
+    assert and($pending, includes(list("Recommend for source approval", "Request changes", "Reject"), $reason))
+      otherwise "Choose a disposition for the pending proposal."
+    assert or(not(eq($reason, "Recommend for source approval")), eq(at($head, "previous"), $input.pin))
+      otherwise "The approved baseline changed. Request a fresh proposal against the current baseline."
+  port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "note"); limit = 3000 } } → note
+  let revision = {
+    kind = "checkpoint-note"; id = concat(if($proposal, "style-proposal.", "style-review."), $request.nonce);
+    checkpoint = $input.coordinate; previous = $parent; note = $note; reason = $reason
+  }
+  let rows = at($input.state, "frontier")
+  port record.put { record = $input.state; key = "frontier"; value = append(list($revision), if($rows, $rows, list())) } → state
+  port kernel.invoke { query = "claimipedia.commit"; input = { request = $request; state = $state; base = $base; reason = $reason; target = $input.coordinate; notice = $notice } } → notice
+  port storage.snapshot {} → snapshot
+  port kernel.invoke { query = "claimipedia.load"; input = $snapshot } → state
+  port record.put { record = $request; key = "snapshot"; value = $snapshot } → request
+  let result = { request = $request; state = $state; notice = $notice }
+
+process claimipedia.styleCatalogue.form:
+  let input = $eventInput
+  let request = $input.request
+  let pending = $input.pending
+  let hidden = map(list(list("collection", "platform"), list("area", "styles"), list("style", $input.style), list("previous", if($input.head, $input.head.id, $input.coordinate))), "field", {
+    tag = "input"; attrs = { type = "hidden"; name = at($field, 0); value = at($field, 1) }; children = list()
+  })
+  let fields = if($pending, list(
+    { name = "decision"; type = "select"; label = "Review disposition"; required = true; options = list(
+      { value = ""; label = "Choose a disposition" },
+      { value = "Recommend for source approval"; label = "Recommend for source approval" },
+      { value = "Request changes"; label = "Request changes" },
+      { value = "Reject"; label = "Reject" }
+    ) },
+    { name = "note"; type = "textarea"; label = "Review rationale"; required = true; maxlength = 3000 }
+  ), list(
+    { name = "note"; type = "textarea"; label = "Proposed deviation and affected surfaces"; required = true; maxlength = 3000 },
+    { name = "rationale"; type = "textarea"; label = "Why a deviation is needed"; required = true; maxlength = 800 }
+  ))
+  fold $fields as field; controls starts $hidden:
+    port kernel.invoke { query = "portfolio.field"; input = { field = $field; labelId = concat("style-deviation-", $field.name) } } → control
+    yield append($controls, list($control)) → controls
+  port kernel.invoke { query = "work.form"; input = {
+    csrf = $request.csrf; revision = $request.snapshot.revision; fields = $controls; style = "cp-form";
+    action = if($pending, "review-style-deviation", "propose-style-deviation"); button = if($pending, "Record style review", "Propose style deviation")
+  } } → result
+
+process claimipedia.styleCatalogue:
+  let request = $eventInput.request
+  let state = $eventInput.state
+  let index = "/?collection=platform&area=styles"
+  let requested = at($request.fields, "style")
+  let name = if($requested, $requested, "cp-workspace-panel")
+  port kernel.invoke { query = "claimipedia.design.components" } → components
+  port kernel.invoke { query = "claimipedia.design.placements" } → slots
+  port record.fromEntries { entries = $slots } → placements
+  port kernel.invoke { query = "claimipedia.design.approvalPin" } → pin
+  let style = at(filter($components, "component", eq($component.name, $name)), 0)
+  let coordinate = concat("styleDeviation.", $name)
+  let notice = if($style, "", "Choose a style from the approved catalogue.")
+  let error = not($style)
+  when eq($request.method, "POST"):
+    port kernel.invoke { query = "checkpoint.notes"; input = { state = $state; id = $coordinate } } → history
+    try:
+      port kernel.invoke { query = "claimipedia.styleCatalogue.save"; input = { request = $request; state = $state; style = and($style, $requested); coordinate = $coordinate; pin = $pin; head = at($history, 0) } } → saved
+      let notice = $saved.notice
+      let state = $saved.state
+      let request = $saved.request
+    catch fault:
+      let notice = $fault.message
+      let error = true
+  let details = list()
+  when $style:
+    let parents = at($placements, $name)
+    let placement = "Follows the shared semantic nesting rules."
+    when $parents:
+      port text.join { values = $parents; separator = ", " } → labels
+      let placement = concat("Approved direct parents · ", $labels)
+    port kernel.invoke { query = "claimipedia.styleCatalogue.examples"; input = $name } → example
+    let samples = {
+      "cp-badge" = { tag = "span"; attrs = { class = "cp-badge" }; children = list("Released claim") };
+      "cp-notice" = { tag = "p"; attrs = { class = "cp-notice" }; children = list("Draft wording is local to the steward workspace.") };
+      "cp-feedback" = { tag = "p"; attrs = { class = "cp-feedback" }; children = list("Local note saved.") };
+      "cp-evidence-source" = { tag = "pre"; attrs = { class = "cp-evidence-source" }; children = list("Example verified source excerpt") }
+    }
+    let sample = { tag = "section"; attrs = { class = "cp-workspace-panel" }; children = list(
+      { tag = "h2"; attrs = {}; children = list($style.name) },
+      { tag = "p"; attrs = {}; children = list(concat("Element · ", $style.tag)) },
+      { tag = "p"; attrs = {}; children = list($placement) },
+      at($samples, $name),
+      { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = $example.href }; children = list($example.label) }) },
+      { tag = "details"; attrs = {}; children = list(
+        { tag = "summary"; attrs = {}; children = list("View approved style rules") },
+        { tag = "pre"; attrs = { class = "cp-evidence-source" }; children = list($style.css) }
+      ) }
+    ) }
+    port kernel.invoke { query = "checkpoint.notes"; input = { state = $state; id = $coordinate } } → history
+    let head = at($history, 0)
+    port kernel.invoke { query = "claimipedia.styleCatalogue.pending"; input = $head } → pending
+    port kernel.invoke { query = "claimipedia.styleCatalogue.form"; input = { request = $request; style = $name; head = $head; coordinate = $coordinate; pending = $pending } } → form
+    fold $history as event; events starts list():
+      port kernel.invoke { query = "claimipedia.styleCatalogue.pending"; input = $event } → proposal
+      let row = { tag = "li"; attrs = {}; children = list(
+        { tag = "strong"; attrs = {}; children = list(if($proposal, "Deviation proposal", $event.reason)) },
+        { tag = "p"; attrs = {}; children = list($event.note) },
+        if($proposal, { tag = "p"; attrs = {}; children = list($event.reason) }, null),
+        { tag = "small"; attrs = {}; children = list(concat(if($proposal, "Baseline · ", "Reviewed proposal · "), $event.previous)) }
+      ) }
+      yield append($events, list($row)) → events
+    let content = list(
+      { tag = "p"; attrs = {}; children = list(if($pending, "Awaiting steward review.", "A proposal describes a change to this approved style or its placement.")) },
+      if(and($pending, not(eq(at($head, "previous"), $pin))), { tag = "p"; attrs = { class = "cp-notice" }; children = list("This proposal was filed against an earlier baseline.") }, null),
+      $form,
+      if(count($events), { tag = "ul"; attrs = { "aria-label" = "Style review history" }; children = $events }, null)
+    )
+    port kernel.invoke { query = "claimipedia.design.panel"; input = { compact = true; title = "Review deviations for this style"; content = $content } } → review
+    let details = list($sample, $review)
+  let rows = at($state, "frontier")
+  let notes = filter(if($rows, $rows, list()), "row", eq(at($row, "kind"), "checkpoint-note"))
+  fold $components as component; queue starts list():
+    let id = concat("styleDeviation.", $component.name)
+    let head = at(filter($notes, "row", eq($row.checkpoint, $id)), 0)
+    let row = null
+    when $head:
+      port kernel.invoke { query = "claimipedia.styleCatalogue.pending"; input = $head } → pending
+      let row = { tag = "li"; attrs = {}; children = list(
+        { tag = "a"; attrs = { href = concat($index, "&style=", $component.name) }; children = list($component.name) },
+        concat(" · ", if($pending, "Awaiting review", $head.reason))
+      ) }
+    yield if($row, append($queue, list($row)), $queue) → queue
+  port kernel.invoke { query = "claimipedia.design.panel"; input = { compact = true; title = "Deviation queue"; content = list(
+    { tag = "p"; attrs = {}; children = list("Steward dispositions are local. A recommended deviation still needs the separate source approval and a new build.") },
+    if(count($queue), { tag = "ul"; attrs = { "aria-label" = "Proposed style deviations" }; children = $queue }, { tag = "p"; attrs = {}; children = list("No style deviations have been proposed.") })
+  ) } } → queuePanel
+  let entries = map($components, "component", { tag = "li"; attrs = {}; children = list(
+    { tag = "a"; attrs = { href = concat($index, "&style=", $component.name); "aria-current" = if(eq($component.name, $name), "page", null) }; children = list($component.name) },
+    concat(" · ", $component.tag)
+  ) })
+  port kernel.invoke { query = "claimipedia.design.panel"; input = { compact = true; title = "Approved named styles"; content = list(
+    { tag = "p"; attrs = {}; children = list(concat(count($components), " styles · approved baseline ", $pin)) },
+    { tag = "ul"; attrs = { "aria-label" = "Approved style catalogue" }; children = $entries }
+  ) } } → inventory
+  let result = { content = append(append(list($queuePanel), $details), list($inventory)); notice = $notice; error = $error }

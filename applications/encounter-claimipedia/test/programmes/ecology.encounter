@@ -1,0 +1,46 @@
+process-module "temple/surface-process-module/1"
+
+process test.ecology.map-and-aster:
+  each list("products/claimipedia/reader.rel", "products/claimipedia/application.rel") as declaration:
+    port browser.open { declaration = $declaration; width = 390; height = 844 } → opened
+    let page = $opened.page
+    port browser.act { page = $page; locator = list({ role = "link"; name = "Knowledge ecology" }); action = "press"; value = "Enter"; event = "navigation" } → map
+    port browser.observe { page = $page; locator = list({ role = "list"; name = "Ecology members" }, { role = "listitem" }); property = "count" } → members
+    port browser.observe { page = $page; locator = list({ role = "list"; name = "Ecology relationships" }, { role = "listitem" }); property = "count" } → relationships
+    port browser.observe { page = $page; locator = list({ role = "heading"; name = "Aster orients Claimipedia" }); property = "count" } → orientation
+    port browser.observe { page = $page; property = "overflow" } → overflow
+    assert and(eq($map.status, 200), eq($members, 6), eq($relationships, 5), eq($orientation, 1), not($overflow))
+      otherwise "The retained ecology identities and directed relationships must render at phone width."
+
+    port browser.act { page = $page; locator = list({ role = "link"; name = "Open Ask Aster" }); action = "click"; event = "navigation" } → ask
+    let question = "What can simulations show about counterfactual exploration?"
+    port browser.act { page = $page; locator = list({ label = "Your question" }); action = "fill"; value = $question } → _
+    port browser.act { page = $page; locator = list({ role = "button"; name = "Search the corpus" }); action = "press"; value = "Enter"; event = "navigation" } → searched
+    port browser.observe { page = $page; locator = list({ css = "ol[aria-label='Relevant released claims'] > li:first-child h3 a" }); property = "attribute"; name = "href" } → first
+    port browser.observe { page = $page; property = "overflow" } → overflow
+    assert and(eq($ask.status, 200), eq($searched.status, 200), eq($first, "/?claim=clm_SIMULATION_COUNTERFACTUAL_EXPLORATION"), not($overflow))
+      otherwise "A natural-language query must rank its relevant released claim first at phone width."
+
+    port browser.act { page = $page; locator = list({ label = "Your question" }); action = "fill"; value = "bodily transformation and the defeat of death" } → _
+    port browser.act { page = $page; locator = list({ role = "button"; name = "Search the corpus" }); action = "click"; event = "navigation" } → evidence
+    let source = list({ role = "link"; name = "Supports · Observation · evi_BIBLICAL_RESURRECTION_1_COR_15" })
+    port browser.observe { page = $page; locator = $source; property = "attribute"; name = "href" } → target
+    assert and(eq($evidence.status, 200), eq($target, "/?claim=clm_BIBLICAL_RESURRECTION_SIMULATION_RUPTURE#evidence.biblicalResurrection.firstCorinthians15"))
+      otherwise "Evidence provenance must be searchable and link to the exact released evidence record."
+    port browser.act { page = $page; locator = $source; action = "click"; event = "navigation" } → followed
+    port browser.observe { page = $page; locator = list({ css = "[id='evidence.biblicalResurrection.firstCorinthians15']" }); property = "count" } → record
+    assert and(eq($followed.status, 200), eq($record, 1))
+      otherwise "The selected evidence record must resolve in the claim detail."
+
+    port browser.act { page = $page; locator = list({ role = "link"; name = "Ask Aster" }); action = "click"; event = "navigation" } → _
+    port browser.act { page = $page; locator = list({ label = "Your question" }); action = "fill"; value = "unfindablewordqzx" } → _
+    port browser.act { page = $page; locator = list({ role = "button"; name = "Search the corpus" }); action = "click"; event = "navigation" } → empty
+    port browser.observe { page = $page; locator = list({ role = "status" }); property = "text" } → message
+    assert and(eq($empty.status, 200), includes($message, "No released claims match."))
+      otherwise "A query without corpus matches must produce an honest empty state."
+
+    when eq($declaration, "products/claimipedia/application.rel"):
+      port browser.act { page = $page; action = "navigate"; value = "/steward/?collection=surfaces" } → index
+      port browser.observe { page = $page; locator = list({ role = "list"; name = "Ecology tools" }, { role = "link"; name = "Ask Aster" }); property = "attribute"; name = "href" } → href
+      assert and(eq($index.status, 200), eq($href, "/aster"))
+        otherwise "The mounted steward Surface index must link to the reader’s Aster route."

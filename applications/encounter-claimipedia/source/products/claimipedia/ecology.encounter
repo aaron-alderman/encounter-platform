@@ -1,0 +1,83 @@
+process-module "temple/surface-process-module/1"
+
+process claimipedia.ecology.links:
+  let current = $eventInput
+  let result = list(
+    { tag = "a"; attrs = { href = "/ecology"; "aria-current" = if(eq($current, "/ecology"), "page", null) }; children = list("Knowledge ecology") },
+    { tag = "a"; attrs = { href = "/aster"; "aria-current" = if(eq($current, "/aster"), "page", null) }; children = list("Ask Aster") }
+  )
+
+process claimipedia.ecology.request:
+  let request = $eventInput.request
+  let reader = $eventInput.reader
+  let ask = eq($request.path, "/aster")
+  assert or(eq($request.method, "GET"), and($ask, eq($request.method, "POST")))
+    otherwise "The ecology map is read-only."
+  let title = if($ask, "Ask Aster", "Meet the knowledge ecology")
+  let intro = if($ask, "Ask a question to find released claims and their evidence. Relevance reflects matching terms. Evidence directions and provenance come from the release.", "Aster helps you find bearings, questions, and promising paths, then introduces the role or relationship that can help next.")
+  let view = { content = list(); notice = ""; session = $request.session }
+  when $ask:
+    port kernel.invoke { query = "claimipedia.aster.view"; input = { request = $request } } → view
+  when not($ask):
+    port application.data { name = "knowledge-ecology" } → raw
+    let facts = filter($raw, "fact", eq($fact.pol, "is"))
+    port kernel.invoke { query = "claimipedia.ecology.map"; input = $facts } → content
+    let view = { content = $content; notice = ""; session = $request.session }
+  port kernel.invoke { query = "claimipedia.ecology.links"; input = $request.path } → links
+  let nav = { tag = "nav"; attrs = { class = "cp-nav"; "aria-label" = "Ecology navigation" }; children = append(list(
+    { tag = "a"; attrs = { href = "/" }; children = list("Search claims") }
+  ), $links) }
+  let hero = { tag = "header"; attrs = { class = "cp-page-head" }; children = list(
+    { tag = "p"; attrs = { class = "cp-eyebrow" }; children = list("Claimipedia · Knowledge ecology") },
+    { tag = "h1"; attrs = {}; children = list($title) },
+    { tag = "p"; attrs = {}; children = list($intro) }
+  ) }
+  let page = { reader = $reader; title = concat($title, " · Claimipedia"); nav = $nav; content = append(list($hero), $view.content) }
+  port kernel.invoke { query = "claimipedia.design.page"; input = { page = $page; notice = $view.notice; error = if($view.notice, true, false) } } → html
+  let result = { html = $html; session = $view.session }
+
+process claimipedia.ecology.map:
+  let facts = $eventInput
+  let members = list("member.aster", "member.claimipedia", "member.seam", "member.sourcery", "member.temple", "member.migration")
+  let relationships = map(filter($facts, "fact", and(eq($fact.p, "is a"), eq($fact.o, "TypedRelationship"))), "fact", $fact.s)
+  fold $members as id; cards starts list():
+    port kernel.invoke { query = "claimipedia.subject"; input = { subject = $id; facts = $facts } } → member
+    assert and(eq(at($member, "member of"), "ecology.claimipedia"), at($member, "has title"), at($member, "has role"), at($member, "has purpose"), at($member, "has boundary"), at($member, "has avatar motif"), at($member, "avatar path"))
+      otherwise "Incomplete ecology member."
+    let avatar = { tag = "svg"; attrs = { viewBox = "0 0 120 120"; width = 84; height = 84; "aria-hidden" = "true" }; children = list(
+      { tag = "path"; attrs = { d = at($member, "avatar path"); stroke = "#a9e5d9"; "stroke-width" = 3; fill = "none" }; children = list() }
+    ) }
+    let ask = if(eq($id, "member.aster"), { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = "/aster" }; children = list("Open Ask Aster") }) }, null)
+    let card = { tag = "li"; attrs = { class = "cp-region"; id = $id }; children = list(
+      $avatar,
+      { tag = "h3"; attrs = {}; children = list(at($member, "has title")) },
+      { tag = "small"; attrs = {}; children = list(at($member, "has role")) },
+      { tag = "p"; attrs = {}; children = list(at($member, "has purpose")) },
+      { tag = "p"; attrs = {}; children = list({ tag = "strong"; attrs = {}; children = list("Authority boundary") }, " · ", at($member, "has boundary")) },
+      $ask
+    ) }
+    yield append($cards, list($card)) → cards
+  fold $relationships as id; edges starts list():
+    port kernel.invoke { query = "claimipedia.subject"; input = { subject = $id; facts = $facts } } → edge
+    assert and(includes($members, $edge.from), includes($members, $edge.to), $edge.relationship, at($edge, "has meaning"), at($edge, "explicitly excludes"))
+      otherwise "Incomplete ecology relationship."
+    port kernel.invoke { query = "claimipedia.subject"; input = { subject = $edge.from; facts = $facts } } → origin
+    port kernel.invoke { query = "claimipedia.subject"; input = { subject = $edge.to; facts = $facts } } → destination
+    let row = { tag = "li"; attrs = { id = $id }; children = list(
+      { tag = "h3"; attrs = {}; children = list(concat(at($origin, "has title"), " ", $edge.relationship, " ", at($destination, "has title"))) },
+      { tag = "p"; attrs = {}; children = list(at($edge, "has meaning")) },
+      { tag = "p"; attrs = {}; children = list("Excludes · ", at($edge, "explicitly excludes")) }
+    ) }
+    yield append($edges, list($row)) → edges
+  port kernel.invoke { query = "claimipedia.subject"; input = { subject = "ecology.claimipedia"; facts = $facts } } → ecology
+  let cast = { tag = "section"; attrs = { class = "cp-atlas" }; children = list(
+    { tag = "h2"; attrs = {}; children = list("The ecology map") },
+    { tag = "p"; attrs = {}; children = list(at($ecology, "has purpose")) },
+    { tag = "p"; attrs = {}; children = list(concat(count($cards), " distinct identities · ", count($edges), " typed relationships")) },
+    { tag = "ul"; attrs = { class = "cp-regions"; "aria-label" = "Ecology members" }; children = $cards }
+  ) }
+  let handoffs = { tag = "section"; attrs = { class = "cp-panel"; id = "ecology-handoffs" }; children = list(
+    { tag = "h2"; attrs = {}; children = list("Typed relationships") },
+    { tag = "ul"; attrs = { "aria-label" = "Ecology relationships" }; children = $edges }
+  ) }
+  let result = list($cast, $handoffs)

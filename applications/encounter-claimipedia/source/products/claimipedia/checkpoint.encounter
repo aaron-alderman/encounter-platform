@@ -1,0 +1,102 @@
+process-module "temple/surface-process-module/1"
+
+process checkpoint.notes:
+  let input = $eventInput
+  let revisions = at($input.state, "frontier")
+  let result = filter(if($revisions, $revisions, list()), "row", and(eq(at($row, "kind"), "checkpoint-note"), eq(at($row, "checkpoint"), $input.id)))
+
+process checkpoint.save:
+  let input = $eventInput
+  let request = $input.request
+  let fields = $request.fields
+  assert and($input.selected, eq(at($fields, "action"), "save-checkpoint-note"))
+    otherwise "Choose a research checkpoint before saving a local note."
+  port scalar.read { text = $fields.base } → base
+  assert eq($base, $request.snapshot.revision)
+    otherwise "The local corpus changed. Reopen the checkpoint and try again."
+  port kernel.invoke { query = "checkpoint.notes"; input = { state = $input.state; id = $input.id } } → history
+  let head = at($history, 0)
+  let previous = if($head, $head.id, $input.id)
+  assert eq(at($fields, "previous"), $previous)
+    otherwise "This checkpoint note changed. Reopen it before editing."
+  port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "note"); limit = 3000 } } → note
+  port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "reason"); limit = 800 } } → reason
+  let revision = { kind = "checkpoint-note"; id = concat("checkpoint-note.", $request.nonce); checkpoint = $input.id; previous = $previous; note = $note; reason = $reason }
+  let revisions = at($input.state, "frontier")
+  port record.put { record = $input.state; key = "frontier"; value = append(list($revision), if($revisions, $revisions, list())) } → state
+  port kernel.invoke { query = "claimipedia.commit"; input = { request = $request; state = $state; base = $base; reason = $reason; target = $input.id; notice = "Local checkpoint note saved." } } → result
+
+process checkpoint.detail:
+  let screen = $eventInput
+  let request = $screen.request
+  port kernel.invoke { query = "checkpoint.notes"; input = { state = $screen.state; id = $screen.id } } → history
+  let head = at($history, 0)
+  let previous = if($head, $head.id, $screen.id)
+  let hidden = map(list(list("collection", at($request.fields, "collection")), list("checkpoint", $screen.id), list("previous", $previous)), "field", {
+    tag = "input"; attrs = { type = "hidden"; name = at($field, 0); value = at($field, 1) }; children = list()
+  })
+  port kernel.invoke { query = "portfolio.field"; input = { field = { name = "note"; label = "Local research note"; type = "textarea"; maxlength = 3000; required = true; value = if($head, $head.note, "") }; labelId = "checkpoint-note" } } → note
+  port kernel.invoke { query = "portfolio.field"; input = { field = { name = "reason"; label = "Revision reason"; type = "text"; maxlength = 800; required = true }; labelId = "checkpoint-reason" } } → reason
+  port kernel.invoke { query = "work.form"; input = { csrf = $request.csrf; revision = $request.snapshot.revision; action = "save-checkpoint-note"; formAction = at($screen, "formAction"); fields = append($hidden, list($note, $reason)); button = "Save local note"; style = "cp-form" } } → form
+  let rows = map($history, "row", { tag = "li"; attrs = {}; children = list(
+    { tag = "p"; attrs = {}; children = list(concat($row.id, " · Previous version: ", $row.previous)) },
+    { tag = "p"; attrs = {}; children = list($row.note) },
+    { tag = "p"; attrs = {}; children = list(concat("Reason: ", $row.reason)) }
+  ) })
+  let result = list(
+    { tag = "h3"; attrs = {}; children = list("Local research notes") },
+    $form,
+    { tag = "ul"; attrs = { "aria-label" = "Local checkpoint note history" }; children = $rows }
+  )
+
+process checkpoint.record:
+  let screen = $eventInput
+  port application.data { name = $screen.record.dataset } → facts
+  let groups = distinct(map($facts, "fact", $fact.s))
+  let rows = map($groups, "id", { tag = "li"; attrs = {}; children = list(
+    { tag = "h3"; attrs = {}; children = list($id) },
+    { tag = "ul"; attrs = {}; children = map(filter($facts, "fact", eq($fact.s, $id)), "fact", {
+      tag = "li"; attrs = {}; children = list(concat($fact.p, ": ", $fact.o))
+    }) }
+  ) })
+  let body = list(
+    { tag = "h2"; attrs = {}; children = list($screen.record.title) },
+    { tag = "p"; attrs = {}; children = list(concat("Verified transfer · ", $screen.record.sourcePath)) },
+    { tag = "ul"; attrs = { "aria-label" = "Imported source facts" }; children = $rows }
+  )
+  when $screen.notesEnabled:
+    port kernel.invoke { query = "library.evidenceLinks"; input = $screen.id } → links
+    let body = append($body, $links)
+    port kernel.invoke { query = "checkpoint.detail"; input = $screen } → notes
+    let body = append($body, $notes)
+  let result = $body
+
+process checkpoint.request:
+  let request = $eventInput
+  let collection = at($request.fields, "collection")
+  let notesEnabled = eq($collection, "checkpoints")
+  port application.data { name = "transfer-records" } → catalogue
+  let ids = map(filter($catalogue, "fact", and(eq($fact.p, "collection"), eq($fact.o, $collection))), "fact", $fact.s)
+  let id = at($request.fields, "checkpoint")
+  let selected = includes($ids, $id)
+  port kernel.invoke { query = "claimipedia.researchReview"; input = { request = $request; selected = and($selected, $notesEnabled); id = $id } } → review
+  let request = $review.request
+  let state = $review.state
+  let title = if($notesEnabled, "Research checkpoints", "Internal application records")
+  let summary = if($notesEnabled, "Historical research dispositions with separately recorded local notes.", "Historical application policy and test records from the verified transfer.")
+  let body = list()
+  when $selected:
+    port kernel.invoke { query = "claimipedia.subject"; input = { facts = $catalogue; subject = $id } } → record
+    port kernel.invoke { query = "checkpoint.record"; input = { request = $request; state = $state; id = $id; record = $record; notesEnabled = $notesEnabled } } → body
+  when not($selected):
+    fold $ids as recordId; items starts list():
+      port kernel.invoke { query = "claimipedia.subject"; input = { facts = $catalogue; subject = $recordId } } → record
+      let item = { tag = "li"; attrs = {}; children = list(
+        { tag = "a"; attrs = { href = concat("/?collection=", $collection, "&checkpoint=", $recordId) }; children = list($record.title) }
+      ) }
+      yield append($items, list($item)) → items
+    let body = list({ tag = "ul"; attrs = { "aria-label" = $title }; children = $items })
+  port kernel.invoke { query = "claimipedia.collections"; input = { design = true; path = $request.path; current = concat("/?collection=", $request.fields.collection) } } → nav
+  let view = { title = $title; summary = $summary; nav = $nav; content = $body }
+  port kernel.invoke { query = "claimipedia.design.workspacePage"; input = { page = $view; notice = $review.notice; error = $review.error; urlPrefix = if(eq($request.path, "/steward/"), "/steward", "") } } → html
+  let result = { html = $html; session = $request.session }

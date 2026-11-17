@@ -1,0 +1,560 @@
+process-module "temple/surface-process-module/1"
+
+process test.claimipedia.development-draft:
+  port file.text { file = "corpus/claimipedia-full-corpus-v1.0.0.rel" } → before
+  port digest.sha256 { text = $before } → identity
+  assert eq($identity, "449807f0e2b4b6378505d94810a60ca5665ec74b3b416291980f19b6af90518d")
+    otherwise "The development corpus must be byte-identical to the release."
+  port browser.open { width = 390; height = 844 } → opened
+  assert eq($opened.status, 200)
+    otherwise "Claimipedia did not open its pinned corpus."
+  let page = $opened.page
+  port browser.act { page = $page; locator = list({ label = "Search claims" }); action = "fill"; value = "North River restoration reduced mean nitrate" } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Search" }); action = "click"; event = "navigation" } → search
+  assert eq($search.status, 200)
+    otherwise "Claim search must use the normal page route."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "clm_01_RIVER_NITRATE" }); action = "click"; event = "navigation" } → detail
+  assert eq($detail.status, 200)
+    otherwise "The result must resolve through its released claim identifier."
+  port browser.observe { page = $page; locator = list({ text = "urn:claimipedia:fixture:north-study" }); property = "count" } → evidence
+  port browser.observe { page = $page; locator = list({ text = "Released version 1 · claimVersion.riverNitrate.1" }); property = "count" } → released
+  assert and(eq($evidence, 1), eq($released, 1))
+    otherwise "The released version coordinate and evidence link must remain accessible."
+  port browser.page { browser = $opened.browser; route = "/?claim=clm_01_RIVER_NITRATE"; independent = true } → stale
+  port browser.act { page = $page; locator = list({ label = "Draft statement" }); action = "fill"; value = "Development draft for the North River claim." } → _
+  port browser.act { page = $page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Exercise the private draft workflow." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Save draft revision" }); action = "click"; event = "navigation" } → saved
+  assert eq($saved.status, 200)
+    otherwise "A private revision must use the ordinary application route."
+  port browser.observe { page = $page; locator = list({ role = "status" }); property = "text" } → notice
+  assert eq($notice, "Draft version 2 saved.")
+    otherwise "The draft must follow released version 1."
+  port browser.act { page = $stale.page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Attempt an obsolete revision." } → _
+  port browser.act { page = $stale.page; locator = list({ role = "button"; name = "Save draft revision" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $stale.page; locator = list({ role = "alert" }); property = "text" } → refusal
+  assert eq($refusal, "The draft store changed. Reopen the claim and try again.")
+    otherwise "An obsolete draft must refuse."
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  port browser.act { page = $page; action = "navigate"; value = "/?claim=clm_01_RIVER_NITRATE" } → detail
+  port browser.observe { page = $page; locator = list({ text = "Draft version 2" }); property = "count" } → draft
+  port browser.observe { page = $page; locator = list({ text = "Released version 1 · claimVersion.riverNitrate.1" }); property = "count" } → released
+  port browser.observe { page = $page; locator = list({ text = "Previous version: claimVersion.riverNitrate.1" }); property = "count" } → previous
+  port browser.observe { page = $page; property = "overflow" } → overflow
+  assert and(eq($detail.status, 200), eq($draft, 1), eq($released, 1), eq($previous, 1), not($overflow))
+    otherwise "Both versions and their lineage must survive a cold reopening at phone width."
+  port browser.observe { page = $page; locator = list({ text = "After: Development draft for the North River claim." }); property = "count" } → after
+  assert eq($after, 1)
+    otherwise "The review must show the changed statement against the previous version."
+  port browser.page { browser = $opened.browser; route = "/?claim=clm_01_RIVER_NITRATE"; independent = true } → reviewTab
+  port browser.act { page = $page; locator = list({ label = "Draft statement" }); action = "fill"; value = "Locally accepted nitrate wording." } → _
+  port browser.act { page = $page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Revise the saved draft." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Save draft revision" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ text = "Before: Development draft for the North River claim." }); property = "count" } → prior
+  assert eq($prior, 1)
+    otherwise "A revised draft must compare with its draft predecessor."
+  port browser.act { page = $reviewTab.page; locator = list({ role = "button"; name = "Accept draft locally" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $reviewTab.page; locator = list({ role = "alert" }); property = "text" } → staleReview
+  assert eq($staleReview, "The draft store changed. Reopen the claim and try again.")
+    otherwise "Accept must refer to the version actually reviewed."
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Accept draft locally" }); action = "click"; event = "navigation" } → _
+  port browser.act { page = $page; locator = list({ label = "Draft statement" }); action = "fill"; value = "Discarded nitrate wording." } → _
+  port browser.act { page = $page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Exercise discard after acceptance." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Save draft revision" }); action = "click"; event = "navigation" } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Discard draft" }); action = "click"; event = "navigation" } → _
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  port browser.act { page = $page; action = "navigate"; value = "/?q=Locally+accepted+nitrate+wording" } → _
+  port browser.act { page = $page; locator = list({ role = "link"; name = "clm_01_RIVER_NITRATE" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ text = "Local working version 3 · Locally accepted nitrate wording." }); property = "count" } → working
+  port browser.observe { page = $page; locator = list({ text = "Status: discarded" }); property = "count" } → discarded
+  port browser.observe { page = $page; locator = list({ role = "button"; name = "Accept draft locally" }); property = "count" } → pending
+  assert and(eq($working, 1), eq($discarded, 1), eq($pending, 0))
+    otherwise "Discard must retain history and leave the accepted working version active after reopening."
+  port file.text { file = "corpus/claimipedia-full-corpus-v1.0.0.rel" } → after
+  assert eq($before, $after)
+    otherwise "Editing a private draft must leave the release bytes unchanged."
+
+process test.claimipedia.frontier-assessment:
+  port browser.open { declaration = "products/claimipedia/application.rel"; width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Frontier Claims" }); action = "click"; event = "navigation" } → frontier
+  port browser.observe { page = $page; locator = list({ text = "234 matches · showing 24" }); property = "count" } → count
+  assert and(eq($frontier.status, 200), eq($count, 1))
+    otherwise "Frontier must have its own searchable collection with all imported assessments."
+  port browser.act { page = $page; locator = list({ label = "Search Frontier assessments" }); action = "fill"; value = "FC-IT3-01" } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Search" }); action = "click"; event = "navigation" } → _
+  port browser.act { page = $page; locator = list({ role = "link"; name = "FC-IT3-01" }); action = "click"; event = "navigation" } → detail
+  port browser.observe { page = $page; locator = list({ text = "Integer triples and their invariants can serve as primitive identifiers of physically meaningful geometry." }); property = "count" } → attribution
+  port browser.observe { page = $page; locator = list({ label = "Current warrant" }); property = "value" } → warrant
+  assert and(eq($detail.status, 200), eq($attribution, 1), eq($warrant, "plausible-mathematical-programme"))
+    otherwise "The original attribution and warrant must be accessible."
+  port browser.act { page = $page; locator = list({ label = "Current warrant" }); action = "fill"; value = "Local warrant wording for testing." } → _
+  port browser.act { page = $page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Exercise local assessment history." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Save assessment revision" }); action = "click"; event = "navigation" } → saved
+  port browser.observe { page = $page; locator = list({ role = "status" }); property = "text" } → notice
+  assert and(eq($saved.status, 200), eq($notice, "Local Frontier assessment revision saved."))
+    otherwise "Assessment edits must save through the ordinary form."
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  port browser.act { page = $page; action = "navigate"; value = "/?collection=frontier&q=Local+warrant+wording" } → _
+  port browser.act { page = $page; locator = list({ role = "link"; name = "FC-IT3-01" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ label = "Current warrant" }); property = "value" } → warrant
+  port browser.observe { page = $page; locator = list({ text = "Current warrant: plausible-mathematical-programme" }); property = "count" } → imported
+  port browser.observe { page = $page; property = "overflow" } → overflow
+  assert and(eq($warrant, "Local warrant wording for testing."), eq($imported, 1), not($overflow))
+    otherwise "Current and imported assessments must survive cold reopening at phone width."
+
+process test.claimipedia.frontier-research-and-references:
+  port browser.open { declaration = "products/claimipedia/application.rel"; width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Research arms" }); action = "press"; value = "Enter"; event = "navigation" } → research
+  port browser.act { page = $page; locator = list({ role = "link"; name = "FRA-01 · Information → geometry → symmetry" }); action = "click"; event = "navigation" } → detail
+  port browser.observe { page = $page; locator = list({ text = "FRA01-W1 · Distance-transform tournament" }); property = "count" } → work
+  port browser.observe { page = $page; locator = list({ text = "hold · Geometry is recovered but signature or algebra is underidentified." }); property = "count" } → disposition
+  assert and(eq($research.status, 200), eq($detail.status, 200), eq($work, 1), eq($disposition, 1))
+    otherwise "Research arms must retain their work packs and decision gates."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "FC-QGE-01" }); action = "click"; event = "navigation" } → assessment
+  port browser.observe { page = $page; locator = list({ role = "heading"; name = "FC-QGE-01" }); property = "count" } → id
+  assert and(eq($assessment.status, 200), eq($id, 1))
+    otherwise "Research arms must link back to their Frontier assessments."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Frontier references" }); action = "click"; event = "navigation" } → evidence
+  port browser.observe { page = $page; locator = list({ text = "102 references" }); property = "count" } → count
+  assert and(eq($evidence.status, 200), eq($count, 1))
+    otherwise "The reference catalogue must retain every imported row."
+  port browser.act { page = $page; locator = list({ label = "Search references" }); action = "fill"; value = "REF-26" } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Search" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ text = "2 references" }); property = "count" } → duplicates
+  port browser.observe { page = $page; locator = list({ role = "link"; name = "Conscious Point Physics Papers" }); property = "attribute"; name = "href" } → link
+  port browser.observe { page = $page; locator = list({ text = "REF-26 · primary-historical-logistics-source" }); property = "count" } → role
+  assert and(eq($duplicates, 1), eq($link, "https://hyperphysics.com/papers/index.html"), eq($role, 1))
+    otherwise "Overlapping legacy reference IDs must keep both source records and their provenance."
+
+process test.claimipedia.frontier-research-edits:
+  port browser.open { width = 390; height = 844 } → opened
+  let armRoute = "/?collection=research&arm=FRA-01"
+  port browser.act { page = $opened.page; action = "navigate"; value = $armRoute } → _
+  let page = $opened.page
+  port browser.page { browser = $opened.browser; route = $armRoute; independent = true } → staleTab
+  let stale = $staleTab.page
+  let armTitle = "Local geometry research plan"
+  let armAction = "Check the independent mesher before reopening."
+  port browser.act { page = $page; locator = list({ label = "Research arm title" }); action = "fill"; value = $armTitle } → _
+  port browser.act { page = $page; locator = list({ label = "Next action" }); action = "fill"; value = $armAction } → _
+  port browser.act { page = $page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Record the next planning step." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Save research arm revision" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ role = "status" }); property = "text" } → notice
+  assert eq($notice, "Local research arm revision saved.")
+    otherwise "A local research arm edit must save."
+  port browser.observe { page = $page; locator = list({ css = "input[name=previous]" }); property = "value" } → first
+  port browser.act { page = $stale; locator = list({ label = "Revision reason" }); action = "fill"; value = "Stale arm update." } → _
+  port browser.act { page = $stale; locator = list({ role = "button"; name = "Save research arm revision" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $stale; locator = list({ role = "alert" }); property = "text" } → refusal
+  assert eq($refusal, "The local corpus changed. Reopen the record and try again.")
+    otherwise "A stale research arm submission must refuse."
+  port browser.act { page = $page; locator = list({ label = "Next action" }); action = "fill"; value = "Review the convergence protocol." } → _
+  port browser.act { page = $page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Refine the working plan." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Save research arm revision" }); action = "click"; event = "navigation" } → _
+
+  let references = "/?collection=evidence&q=REF-26"
+  port browser.act { page = $page; action = "navigate"; value = $references } → _
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Edit reference: Conscious Point Physics Papers" }); action = "click"; event = "navigation" } → _
+  let refTitle = "Local physics paper index"
+  let refUrl = "https://example.org/physics-papers"
+  port browser.act { page = $page; locator = list({ label = "Reference title" }); action = "fill"; value = $refTitle } → _
+  port browser.act { page = $page; locator = list({ label = "Reference URL" }); action = "fill"; value = $refUrl } → _
+  port browser.act { page = $page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Update the working link for this row." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Save reference revision" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ role = "status" }); property = "text" } → notice
+  assert eq($notice, "Local reference revision saved.")
+    otherwise "The selected reference row must save."
+
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  port browser.act { page = $page; action = "navigate"; value = $armRoute } → _
+  port browser.observe { page = $page; locator = list({ label = "Next action" }); property = "value" } → action
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Local revisions" }, { text = concat("Next action: ", $armAction) }); property = "count" } → priorAction
+  port browser.observe { page = $page; locator = list({ text = concat("Previous version: ", $first); exact = false }); property = "count" } → parent
+  port browser.observe { page = $page; locator = list({ text = "Information → geometry → symmetry" }); property = "count" } → importedArm
+  port browser.observe { page = $page; locator = list({ role = "link"; name = "FC-QGE-01" }); property = "count" } → claim
+  assert and(eq($action, "Review the convergence protocol."), eq($priorAction, 1), eq($parent, 1), eq($importedArm, 1), eq($claim, 1))
+    otherwise "The current arm, both revisions, and the imported provenance must survive restart."
+
+  port browser.act { page = $page; action = "navigate"; value = $references } → _
+  port browser.observe { page = $page; locator = list({ text = "2 references" }); property = "count" } → duplicates
+  port browser.observe { page = $page; locator = list({ text = "REF-26 · primary-historical-logistics-source" }); property = "count" } → other
+  port browser.observe { page = $page; locator = list({ role = "link"; name = $refTitle }); property = "attribute"; name = "href" } → href
+  assert and(eq($duplicates, 1), eq($other, 1), eq($href, $refUrl))
+    otherwise "The local reference must retain its edited link and remain distinct from the other REF-26 row."
+  port browser.act { page = $page; locator = list({ role = "link"; name = concat("Edit reference: ", $refTitle) }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ text = "Conscious Point Physics Papers" }); property = "count" } → importedRef
+  port browser.observe { page = $page; locator = list({ role = "link"; name = "https://hyperphysics.com/papers/index.html" }); property = "count" } → originalUrl
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Local revisions" }, { text = "Reason: Update the working link for this row." }); property = "count" } → reason
+  assert and(eq($importedRef, 1), eq($originalUrl, 1), eq($reason, 1))
+    otherwise "The original reference and the local revision must survive restart."
+
+process test.claimipedia.research-checkpoint:
+  port file.text { file = "products/claimipedia/spin23-checkpoint.rel" } → original
+  port browser.open { declaration = "products/claimipedia/application.rel"; width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Research checkpoints" }); action = "click"; event = "navigation" } → index
+  assert eq($index.status, 200)
+    otherwise "Research checkpoints must open as their own collection."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Spin(2,3) SRP7 admission and SRP8 six-path portfolio checkpoint" }); action = "click"; event = "navigation" } → detail
+  port browser.observe { page = $page; locator = list({ text = "status: srp7-admitted-srp8-awaiting-human-admission" }); property = "count" } → disposition
+  port browser.observe { page = $page; locator = list({ text = "publicationAuthority: not-granted" }); property = "count" } → authority
+  assert and(eq($detail.status, 200), eq($disposition, 1), eq($authority, 1))
+    otherwise "The source checkpoint must preserve its disposition and authority boundary."
+
+  let note = "Check the relation-indexed kernel against the original evidence."
+  port browser.act { page = $page; locator = list({ label = "Local research note" }); action = "fill"; value = $note } → _
+  port browser.act { page = $page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Retain the question alongside the checkpoint." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Save local note" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ role = "status" }); property = "text" } → status
+  assert eq($status, "Local checkpoint note saved.")
+    otherwise "A local note must save through the normal revision store."
+
+  let route = "/?collection=checkpoints&checkpoint=checkpoint.claimipedia.spin23.SRP8"
+  port browser.page { browser = $opened.browser; route = $route } → stale
+  let next = "Retain the inverse nonidentifiability boundary in follow-up."
+  port browser.act { page = $page; locator = list({ label = "Local research note" }); action = "fill"; value = $next } → _
+  port browser.act { page = $page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Refine the local follow-up." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Save local note" }); action = "click"; event = "navigation" } → _
+  port browser.act { page = $stale.page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Stale fixture must refuse." } → _
+  port browser.act { page = $stale.page; locator = list({ role = "button"; name = "Save local note" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $stale.page; locator = list({ role = "alert" }); property = "text" } → refusal
+  assert eq($refusal, "The local corpus changed. Reopen the checkpoint and try again.")
+    otherwise "An older browser form must not overwrite the new note."
+
+  port browser.act { page = $page; action = "navigate"; value = "/?claim=clm_01_RIVER_NITRATE" } → _
+  port browser.act { page = $page; locator = list({ label = "Draft statement" }); action = "fill"; value = "Disposable unrelated claim draft." } → _
+  port browser.act { page = $page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Check that claim edits preserve research notes." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Save draft revision" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ role = "status" }); property = "text" } → draft
+  assert eq($draft, "Draft version 2 saved.")
+    otherwise "The separate released-claim workflow must still save."
+
+  port browser.reopen { browser = $opened.browser } → reopened
+  port browser.act { page = $reopened.page; action = "navigate"; value = $route } → _
+  port browser.observe { page = $reopened.page; locator = list({ label = "Local research note" }); property = "value" } → current
+  port browser.observe { page = $reopened.page; locator = list({ role = "list"; name = "Local checkpoint note history" }, { role = "listitem" }); property = "count" } → revisions
+  port browser.observe { page = $reopened.page; locator = list({ text = "status: srp7-admitted-srp8-awaiting-human-admission" }); property = "count" } → retained
+  port browser.observe { page = $reopened.page; property = "overflow" } → overflow
+  port file.text { file = "products/claimipedia/spin23-checkpoint.rel" } → after
+  assert and(eq($current, $next), eq($revisions, 2))
+    otherwise "The current and preceding notes must survive an unrelated edit and cold reopening."
+  assert and(eq($retained, 1), eq($original, $after))
+    otherwise "The saved notes must leave the imported disposition and source bytes intact."
+  assert not($overflow)
+    otherwise "The checkpoint and its provenance coordinates must fit at phone width."
+
+process test.claimipedia.application-records:
+  port browser.open { declaration = "products/claimipedia/application.rel"; width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Application records" }); action = "click"; event = "navigation" } → _
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Legacy Claimipedia deployment admission records" }); action = "click"; event = "navigation" } → detail
+  port browser.observe { page = $page; locator = list({ role = "heading"; name = "policy.claimipedia.deploy" }); property = "count" } → policy
+  port browser.observe { page = $page; locator = list({ text = "autoPromote: false" }); property = "count" } → limit
+  port browser.observe { page = $page; locator = list({ role = "button"; name = "Save local note" }); property = "count" } → editor
+  assert and(eq($detail.status, 200), eq($policy, 1), eq($limit, 1), eq($editor, 0))
+    otherwise "Internal deployment records must retain their identity and restrictions in a separate inspection collection."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Research checkpoints" }); action = "click"; event = "navigation" } → _
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Spin(2,3) SRP10–SRP12 physics pathway" }); action = "click"; event = "navigation" } → detail
+  port browser.observe { page = $page; locator = list({ text = "status: executed-scoped-awaiting-synthesis" }); property = "count" } → status
+  port browser.observe { page = $page; locator = list({ role = "heading"; name = "claim.physics.spin23.orientation.externalSelector" }); property = "count" } → finding
+  port browser.observe { page = $page; locator = list({ text = "nonEntailment: no-intrinsic-Spin23-orientation-origin" }); property = "count" } → boundary
+  assert and(eq($detail.status, 200), eq($status, 1), eq($finding, 1), eq($boundary, 1))
+    otherwise "The second research checkpoint must retain the original findings and their scope."
+
+process test.claimipedia.research-inbox:
+  port browser.open { declaration = "products/claimipedia/application.rel"; width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Research inbox" }); action = "click"; event = "navigation" } → inbox
+  port browser.observe { page = $page; locator = list({ text = "41 of 41 opportunities" }); property = "count" } → total
+  assert and(eq($inbox.status, 200), eq($total, 1))
+    otherwise "The inbox must expose the full imported opportunity ledger."
+  port browser.act { page = $page; locator = list({ label = "Search research opportunities" }); action = "fill"; value = "J3OS CLEAN-ROOM" } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Search" }); action = "click"; event = "navigation" } → _
+  port browser.act { page = $page; locator = list({ role = "link"; name = "OpenSecretScience J3Os clean-room audit" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ text = "status: completed-at-preregistered-scope" }); property = "count" } → status
+  assert eq($status, 1)
+    otherwise "Search must reach the original opportunity and recorded disposition."
+  let route = "/?collection=research-inbox&checkpoint=researchOpportunity.RIO-022"
+  port browser.act { page = $page; locator = list({ role = "link"; name = "researchResult.RIO-022-W3" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ text = "status: complete-prospective-test-preregistered" }); property = "count" } → result
+  port browser.observe { page = $page; locator = list({ role = "button"; name = "Save local note" }); property = "count" } → resultEdit
+  assert and(eq($result, 1), eq($resultEdit, 0))
+    otherwise "The related result must resolve with its historical status and inspection-only controls."
+  port browser.act { page = $page; action = "navigate"; value = $route } → _
+  let note = "Preserve the sealed preregistration in any follow-up."
+  port browser.act { page = $page; locator = list({ label = "Local research note" }); action = "fill"; value = $note } → _
+  port browser.act { page = $page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Record a local follow-up boundary." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Save local note" }); action = "click"; event = "navigation" } → _
+  port browser.reopen { browser = $opened.browser } → reopened
+  port browser.act { page = $reopened.page; action = "navigate"; value = $route } → _
+  port browser.observe { page = $reopened.page; locator = list({ label = "Local research note" }); property = "value" } → saved
+  assert eq($saved, $note)
+    otherwise "The opportunity follow-up must survive cold reopening."
+  port browser.act { page = $reopened.page; action = "navigate"; value = "/?collection=research-inbox&checkpoint=researchOpportunity.RIO-014" } → _
+  port browser.observe { page = $reopened.page; locator = list({ text = "reconciliation [observed]:"; exact = false }); property = "count" } → observed
+  assert eq($observed, 1)
+    otherwise "The legacy observation polarity must remain visible as an observation."
+
+process test.claimipedia.evidence-library:
+  port browser.open { declaration = "products/claimipedia/application.rel"; width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Evidence library" }); action = "click"; event = "navigation" } → library
+  port browser.observe { page = $page; locator = list({ text = "2296 matches of 2296 · showing 24" }); property = "count" } → count
+  assert and(eq($library.status, 200), eq($count, 1))
+    otherwise "The evidence index must expose the complete selected transfer while bounding the result list."
+
+  port browser.act { page = $page; action = "navigate"; value = "/?collection=checkpoints&checkpoint=checkpoint.physics.spin23.SRP10-SRP12" } → _
+  port browser.act { page = $page; locator = list({ role = "link"; name = "external-selector-and-invariant-robustness.md" }); action = "click"; event = "navigation" } → evidence
+  port browser.observe { page = $page; locator = list({ text = "SHA-256: fac5148faebe4a379dc53ff209cfaa98b7cd3f8c2858855eacb9cff0fb21fd48" }); property = "count" } → pin
+  port browser.act { page = $page; locator = list({ text = "Read verified source text" }); action = "click" } → _
+  port browser.observe { page = $page; locator = list({ css = "pre.cp-evidence-source"; contains = "# SRP10 + SRP12 — external selectors and invariant robustness" }); property = "count" } → source
+  port browser.observe { page = $page; property = "overflow" } → overflow
+  assert and(eq($evidence.status, 200), eq($pin, 1), eq($source, 1), not($overflow))
+    otherwise "The checkpoint link must show its verified evidence and readable source at phone width."
+
+  let note = "Follow up the conditional selector results."
+  port browser.act { page = $page; locator = list({ label = "Local research note" }); action = "fill"; value = $note } → _
+  port browser.act { page = $page; locator = list({ label = "Revision reason" }); action = "fill"; value = "Preserve this evidence pointer for local review." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Save local note" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ role = "status" }); property = "text" } → notice
+  assert eq($notice, "Local checkpoint note saved.")
+    otherwise "The evidence note must save through the shared revision workflow."
+
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Evidence library" }); action = "click"; event = "navigation" } → _
+  port browser.act { page = $page; locator = list({ label = "Search transferred evidence" }); action = "fill"; value = "EXTERNAL-SELECTOR-AND-INVARIANT-ROBUSTNESS.MD" } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Search" }); action = "click"; event = "navigation" } → _
+  port browser.act { page = $page; locator = list({ role = "link"; name = "external-selector-and-invariant-robustness.md" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ label = "Local research note" }); property = "value" } → saved
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Local checkpoint note history" }, { role = "listitem" }); property = "count" } → revisions
+  assert and(eq($saved, $note), eq($revisions, 1))
+    otherwise "Searching the same source after restart must recover its separate note history."
+
+  port browser.act { page = $page; action = "navigate"; value = "/?collection=research-inbox&checkpoint=researchResult.RIO-022-W3" } → _
+  port browser.act { page = $page; locator = list({ role = "link"; name = "prospective-neutrino-preregistration.json" }); action = "click"; event = "navigation" } → receipt
+  port browser.observe { page = $page; locator = list({ text = "SHA-256: 72b50e67cfe56fda3cce7af6c520b18277061fb3cc33ec18786d7631840ed293" }); property = "count" } → pin
+  assert and(eq($receipt.status, 200), eq($pin, 1))
+    otherwise "The research result must link to its verified preregistration receipt."
+
+process test.claimipedia.evidence-download:
+  port browser.open { declaration = "products/claimipedia/application.rel"; attachments = true; width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Evidence library" }); action = "click"; event = "navigation" } → _
+  let filename = "paper3 - dissipative softening of chern plateaus.pdf"
+  port browser.act { page = $page; locator = list({ label = "Search transferred evidence" }); action = "fill"; value = $filename } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Search" }); action = "click"; event = "navigation" } → _
+  port browser.act { page = $page; locator = list({ role = "link"; name = $filename }); action = "click"; event = "navigation" } → detail
+  assert eq($detail.status, 200)
+    otherwise "The indexed PDF record must open from the evidence library."
+  let locator = list({ role = "link"; name = "Download verified original" })
+  port browser.observe { page = $page; locator = $locator; property = "count" } → links
+  assert eq($links, if($opened.attachments, 1, 0))
+    otherwise "The download control must reflect the operator's attachment mount."
+  port browser.response { page = $page; route = "/attachments/not-in-the-catalogue" } → absent
+  assert eq($absent.status, 404)
+    otherwise "Unknown coordinates must not expose a source file."
+  when $opened.attachments:
+    port browser.observe { page = $page; locator = $locator; property = "attribute"; name = "href" } → route
+    port browser.response { page = $page; route = $route; method = "POST" } → blocked
+    assert eq($blocked.status, 405)
+      otherwise "The attachment endpoint must reject writes."
+    port browser.act { page = $page; locator = $locator; action = "click"; event = "download" } → file
+    assert and(eq($file.filename, $filename), eq($file.bytes, 2070948), eq($file.sha256, "3673bdab613f1b24124d5d971c8f01476f7a22fc9cc069c3f494d7c6defae666"))
+      otherwise "The browser download must reproduce the exact pinned binary bytes and original filename."
+
+process test.claimipedia.local-follow-up-review:
+  let route = "/?collection=research-inbox&checkpoint=researchOpportunity.RIO-022"
+  port browser.open { declaration = "products/claimipedia/application.rel"; width = 390; height = 844; operator = "proposer"; attachments = true } → opened
+  let page = $opened.page
+  port browser.response { page = $page; route = $route; anonymous = true } → anonymous
+  assert eq($anonymous.status, 401)
+    otherwise "The configured instance must challenge unauthenticated requests."
+  port browser.act { page = $page; action = "navigate"; value = $route } → _
+  let evidence = "sourcery-applications/applications/claimipedia/research/rio-022-audit/prospective-neutrino-preregistration.json"
+  each list(list("Evidence path or coordinate", "missing-evidence"), list("Proposed next action", "Check whether the next JUNO release meets the frozen eligibility criteria."), list("Review rationale", "Retain the preregistration boundary.")) as field:
+    port browser.act { page = $page; locator = list({ label = at($field, 0) }); action = "fill"; value = at($field, 1) } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Propose follow-up" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ role = "alert" }); property = "text" } → invalid
+  assert eq($invalid, "Choose an exact evidence path or coordinate from the verified library.")
+    otherwise "An unknown evidence coordinate must not enter review history."
+  each list(list("Evidence path or coordinate", $evidence), list("Proposed next action", "Check whether the next JUNO release meets the frozen eligibility criteria."), list("Review rationale", "Retain the preregistration boundary.")) as field:
+    port browser.act { page = $page; locator = list({ label = at($field, 0) }); action = "fill"; value = at($field, 1) } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Propose follow-up" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ role = "status" }); property = "text" } → proposed
+  assert eq($proposed, "Local follow-up proposed.")
+    otherwise "A proposal must be saved before a separate review decision is possible."
+  port browser.observe { page = $page; locator = list({ role = "button"; name = "Record local decision" }); property = "count" } → proposerDecision
+  assert eq($proposerDecision, 0)
+    otherwise "The proposing identity must not see a reviewer action."
+  port browser.page { browser = $opened.browser; route = $route; operator = "reviewer" } → reviewer
+  port browser.page { browser = $opened.browser; route = $route; operator = "reviewer" } → stale
+  let decisionForm = { css = "form"; has = list({ role = "button"; name = "Record local decision" }) }
+  port browser.observe { page = $reviewer.page; locator = list($decisionForm, { css = "input[name=previous]" }); property = "attribute"; name = "value" } → previous
+  port browser.response { page = $page; route = $route; method = "POST"; formFrom = list({ css = "form"; has = list({ role = "button"; name = "Save local note" }) }); fields = { action = "decide-follow-up"; previous = $previous; decision = "approve-for-manual-follow-up"; rationale = "Forged decision"; actor = "fixture-reviewer" } } → forged
+  assert and(eq($forged.status, 200), includes($forged.text, "A verified operator with the required review role"))
+    otherwise "A valid proposer session and a forged reviewer name must not authorize a decision."
+  let page = $reviewer.page
+  each list($page, $stale.page) as reviewer:
+    port browser.act { page = $reviewer; locator = list({ label = "Local disposition" }); action = "select"; value = "approve-for-manual-follow-up" } → _
+    port browser.act { page = $reviewer; locator = list({ label = "Review rationale" }); action = "fill"; value = "Approve only a manual evidence eligibility check." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Record local decision" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ role = "status" }); property = "text" } → decided
+  assert eq($decided, "Local follow-up decision recorded.")
+    otherwise "The explicit review decision must append a separate revision."
+  port browser.act { page = $stale.page; locator = list({ role = "button"; name = "Record local decision" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $stale.page; locator = list({ role = "alert" }); property = "text" } → refused
+  assert eq($refused, "The local corpus changed. Reopen the opportunity and try again.")
+    otherwise "A stale reviewer must not replace an existing decision."
+
+  let freezeForm = { css = "form"; has = list({ role = "button"; name = "Freeze follow-up packet" }) }
+  port browser.observe { page = $page; locator = list($freezeForm, { css = "input[name=previous]" }); property = "attribute"; name = "value" } → approvedDecision
+  port browser.act { page = $page; locator = list({ label = "Packet freeze rationale" }); action = "fill"; value = "Preserve the approved manual follow-up." } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Freeze follow-up packet" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ role = "status" }); property = "text" } → frozen
+  assert eq($frozen, "Local follow-up packet frozen.")
+    otherwise "A verified reviewer must explicitly freeze the approved follow-up."
+  port browser.act { page = $page; locator = list({ text = "View frozen packet REL" }); action = "click" } → _
+  port browser.observe { page = $page; locator = list({ label = "Frozen packet REL" }); property = "value" } → packetText
+  port rel.read { text = $packetText; kind = "ClaimipediaResearchPacket" } → packet
+  port digest.sha256 { text = $packetText } → packetPin
+  port file.text { file = "products/claimipedia/research-inbox.rel" } → inboxText
+  port rel.read { text = $inboxText; kind = "ApplicationData" } → ledger
+  let source = filter($ledger, "fact", eq($fact.s, "researchOpportunity.RIO-022"))
+  let frozenFacts = map($packet.sourceFacts, "fact", list($fact.s, $fact.p, $fact.o, $fact.pol))
+  let importedFacts = map($source, "fact", list($fact.s, $fact.p, $fact.o, $fact.pol))
+  assert eq($frozenFacts, $importedFacts)
+    otherwise "The packet must retain the exact imported opportunity tuples."
+  assert eq($packet.decision.id, $approvedDecision)
+    otherwise "The packet must retain the reviewed decision coordinate."
+  assert and(eq($packet.opportunity, "researchOpportunity.RIO-022"), eq($packet.evidence.sha256, "72b50e67cfe56fda3cce7af6c520b18277061fb3cc33ec18786d7631840ed293"), eq($packet.decision.proposal, $packet.proposal.id), eq($packet.frozenBy, "fixture-reviewer"), eq($packet.executionAuthorized, false), eq($packet.scientificAdmission, false), eq($packet.publicationAuthorized, false))
+    otherwise "The frozen packet must bind the exact decision and evidence without granting authority."
+  port browser.observe { page = $page; locator = list({ text = concat("Packet SHA-256: ", $packetPin) }); property = "count" } → digest
+  port browser.observe { page = $page; locator = list({ role = "button"; name = "Freeze follow-up packet" }); property = "count" } → duplicate
+  assert and(eq($digest, 1), eq($duplicate, 0))
+    otherwise "The stored packet must have a matching digest and no duplicate freeze action."
+  port browser.response { page = $page; route = $route; method = "POST"; formFrom = list({ css = "form"; has = list({ role = "button"; name = "Save local note" }) }); fields = { action = "freeze-follow-up"; previous = $approvedDecision; rationale = "Duplicate freeze attempt" } } → repeated
+  assert and(eq($repeated.status, 200), includes($repeated.text, "This decision already has a frozen packet."))
+    otherwise "A current authenticated form cannot freeze an already frozen decision again."
+
+  port browser.act { page = $page; locator = list({ label = "Worker operator ID" }); action = "fill"; value = "fixture-worker" } → _
+  port browser.act { page = $page; locator = list({ label = "Lease rationale" }); action = "fill"; value = "Permit one pinned-file integrity check." } → _
+  port browser.act { page = $page; locator = list({ label = "Confirm a single evidence check" }); action = "check"; value = true } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Issue evidence lease" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ role = "status" }); property = "text" } → issued
+  assert eq($issued, "One-shot evidence lease issued.")
+    otherwise "The frozen packet must require a separate verified reviewer action to authorize a check."
+  port browser.observe { page = $page; locator = list({ role = "button"; name = "Run pinned evidence check" }); property = "count" } → reviewerRun
+  assert eq($reviewerRun, 0)
+    otherwise "A reviewer cannot consume a named worker lease."
+
+  port browser.reopen { browser = $opened.browser } → _
+  port browser.page { browser = $opened.browser; route = $route; operator = "worker" } → worker
+  port browser.page { browser = $opened.browser; route = $route; operator = "worker" } → staleWorker
+  port browser.act { page = $worker.page; locator = list({ role = "button"; name = "Run pinned evidence check" }); action = "click"; event = "navigation" } → _
+  when $opened.attachments:
+    port browser.observe { page = $worker.page; locator = list({ role = "status" }); property = "text" } → checked
+    assert eq($checked, "Evidence bytes verified. Lease consumed.")
+      otherwise "The named worker must check the original mounted bytes under the retained lease."
+    port browser.act { page = $staleWorker.page; locator = list({ role = "button"; name = "Run pinned evidence check" }); action = "click"; event = "navigation" } → _
+    port browser.observe { page = $staleWorker.page; locator = list({ role = "alert" }); property = "text" } → replay
+    assert eq($replay, "The local corpus changed. Reopen the opportunity and try again.")
+      otherwise "A stale worker tab must not consume the same lease twice."
+    port browser.observe { page = $worker.page; locator = list({ role = "button"; name = "Review evidence receipt" }); property = "count" } → selfReview
+    assert eq($selfReview, 0)
+      otherwise "The worker must not get the independent review action."
+    port browser.page { browser = $opened.browser; route = $route; operator = "verifier" } → verifier
+    port browser.act { page = $verifier.page; locator = list({ label = "Handoff rationale" }); action = "fill"; value = "Independently checked the pinned file and lease." } → _
+    port browser.act { page = $verifier.page; locator = list({ role = "button"; name = "Review evidence receipt" }); action = "click"; event = "navigation" } → _
+    port browser.observe { page = $verifier.page; locator = list({ text = "Independent review: integrity-confirmed" }); property = "count" } → reviewed
+    assert eq($reviewed, 1)
+      otherwise "The independent verifier must reproduce the byte integrity result."
+    port browser.page { browser = $opened.browser; route = $route; operator = "reviewer" } → patchAuthor
+    port browser.act { page = $patchAuthor.page; locator = list({ label = "Handoff rationale" }); action = "fill"; value = "Propose a link to the reviewed integrity receipt." } → _
+    port browser.act { page = $patchAuthor.page; locator = list({ role = "button"; name = "Propose evidence reconciliation" }); action = "click"; event = "navigation" } → _
+    port browser.act { page = $patchAuthor.page; locator = list({ text = "View reconciliation REL" }); action = "click" } → _
+    port browser.observe { page = $patchAuthor.page; locator = list({ label = "Reconciliation REL" }); property = "value" } → patchText
+    port rel.read { text = $patchText; kind = "ClaimipediaEvidenceReconciliation" } → patch
+    port digest.sha256 { text = $patchText } → patchPin
+    port browser.observe { page = $patchAuthor.page; locator = list({ text = concat("Reconciliation SHA-256: ", $patchPin) }); property = "count" } → pinnedPatch
+    assert and(eq($pinnedPatch, 1), eq($patch.target, $packet.opportunity), eq($patch.sourceSha256, $packet.sourceSha256), eq($patch.packetSha256, $packetPin), eq($patch.upstreamWritesPerformed, false), eq($patch.scientificAdmission, false), eq($patch.publicationAuthorized, false))
+      otherwise "The proposal must pin the exact patch and imported source without applying a change."
+    port browser.page { browser = $opened.browser; route = $route; operator = "reconciler" } → reconciler
+    port browser.act { page = $reconciler.page; locator = list({ label = "Reconciliation disposition" }); action = "select"; value = "approved-for-manual-application" } → _
+    port browser.act { page = $reconciler.page; locator = list({ label = "Handoff rationale" }); action = "fill"; value = "Approve the proposed integrity link for manual application." } → _
+    port browser.act { page = $reconciler.page; locator = list({ role = "button"; name = "Record reconciliation disposition" }); action = "click"; event = "navigation" } → _
+    port browser.observe { page = $reconciler.page; locator = list({ role = "status" }); property = "text" } → disposition
+    assert eq($disposition, "Evidence reconciliation disposition recorded.")
+      otherwise "A separate verified reconciler must explicitly dispose the proposal."
+    port browser.observe { page = $reconciler.page; locator = list({ role = "button"; name = "Apply approved evidence patch" }); property = "count" } → applyByReconciler
+    assert eq($applyByReconciler, 0)
+      otherwise "The reconciler's approval must not carry application authority."
+    port browser.page { browser = $opened.browser; route = $route; operator = "curator" } → curator
+    let applyForm = { css = "form"; has = list({ role = "button"; name = "Apply approved evidence patch" }) }
+    port browser.response { page = $curator.page; route = $route; method = "POST"; formFrom = list($applyForm); fields = { rationale = "Application without confirmation" } } → unconfirmed
+    assert includes($unconfirmed.text, "Explicitly confirm the local evidence application.")
+      otherwise "The verified curator must confirm the exact application."
+    port browser.act { page = $curator.page; locator = list({ label = "Handoff rationale" }); action = "fill"; value = "Apply the approved integrity links locally." } → _
+    port browser.act { page = $curator.page; locator = list({ label = "Confirm local application of the approved patch" }); action = "check"; value = true } → _
+    port browser.act { page = $curator.page; locator = list({ role = "button"; name = "Apply approved evidence patch" }); action = "click"; event = "navigation" } → _
+    port browser.observe { page = $curator.page; locator = list({ role = "status" }); property = "text" } → applied
+    assert eq($applied, "Approved evidence links applied to the working copy.")
+      otherwise "The approved patch must apply as a distinct local revision."
+  when not($opened.attachments):
+    port browser.observe { page = $worker.page; locator = list({ role = "alert" }); property = "text" } → unavailable
+    assert eq($unavailable, "Mount the verified transfer before running this check.")
+      otherwise "A missing mount must leave the lease available."
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  port browser.act { page = $page; action = "navigate"; value = $route } → _
+  port browser.act { page = $page; locator = list({ text = "View frozen packet REL" }); action = "click" } → _
+  port browser.observe { page = $page; locator = list({ label = "Frozen packet REL" }); property = "value" } → restoredPacket
+  assert eq($restoredPacket, $packetText)
+    otherwise "The exact frozen packet must survive a cold restart."
+  when $opened.attachments:
+    let checks = { role = "list"; name = "Evidence check history" }
+    port browser.observe { page = $page; locator = list($checks, { role = "listitem" }); property = "count" } → events
+    port browser.observe { page = $page; locator = list($checks, { text = "Evidence integrity verified" }); property = "count" } → receipt
+    assert and(eq($events, 2), eq($receipt, 1))
+      otherwise "The lease and one integrity receipt must survive restart."
+    let handoff = { role = "list"; name = "Evidence handoff history" }
+    port browser.observe { page = $page; locator = list($handoff, { role = "listitem" }); property = "count" } → handoffCount
+    port browser.observe { page = $page; locator = list($handoff, { text = "Reconciliation disposition: approved-for-manual-application" }); property = "count" } → disposition
+    assert and(eq($handoffCount, 4), eq($disposition, 1))
+      otherwise "The review, patch, disposition and separate application must survive restart."
+    let facts = { role = "list"; name = "Applied local evidence facts" }
+    port browser.observe { page = $page; locator = list($facts, { role = "listitem" }); property = "count" } → factsCount
+    port browser.observe { page = $page; locator = list($facts, { text = "reviewedEvidenceSha256 · 72b50e67cfe56fda3cce7af6c520b18277061fb3cc33ec18786d7631840ed293"; exact = false }); property = "count" } → evidenceLink
+    port browser.observe { page = $page; locator = list({ text = concat("Applied patch SHA-256: ", $patchPin) }); property = "count" } → appliedPin
+    assert and(eq($factsCount, 2), eq($evidenceLink, 1), eq($appliedPin, 1))
+      otherwise "Exactly the two approved local links and their patch pin must survive restart."
+  let history = { role = "list"; name = "Local follow-up history" }
+  port browser.observe { page = $page; locator = list($history, { role = "listitem" }); property = "count" } → entries
+  port browser.observe { page = $page; locator = list($history, { text = "Local decision: approve-for-manual-follow-up" }); property = "count" } → decision
+  port browser.observe { page = $page; locator = list($history, { text = "Evidence SHA-256: 72b50e67cfe56fda3cce7af6c520b18277061fb3cc33ec18786d7631840ed293" }); property = "count" } → pin
+  port browser.observe { page = $page; locator = list({ text = "status: completed-at-preregistered-scope" }); property = "count" } → historical
+  port browser.observe { page = $page; locator = list($history, { text = "fixture-reviewer · Verified operator · Approve only a manual evidence eligibility check." }); property = "count" } → attributed
+  assert and(eq($attributed, 1), eq($entries, 2), eq($decision, 1), eq($pin, 1), eq($historical, 1))
+    otherwise "The proposal and decision must survive restart while retaining the imported disposition and exact evidence pin."
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Back to research inbox" }); action = "click"; event = "navigation" } → _
+  port browser.act { page = $page; locator = list({ label = "Filter local review" }); action = "select"; value = "approve-for-manual-follow-up" } → _
+  port browser.act { page = $page; locator = list({ role = "button"; name = "Search" }); action = "click"; event = "navigation" } → _
+  port browser.observe { page = $page; locator = list({ text = "1 of 41 opportunities" }); property = "count" } → queue
+  assert eq($queue, 1)
+    otherwise "The reviewed opportunity must remain discoverable in the local follow-up queue."
+
+process test.claimipedia.lease-window:
+  port file.text { file = "source/products/claimipedia/lease.encounter" } → source
+  port front.open { grants = list("number.calculate") } → front
+  port front.hydrate { front = $front; file = "lease.encounter"; text = $source } → module
+  port front.link { front = $front; candidates = list($module); roots = list("lease.window") } → linked
+  port front.admit { front = $front; linked = $linked; entries = list("lease.window") } → admitted
+  each list(list(99, false), list(100, true), list(999, true), list(1000, false), list(1001, false)) as item:
+    port front.run { front = $front; admission = $admitted; entry = "lease.window"; input = { now = at($item, 0); issuedAt = 100; expiresAt = 1000 } } → valid
+    assert eq($valid, at($item, 1))
+      otherwise "A lease must include its issue instant and refuse at its expiry."
