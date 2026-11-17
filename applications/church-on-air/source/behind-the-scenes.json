@@ -1,0 +1,22 @@
+{
+  "protocol":"church-on-air/behind-the-scenes/1",
+  "title":"THE MAKING OF CHURCH ON AIR",
+  "subtitle":"Dot takes you behind the picture",
+  "voice":{"engine":"windows-system-speech","name":"Microsoft Catherine","culture":"en-AU","rate":2,"sampleRate":16000},
+  "output":{"width":1920,"height":1080,"fps":25},
+  "coldOpenSeconds":8,
+  "revealSeconds":1.6,
+  "closingSeconds":5,
+  "audio":{"churchBedDb":-24,"narrationGainDb":0,"edgeFadeSeconds":0.22},
+  "narratorLabel":"DOT / LOCAL SYNTHETIC NARRATOR",
+  "chapters":[
+    {"id":"hello","title":"A dangerous amount of purple","scene":"overview","focus":"overflow","filmIn":9.6,"sprite":"waving","text":"I'm Dot. I helped make this. Five church videos, a very nineties brief, and a dangerous amount of purple.","reason":"The editor is revealed before the narrator speaks; introduce the mascot with a short, lightly amused line."},
+    {"id":"rhythm","title":"Give the invitation a rhythm","scene":"rhythm","focus":"worship","filmIn":26.04,"sprite":"review","text":"The first cut marched at the same pace. So I gave it a rhythm. A quick hello. A bigger invitation. Then room for the worship to breathe.","reason":"Explain the actual editorial symmetry break while the real rhythm analysis and sequence are visible."},
+    {"id":"encounter","title":"One shot, several views","scene":"encounter","focus":"overflow","filmIn":8,"sprite":"review","text":"Encounter gave each shot a name, a source range, and a reason. The same shot appears in the timeline, the inspector, and the render plan.","reason":"Connect the spoken experience to an actual checked projection and its declared source edit destinations."},
+    {"id":"checks","title":"A useful refusal","scene":"checks","focus":"room","filmIn":20.4,"sprite":"waiting","text":"An off-frame edit was refused. A caption change followed its declared route back to the source. That made the language useful while I was working.","reason":"Show the live application's genuine frame-grid refusal; the earlier accepted caption proposal remains in its retained source history."},
+    {"id":"outtakes","title":"Very glamorous","scene":"outtakes","focus":"home","filmIn":43,"sprite":"jumping","text":"I also made the titles too big, discovered a Windows file lock, and fixed both. Very glamorous.","reason":"Keep the testimonial honest by naming actual production failures, without presenting invented console footage."},
+    {"id":"boundaries","title":"The checks and the pictures","scene":"overview","focus":"glory","filmIn":55,"sprite":"review","text":"Temple ran the checks. Local media tools made the pictures. The footage and church audio stayed real.","reason":"Distinguish the real Encounter/Temple semantic path from native media rendering and the new synthetic commentary."},
+    {"id":"breathing","title":"The quiet decision","scene":"breathing","focus":"worship","filmIn":26.92,"sprite":"idle","text":"My favourite decision was the quiet stretch in the middle. We gave the worship some space. That's the bit I would keep.","reason":"Finish on a concrete editorial preference; return attention to the original worship rather than the tooling."}
+  ],
+  "credits":["User-directed Dot character performance; locally synthesized narration.","Bundled Codex mascot artwork from the installed app; no official voice or endorsement claimed.","Studio views are actual local UI captures, composited with moving programme footage.","Original church audio remains audible as a quiet bed and returns at the end."]
+}

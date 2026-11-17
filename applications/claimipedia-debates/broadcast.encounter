@@ -1,0 +1,297 @@
+# Claimipedia Debates broadcast template. Copy episode-starter.encounter for a new episode.
+# episode-01.encounter is the worked reference for the completed broadcast.
+# Run debates.plan with the episode record as eventInput under the existing usewords/process/1 profile.
+# Source intervals are [inFrame, outFrame) at 25 fps. Claim pauses occur between frames.
+# Supply source-relative cue frames and narration holds measured on the same clock.
+# Pass the checked plan to debates.narration for the voice job. Exchange job JSON as UTF-8.
+# Render station-ident shots from their bundled picture and clean audio. The audio locator
+# is authoritative; mute the embedded WebM audio. Apply audioFilter once to the joined
+# mix (input 0's audio), and map [tv-out] as the final soundtrack.
+# The result is an edit plan and graphic recipes for a media host. This module has no encoding effects.
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process debates.frame:
+  port value.describe { value = $eventInput } → shape
+  assert and(eq($shape.type, "number"), $shape.finite)
+    otherwise "DEBATE-FRAME: Supply a finite frame number."
+  port number.calculate { operation = "floor"; values = list($eventInput) } → integer
+  port number.calculate { operation = "lessEqual"; values = list(0, $eventInput) } → nonnegative
+  assert and($nonnegative, eq($integer, $eventInput))
+    otherwise "DEBATE-FRAME: Supply a nonnegative whole frame number."
+  let result = $integer
+
+process debates.text:
+  port value.describe { value = $eventInput } → shape
+  assert eq($shape.type, "string")
+    otherwise "DEBATE-TEXT: Supply text."
+  port text.trim { value = $eventInput } → result
+  assert not(eq($result, ""))
+    otherwise "DEBATE-TEXT: Required text is empty."
+
+process debates.spoken:
+  port text.matches { value = $eventInput; pattern = "â€|Ã[\\u0080-\\u00bf]|�" } → corrupted
+  assert not($corrupted)
+    otherwise "DEBATE-VOICE: Restore the original text before sending it to narration."
+  # Display copy keeps its typography. The voice receives plain speech punctuation.
+  port text.split { value = $eventInput; pattern = "[‘’]" } → apostrophes
+  port text.join { values = $apostrophes; separator = "'" } → speech
+  port text.split { value = $speech; pattern = "[“”]" } → quotationMarks
+  port text.join { values = $quotationMarks; separator = "\"" } → result
+
+process debates.narration:
+  assert eq($eventInput.protocol, "claimipedia/debates-edit-plan/1")
+    otherwise "DEBATE-VOICE: Supply a checked debate edit plan."
+  fold $eventInput.timeline as shot; job starts { index = 0; chapters = list() }:
+    let updated = $job
+    when eq($shot.audio, "narration"):
+      let id = ""
+      let words = ""
+      let index = $job.index
+      when not(eq($shot.kind, "closing")):
+        let id = $shot.id
+        let words = $shot.narration
+      when eq($shot.kind, "closing"):
+        let index = add($index, 1)
+        port number.calculate { operation = "less"; values = list($index, 10) } → singleDigit
+        let id = concat("closing-", if($singleDigit, "0", ""), $index)
+        let words = $shot.card.narration
+      port text.matches { value = $id; pattern = "^[a-z][a-z0-9-]*$" } → safeId
+      assert and($safeId, eq(count(filter($job.chapters, "chapter", eq($chapter.id, $id))), 0))
+        otherwise "DEBATE-VOICE: Narration track IDs must be distinct lowercase file identifiers."
+      port kernel.invoke { query = "debates.spoken"; input = $words } → speech
+      let updated = { index = $index; chapters = append($job.chapters, list({ id = $id; text = $speech })) }
+    yield $updated → completed
+  let result = { voice = { name = "Microsoft David Desktop"; rate = 1; sampleRate = 22050 }; chapters = $completed.chapters }
+
+process debates.broadcastDefaults:
+  let result = {
+    ident = {
+      picture = "applications/claimipedia-debates/assets/claimipedia-debates-ident.webm";
+      audio = "applications/claimipedia-debates/assets/claimipedia-debates-jingle.wav";
+      frames = 124
+    };
+    sampleRate = 48000;
+    audio = {
+      scope = "joined-programme"; channels = "dual mono"; monoWeights = list(0.5, 0.5);
+      highPassHz = 125; lowPassHz = 4850; presenceHz = 1650; presenceDb = 1.4; presenceQ = 1.1;
+      compressorThreshold = 0.17; compressorRatio = 2.1; compressorAttackMs = 12; compressorReleaseMs = 170;
+      compressorKnee = 2.8; compressorMakeup = 1.08;
+      drive = 1.16; saturation = "tanh"; saturationThreshold = 0.82; saturationOutput = 0.94;
+      saturationOversample = 2; postSaturationLowPassHz = 5300;
+      hissColour = "pink"; hissAmplitude = 0.0015; hissSeed = 1997; hissHighPassHz = 780; hissLowPassHz = 4700;
+      fadeInSeconds = 0.05; fadeOutSeconds = 0.13
+    }
+  }
+
+process debates.identShot:
+  let cue = $eventInput
+  let result = { kind = "station-ident"; id = $cue.id; outputFrame = $cue.outputFrame;
+    frames = $cue.ident.frames; picture = $cue.ident.picture; audio = "asset"; audioLocator = $cue.ident.audio }
+
+process debates.audioFilter:
+  let job = $eventInput
+  let audio = $job.audio
+  let rate = $job.sampleRate
+  port number.calculate { operation = "divide"; values = list($rate, 25) } → samplesPerFrame
+  port number.calculate { operation = "multiply"; values = list($job.frames, $samplesPerFrame) } → samples
+  port number.calculate { operation = "multiply"; values = list($audio.fadeInSeconds, $rate) } → fadeIn
+  port number.calculate { operation = "multiply"; values = list($audio.fadeOutSeconds, $rate) } → fadeOut
+  port number.calculate { operation = "subtract"; values = list($samples, $fadeOut) } → fadeStart
+  let input = concat(
+    "[0:a]aresample=", $rate, ",aformat=channel_layouts=stereo,apad,atrim=end_sample=", $samples,
+    ",asetpts=PTS-STARTPTS,pan=mono|c0=", at($audio.monoWeights, 0), "*c0+", at($audio.monoWeights, 1), "*c1"
+  )
+  let tone = concat(
+    ",highpass=f=", $audio.highPassHz, ",lowpass=f=", $audio.lowPassHz,
+    ",equalizer=f=", $audio.presenceHz, ":t=q:w=", $audio.presenceQ, ":g=", $audio.presenceDb
+  )
+  let compressor = concat(
+    ",acompressor=threshold=", $audio.compressorThreshold, ":ratio=", $audio.compressorRatio,
+    ":attack=", $audio.compressorAttackMs, ":release=", $audio.compressorReleaseMs, ":knee=", $audio.compressorKnee,
+    ":makeup=", $audio.compressorMakeup, ",volume=", $audio.drive
+  )
+  let saturation = concat(
+    ",asoftclip=type=", $audio.saturation, ":threshold=", $audio.saturationThreshold, ":output=", $audio.saturationOutput,
+    ":oversample=", $audio.saturationOversample, ",lowpass=f=", $audio.postSaturationLowPassHz, "[tv];"
+  )
+  let noise = concat(
+    "anoisesrc=color=", $audio.hissColour, ":amplitude=", $audio.hissAmplitude, ":sample_rate=", $rate, ":seed=", $audio.hissSeed,
+    ",highpass=f=", $audio.hissHighPassHz, ",lowpass=f=", $audio.hissLowPassHz, "[hiss];"
+  )
+  let output = concat(
+    "[tv][hiss]amix=inputs=2:duration=first:normalize=0,atrim=end_sample=", $samples,
+    ",afade=t=in:ns=", $fadeIn, ",afade=t=out:ss=", $fadeStart, ":ns=", $fadeOut,
+    ",pan=stereo|c0=c0|c1=c0[tv-out]"
+  )
+  let result = concat($input, $tone, $compressor, $saturation, $noise, $output)
+
+process debates.style:
+  let result = {
+    canvas = { width = 960; height = 540; fps = 25 };
+    palette = { background = "#110d29"; grid = "#352659"; panel = "#201443"; ink = "#f7f4ff"; claim = "#70f4ef"; behaviour = "#ffb3df"; title = "#fff294" };
+    chrome = { masthead = "CLAIMIPEDIA DEBATES"; channel = "VHF 07"; header = list(12, 8, 936, 34); font = "Cascadia Mono"; gridHorizon = list(480, 184) };
+    picture = { box = list(128, 56, 704, 396); fit = "contain"; scale = "source aspect ratio"; framing = "bezel and cyan inset border" };
+    nameplates = { left = list(128, 462, 350, 34); right = list(482, 462, 350, 34); treatment = "equal"; sourceCreditBaseline = 510 };
+    signal = { scanlines = true; chromaShift = list(2, -2); noiseStrength = 5; trackingTearFrames = 6; tearAt = "claim freeze entry" };
+    cards = {
+      intro = { layout = "title in picture window"; titleColour = "#fff294"; sourceAudioLead = true };
+      claim = { label = "BOT SUMMARY"; layout = "lower panel above nameplates"; accent = "#70f4ef"; bounds = list(44, 48, 864, 394) };
+      behaviour = { label = "CONDUCT"; layout = "compact lower panel above nameplates"; accent = "#ffb3df"; bounds = list(44, 288, 864, 154) };
+      closing = { label = "CLOSING"; layout = "centred panel above nameplates"; backdrop = "dimmed final freeze"; bounds = list(44, 48, 864, 394) }
+    }
+  }
+
+process debates.live:
+  let slice = $eventInput
+  port number.calculate { operation = "subtract"; values = list($slice.outFrame, $slice.inFrame) } → duration
+  fold $slice.behaviours as item; events starts list():
+    port number.calculate { operation = "max"; values = list($slice.inFrame, $item.inFrame) } → first
+    port number.calculate { operation = "min"; values = list($slice.outFrame, $item.outFrame) } → last
+    port number.calculate { operation = "less"; values = list($first, $last) } → intersects
+    when $intersects:
+      port number.calculate { operation = "subtract"; values = list($first, $slice.inFrame) } → relativeStart
+      port number.calculate { operation = "subtract"; values = list($last, $slice.inFrame) } → relativeEnd
+      let events = append($events, list({
+        id = $item.id; subject = $item.subject; label = $item.label; observation = $item.observation;
+        sourceIn = $first; sourceOut = $last;
+        outputIn = add($slice.outputFrame, $relativeStart); outputOut = add($slice.outputFrame, $relativeEnd)
+      }))
+    yield $events → overlays
+  let result = { kind = "source"; inFrame = $slice.inFrame; outFrame = $slice.outFrame;
+    outputFrame = $slice.outputFrame; frames = $duration; audio = "source"; overlays = $overlays;
+    titleCoverUntil = $slice.coverUntil }
+
+process debates.plan:
+  let episode = $eventInput
+  let source = $episode.source
+  let intro = $episode.intro
+  let closing = $episode.closing
+  let speakers = $episode.speakers
+  assert and(isArray($speakers), eq(count($speakers), 2))
+    otherwise "DEBATE-SPEAKERS: Supply the two debaters in picture order, left then right."
+  let left = at($speakers, 0)
+  let right = at($speakers, 1)
+  assert and(eq($left.id, "left"), eq($right.id, "right"))
+    otherwise "DEBATE-SPEAKERS: Speaker IDs must be left and right in picture order."
+  each $speakers as speaker:
+    port kernel.invoke { query = "debates.text"; input = $speaker.name } → name
+  assert not(eq($left.name, $right.name))
+    otherwise "DEBATE-SPEAKERS: The nameplates must identify different debaters."
+  each list($episode.label, $episode.title, $episode.topic, $source.locator, $source.credit, $intro.narration, $closing.summary, $closing.priorities) as text:
+    port kernel.invoke { query = "debates.text"; input = $text } → checked
+  each list($source.durationFrames, $source.inFrame, $source.revealFrame, $source.outFrame, $intro.frames, $closing.summaryFrames, $closing.methodFrames, $closing.prioritiesFrames) as frame:
+    port kernel.invoke { query = "debates.frame"; input = $frame } → checked
+  port number.calculate { operation = "less"; values = list($source.inFrame, $source.outFrame) } → sourceOrdered
+  port number.calculate { operation = "lessEqual"; values = list($source.outFrame, $source.durationFrames) } → sourceBounded
+  port number.calculate { operation = "lessEqual"; values = list($source.inFrame, $source.revealFrame) } → revealAfterStart
+  port number.calculate { operation = "less"; values = list($source.revealFrame, $source.outFrame) } → revealInSource
+  port number.calculate { operation = "subtract"; values = list($source.revealFrame, $source.inFrame) } → titleLead
+  port number.calculate { operation = "lessEqual"; values = list($titleLead, 75) } → shortLead
+  port number.calculate { operation = "lessEqual"; values = list($intro.frames, 375) } → shortIntro
+  assert and($sourceOrdered, $sourceBounded, $revealAfterStart, $revealInSource, $shortLead)
+    otherwise "DEBATE-SOURCE: Check the trim and title reveal. The source audio lead can be at most three seconds."
+  assert and(not(eq($intro.frames, 0)), $shortIntro)
+    otherwise "DEBATE-INTRO: The narrated intro must last up to 15 seconds."
+  assert and(isArray($episode.claims), isArray($episode.behaviours), isArray($closing.assessments))
+    otherwise "DEBATE-TRACK: Claims, behaviour and assessments are separate lists."
+  assert and(not(eq(count($episode.claims), 0)), not(eq(count($closing.assessments), 0)))
+    otherwise "DEBATE-TRACK: Supply claim cues and a closing assessment."
+  each $episode.behaviours as item:
+    each list($item.id, $item.label, $item.observation) as text:
+      port kernel.invoke { query = "debates.text"; input = $text } → checked
+    assert includes(list("left", "right", "moderator", "exchange"), $item.subject)
+      otherwise "DEBATE-BEHAVIOUR: Use an identified speaker, the moderator or the exchange."
+    assert eq(count(filter($episode.behaviours, "b", eq($b.id, $item.id))), 1)
+      otherwise "DEBATE-BEHAVIOUR: Use distinct cue IDs."
+    each list($item.inFrame, $item.outFrame) as frame:
+      port kernel.invoke { query = "debates.frame"; input = $frame } → checked
+    port number.calculate { operation = "lessEqual"; values = list($source.revealFrame, $item.inFrame) } → afterReveal
+    port number.calculate { operation = "less"; values = list($item.inFrame, $item.outFrame) } → ordered
+    port number.calculate { operation = "lessEqual"; values = list($item.outFrame, $source.outFrame) } → bounded
+    assert and($afterReveal, $ordered, $bounded)
+      otherwise "DEBATE-BEHAVIOUR: Keep a positive cue interval inside visible source footage."
+  let title = { kind = "intro"; id = "intro-01"; outputFrame = 0; frames = $intro.frames; title = $episode.title; narration = $intro.narration; audio = "narration" }
+  port kernel.invoke { query = "debates.broadcastDefaults"; input = null } → broadcast
+  port kernel.invoke { query = "debates.identShot"; input = { id = "opening-ident"; outputFrame = $intro.frames; ident = $broadcast.ident } } → opening
+  let initial = { cursor = $source.inFrame; outputFrame = add($intro.frames, $opening.frames); claimIds = list(); timeline = list($title, $opening) }
+  fold $episode.claims as cue; state starts $initial:
+    each list($cue.id, $cue.title, $cue.copy, $cue.narration) as text:
+      port kernel.invoke { query = "debates.text"; input = $text } → checked
+    assert eq(count(filter($episode.claims, "c", eq($c.id, $cue.id))), 1)
+      otherwise "DEBATE-CLAIM: Use distinct cue IDs."
+    each list($cue.sourceFrame, $cue.holdFrames) as frame:
+      port kernel.invoke { query = "debates.frame"; input = $frame } → checked
+    port number.calculate { operation = "less"; values = list($state.cursor, $cue.sourceFrame) } → afterLast
+    port number.calculate { operation = "less"; values = list($source.revealFrame, $cue.sourceFrame) } → afterReveal
+    port number.calculate { operation = "less"; values = list($cue.sourceFrame, $source.outFrame) } → beforeEnd
+    assert and($afterLast, $afterReveal, $beforeEnd, not(eq($cue.holdFrames, 0)))
+      otherwise "DEBATE-CLAIM: Pauses must be strictly ordered inside visible footage and have positive holds."
+    assert and(isArray($cue.claimIds), isArray($cue.speakers), not(eq(count($cue.claimIds), 0)), not(eq(count($cue.speakers), 0)))
+      otherwise "DEBATE-CLAIM: Link at least one claim ID and one speaker."
+    each $cue.speakers as id:
+      assert and(includes(list("left", "right"), $id), eq(count(filter($cue.speakers, "s", eq($s, $id))), 1))
+        otherwise "DEBATE-CLAIM: Use distinct identified debaters."
+    fold $cue.claimIds as id; seen starts $state.claimIds:
+      port kernel.invoke { query = "debates.text"; input = $id } → checked
+      assert not(includes($seen, $id))
+        otherwise "DEBATE-CLAIM: Each claim ID belongs to one pause."
+      yield append($seen, list($id)) → claimIds
+    port kernel.invoke { query = "debates.live"; input = {
+      inFrame = $state.cursor; outFrame = $cue.sourceFrame; outputFrame = $state.outputFrame; behaviours = $episode.behaviours;
+      coverUntil = if(eq($state.cursor, $source.inFrame), $source.revealFrame, null)
+    } } → live
+    port number.calculate { operation = "subtract"; values = list($cue.sourceFrame, 1) } → freezeFrame
+    let pauseAt = add($state.outputFrame, $live.frames)
+    let pause = { kind = "claim"; id = $cue.id; claimIds = $cue.claimIds; speakers = $cue.speakers; sourceFrame = $freezeFrame;
+      outputFrame = $pauseAt; frames = $cue.holdFrames; title = $cue.title; copy = $cue.copy; narration = $cue.narration; audio = "narration" }
+    yield { cursor = $cue.sourceFrame; outputFrame = add($pauseAt, $cue.holdFrames); claimIds = $claimIds;
+      timeline = append($state.timeline, list($live, $pause)) } → cut
+  port kernel.invoke { query = "debates.live"; input = {
+    inFrame = $cut.cursor; outFrame = $source.outFrame; outputFrame = $cut.outputFrame;
+    behaviours = $episode.behaviours; coverUntil = null
+  } } → tail
+  let closingAt = add($cut.outputFrame, $tail.frames)
+  port number.calculate { operation = "subtract"; values = list($source.outFrame, 1) } → finalFreeze
+  port record.entries { value = $closing } → closingFields
+  assert eq(count($closingFields), 6)
+    otherwise "DEBATE-CLOSING: The closing accepts a summary, method hold, claim assessments and unresolved priorities."
+  let method = "The tiers compare individual arguments by evidence fit, scope, and whether the inference follows. Value priorities are shown separately. Conduct is recorded on its own track."
+  let cards = list(
+    { tier = "DISTILLATION"; title = "Shared ground"; copy = $closing.summary; narration = $closing.summary; frames = $closing.summaryFrames },
+    { tier = "METHOD"; title = "How the arguments are assessed"; copy = $method; narration = $method; frames = $closing.methodFrames }
+  )
+  fold $closing.assessments as finding; cards starts $cards:
+    assert includes(list("Stands in a narrow form", "Plausible, with evidence still needed", "Material gap in the form argued"), $finding.tier)
+      otherwise "DEBATE-CLOSING: Use an argument tier."
+    assert includes(list("left", "right"), $finding.speaker)
+      otherwise "DEBATE-CLOSING: Attribute each argument to a debater."
+    assert and(isArray($finding.claimIds), not(eq(count($finding.claimIds), 0)))
+      otherwise "DEBATE-CLOSING: Link each assessment to at least one claim."
+    each $finding.claimIds as id:
+      assert includes($cut.claimIds, $id)
+        otherwise "DEBATE-CLOSING: An assessment names an unknown claim."
+    each list($finding.title, $finding.reason) as text:
+      port kernel.invoke { query = "debates.text"; input = $text } → checked
+    port kernel.invoke { query = "debates.frame"; input = $finding.holdFrames } → frames
+    let speaker = if(eq($finding.speaker, "left"), at($speakers, 0), at($speakers, 1))
+    yield append($cards, list({ tier = $finding.tier; title = $finding.title; copy = $finding.reason;
+      claimIds = $finding.claimIds; speaker = $finding.speaker; frames = $frames;
+      narration = concat($speaker.name, ". ", $finding.title, ". ", $finding.reason) })) → assessed
+  let closingCards = append($assessed, list({ tier = "VALUES"; title = "What each side gives priority to";
+    copy = $closing.priorities; narration = $closing.priorities; frames = $closing.prioritiesFrames }))
+  let startClosing = { timeline = append($cut.timeline, list($tail)); outputFrame = $closingAt }
+  fold $closingCards as card; state starts $startClosing:
+    assert not(eq($card.frames, 0))
+      otherwise "DEBATE-CLOSING: Every assessment card needs a positive hold."
+    let shot = { kind = "closing"; outputFrame = $state.outputFrame; frames = $card.frames;
+      sourceFrame = $finalFreeze; audio = "narration"; card = $card }
+    yield { timeline = append($state.timeline, list($shot)); outputFrame = add($state.outputFrame, $card.frames) } → completed
+  port kernel.invoke { query = "debates.style"; input = null } → style
+  port kernel.invoke { query = "debates.identShot"; input = { id = "sign-off-ident"; outputFrame = $completed.outputFrame; ident = $broadcast.ident } } → signoff
+  let duration = add($completed.outputFrame, $signoff.frames)
+  port kernel.invoke { query = "debates.audioFilter"; input = { frames = $duration; sampleRate = $broadcast.sampleRate; audio = $broadcast.audio } } → audioFilter
+  let result = { protocol = "claimipedia/debates-edit-plan/1"; label = $episode.label; title = $episode.title;
+    topic = $episode.topic; source = $source; speakers = $speakers; graphics = $style;
+    sampleRate = $broadcast.sampleRate; audioMaster = $broadcast.audio; audioFilter = $audioFilter;
+    durationFrames = $duration; timeline = append($completed.timeline, list($signoff)) }

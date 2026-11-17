@@ -1,0 +1,90 @@
+# Making-of narration: the same words drive voice, captions and checked beats.
+module behindTheScenes
+
+view bts.hello of @voice.hello isa Beat:
+  B.title: source.N.title
+  B.scene: source.N.scene
+  B.focus: source.N.focus
+  B.filmIn: source.N.filmIn
+  B.sprite: source.N.sprite
+  B.text: source.N.text
+  B.reason: source.N.reason
+  show as NarratedBeat
+
+view bts.rhythm of @voice.rhythm isa Beat:
+  B.title: source.N.title
+  B.scene: source.N.scene
+  B.focus: source.N.focus
+  B.filmIn: source.N.filmIn
+  B.sprite: source.N.sprite
+  B.text: source.N.text
+  B.reason: source.N.reason
+  show as NarratedBeat
+
+view bts.encounter of @voice.encounter isa Beat:
+  B.title: source.N.title
+  B.scene: source.N.scene
+  B.focus: source.N.focus
+  B.filmIn: source.N.filmIn
+  B.sprite: source.N.sprite
+  B.text: source.N.text
+  B.reason: source.N.reason
+  show as NarratedBeat
+
+view bts.checks of @voice.checks isa Beat:
+  B.title: source.N.title
+  B.scene: source.N.scene
+  B.focus: source.N.focus
+  B.filmIn: source.N.filmIn
+  B.sprite: source.N.sprite
+  B.text: source.N.text
+  B.reason: source.N.reason
+  show as NarratedBeat
+
+view bts.outtakes of @voice.outtakes isa Beat:
+  B.title: source.N.title
+  B.scene: source.N.scene
+  B.focus: source.N.focus
+  B.filmIn: source.N.filmIn
+  B.sprite: source.N.sprite
+  B.text: source.N.text
+  B.reason: source.N.reason
+  show as NarratedBeat
+
+view bts.boundaries of @voice.boundaries isa Beat:
+  B.title: source.N.title
+  B.scene: source.N.scene
+  B.focus: source.N.focus
+  B.filmIn: source.N.filmIn
+  B.sprite: source.N.sprite
+  B.text: source.N.text
+  B.reason: source.N.reason
+  show as NarratedBeat
+
+view bts.breathing of @voice.breathing isa Beat:
+  B.title: source.N.title
+  B.scene: source.N.scene
+  B.focus: source.N.focus
+  B.filmIn: source.N.filmIn
+  B.sprite: source.N.sprite
+  B.text: source.N.text
+  B.reason: source.N.reason
+  show as NarratedBeat
+
+representation NarratedBeat:
+  given navigation as Beat
+  return Beat:
+    B.title: navigation.B.title
+    B.scene: navigation.B.scene
+    B.focus: navigation.B.focus
+    B.filmIn: navigation.B.filmIn
+    B.sprite: navigation.B.sprite
+    B.text: navigation.B.text
+    B.reason: navigation.B.reason
+  render:
+    tag: "article"
+    children:
+      - navigation.B.title
+      - navigation.B.text
+      - navigation.B.reason
+

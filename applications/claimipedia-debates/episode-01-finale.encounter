@@ -1,0 +1,106 @@
+# Episode 01 finale. Scoreboard findings are bounded by the edited debate and its claim audit.
+# The Kingdom section is a Christian proposal drawn from the listed sources.
+# The Field's household examples are synthetic and supply no evidence of policy effects.
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process debates.episode01Finale:
+  let result = {
+    scoreboard = list(
+      {
+        id = "score-quality";
+        title = "How well did they debate?";
+        rows = list(
+          { label = "Substance / useful"; text = "Wilson pressed the cost of care. Turner pressed the scope of the estimates." },
+          { label = "Comparison / incomplete"; text = "Neither side compared concrete family arrangements on the same outcomes." },
+          { label = "Conduct / uneven"; text = "Interruptions and personal remarks cut across several exchanges." }
+        );
+        sourceLine = "EP 01  /  KYLA TURNER AND RACHEL WILSON  /  EDITED EXCERPT";
+        sources = list("https://www.youtube.com/watch?v=cKNlJbX3v_8");
+        narration = "On debate quality, each speaker brought something the other argument needed. Rachel Wilson kept the cost of unpaid care in view. Kyla Turner questioned the scale of the estimates and raised the costs to mothers. Neither compared concrete arrangements on the same outcomes. Interruptions and personal remarks also made parts of the exchange harder to follow."
+      },
+      {
+        id = "score-numbers";
+        title = "What the figures measure";
+        rows = list(
+          { label = "45 million / corrected"; text = "A conditional working-age population estimate. Labour force participation requires a separate estimate." },
+          { label = "US$26,000 / corrected"; text = "Roughly six years of estimated earnings change around a first birth. Lifetime losses were outside the measure." }
+        );
+        sourceLine = "LIKELY MATCH  /  JEC REPUBLICAN STAFF REPORT, 2022  +  BLS DEFINITIONS";
+        sources = list("https://www.jec.senate.gov/public/_cache/files/b8807501-210c-4554-9d72-31de4e939578/the-economic-cost-of-abortion.pdf", "https://www.bls.gov/cps/definitions.htm");
+        narration = "Two objective corrections concern what the figures measure. The staff report that matches both numbers estimates about forty-five million people of working age under its assumptions. The labour force is a different measure. Its twenty-six thousand dollar estimate covers roughly six years around a first birth. The lifetime claim goes beyond that measure."
+      },
+      {
+        id = "score-history";
+        title = "A chronology check";
+        rows = list(
+          { label = "Supported / narrow"; text = "Ford's early personnel work predates the Foundation's later women's studies grants." },
+          { label = "Still open"; text = "That chronology leaves questions about the origins of HR and the motives for particular grants." }
+        );
+        sourceLine = "THE HENRY FORD  /  FORD FOUNDATION ANNUAL REPORT, 1973";
+        sources = list("https://findingaids.thehenryford.org/xtf/data/pdf/683_FiveDollarDayCollection.pdf", "https://www.fordfoundation.org/wp-content/uploads/2015/05/1973-annual-report.pdf");
+        narration = "The chronology supports a narrow point. Ford Motor Company had early personnel work before the Ford Foundation's later grants for women's studies. Those events can be dated separately. Who invented human resources, and what motivated particular grants, are broader questions."
+      },
+      {
+        id = "score-open";
+        title = "Where the debate lands";
+        rows = list(
+          { label = "Shared ground"; text = "Care matters, and work arrangements can put pressure on parents." },
+          { label = "Unresolved"; text = "Which arrangements can sustain income, time for care, and the ability to have and raise children?" },
+          { label = "Verdict"; text = "The evidence here supports limited findings. The wider policy question stays open." }
+        );
+        sourceLine = "EVIDENCE, SCOPE AND INFERENCE  /  CONDUCT ASSESSED SEPARATELY";
+        sources = list("https://www.youtube.com/watch?v=cKNlJbX3v_8");
+        narration = "The common ground is that care matters and the organisation of paid work can put pressure on parents. The open question is which arrangements sustain income, time for care, and the ability to have and raise children. The excerpt supports limited findings and leaves the wider policy question open."
+      }
+    );
+    kingdom = list(
+      {
+        id = "kingdom-question";
+        title = "Who can carry the burden?";
+        rows = list(
+          { label = "Wilson's concern"; text = "Care takes real time, effort and sacrifice." },
+          { label = "Turner's concern"; text = "Parents need practical choices about paid work and family life." },
+          { label = "Kingdom question"; text = "Who has the time, money or authority to make care possible?" }
+        );
+        sourceLine = "MARK 10:42–45  /  KENOTIC GOVERNANCE  /  POWER AS SERVICE";
+        sources = list("https://bible.usccb.org/bible/mark/10", "corpus/syntheses/kenotic_governance_tri_omni_theism_and_a_lawful_world.md");
+        narration = "Here is a Christian proposal. Wilson asks us to see the cost of care. Turner asks us to see the cost of narrowing people's choices. Jesus describes authority as service. For this debate, that asks a different question: who has the time, money, or authority to make it possible for families to care for one another?"
+      },
+      {
+        id = "kingdom-household";
+        title = "Make care a shared commitment";
+        rows = list(
+          { label = "Make work visible"; text = "Put wages, childcare, night care, household tasks and rest on the same page." },
+          { label = "Agree and revisit"; text = "Choose a workable division together, protect each person's ability to ask for change, and set a review date." }
+        );
+        sourceLine = "THE FIELD  /  HOUSEHOLD ORIENTATIONS AND REVISABLE COMMITMENTS";
+        sources = list("corpus/programmes/the-field/household-orientations-and-correction.md");
+        narration = "Start with a shared care agreement. Put paid hours, childcare, night care, household tasks and rest on one page. Each adult names what they can carry and what they need. Choose an arrangement together and set a date to review it. The Field helps us distinguish what people value, what an arrangement actually does, and whether either person can ask for a change."
+      },
+      {
+        id = "kingdom-institutions";
+        title = "Put help within reach";
+        rows = list(
+          { label = "Employers"; text = "Offer predictable hours, workable leave and flexible schedules where the work allows." },
+          { label = "Churches"; text = "Ask families what would help. Organise safeguarded respite, meals, transport or emergency support." },
+          { label = "Include"; text = "Make help accessible to single parents and families with little money or support." }
+        );
+        sourceLine = "ACTS 6:1–6  /  HEAR THE PEOPLE WHOSE NEEDS THE SYSTEM MISSED";
+        sources = list("https://bible.usccb.org/bible/acts/6", "corpus/syntheses/kenotic_governance_tri_omni_theism_and_a_lawful_world.md");
+        narration = "Families need practical help from people who control resources. Employers can try predictable schedules and workable leave. Churches can ask parents what would help and offer safeguarded respite, meals or emergency support. In Acts six, a complaint about overlooked widows changed how care was organised. In this proposal, single parents and families under financial pressure should help shape what is offered."
+      },
+      {
+        id = "kingdom-test";
+        title = "Try it, listen, and revise";
+        rows = list(
+          { label = "Start small"; text = "Try one voluntary arrangement for eight weeks. Compare with the starting position." },
+          { label = "Check effects"; text = "Ask about income, time for care and rest, children's needs, and who absorbed extra work." },
+          { label = "Keep it revisable"; text = "Invite confidential feedback. Change or stop what adds strain or excludes people." }
+        );
+        sourceLine = "A TESTABLE PROPOSAL  /  THE FIELD'S MODEL IS SYNTHETIC";
+        sources = list("corpus/programmes/the-field/household-orientations-and-correction.md");
+        narration = "Try one voluntary arrangement for eight weeks. Compare income, time for care and rest, and how children's needs are being met. Ask separately who absorbed extra work, and make feedback safe. Revise or stop what adds strain or excludes people. The corpus offers a way to frame this test. What helps depends on what families actually experience."
+      }
+    )
+  }

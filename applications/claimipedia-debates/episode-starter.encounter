@@ -1,0 +1,65 @@
+# Copy and rename this process for each episode. Run it to obtain the input to debates.plan.
+# Replace the example content and source timings before production.
+# Use 25 fps frame numbers. Source and behaviour intervals exclude their end frame.
+# revealFrame = inFrame reveals the picture immediately after the opening ident.
+# debates.plan adds the approved spoken ident after the intro and at sign-off.
+# Its audioFilter is ready for the media host to apply to the entire joined mix.
+# Narration holds include the measured voice length and desired head and tail padding.
+# Put debaters in picture order. Give each argument its own claim ID.
+# Behaviour cues describe what viewers can observe and play over the source audio.
+# Review assessments for neutral language. Leave the overall verdict open.
+# For a full-screen scoreboard followed by a separately narrated Kingdom response,
+# copy episode-01-finale.encounter and pass its result to debates.finale.
+# Pass the checked plan, prepared finale, and measured holds to debates.withFinale.
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process debates.episodeDraft:
+  let result = {
+    label = "EP 02";
+    title = "Replace with the episode question";
+    topic = "Replace with the topic line";
+    source = {
+      locator = "replace-with-source-clip";
+      credit = "Replace with the source credit";
+      durationFrames = 1500;
+      inFrame = 0;
+      revealFrame = 0;
+      outFrame = 1500
+    };
+    speakers = list(
+      { id = "left"; name = "Left debater"; handle = null },
+      { id = "right"; name = "Right debater"; handle = null }
+    );
+    intro = { frames = 250; narration = "Name both debaters and introduce the episode question." };
+    claims = list(
+      {
+        id = "claim-01"; sourceFrame = 250; holdFrames = 175;
+        speakers = list("left"); claimIds = list("C01");
+        title = "Identify the claim";
+        copy = "State the claim and the evidence or assumption it depends on.";
+        narration = "Explain the claim and the scope of the available evidence."
+      }
+    );
+    behaviours = list(
+      {
+        id = "conduct-01"; inFrame = 225; outFrame = 300; subject = "exchange";
+        label = "Identify the observed behaviour";
+        observation = "Describe the exchange in concrete terms."
+      }
+    );
+    closing = {
+      summary = "State the shared ground and the principal disagreement.";
+      summaryFrames = 150;
+      methodFrames = 300;
+      assessments = list(
+        {
+          tier = "Plausible, with evidence still needed"; title = "Identify the argument assessed";
+          speaker = "left"; claimIds = list("C01"); holdFrames = 200;
+          reason = "State what the evidence supports and what the inference still requires."
+        }
+      );
+      priorities = "Describe the priorities that remain open to the viewer.";
+      prioritiesFrames = 150
+    }
+  }

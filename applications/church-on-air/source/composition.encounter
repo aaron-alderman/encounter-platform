@@ -1,0 +1,172 @@
+# Typed broadcast projections; direct edits return to these REL facts.
+module broadcast
+
+view broadcast.signal of @signal isa Cut:
+  C.title: source.S.title
+  C.clip: source.S.clip
+  C.in: source.S.in
+  C.duration: source.S.duration
+  C.layout: source.S.layout
+  C.transition: source.S.transition
+  C.tracking: source.S.tracking
+  C.caption: source.S.caption
+  C.reason: source.S.reason
+  edit C.title through source.S.title
+  edit C.in through source.S.in
+  edit C.duration through source.S.duration
+  edit C.layout through source.S.layout
+  edit C.transition through source.S.transition
+  edit C.tracking through source.S.tracking
+  edit C.caption through source.S.caption
+  show as TimelineShot
+
+view broadcast.overflow of @overflow isa Cut:
+  C.title: source.S.title
+  C.clip: source.S.clip
+  C.in: source.S.in
+  C.duration: source.S.duration
+  C.layout: source.S.layout
+  C.transition: source.S.transition
+  C.tracking: source.S.tracking
+  C.caption: source.S.caption
+  C.reason: source.S.reason
+  edit C.title through source.S.title
+  edit C.in through source.S.in
+  edit C.duration through source.S.duration
+  edit C.layout through source.S.layout
+  edit C.transition through source.S.transition
+  edit C.tracking through source.S.tracking
+  edit C.caption through source.S.caption
+  show as TimelineShot
+
+view broadcast.names of @names isa Cut:
+  C.title: source.S.title
+  C.clip: source.S.clip
+  C.in: source.S.in
+  C.duration: source.S.duration
+  C.layout: source.S.layout
+  C.transition: source.S.transition
+  C.tracking: source.S.tracking
+  C.caption: source.S.caption
+  C.reason: source.S.reason
+  edit C.title through source.S.title
+  edit C.in through source.S.in
+  edit C.duration through source.S.duration
+  edit C.layout through source.S.layout
+  edit C.transition through source.S.transition
+  edit C.tracking through source.S.tracking
+  edit C.caption through source.S.caption
+  show as TimelineShot
+
+view broadcast.room of @room isa Cut:
+  C.title: source.S.title
+  C.clip: source.S.clip
+  C.in: source.S.in
+  C.duration: source.S.duration
+  C.layout: source.S.layout
+  C.transition: source.S.transition
+  C.tracking: source.S.tracking
+  C.caption: source.S.caption
+  C.reason: source.S.reason
+  edit C.title through source.S.title
+  edit C.in through source.S.in
+  edit C.duration through source.S.duration
+  edit C.layout through source.S.layout
+  edit C.transition through source.S.transition
+  edit C.tracking through source.S.tracking
+  edit C.caption through source.S.caption
+  show as TimelineShot
+
+view broadcast.worship of @worship isa Cut:
+  C.title: source.S.title
+  C.clip: source.S.clip
+  C.in: source.S.in
+  C.duration: source.S.duration
+  C.layout: source.S.layout
+  C.transition: source.S.transition
+  C.tracking: source.S.tracking
+  C.caption: source.S.caption
+  C.reason: source.S.reason
+  edit C.title through source.S.title
+  edit C.in through source.S.in
+  edit C.duration through source.S.duration
+  edit C.layout through source.S.layout
+  edit C.transition through source.S.transition
+  edit C.tracking through source.S.tracking
+  edit C.caption through source.S.caption
+  show as TimelineShot
+
+view broadcast.home of @home isa Cut:
+  C.title: source.S.title
+  C.clip: source.S.clip
+  C.in: source.S.in
+  C.duration: source.S.duration
+  C.layout: source.S.layout
+  C.transition: source.S.transition
+  C.tracking: source.S.tracking
+  C.caption: source.S.caption
+  C.reason: source.S.reason
+  edit C.title through source.S.title
+  edit C.in through source.S.in
+  edit C.duration through source.S.duration
+  edit C.layout through source.S.layout
+  edit C.transition through source.S.transition
+  edit C.tracking through source.S.tracking
+  edit C.caption through source.S.caption
+  show as TimelineShot
+
+view broadcast.glory of @glory isa Cut:
+  C.title: source.S.title
+  C.clip: source.S.clip
+  C.in: source.S.in
+  C.duration: source.S.duration
+  C.layout: source.S.layout
+  C.transition: source.S.transition
+  C.tracking: source.S.tracking
+  C.caption: source.S.caption
+  C.reason: source.S.reason
+  edit C.title through source.S.title
+  edit C.in through source.S.in
+  edit C.duration through source.S.duration
+  edit C.layout through source.S.layout
+  edit C.transition through source.S.transition
+  edit C.tracking through source.S.tracking
+  edit C.caption through source.S.caption
+  show as TimelineShot
+
+view broadcast.invitation of @invitation isa Cut:
+  C.title: source.S.title
+  C.clip: source.S.clip
+  C.in: source.S.in
+  C.duration: source.S.duration
+  C.layout: source.S.layout
+  C.transition: source.S.transition
+  C.tracking: source.S.tracking
+  C.caption: source.S.caption
+  C.reason: source.S.reason
+  edit C.title through source.S.title
+  edit C.in through source.S.in
+  edit C.duration through source.S.duration
+  edit C.layout through source.S.layout
+  edit C.transition through source.S.transition
+  edit C.tracking through source.S.tracking
+  edit C.caption through source.S.caption
+  show as TimelineShot
+
+representation TimelineShot:
+  given navigation as Cut
+  return Cut:
+    C.title: navigation.C.title
+    C.clip: navigation.C.clip
+    C.in: navigation.C.in
+    C.duration: navigation.C.duration
+    C.layout: navigation.C.layout
+    C.transition: navigation.C.transition
+    C.tracking: navigation.C.tracking
+    C.caption: navigation.C.caption
+    C.reason: navigation.C.reason
+  render:
+    tag: "article"
+    children:
+      - navigation.C.title
+      - navigation.C.reason

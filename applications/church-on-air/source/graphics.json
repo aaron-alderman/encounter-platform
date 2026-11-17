@@ -1,0 +1,54 @@
+{
+ "protocol":"church-on-air/graphics-recipes/1",
+ "canvas":[320,240],
+ "layouts":{
+  "card":{
+   "background":"perspective","videoBox":[274,258,350,197],"entrance":{"seconds":0.45,"offsetX":-14},
+   "elements":[
+    {"kind":"masthead"},
+    {"kind":"title","xy":[12,35],"width":190,"height":72,"size":31,"field":"title","color":"yellow","extrude":4,"linesByText":{"CHURCH ON AIR":["CHURCH","ON AIR"],"COME AS YOU ARE":["COME AS","YOU ARE"]}},
+    {"kind":"caption","xy":[14,114],"width":115,"size":9,"field":"caption","color":"cyan"},
+    {"kind":"cube","center":[52,180],"size":29},
+    {"kind":"star","center":[102,179],"lines":["YOU'RE","INVITED"]},
+    {"kind":"rect","box":[136,127,313,229],"outline":"cyan","width":1},
+    {"kind":"text","xy":[141,120],"text":"ORIGINAL CHURCH AUDIO","size":6,"color":"cyan"},
+    {"kind":"ticker","prefixCaption":false}
+   ]
+  },
+  "split":{
+   "background":"perspective","videoBox":[236,92,392,221],"entrance":{"seconds":0.45,"offsetX":-14},
+   "elements":[
+    {"kind":"masthead"},
+    {"kind":"rect","box":[7,34,111,204],"fill":"violet"},
+    {"kind":"title","xy":[13,43],"width":92,"height":75,"size":20,"field":"title","color":"yellow","extrude":3},
+    {"kind":"caption","xy":[13,53],"afterTitle":true,"width":91,"size":8,"field":"caption","color":"white"},
+    {"kind":"cube","center":[58,183],"size":20},
+    {"kind":"rect","box":[116,44,315,159],"outline":"cyan","width":1},
+    {"kind":"text","xy":[122,166],"text":"TUNE IN TO SOMETHING","size":9,"color":"yellow","bold":true},
+    {"kind":"text","xy":[122,180],"text":"BIGGER THAN YOURSELF.","size":9,"color":"white","bold":true},
+    {"kind":"line","points":[122,198,312,198],"color":"pink","width":2},
+    {"kind":"ticker","prefixCaption":false},
+    {"kind":"meter"}
+   ]
+  },
+  "hero":{
+   "background":"perspective","videoBox":[16,68,608,342],"entrance":{"seconds":0,"offsetX":0},
+   "elements":[
+    {"kind":"masthead"},
+    {"kind":"rect","box":[7,32,313,206],"outline":"cyan","width":1},
+    {"kind":"title","xy":[8,210],"width":266,"height":20,"size":17,"field":"title","color":"yellow","extrude":2},
+    {"kind":"ticker","prefixCaption":true},
+    {"kind":"meter"}
+   ]
+  },
+  "full":{
+   "background":"source-blur","videoBox":[0,60,640,360],"entrance":{"seconds":0,"offsetX":0},
+   "elements":[
+    {"kind":"masthead","visibleUntil":1.25},
+    {"kind":"title","xy":[10,216],"width":300,"height":20,"size":14,"field":"title","color":"yellow","extrude":2,"visibleUntil":1.25}
+   ]
+  }
+ },
+ "nativePrimitives":["perspective-grid","source-blur","masthead","title","caption","cube","star","rect","line","text","ticker","meter"],
+ "nativeBoundary":"Coordinates, layout membership, text sources and entrance/hold values are authored here. Rasterization, text metrics, cube projection, tape distortion and FFmpeg codecs remain native mechanisms."
+}

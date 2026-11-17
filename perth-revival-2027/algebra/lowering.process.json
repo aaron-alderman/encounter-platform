@@ -1,0 +1,2109 @@
+{
+  "protocol": "temple/surface-process-module/1",
+  "queries": {
+    "lower.scan": [
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$input"
+        },
+        "into": "kind"
+      },
+      {
+        "let": "result",
+        "value": []
+      },
+      {
+        "when": [
+          "eq",
+          "$kind.type",
+          "string"
+        ],
+        "then": [
+          {
+            "port": "text.split",
+            "args": {
+              "value": "$input",
+              "pattern": "[^A-Za-z0-9_-]+"
+            },
+            "into": "result"
+          }
+        ]
+      },
+      {
+        "when": "$kind.array",
+        "then": [
+          {
+            "fold": "$input",
+            "as": "part",
+            "accumulator": "tokens",
+            "initial": [],
+            "steps": [
+              {
+                "let": "input",
+                "value": "$part"
+              },
+              {
+                "fold": [
+                  "list",
+                  null
+                ],
+                "as": "callFrame",
+                "accumulator": "frameResult",
+                "initial": null,
+                "steps": [
+                  {
+                    "call": "lower.scan"
+                  }
+                ],
+                "yield": "$result",
+                "into": "result"
+              }
+            ],
+            "yield": [
+              "append",
+              "$tokens",
+              "$result"
+            ],
+            "into": "result"
+          }
+        ]
+      },
+      {
+        "when": [
+          "if",
+          [
+            "eq",
+            "$kind.type",
+            "object"
+          ],
+          [
+            "if",
+            [
+              "if",
+              "$kind.array",
+              false,
+              true
+            ],
+            [
+              "if",
+              [
+                "if",
+                [
+                  "eq",
+                  "$input",
+                  null
+                ],
+                false,
+                true
+              ],
+              true,
+              false
+            ],
+            false
+          ],
+          false
+        ],
+        "then": [
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$input"
+            },
+            "into": "entries"
+          },
+          {
+            "fold": "$entries",
+            "as": "entry",
+            "accumulator": "tokens",
+            "initial": [],
+            "steps": [
+              {
+                "let": "input",
+                "value": "$entry"
+              },
+              {
+                "fold": [
+                  "list",
+                  null
+                ],
+                "as": "callFrame",
+                "accumulator": "frameResult",
+                "initial": null,
+                "steps": [
+                  {
+                    "call": "lower.scan"
+                  }
+                ],
+                "yield": "$result",
+                "into": "result"
+              }
+            ],
+            "yield": [
+              "append",
+              "$tokens",
+              "$result"
+            ],
+            "into": "result"
+          }
+        ]
+      }
+    ],
+    "lower.fresh": [
+      {
+        "let": "candidate",
+        "value": [
+          "concat",
+          "__templeDerived",
+          "$context.serial"
+        ]
+      },
+      {
+        "let": "occupied",
+        "value": [
+          "includes",
+          "$context.used",
+          "$candidate"
+        ]
+      },
+      {
+        "when": "$occupied",
+        "then": [
+          {
+            "fold": [
+              "list",
+              null
+            ],
+            "as": "invokeInput",
+            "accumulator": "invokeAcc",
+            "initial": null,
+            "steps": [
+              {
+                "let": "input",
+                "value": "$invokeInput"
+              },
+              {
+                "let": "context",
+                "value": {
+                  "used": "$context.used",
+                  "serial": [
+                    "add",
+                    "$context.serial",
+                    1
+                  ],
+                  "locals": "$context.locals"
+                }
+              },
+              {
+                "fold": [
+                  "list",
+                  null
+                ],
+                "as": "callFrame",
+                "accumulator": "frameResult",
+                "initial": null,
+                "steps": [
+                  {
+                    "call": "lower.fresh"
+                  }
+                ],
+                "yield": "$result",
+                "into": "result"
+              }
+            ],
+            "yield": "$result",
+            "into": "fresh"
+          },
+          {
+            "let": "result",
+            "value": "$fresh"
+          }
+        ]
+      },
+      {
+        "when": [
+          "if",
+          "$occupied",
+          false,
+          true
+        ],
+        "then": [
+          {
+            "let": "result",
+            "value": {
+              "value": "$candidate",
+              "context": {
+                "used": [
+                  "append",
+                  "$context.used",
+                  [
+                    "list",
+                    "$candidate"
+                  ]
+                ],
+                "serial": [
+                  "add",
+                  "$context.serial",
+                  1
+                ],
+                "locals": "$context.locals"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "lower.template": [
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$input"
+        },
+        "into": "kind"
+      },
+      {
+        "let": "result",
+        "value": {
+          "value": "$input",
+          "context": "$context"
+        }
+      },
+      {
+        "when": "$kind.array",
+        "then": [
+          {
+            "fold": "$input",
+            "as": "part",
+            "accumulator": "built",
+            "initial": {
+              "value": [
+                "list"
+              ],
+              "context": "$context"
+            },
+            "steps": [
+              {
+                "let": "context",
+                "value": "$built.context"
+              },
+              {
+                "let": "input",
+                "value": "$part"
+              },
+              {
+                "fold": [
+                  "list",
+                  null
+                ],
+                "as": "callFrame",
+                "accumulator": "frameResult",
+                "initial": null,
+                "steps": [
+                  {
+                    "call": "lower.template"
+                  }
+                ],
+                "yield": "$result",
+                "into": "result"
+              }
+            ],
+            "yield": {
+              "value": [
+                "append",
+                "$built.value",
+                [
+                  "list",
+                  "$result.value"
+                ]
+              ],
+              "context": "$result.context"
+            },
+            "into": "result"
+          }
+        ]
+      },
+      {
+        "when": [
+          "if",
+          [
+            "eq",
+            "$kind.type",
+            "object"
+          ],
+          [
+            "if",
+            [
+              "if",
+              "$kind.array",
+              false,
+              true
+            ],
+            [
+              "if",
+              [
+                "if",
+                [
+                  "eq",
+                  "$input",
+                  null
+                ],
+                false,
+                true
+              ],
+              true,
+              false
+            ],
+            false
+          ],
+          false
+        ],
+        "then": [
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$input"
+            },
+            "into": "entries"
+          },
+          {
+            "let": "handled",
+            "value": false
+          },
+          {
+            "when": [
+              "eq",
+              [
+                "count",
+                "$entries"
+              ],
+              1
+            ],
+            "then": [
+              {
+                "let": "marker",
+                "value": [
+                  "at",
+                  [
+                    "at",
+                    "$entries",
+                    0
+                  ],
+                  0
+                ]
+              },
+              {
+                "let": "key",
+                "value": [
+                  "at",
+                  [
+                    "at",
+                    "$entries",
+                    0
+                  ],
+                  1
+                ]
+              },
+              {
+                "when": [
+                  "if",
+                  [
+                    "eq",
+                    "$marker",
+                    "arg"
+                  ],
+                  [
+                    "eq",
+                    "$marker",
+                    "arg"
+                  ],
+                  [
+                    "eq",
+                    "$marker",
+                    "refArg"
+                  ]
+                ],
+                "then": [
+                  {
+                    "port": "value.describe",
+                    "args": {
+                      "value": "$key"
+                    },
+                    "into": "placeholderKind"
+                  },
+                  {
+                    "assert": [
+                      "if",
+                      [
+                        "eq",
+                        "$placeholderKind.type",
+                        "number"
+                      ],
+                      [
+                        "includes",
+                        [
+                          "range",
+                          [
+                            "count",
+                            "$arguments"
+                          ]
+                        ],
+                        [
+                          "add",
+                          "$key",
+                          1
+                        ]
+                      ],
+                      false
+                    ],
+                    "message": "Invalid operator argument placeholder"
+                  },
+                  {
+                    "let": "value",
+                    "value": [
+                      "at",
+                      "$arguments",
+                      "$key"
+                    ]
+                  },
+                  {
+                    "when": [
+                      "eq",
+                      "$marker",
+                      "refArg"
+                    ],
+                    "then": [
+                      {
+                        "port": "value.describe",
+                        "args": {
+                          "value": "$value"
+                        },
+                        "into": "binderKind"
+                      },
+                      {
+                        "assert": [
+                          "if",
+                          [
+                            "eq",
+                            "$binderKind.type",
+                            "string"
+                          ],
+                          [
+                            "if",
+                            [
+                              "if",
+                              [
+                                "includes",
+                                [
+                                  "list",
+                                  "__proto__",
+                                  "prototype",
+                                  "constructor"
+                                ],
+                                "$value"
+                              ],
+                              false,
+                              true
+                            ],
+                            true,
+                            false
+                          ],
+                          false
+                        ],
+                        "message": "Invalid operator binder"
+                      },
+                      {
+                        "let": "value",
+                        "value": [
+                          "concat",
+                          "$definitions.referenceSigil",
+                          "$value"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "let": "result",
+                    "value": {
+                      "value": "$value",
+                      "context": "$context"
+                    }
+                  },
+                  {
+                    "let": "handled",
+                    "value": true
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "if",
+                  [
+                    "eq",
+                    "$marker",
+                    "bind"
+                  ],
+                  [
+                    "eq",
+                    "$marker",
+                    "bind"
+                  ],
+                  [
+                    "eq",
+                    "$marker",
+                    "ref"
+                  ]
+                ],
+                "then": [
+                  {
+                    "let": "local",
+                    "value": [
+                      "at",
+                      "$context.locals",
+                      "$key"
+                    ]
+                  },
+                  {
+                    "when": [
+                      "if",
+                      "$local",
+                      false,
+                      true
+                    ],
+                    "then": [
+                      {
+                        "fold": [
+                          "list",
+                          null
+                        ],
+                        "as": "invokeInput",
+                        "accumulator": "invokeAcc",
+                        "initial": null,
+                        "steps": [
+                          {
+                            "let": "input",
+                            "value": "$invokeInput"
+                          },
+                          {
+                            "fold": [
+                              "list",
+                              null
+                            ],
+                            "as": "callFrame",
+                            "accumulator": "frameResult",
+                            "initial": null,
+                            "steps": [
+                              {
+                                "call": "lower.fresh"
+                              }
+                            ],
+                            "yield": "$result",
+                            "into": "result"
+                          }
+                        ],
+                        "yield": "$result",
+                        "into": "fresh"
+                      },
+                      {
+                        "let": "local",
+                        "value": "$fresh.value"
+                      },
+                      {
+                        "port": "record.entries",
+                        "args": {
+                          "value": "$fresh.context.locals"
+                        },
+                        "into": "locals"
+                      },
+                      {
+                        "port": "record.fromEntries",
+                        "args": {
+                          "entries": [
+                            "append",
+                            "$locals",
+                            [
+                              "list",
+                              [
+                                "list",
+                                "$key",
+                                "$local"
+                              ]
+                            ]
+                          ]
+                        },
+                        "into": "locals"
+                      },
+                      {
+                        "let": "context",
+                        "value": {
+                          "used": "$fresh.context.used",
+                          "serial": "$fresh.context.serial",
+                          "locals": "$locals"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "let": "result",
+                    "value": {
+                      "value": [
+                        "concat",
+                        [
+                          "if",
+                          [
+                            "eq",
+                            "$marker",
+                            "ref"
+                          ],
+                          "$definitions.referenceSigil",
+                          ""
+                        ],
+                        "$local"
+                      ],
+                      "context": "$context"
+                    }
+                  },
+                  {
+                    "let": "handled",
+                    "value": true
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "if",
+                  [
+                    "eq",
+                    "$marker",
+                    "arguments"
+                  ],
+                  [
+                    "if",
+                    [
+                      "eq",
+                      "$key",
+                      true
+                    ],
+                    true,
+                    false
+                  ],
+                  false
+                ],
+                "then": [
+                  {
+                    "let": "result",
+                    "value": {
+                      "value": [
+                        "append",
+                        [
+                          "list",
+                          "list"
+                        ],
+                        "$arguments"
+                      ],
+                      "context": "$context"
+                    }
+                  },
+                  {
+                    "let": "handled",
+                    "value": true
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "eq",
+                  "$marker",
+                  "term"
+                ],
+                "then": [
+                  {
+                    "let": "value",
+                    "value": [
+                      "at",
+                      "$terms",
+                      "$key"
+                    ]
+                  },
+                  {
+                    "port": "value.describe",
+                    "args": {
+                      "value": "$value"
+                    },
+                    "into": "termKind"
+                  },
+                  {
+                    "assert": [
+                      "if",
+                      [
+                        "eq",
+                        "$termKind.type",
+                        "undefined"
+                      ],
+                      false,
+                      true
+                    ],
+                    "message": "Unknown template term"
+                  },
+                  {
+                    "let": "result",
+                    "value": {
+                      "value": "$value",
+                      "context": "$context"
+                    }
+                  },
+                  {
+                    "let": "handled",
+                    "value": true
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "eq",
+                  "$marker",
+                  "foldArgs"
+                ],
+                "then": [
+                  {
+                    "let": "spec",
+                    "value": "$key"
+                  },
+                  {
+                    "fold": "$arguments",
+                    "as": "part",
+                    "accumulator": "reverse",
+                    "initial": [],
+                    "steps": [],
+                    "yield": [
+                      "append",
+                      [
+                        "list",
+                        "$part"
+                      ],
+                      "$reverse"
+                    ],
+                    "into": "reverse"
+                  },
+                  {
+                    "fold": [
+                      "list",
+                      [
+                        "at",
+                        "$spec",
+                        "initial"
+                      ]
+                    ],
+                    "as": "invokeInput",
+                    "accumulator": "invokeAcc",
+                    "initial": null,
+                    "steps": [
+                      {
+                        "let": "input",
+                        "value": "$invokeInput"
+                      },
+                      {
+                        "fold": [
+                          "list",
+                          null
+                        ],
+                        "as": "callFrame",
+                        "accumulator": "frameResult",
+                        "initial": null,
+                        "steps": [
+                          {
+                            "call": "lower.template"
+                          }
+                        ],
+                        "yield": "$result",
+                        "into": "result"
+                      }
+                    ],
+                    "yield": "$result",
+                    "into": "initial"
+                  },
+                  {
+                    "fold": "$reverse",
+                    "as": "part",
+                    "accumulator": "built",
+                    "initial": "$initial",
+                    "steps": [
+                      {
+                        "port": "record.entries",
+                        "args": {
+                          "value": "$terms"
+                        },
+                        "into": "termEntries"
+                      },
+                      {
+                        "port": "record.fromEntries",
+                        "args": {
+                          "entries": [
+                            "append",
+                            "$termEntries",
+                            [
+                              "list",
+                              [
+                                "list",
+                                [
+                                  "at",
+                                  "$spec",
+                                  "item"
+                                ],
+                                "$part"
+                              ],
+                              [
+                                "list",
+                                [
+                                  "at",
+                                  "$spec",
+                                  "accumulator"
+                                ],
+                                "$built.value"
+                              ]
+                            ]
+                          ]
+                        },
+                        "into": "newTerms"
+                      },
+                      {
+                        "let": "context",
+                        "value": "$built.context"
+                      },
+                      {
+                        "let": "input",
+                        "value": [
+                          "at",
+                          "$spec",
+                          "body"
+                        ]
+                      },
+                      {
+                        "let": "terms",
+                        "value": "$newTerms"
+                      },
+                      {
+                        "fold": [
+                          "list",
+                          null
+                        ],
+                        "as": "callFrame",
+                        "accumulator": "frameResult",
+                        "initial": null,
+                        "steps": [
+                          {
+                            "call": "lower.template"
+                          }
+                        ],
+                        "yield": "$result",
+                        "into": "result"
+                      }
+                    ],
+                    "yield": "$result",
+                    "into": "result"
+                  },
+                  {
+                    "let": "handled",
+                    "value": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "when": [
+              "if",
+              "$handled",
+              false,
+              true
+            ],
+            "then": [
+              {
+                "fold": "$entries",
+                "as": "entry",
+                "accumulator": "built",
+                "initial": {
+                  "value": [
+                    "list"
+                  ],
+                  "context": "$context"
+                },
+                "steps": [
+                  {
+                    "let": "context",
+                    "value": "$built.context"
+                  },
+                  {
+                    "let": "input",
+                    "value": [
+                      "at",
+                      "$entry",
+                      1
+                    ]
+                  },
+                  {
+                    "fold": [
+                      "list",
+                      null
+                    ],
+                    "as": "callFrame",
+                    "accumulator": "frameResult",
+                    "initial": null,
+                    "steps": [
+                      {
+                        "call": "lower.template"
+                      }
+                    ],
+                    "yield": "$result",
+                    "into": "result"
+                  }
+                ],
+                "yield": {
+                  "value": [
+                    "append",
+                    "$built.value",
+                    [
+                      "list",
+                      [
+                        "list",
+                        [
+                          "at",
+                          "$entry",
+                          0
+                        ],
+                        "$result.value"
+                      ]
+                    ]
+                  ],
+                  "context": "$result.context"
+                },
+                "into": "built"
+              },
+              {
+                "port": "record.fromEntries",
+                "args": {
+                  "entries": "$built.value"
+                },
+                "into": "value"
+              },
+              {
+                "let": "result",
+                "value": {
+                  "value": "$value",
+                  "context": "$built.context"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "lower.expression": [
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$input"
+        },
+        "into": "kind"
+      },
+      {
+        "let": "result",
+        "value": {
+          "value": "$input",
+          "context": "$context"
+        }
+      },
+      {
+        "when": [
+          "if",
+          [
+            "eq",
+            "$kind.type",
+            "object"
+          ],
+          [
+            "if",
+            [
+              "if",
+              "$kind.array",
+              false,
+              true
+            ],
+            [
+              "if",
+              [
+                "if",
+                [
+                  "eq",
+                  "$input",
+                  null
+                ],
+                false,
+                true
+              ],
+              true,
+              false
+            ],
+            false
+          ],
+          false
+        ],
+        "then": [
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$input"
+            },
+            "into": "entries"
+          },
+          {
+            "fold": "$entries",
+            "as": "entry",
+            "accumulator": "built",
+            "initial": {
+              "value": [
+                "list"
+              ],
+              "context": "$context"
+            },
+            "steps": [
+              {
+                "let": "context",
+                "value": "$built.context"
+              },
+              {
+                "let": "input",
+                "value": [
+                  "at",
+                  "$entry",
+                  1
+                ]
+              },
+              {
+                "fold": [
+                  "list",
+                  null
+                ],
+                "as": "callFrame",
+                "accumulator": "frameResult",
+                "initial": null,
+                "steps": [
+                  {
+                    "call": "lower.expression"
+                  }
+                ],
+                "yield": "$result",
+                "into": "result"
+              }
+            ],
+            "yield": {
+              "value": [
+                "append",
+                "$built.value",
+                [
+                  "list",
+                  [
+                    "list",
+                    [
+                      "at",
+                      "$entry",
+                      0
+                    ],
+                    "$result.value"
+                  ]
+                ]
+              ],
+              "context": "$result.context"
+            },
+            "into": "built"
+          },
+          {
+            "port": "record.fromEntries",
+            "args": {
+              "entries": "$built.value"
+            },
+            "into": "value"
+          },
+          {
+            "let": "result",
+            "value": {
+              "value": "$value",
+              "context": "$built.context"
+            }
+          }
+        ]
+      },
+      {
+        "when": [
+          "if",
+          "$kind.array",
+          [
+            "if",
+            [
+              "count",
+              "$input"
+            ],
+            true,
+            false
+          ],
+          false
+        ],
+        "then": [
+          {
+            "let": "operation",
+            "value": [
+              "at",
+              "$input",
+              0
+            ]
+          },
+          {
+            "let": "rule",
+            "value": [
+              "at",
+              "$definitions.operators",
+              "$operation"
+            ]
+          },
+          {
+            "let": "primitive",
+            "value": [
+              "includes",
+              "$primitives",
+              "$operation"
+            ]
+          },
+          {
+            "assert": [
+              "if",
+              "$primitive",
+              "$primitive",
+              "$rule"
+            ],
+            "message": "Unknown algebra operation [TEMPLE-L001]. Boundary: authored operator vocabulary. Correct the spelling or supply a derived law in algebra/operators.expression.json; do not add a native fallback. Rerun the isolated bootstrap proof."
+          },
+          {
+            "fold": [
+              "range",
+              [
+                "add",
+                [
+                  "count",
+                  "$input"
+                ],
+                -1
+              ]
+            ],
+            "as": "index",
+            "accumulator": "arguments",
+            "initial": [],
+            "steps": [],
+            "yield": [
+              "append",
+              "$arguments",
+              [
+                "list",
+                [
+                  "at",
+                  "$input",
+                  "$index"
+                ]
+              ]
+            ],
+            "into": "arguments"
+          },
+          {
+            "when": [
+              "if",
+              "$primitive",
+              false,
+              true
+            ],
+            "then": [
+              {
+                "assert": [
+                  "if",
+                  [
+                    "includes",
+                    "$ancestry",
+                    "$operation"
+                  ],
+                  false,
+                  true
+                ],
+                "message": "Cyclic operator definition [TEMPLE-L002]. Boundary: finite operator lowering. Break the dependency cycle in the authored laws; do not increase the execution budget. Rerun the isolated bootstrap proof."
+              },
+              {
+                "let": "arity",
+                "value": [
+                  "at",
+                  "$rule",
+                  "arity"
+                ]
+              },
+              {
+                "port": "value.describe",
+                "args": {
+                  "value": "$arity"
+                },
+                "into": "arityKind"
+              },
+              {
+                "assert": [
+                  "if",
+                  [
+                    "eq",
+                    "$arityKind.type",
+                    "number"
+                  ],
+                  [
+                    "eq",
+                    [
+                      "count",
+                      "$arguments"
+                    ],
+                    "$arity"
+                  ],
+                  [
+                    "includes",
+                    [
+                      "range",
+                      [
+                        "add",
+                        [
+                          "count",
+                          "$arguments"
+                        ],
+                        1
+                      ]
+                    ],
+                    [
+                      "add",
+                      [
+                        "at",
+                        "$rule",
+                        "minimumArity"
+                      ],
+                      1
+                    ]
+                  ]
+                ],
+                "message": "Invalid derived operator arity [TEMPLE-L003]. Boundary: operator call contract. Match the call arguments to the authored arity; preserve lazy argument semantics. Rerun the isolated bootstrap proof."
+              }
+            ]
+          },
+          {
+            "fold": "$arguments",
+            "as": "argument",
+            "accumulator": "built",
+            "initial": {
+              "value": [
+                "list"
+              ],
+              "context": "$context"
+            },
+            "steps": [
+              {
+                "let": "context",
+                "value": "$built.context"
+              },
+              {
+                "let": "input",
+                "value": "$argument"
+              },
+              {
+                "fold": [
+                  "list",
+                  null
+                ],
+                "as": "callFrame",
+                "accumulator": "frameResult",
+                "initial": null,
+                "steps": [
+                  {
+                    "call": "lower.expression"
+                  }
+                ],
+                "yield": "$result",
+                "into": "result"
+              }
+            ],
+            "yield": {
+              "value": [
+                "append",
+                "$built.value",
+                [
+                  "list",
+                  "$result.value"
+                ]
+              ],
+              "context": "$result.context"
+            },
+            "into": "built"
+          },
+          {
+            "when": "$primitive",
+            "then": [
+              {
+                "let": "result",
+                "value": {
+                  "value": [
+                    "append",
+                    [
+                      "list",
+                      "$operation"
+                    ],
+                    "$built.value"
+                  ],
+                  "context": "$built.context"
+                }
+              }
+            ]
+          },
+          {
+            "when": [
+              "if",
+              "$primitive",
+              false,
+              true
+            ],
+            "then": [
+              {
+                "fold": [
+                  "list",
+                  [
+                    "at",
+                    "$rule",
+                    "body"
+                  ]
+                ],
+                "as": "invokeInput",
+                "accumulator": "invokeAcc",
+                "initial": null,
+                "steps": [
+                  {
+                    "let": "input",
+                    "value": "$invokeInput"
+                  },
+                  {
+                    "let": "context",
+                    "value": {
+                      "used": "$built.context.used",
+                      "serial": "$built.context.serial",
+                      "locals": {}
+                    }
+                  },
+                  {
+                    "let": "arguments",
+                    "value": "$built.value"
+                  },
+                  {
+                    "let": "terms",
+                    "value": {}
+                  },
+                  {
+                    "fold": [
+                      "list",
+                      null
+                    ],
+                    "as": "callFrame",
+                    "accumulator": "frameResult",
+                    "initial": null,
+                    "steps": [
+                      {
+                        "call": "lower.template"
+                      }
+                    ],
+                    "yield": "$result",
+                    "into": "result"
+                  }
+                ],
+                "yield": "$result",
+                "into": "expanded"
+              },
+              {
+                "fold": [
+                  "list",
+                  "$expanded.value"
+                ],
+                "as": "invokeInput",
+                "accumulator": "invokeAcc",
+                "initial": null,
+                "steps": [
+                  {
+                    "let": "input",
+                    "value": "$invokeInput"
+                  },
+                  {
+                    "let": "context",
+                    "value": "$expanded.context"
+                  },
+                  {
+                    "let": "ancestry",
+                    "value": [
+                      "append",
+                      "$ancestry",
+                      [
+                        "list",
+                        "$operation"
+                      ]
+                    ]
+                  },
+                  {
+                    "fold": [
+                      "list",
+                      null
+                    ],
+                    "as": "callFrame",
+                    "accumulator": "frameResult",
+                    "initial": null,
+                    "steps": [
+                      {
+                        "call": "lower.expression"
+                      }
+                    ],
+                    "yield": "$result",
+                    "into": "result"
+                  }
+                ],
+                "yield": "$result",
+                "into": "result"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "lower.programme": [
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$input"
+        },
+        "into": "kind"
+      },
+      {
+        "assert": "$kind.array",
+        "message": "Process must be an array"
+      },
+      {
+        "fold": "$input",
+        "as": "statement",
+        "accumulator": "built",
+        "initial": {
+          "value": [
+            "list"
+          ],
+          "context": "$context"
+        },
+        "steps": [
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$statement"
+            },
+            "into": "entries"
+          },
+          {
+            "fold": "$entries",
+            "as": "entry",
+            "accumulator": "fields",
+            "initial": {
+              "value": [
+                "list"
+              ],
+              "context": "$built.context"
+            },
+            "steps": [
+              {
+                "let": "field",
+                "value": [
+                  "at",
+                  "$entry",
+                  0
+                ]
+              },
+              {
+                "let": "context",
+                "value": "$fields.context"
+              },
+              {
+                "let": "result",
+                "value": {
+                  "value": [
+                    "at",
+                    "$entry",
+                    1
+                  ],
+                  "context": "$context"
+                }
+              },
+              {
+                "when": [
+                  "includes",
+                  "$definitions.statementFields.programmes",
+                  "$field"
+                ],
+                "then": [
+                  {
+                    "fold": [
+                      "list",
+                      [
+                        "at",
+                        "$entry",
+                        1
+                      ]
+                    ],
+                    "as": "invokeInput",
+                    "accumulator": "invokeAcc",
+                    "initial": null,
+                    "steps": [
+                      {
+                        "let": "input",
+                        "value": "$invokeInput"
+                      },
+                      {
+                        "fold": [
+                          "list",
+                          null
+                        ],
+                        "as": "callFrame",
+                        "accumulator": "frameResult",
+                        "initial": null,
+                        "steps": [
+                          {
+                            "call": "lower.programme"
+                          }
+                        ],
+                        "yield": "$result",
+                        "into": "result"
+                      }
+                    ],
+                    "yield": "$result",
+                    "into": "result"
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "includes",
+                  "$definitions.statementFields.expressions",
+                  "$field"
+                ],
+                "then": [
+                  {
+                    "fold": [
+                      "list",
+                      [
+                        "at",
+                        "$entry",
+                        1
+                      ]
+                    ],
+                    "as": "invokeInput",
+                    "accumulator": "invokeAcc",
+                    "initial": null,
+                    "steps": [
+                      {
+                        "let": "input",
+                        "value": "$invokeInput"
+                      },
+                      {
+                        "fold": [
+                          "list",
+                          null
+                        ],
+                        "as": "callFrame",
+                        "accumulator": "frameResult",
+                        "initial": null,
+                        "steps": [
+                          {
+                            "call": "lower.expression"
+                          }
+                        ],
+                        "yield": "$result",
+                        "into": "result"
+                      }
+                    ],
+                    "yield": "$result",
+                    "into": "result"
+                  }
+                ]
+              }
+            ],
+            "yield": {
+              "value": [
+                "append",
+                "$fields.value",
+                [
+                  "list",
+                  [
+                    "list",
+                    [
+                      "at",
+                      "$entry",
+                      0
+                    ],
+                    "$result.value"
+                  ]
+                ]
+              ],
+              "context": "$result.context"
+            },
+            "into": "fields"
+          },
+          {
+            "port": "record.fromEntries",
+            "args": {
+              "entries": "$fields.value"
+            },
+            "into": "statement"
+          }
+        ],
+        "yield": {
+          "value": [
+            "append",
+            "$built.value",
+            [
+              "list",
+              "$statement"
+            ]
+          ],
+          "context": "$fields.context"
+        },
+        "into": "result"
+      }
+    ],
+    "lower.model": [
+      {
+        "let": "original",
+        "value": "$input"
+      },
+      {
+        "port": "record.entries",
+        "args": {
+          "value": "$input.queries"
+        },
+        "into": "queries"
+      },
+      {
+        "fold": "$queries",
+        "as": "query",
+        "accumulator": "built",
+        "initial": {
+          "value": [
+            "list"
+          ],
+          "context": "$context"
+        },
+        "steps": [
+          {
+            "let": "context",
+            "value": "$built.context"
+          },
+          {
+            "let": "input",
+            "value": [
+              "at",
+              "$query",
+              1
+            ]
+          },
+          {
+            "fold": [
+              "list",
+              null
+            ],
+            "as": "callFrame",
+            "accumulator": "frameResult",
+            "initial": null,
+            "steps": [
+              {
+                "call": "lower.programme"
+              }
+            ],
+            "yield": "$result",
+            "into": "result"
+          }
+        ],
+        "yield": {
+          "value": [
+            "append",
+            "$built.value",
+            [
+              "list",
+              [
+                "list",
+                [
+                  "at",
+                  "$query",
+                  0
+                ],
+                "$result.value"
+              ]
+            ]
+          ],
+          "context": "$result.context"
+        },
+        "into": "built"
+      },
+      {
+        "port": "record.fromEntries",
+        "args": {
+          "entries": "$built.value"
+        },
+        "into": "queries"
+      },
+      {
+        "port": "record.entries",
+        "args": {
+          "value": "$original"
+        },
+        "into": "entries"
+      },
+      {
+        "port": "record.fromEntries",
+        "args": {
+          "entries": [
+            "append",
+            "$entries",
+            [
+              "list",
+              [
+                "list",
+                "queries",
+                "$queries"
+              ]
+            ]
+          ]
+        },
+        "into": "value"
+      },
+      {
+        "let": "result",
+        "value": {
+          "value": "$value",
+          "context": "$built.context"
+        }
+      }
+    ],
+    "lower.start": [
+      {
+        "assert": [
+          "eq",
+          "$definitions.protocol",
+          "temple/derived-expression-definitions/1"
+        ],
+        "message": "Unknown expression definition protocol"
+      },
+      {
+        "port": "record.entries",
+        "args": {
+          "value": "$definitions.operators"
+        },
+        "into": "rules"
+      },
+      {
+        "each": "$rules",
+        "as": "ruleEntry",
+        "steps": [
+          {
+            "let": "ruleName",
+            "value": [
+              "at",
+              "$ruleEntry",
+              0
+            ]
+          },
+          {
+            "let": "rule",
+            "value": [
+              "at",
+              "$ruleEntry",
+              1
+            ]
+          },
+          {
+            "assert": [
+              "if",
+              [
+                "if",
+                [
+                  "includes",
+                  "$primitives",
+                  "$ruleName"
+                ],
+                false,
+                true
+              ],
+              [
+                "if",
+                [
+                  "if",
+                  [
+                    "includes",
+                    [
+                      "list",
+                      "__proto__",
+                      "prototype",
+                      "constructor"
+                    ],
+                    "$ruleName"
+                  ],
+                  false,
+                  true
+                ],
+                true,
+                false
+              ],
+              false
+            ],
+            "message": "Invalid or shadowing operator definition [TEMPLE-L004]. Boundary: primitive ownership and operator names. Use a valid distinct derived name; do not replace a seed primitive with a second definition. Rerun the isolated bootstrap proof."
+          },
+          {
+            "let": "arity",
+            "value": [
+              "at",
+              "$rule",
+              "arity"
+            ]
+          },
+          {
+            "port": "value.describe",
+            "args": {
+              "value": "$arity"
+            },
+            "into": "arityKind"
+          },
+          {
+            "let": "declaredArity",
+            "value": [
+              "if",
+              [
+                "eq",
+                "$arityKind.type",
+                "number"
+              ],
+              "$arity",
+              [
+                "at",
+                "$rule",
+                "minimumArity"
+              ]
+            ]
+          },
+          {
+            "port": "value.describe",
+            "args": {
+              "value": "$declaredArity"
+            },
+            "into": "declaredKind"
+          },
+          {
+            "assert": [
+              "if",
+              [
+                "eq",
+                "$declaredKind.type",
+                "number"
+              ],
+              [
+                "includes",
+                [
+                  "range",
+                  64
+                ],
+                [
+                  "add",
+                  "$declaredArity",
+                  1
+                ]
+              ],
+              false
+            ],
+            "message": "Invalid operator arity declaration"
+          },
+          {
+            "port": "value.describe",
+            "args": {
+              "value": [
+                "at",
+                "$rule",
+                "body"
+              ]
+            },
+            "into": "bodyKind"
+          },
+          {
+            "assert": [
+              "if",
+              [
+                "eq",
+                "$bodyKind.type",
+                "undefined"
+              ],
+              false,
+              true
+            ],
+            "message": "Missing operator body [TEMPLE-L005]. Boundary: executable derived law. Supply the authored lowering body; do not restore a retired implementation module. Rerun the isolated bootstrap proof."
+          }
+        ]
+      },
+      {
+        "let": "originalInput",
+        "value": "$input"
+      },
+      {
+        "fold": [
+          "list",
+          [
+            "list",
+            "$input",
+            "$definitions"
+          ]
+        ],
+        "as": "invokeInput",
+        "accumulator": "invokeAcc",
+        "initial": null,
+        "steps": [
+          {
+            "let": "input",
+            "value": "$invokeInput"
+          },
+          {
+            "fold": [
+              "list",
+              null
+            ],
+            "as": "callFrame",
+            "accumulator": "frameResult",
+            "initial": null,
+            "steps": [
+              {
+                "call": "lower.scan"
+              }
+            ],
+            "yield": "$result",
+            "into": "result"
+          }
+        ],
+        "yield": "$result",
+        "into": "names"
+      },
+      {
+        "let": "context",
+        "value": {
+          "used": [
+            "distinct",
+            "$names"
+          ],
+          "serial": 0,
+          "locals": {}
+        }
+      },
+      {
+        "let": "ancestry",
+        "value": []
+      },
+      {
+        "assert": [
+          "includes",
+          [
+            "list",
+            "expression",
+            "programme",
+            "model"
+          ],
+          "$mode"
+        ],
+        "message": "Unknown lowering mode"
+      },
+      {
+        "when": [
+          "eq",
+          "$mode",
+          "expression"
+        ],
+        "then": [
+          {
+            "let": "input",
+            "value": "$originalInput"
+          },
+          {
+            "fold": [
+              "list",
+              null
+            ],
+            "as": "callFrame",
+            "accumulator": "frameResult",
+            "initial": null,
+            "steps": [
+              {
+                "call": "lower.expression"
+              }
+            ],
+            "yield": "$result",
+            "into": "result"
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$mode",
+          "programme"
+        ],
+        "then": [
+          {
+            "let": "input",
+            "value": "$originalInput"
+          },
+          {
+            "fold": [
+              "list",
+              null
+            ],
+            "as": "callFrame",
+            "accumulator": "frameResult",
+            "initial": null,
+            "steps": [
+              {
+                "call": "lower.programme"
+              }
+            ],
+            "yield": "$result",
+            "into": "result"
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$mode",
+          "model"
+        ],
+        "then": [
+          {
+            "let": "input",
+            "value": "$originalInput"
+          },
+          {
+            "fold": [
+              "list",
+              null
+            ],
+            "as": "callFrame",
+            "accumulator": "frameResult",
+            "initial": null,
+            "steps": [
+              {
+                "call": "lower.model"
+              }
+            ],
+            "yield": "$result",
+            "into": "result"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,93 @@
+# Optional full-screen finale. Supply an episode's authored finale to debates.finale.
+# Rasterize each screen at 960 x 540. Hold it for its narration plus head and tail padding.
+# Run debates.withFinale with { plan, finale, holds }; holds are { id, frames } in scene order.
+# Its timeline replaces the standard closing and places the sign-off after the last scene.
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process debates.finaleEscape:
+  port text.split { value = $eventInput; pattern = "&" } → parts
+  port text.join { values = $parts; separator = "&amp;" } → escaped
+  port text.split { value = $escaped; pattern = "<" } → parts
+  port text.join { values = $parts; separator = "&lt;" } → escaped
+  port text.split { value = $escaped; pattern = ">" } → parts
+  port text.join { values = $parts; separator = "&gt;" } → result
+
+process debates.finaleScreen:
+  let card = $eventInput.card
+  let kingdom = eq($eventInput.act, "kingdom")
+  port kernel.invoke { query = "debates.finaleEscape"; input = $card.title } → title
+  port kernel.invoke { query = "debates.finaleEscape"; input = $card.sourceLine } → source
+  fold $card.rows as row; html starts "":
+    port kernel.invoke { query = "debates.finaleEscape"; input = $row.label } → label
+    port kernel.invoke { query = "debates.finaleEscape"; input = $row.text } → body
+    yield concat($html, "<div class='row'><b>", $label, "</b><span>", $body, "</span></div>") → rows
+  let head = "<!doctype html><meta charset='utf-8'><style>*{box-sizing:border-box}body{margin:0;color:#edf6f8;font:24px/1.22 Arial,sans-serif}main{--accent:#76f4eb;--line:#426d85;--panel:#102134;position:relative;width:960px;height:540px;overflow:hidden;padding:31px 52px;background:repeating-linear-gradient(0deg,#0000 0 3px,#01091640 4px),linear-gradient(150deg,#071522,#171533)}main.kingdom{--accent:#f6d187;--line:#8b714f;--panel:#1b302e;background:radial-gradient(ellipse at 88% 5%,#80613c 0,#32453b 28%,#152824 56%,#10201f 100%)}header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid var(--accent);padding:0 0 14px;color:var(--accent);font:700 20px Consolas,monospace;letter-spacing:2px}h1{margin:24px 0 20px;font-size:50px;line-height:1.06;color:#fff6e4}.kingdom h1{font-family:Georgia,serif}.row{display:grid;grid-template-columns:201px 1fr;align-items:center;min-height:64px;margin-bottom:11px;border:1px solid var(--line);border-left:5px solid var(--accent);background:var(--panel);padding:10px 15px;gap:12px}.row b{color:var(--accent);font:700 17px/1.18 Consolas,monospace;text-transform:uppercase}.row span{font-size:23px}footer{position:absolute;bottom:28px;left:52px;right:52px;padding-top:12px;border-top:1px solid var(--line);color:#ccd8da;font:17px/1.2 Consolas,monospace}</style>"
+  let eyebrow = if($kingdom, "KINGDOM RESPONSE", "CLAIMIPEDIA DEBATES / SCOREBOARD")
+  let marker = if($kingdom, "CHRISTIAN PROPOSAL", "VHF 07 / FINAL REVIEW")
+  let result = concat($head, "<main class='", if($kingdom, "kingdom", "scoreboard"), "'><header><span>",
+    $eyebrow, "</span><span>", $marker, "</span></header><h1>", $title, "</h1>", $rows,
+    "<footer>", $source, "</footer></main>")
+
+process debates.finale:
+  assert and(isArray($eventInput.scoreboard), isArray($eventInput.kingdom))
+    otherwise "DEBATE-FINALE: Supply distinct scoreboard and Kingdom cards."
+  assert and(not(eq(count($eventInput.scoreboard), 0)), not(eq(count($eventInput.kingdom), 0)))
+    otherwise "DEBATE-FINALE: Supply both editorial acts."
+  let acts = list(
+    { id = "scoreboard"; voice = "Microsoft David Desktop"; cards = $eventInput.scoreboard },
+    { id = "kingdom"; voice = "Microsoft Zira Desktop"; cards = $eventInput.kingdom }
+  )
+  fold $acts as act; scenes starts list():
+    fold $act.cards as card; scenes starts $scenes:
+      assert and(isArray($card.rows), includes(list(1, 2, 3), count($card.rows)))
+        otherwise "DEBATE-FINALE: Supply one to three rows on each screen."
+      assert eq(count(filter($scenes, "scene", eq($scene.id, $card.id))), 0)
+        otherwise "DEBATE-FINALE: Card IDs must be unique."
+      port text.matches { value = $card.id; pattern = "^[a-z][a-z0-9-]*$" } → safeId
+      assert $safeId
+        otherwise "DEBATE-FINALE: Use a lowercase file-safe card ID."
+      each list($card.title, $card.sourceLine, $card.narration) as field:
+        port kernel.invoke { query = "debates.text"; input = $field } → checked
+      each $card.rows as row:
+        port kernel.invoke { query = "debates.text"; input = $row.label } → checked
+        port kernel.invoke { query = "debates.text"; input = $row.text } → checked
+      port kernel.invoke { query = "debates.spoken"; input = $card.narration } → speech
+      port kernel.invoke { query = "debates.finaleScreen"; input = { act = $act.id; card = $card } } → screen
+      yield append($scenes, list({ id = $card.id; section = $act.id; voice = $act.voice;
+        text = $speech; html = $screen; sources = $card.sources })) → actScenes
+    yield $actScenes → programme
+  let result = { protocol = "claimipedia/debates-finale/1"; canvas = list(960, 540); fps = 25; scenes = $programme }
+
+process debates.withFinale:
+  let plan = $eventInput.plan
+  let finale = $eventInput.finale
+  let holds = $eventInput.holds
+  assert and(eq($plan.protocol, "claimipedia/debates-edit-plan/1"), eq($finale.protocol, "claimipedia/debates-finale/1"))
+    otherwise "DEBATE-FINALE: Supply a checked edit plan and prepared finale."
+  assert and(isArray($holds), eq(count($holds), count($finale.scenes)), not(eq(count($holds), 0)))
+    otherwise "DEBATE-FINALE: Measure a hold for every scene."
+  let closing = filter($plan.timeline, "shot", eq($shot.kind, "closing"))
+  assert not(eq(count($closing), 0))
+    otherwise "DEBATE-FINALE: The edit plan must still have its standard closing."
+  let first = at($closing, 0)
+  let kept = filter($plan.timeline, "shot", not(or(eq($shot.kind, "closing"), and(eq($shot.kind, "station-ident"), eq($shot.id, "sign-off-ident")))))
+  let start = { index = 0; frame = $first.outputFrame; timeline = $kept }
+  fold $finale.scenes as scene; cut starts $start:
+    let hold = at($holds, $cut.index)
+    assert eq($hold.id, $scene.id)
+      otherwise "DEBATE-FINALE: Measure the holds in scene order."
+    port kernel.invoke { query = "debates.frame"; input = $hold.frames } → frames
+    assert not(eq($frames, 0))
+      otherwise "DEBATE-FINALE: Every scene needs a positive hold."
+    let shot = { kind = $scene.section; id = $scene.id; outputFrame = $cut.frame; frames = $frames;
+      html = $scene.html; voice = $scene.voice; narration = $scene.text; sources = $scene.sources; audio = "finale-narration" }
+    yield { index = add($cut.index, 1); frame = add($cut.frame, $frames); timeline = append($cut.timeline, list($shot)) } → completed
+  port kernel.invoke { query = "debates.broadcastDefaults"; input = null } → broadcast
+  port kernel.invoke { query = "debates.identShot"; input = { id = "sign-off-ident"; outputFrame = $completed.frame; ident = $broadcast.ident } } → signoff
+  let duration = add($completed.frame, $signoff.frames)
+  port kernel.invoke { query = "debates.audioFilter"; input = { frames = $duration; sampleRate = $plan.sampleRate; audio = $plan.audioMaster } } → audioFilter
+  let result = { protocol = $plan.protocol; label = $plan.label; title = $plan.title; topic = $plan.topic;
+    source = $plan.source; speakers = $plan.speakers; graphics = $plan.graphics;
+    sampleRate = $plan.sampleRate; audioMaster = $plan.audioMaster; audioFilter = $audioFilter;
+    durationFrames = $duration; timeline = append($completed.timeline, list($signoff)) }

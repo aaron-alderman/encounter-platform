@@ -1,0 +1,230 @@
+⟦KEN 1⟧ Church on Air · a 1990s local-TV invitation
+⍝ KEN: Kenotic Editing Notes. Intent first; cuts, surfaces and restraint follow.
+⍝ A faithful transcription of the delivered 72.48-second church film.
+⍝ This is an intent export, not a claim that a KEN parser has executed it.
+⍝ The delivered film was lowered through Encounter/REL, Temple and native media tools.
+⍝ Paths below are relative to applications/church-on-air unless explicitly bound.
+
+§ intent
+  purpose "Give the invitation the exuberance of late-night 1990s television; then make room for worship."
+  form local-TV invitation · sincere · playful graphics
+  centre people worshipping together
+  footage ≡ the five supplied videos     ⍝ real people, real places; no generated church scenes
+  speech ⊆ selected source audio         ⍝ no newly performed or synthesized speech
+  music ≡ selected church audio          ⍝ follows its own corresponding pictures
+  claims ⊆ visible footage + attributed source wording
+  invitation ⚑ editorial copy            ⍝ an invitation, not evidence of an achieved outcome
+  contact @TanksAaron
+  end "COME AS YOU ARE"
+  restraint ⊢ the graphics yield to the worship, then return for the closing invitation
+
+§ voice ∅
+§ sfx ∅                                  ⍝ picture tracking adds no artificial audio static
+§ music source-only                      ⍝ no replacement soundtrack or synthetic music
+
+§ bind
+  media config(".local/config.json").mediaDir
+  evidence ".local/analysis.json"
+  graphics "source/graphics.json"
+  renderer "native/render.py"
+  output ".local/church-on-air-b77f1cb50f72c2c4.mp4"
+
+§ source                                 ⍝ local filename · public origin · exact input bytes
+  OVERFLOW "2118035556764684571.mp4" ⊂ media
+    origin "https://x.com/TanksAaron/status/2118035556764684571/video/1"
+    sha256 ae4abca54fd1f86495b1c7a534fca6d503fb3a334ee16523716751826526da61
+  REVIVAL "2118033330834997550.mp4" ⊂ media
+    origin "https://x.com/TanksAaron/status/2118033330834997550/video/1"
+    sha256 b62bd0ebd3aca2511c60d579ba36f31ba0b663762423933634b91442a702b8a2
+  SUNDAY "2112164997589774488.mp4" ⊂ media
+    origin "https://x.com/TanksAaron/status/2112164997589774488/video/1"
+    sha256 660517e90e6cebc08d6edd351468ce449feab3d31d62f894bbe62a9fc79a3a75
+  HOME "2106759066815225895.mp4" ⊂ media
+    origin "https://x.com/TanksAaron/status/2106759066815225895/video/1"
+    sha256 f9f4fbf2a4df7aeee443e6a21fbcc130f2a200d286961d71824ceaa0d7ad51e9
+  GLORY "2048307680318750886.mp4" ⊂ media
+    origin "https://x.com/TanksAaron/status/2048307680318750886/video/1"
+    sha256 db31f729844e5229419afe508eb544608a593152fbbeb71a56d5e1e44760a02b
+
+§ testimony
+  AARON "I LOVE MY CHURCH."
+    source HOME.origin
+    delivery on-screen attribution "- AARON"
+    ⍝ The supplied tweet's wording; no invented spoken testimonial.
+
+§ time
+  fps 25 · frames 1812 · duration 72.48
+  units seconds · ranges [in,out) · frame-grid .04
+  shot ≥1 · gap 0 · overlap 0
+  transition .48                         ⍝ 12 incoming frames; does not shorten the sequence
+  transition-source previous final picture held beneath the incoming picture
+  transition-ease p ↦ 1−(1−p)³
+  picture-end fade last 12 frames
+  ⍝ Tempo/onset measurements informed selection; lyric and bar boundaries were editorial.
+
+§ screen
+  source 16:9 → 640×360 · bicubic
+  graphics 320×240 → 640×480 · nearest
+  compose 640×480 · 4:3 → 960×720 · nearest
+  codec H.264 · yuv420p · crf 19 · preset fast · faststart
+  audio AAC · stereo · 48000 Hz · 192 kb/s
+  fonts title "Arial Bold" · detail "Cascadia Mono"
+  title fit width and height             ⍝ reduce size rather than spill into the picture
+
+§ palette
+  ink #0b0820 · violet #5127a5 · cyan #52f9db
+  yellow #ffef66 · pink #ff6dce · white #ffffff
+
+§ chrome
+  masthead "CHURCH ON AIR" · "VHF 07"
+  ticker "PERTH, WESTERN AUSTRALIA   ///   FAITH. WORSHIP. COMMUNITY.   ///   @TANKSAARON   ///   "
+  ticker scroll 18 graphics-px/s · size 7 · baseline 231
+  picture-credit "ORIGINAL CHURCH AUDIO"
+  seal "YOU'RE" / "INVITED"
+  grid perspective · horizon 145 · moving lower field
+  cube rotating wireframe · cyan
+  meter source-RMS                        ⍝ actual source observation, not invented audio activity
+
+§ lexicon                                ⍝ names used by shots; positions in graphics pixels unless stated
+  card
+    background perspective
+    picture (274,258,350,197) ⊂ compose   ⍝ x,y,width,height in 640×480 compose pixels
+    title (12,35) · width 190 · height 72 · size 31 · yellow · extrusion 4
+    title-lines "CHURCH" / "ON AIR"
+    end-lines "COME AS" / "YOU ARE"
+    caption (14,114) · width 115 · size 9 · cyan · slash separates lines
+    cube centre (52,180) · size 29
+    seal centre (102,179)
+    picture-credit (141,120) · size 6 · cyan
+    include masthead · picture-frame · ticker
+    arrival x −14→0 · .45 · quadratic ease-out
+  split
+    background perspective
+    panel (7,34,111,204) · violet         ⍝ rectangle endpoints
+    picture (236,92,392,221) ⊂ compose
+    title (13,43) · width 92 · height 75 · size ≤20 · yellow · extrusion 3
+    caption (13,53+title-height) · width 91 · size 8 · white · slash separates lines
+    cube centre (58,183) · size 20
+    line "TUNE IN TO SOMETHING" (122,166) · size 9 · yellow
+    line "BIGGER THAN YOURSELF." (122,180) · size 9 · white
+    include masthead · picture-frame · pink-rule · ticker · meter
+    arrival x −14→0 · .45 · quadratic ease-out
+  hero
+    background perspective
+    picture (16,68,608,342) ⊂ compose
+    title (8,210) · width 266 · height 20 · size ≤17 · yellow · extrusion 2
+    caption prepend to ticker
+    include masthead · cyan-picture-frame · ticker · meter
+    arrival fixed
+  full
+    background source-picture · blur radius 10 · brightness ×.25
+    picture (0,60,640,360) ⊂ compose
+    title (10,216) · width 300 · height 20 · size ≤14 · yellow · extrusion 2
+    masthead and title visible first 1.25
+    secondary-caption metadata-only      ⍝ it is not painted by this layout
+    after 1.25 ⊢ only the real picture and its existing source captions remain
+
+§ transition
+  cut instantaneous
+  push previous exits left · incoming enters from right
+  iris expanding centred circular reveal
+  venetian horizontal slats · compose-pitch 32
+  spin incoming grows 0→1 · rotation 270°→0° over held previous picture
+
+§ tape                                   ⍝ compose pixels; local frame i starts again at each shot
+  seed 1979+i · generator NumPy default_rng
+  red shift +1 horizontal · blue shift −1 horizontal
+  scanlines every second row ×.90
+  grain integer −3…+3 · monochrome · every frame
+  heavy tracking active every frame
+  burst tracking active i mod 150 <15     ⍝ .60 seconds in every six-second local cycle
+  soft tracking sparse lower-edge noise i mod 250 <2
+  active-band y=floor((local-seconds×235) mod 480) · height ≤12
+  active-shear row-shift trunc(9×sin(row×1.7+local-seconds×14))
+  active-static two rows every fifth frame · lower five rows each active frame
+  ⍝ Exact raster primitives, rounding and layer order bind to the declared renderer.
+
+§ audio
+  gain OVERFLOW ×1.2279 · REVIVAL ×1.3143 · SUNDAY ×.7973 · HOME ×1.5021 · GLORY ×.5499
+  process resample 48000 → gain → highpass 55 Hz → lowpass 10500 Hz → limit .9
+  limiter auto-makeup false
+  continuity ⊢ adjacent ranges of the same source become one unbroken audio group
+  source-group edges fade-in .12 · fade-out .12
+  joins concatenate                       ⍝ edge fades, not crossfades; no time is removed
+
+§ shot                                   ⍝ film interval · source interval · then named presentation choices
+▸ signal                                 ⍝ frames [0,84)
+  at [0.00,3.36) · clip OVERFLOW [35.00,38.36)
+  surface card · enter cut · tape heavy
+  title "CHURCH ON AIR"
+  caption "FAITH. WORSHIP. COMMUNITY."
+  reason "Acquire the signal. A short receiver lock establishes the era immediately."
+
+▸ overflow                               ⍝ frames [84,335)
+  at [3.36,13.40) · clip OVERFLOW [38.36,48.40)
+  surface split · enter push · tape burst
+  title "GET READY FOR THE OVERFLOW"
+  caption "A LOCAL CHURCH. / AN OPEN INVITATION."
+  audio continue signal
+  reason "Make the invitation large; give the graphics a surface without covering faces."
+
+▸ names                                  ⍝ frames [335,493)
+  at [13.40,19.72) · clip REVIVAL [30.36,36.68)
+  surface hero · enter venetian · tape burst
+  title "PERTH REVIVAL"
+  caption "YAHWEH / RAPHA / ELOHIM"
+  reason "A fresh refrain and a brisk movement; change the register before the frame opens."
+
+▸ room                                   ⍝ frames [493,651)
+  at [19.72,26.04) · clip REVIVAL [36.68,43.00)
+  surface full · enter iris · tape soft
+  title "MAKE ROOM" · hold 1.25
+  metadata-caption "WORSHIP. PRAYER. COMMUNITY."
+  audio continue names
+  reason "Open the enclosure while the original source and audio remain continuous."
+
+▸ worship                                ⍝ frames [651,985)
+  at [26.04,39.40) · clip SUNDAY [50.32,63.68)
+  surface full · enter cut · tape soft
+  title "THERE IS NO OTHER NAME" · hold 1.25
+  metadata-caption "SUNDAY SERVICE / PERTH"
+  reason "The symmetry break: a longer, nearly unadorned passage. Let the worship carry the film."
+
+▸ home                                   ⍝ frames [985,1310)
+  at [39.40,52.40) · clip HOME [57.08,70.08)
+  surface split · enter spin · tape burst
+  title "A PLACE TO CALL HOME"
+  caption "I LOVE MY CHURCH. / - AARON"
+  reason "Return to invitation language, with the author's own statement and a deliberately cheesy arrival."
+
+▸ glory                                  ⍝ frames [1310,1644)
+  at [52.40,65.76) · clip GLORY [13.20,26.56)
+  surface hero · enter push · tape soft
+  title "ALL THE GLORY"
+  caption "ALL THE PRAISE. / UNTO YOU JESUS."
+  reason "Let the brighter source settle. Secondary words belong in the rolling strip."
+
+▸ invitation                             ⍝ frames [1644,1812)
+  at [65.76,72.48) · clip GLORY [26.56,33.28)
+  surface card · enter iris · tape burst
+  title "COME AS YOU ARE"
+  caption "KINGDOMCITY / PERTH / @TanksAaron"
+  audio continue glory
+  reason "Hold a generous final invitation over the continuing church audio."
+
+§ receipt                                ⍝ observed delivery, not a promise about an unexecuted KEN lowering
+  film sha256 b77f1cb50f72c2c418bd30ee6893bc25d9f23df1666eb59d55f8aff949b7f463
+  frames 1812 · duration 72.48 · 960×720 · 25 fps
+  audio stereo AAC · 48000 Hz · observed peak −4.8 dBFS
+  source-basis 820d2266fc916b1144814bdd848011a85a9a0687c4b1f9dd08f3c50cdc4ca98f
+  graphics sha256 d910e64b1f60da1e9823de14cd119e05def4cdf1d0c01e040155c6283a2267b0
+  renderer sha256 f33662f19b94e85cdac130100a5e3c970e7b84901a2ac50164fd888972a820b4
+  details ".local/render-receipt.json" · ".local/verification.json"
+
+§ yield
+  ⊢ intent, words, source ranges, surfaces and restraint are named editable choices
+  ⊢ source footage and source audio remain identifiable; their edits do not become new testimony
+  ⊢ an edit changes the intended film; the receipt above continues to identify the delivered predecessor
+  ⊢ executable predecessor: source/composition.encounter + source/composition.rel
+  ⊢ raster vocabulary: source/graphics.json + native/render.py
+  ⊢ KEN-to-Encounter lowering remains to be implemented and checked; this export does not claim it
