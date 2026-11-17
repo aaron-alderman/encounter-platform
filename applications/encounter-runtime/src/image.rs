@@ -21,6 +21,8 @@ fn runtime_pin() -> Result<String> {
 }
 
 pub fn build(root: &Path, declaration: &str, output: &Path) -> Result<String> {
+    crate::package::check(root)?;
+    crate::package::check_path(output)?;
     let (app, files) = Application::capture(root, declaration)?;
     let programme = app.admit(&mut Meter::new(20_000_000))?.compiled();
     let programme_sha256 = rel::hash(rel::encode(&programme, PROGRAMME_KIND)?);
@@ -66,6 +68,9 @@ pub struct LoadedImage {
 }
 
 pub fn load(path: &Path, expected: &str) -> Result<LoadedImage> {
+    crate::package::check_path(path)?;
+    let package_root = path.canonicalize()?.parent().ok_or_else(|| fail("missing image package directory"))?.to_path_buf();
+    crate::package::check(&package_root)?;
     if expected.len() != 64 || !expected.bytes().all(|byte|
         byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
     {

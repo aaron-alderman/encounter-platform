@@ -77,7 +77,7 @@ test('Workgarden adds, completes, retains, and reopens a work item', async t => 
   assert.deepEqual(board.errors, []);
 });
 
-test('Harborboard saves planning states, epics, and acyclic dependencies', async t => {
+test('Harborboard saves plans and requires every blocker to be Done', async t => {
   const board = await openBoard(t, 'harborboard', { width: 1280, height: 850 });
   const { page } = board;
   const card = title => page.getByRole('article', { name: title, exact: true });
@@ -110,15 +110,50 @@ test('Harborboard saves planning states, epics, and acyclic dependencies', async
   await addDependency('Draft guide', 'Publish guide');
   assert.match(await page.getByRole('alert').innerText(), /create a cycle/);
   assert.equal(await card('Draft guide').getByText('Depends on: Publish guide').count(), 0);
-  await plan('Review guide', 'Done');
-  assert.equal(await card('Publish guide').getByText('Blocked by: Review guide').count(), 0);
+  await addDependency('Publish guide', 'Draft guide');
+  const markDone = title => submit(page, card(title).getByRole('button', { name: 'Mark done', exact: true }));
+  const completionForm = card('Publish guide').locator('form').filter({ has: page.getByRole('button', { name: 'Mark done', exact: true }) });
+  const base = () => completionForm.locator('input[name=base]').inputValue();
+  const blockedBase = await base();
+  await markDone('Publish guide');
+  assert.match(await page.getByRole('alert').innerText(), /Cannot mark this item Done/);
+  assert.match(await card('Publish guide').innerText(), /Blocked by: Review guide, Draft guide/);
+  assert.equal(await base(), blockedBase);
+
+  // A previously rendered or manually submitted planning action must also pass the guard.
+  const planForm = card('Publish guide').locator('form').filter({ has: page.getByRole('button', { name: 'Save plan', exact: true, includeHidden: true }) });
+  const response = await page.request.post(page.url(), {
+    headers: { Origin: new URL(page.url()).origin },
+    form: {
+      _csrf: await planForm.locator('input[name=_csrf]').inputValue(),
+      base: blockedBase,
+      action: 'plan',
+      item: await planForm.locator('input[name=item]').inputValue(),
+      status: 'Done',
+      epic: await planForm.locator('select[name=epic]').inputValue(),
+    },
+  });
+  assert.equal(response.status(), 200);
+  assert.match(await response.text(), /Cannot mark this item Done/);
+  await page.reload();
+  assert.equal(await base(), blockedBase);
+
+  await markDone('Draft guide');
+  assert.equal(await card('Publish guide').getByText('Blocked by: Review guide', { exact: true }).count(), 1);
+  const oneOpenBase = await base();
+  await markDone('Publish guide');
+  assert.match(await page.getByRole('alert').innerText(), /Cannot mark this item Done/);
+  assert.equal(await base(), oneOpenBase);
+  await markDone('Review guide');
+  await markDone('Publish guide');
+  assert.equal(await page.getByRole('status').innerText(), 'Work item marked Done.');
   await board.restart();
-  assert.equal(await card('Publish guide').getByText('Depends on: Review guide').count(), 1);
+  assert.equal(await card('Publish guide').getByText('Depends on: Review guide, Draft guide', { exact: true }).count(), 1);
   assert.equal(await card('Publish guide').getByText('Epic: Spring launch').count(), 1);
-  assert.equal(await page.getByRole('region', { name: 'Done' }).getByRole('article', { name: 'Review guide' }).count(), 1);
+  assert.equal(await page.getByRole('region', { name: 'Done' }).getByRole('article', { name: 'Publish guide' }).count(), 1);
   const item = await edit('Publish guide');
   await submit(page, item.getByRole('button', { name: 'Remove dependency: Review guide', exact: true }));
-  assert.equal(await card('Publish guide').getByText('Depends on: Review guide').count(), 0);
+  assert.equal(await card('Publish guide').getByText('Depends on: Draft guide', { exact: true }).count(), 1);
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   assert.deepEqual(board.errors, []);

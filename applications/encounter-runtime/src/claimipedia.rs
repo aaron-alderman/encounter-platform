@@ -7,13 +7,28 @@ const PROFILE: &str = "profiles/claimipedia-web.rel";
 pub fn serve(port: u16) -> Result<()> {
     let root = profile::root().canonicalize()?;
     let applications = root.parent().ok_or_else(|| fail("missing applications root"))?;
-    let web = Facts::read(&root.join(PROFILE))?;
-    let application_root = applications.join(web.one("web", "applicationRoot")?);
-    if !application_root.canonicalize()?.starts_with(applications) {
-        return Err(fail("application root outside workspace"));
+    let web = Facts::read(&profile::contained(&root, PROFILE)?)?;
+    let projects = applications.parent().and_then(|platform| platform.parent())
+        .ok_or_else(|| fail("missing workspace projects root"))?;
+    let shared_applications = projects.join("applications");
+    let application = web.one("web", "applicationRoot")?;
+    let application_root = shared_applications.join(application);
+    if application_root.parent() != Some(shared_applications.as_path())
+        || application_root.canonicalize()? != application_root
+        || !application_root.is_dir()
+    {
+        return Err(fail("Claimipedia root must be a direct directory in the shared application checkout"));
     }
+    crate::package::check(&application_root)?;
     let app = Application::load(&application_root, web.one("web", "application")?)?;
-    let page = Page::load(PROFILE, Some(app.release()?))?;
+    let application_prefix = format!("{application}/");
+    let page = Page::from_profile(&web, Some(app.release()?), |name| {
+        if let Some(relative) = name.strip_prefix(&application_prefix) {
+            profile::contained(&application_root, relative)
+        } else {
+            profile::contained(applications, name)
+        }
+    })?;
     // Resolve the catalogue before advertising a listener.
     page.render(json!({"fields":{}}))?;
 

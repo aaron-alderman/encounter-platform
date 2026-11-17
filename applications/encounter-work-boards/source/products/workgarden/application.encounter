@@ -36,4 +36,5 @@ process product.view:
     yield append($rows, list($row)) → rows
   let listing = if(count($rows), { tag = "ul"; attrs = {}; children = $rows }, { tag = "p"; attrs = { class = "quiet" }; children = list("No work items yet.") })
   let work = { tag = "section"; attrs = {}; children = list({ tag = "h2"; attrs = {}; children = list("Work items") }, $add, $listing) }
-  let result = { title = "Workgarden"; summary = "A simple list for the work you want to finish."; content = list($work) }
+  port kernel.invoke { query = "work.asterContext"; input = $board } → marker
+  let result = { title = "Workgarden"; summary = "A simple list for the work you want to finish."; content = list($marker, $work) }

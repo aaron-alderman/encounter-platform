@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use std::{
     collections::BTreeSet,
     net::TcpStream,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 const HTML: &str = "text/html";
@@ -100,17 +100,19 @@ pub struct Page {
 }
 
 impl Page {
-    pub fn load(declaration: &str, data: Option<Value>) -> Result<Self> {
-        Self::load_in(&profile::root(), declaration, data)
-    }
-
     fn load_in(root: &Path, declaration: &str, data: Option<Value>) -> Result<Self> {
         let root = root.canonicalize()?;
         let applications = root.parent().ok_or_else(|| fail("missing applications root"))?;
         let facts = Facts::read(&profile::contained(&root, declaration)?)?;
+        Self::from_profile(&facts, data, |name| profile::contained(applications, name))
+    }
+
+    pub(crate) fn from_profile(
+        facts: &Facts, data: Option<Value>, resolve: impl Fn(&str) -> Result<PathBuf>,
+    ) -> Result<Self> {
         let grants: BTreeSet<_> = facts.values("web", "grant").into_iter().collect();
         let sources = facts.values("web", "module").into_iter().map(|name| {
-            pinned(&profile::contained(applications, name)?, facts.one(name, "sha256")?)
+            pinned(&resolve(name)?, facts.one(name, "sha256")?)
         }).collect::<Result<Vec<_>>>()?;
         let entry = facts.one("web", "entry")?.to_owned();
         let mut programme = Programme::admit(&sources, &entry, &grants, &mut Meter::new(20_000_000))?;

@@ -2,6 +2,7 @@
 ("application", "module", "source/products/shared/work-items.encounter")
 ("application", "module", "source/products/shared/work-ui.encounter")
 ("application", "module", "source/products/harborboard/application.encounter")
+("application", "module", "source/dependency-guard.encounter")
 ("application", "module", "source/products/harborboard/board.encounter")
 ("application", "module", "algebra/html/html.escape.encounter")
 ("application", "module", "algebra/html/html.cssText.encounter")

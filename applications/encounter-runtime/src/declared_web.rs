@@ -9,6 +9,7 @@ struct Session {
 }
 
 pub fn serve(root: &Path, declaration: &str, directory: &Path, port: u16) -> Result<()> {
+    crate::package::check(root)?;
     let app = Application::load(root, declaration)?;
     let mut meter = Meter::new(20_000_000);
     let programme = app.admit_browser(&mut meter)?;

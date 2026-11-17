@@ -6,6 +6,18 @@ process harbor.statuses:
 process product.empty:
   let result = { items = list(); epics = list() }
 
+process harbor.readiness:
+  let board = $eventInput
+  let item = $board.item
+  fold $item.dependencies as id; blockers starts list():
+    let blocker = at(filter($board.items, "other", eq($other.id, $id)), 0)
+    let entry = { id = $id; label = concat("Missing dependency (", $id, ")"); status = "" }
+    when $blocker:
+      let entry = { id = $id; label = $blocker.title; status = $blocker.status }
+    yield append($blockers, list($entry)) → blockers
+  port kernel.invoke { query = "dependency.guard"; input = { target = $item.id; required = "Done"; blockers = $blockers } } → guard
+  let result = { blockers = $blockers; blocked = $guard.blocked; allowed = $guard.allowed }
+
 process harbor.dependency:
   let edge = $eventInput
   let selected = $edge.item
@@ -41,7 +53,7 @@ process product.change:
   let items = $command.state.items
   let epics = $command.state.epics
   let action = $fields.action
-  assert includes(list("add", "add-epic", "plan", "add-dependency", "remove-dependency"), $action)
+  assert includes(list("add", "add-epic", "plan", "mark-done", "add-dependency", "remove-dependency"), $action)
     otherwise "Choose a Harborboard action."
   let notice = ""
   let target = $command.id
@@ -54,18 +66,26 @@ process product.change:
     port kernel.invoke { query = "work.label"; input = { text = $fields.title; limit = 200 } } → title
     let epics = append($epics, list({ id = $target; title = $title }))
     let notice = "Epic added."
-  when includes(list("plan", "add-dependency", "remove-dependency"), $action):
+  when includes(list("plan", "mark-done", "add-dependency", "remove-dependency"), $action):
     let target = $fields.item
     port kernel.invoke { query = "work.item"; input = { items = $items; id = $target } } → selected
     let changed = $selected
-    when eq($action, "plan"):
+    when includes(list("plan", "mark-done"), $action):
+      let status = if(eq($action, "mark-done"), "Done", at($fields, "status"))
+      let epic = if(eq($action, "mark-done"), $selected.epic, at($fields, "epic"))
       port kernel.invoke { query = "harbor.statuses" } → statuses
-      assert includes($statuses, $fields.status)
+      assert includes($statuses, $status)
         otherwise "Choose a planning state."
-      assert or(eq($fields.epic, ""), some($epics, "epic", eq($epic.id, $fields.epic)))
+      assert or(eq($epic, ""), some($epics, "option", eq($option.id, $epic)))
         otherwise "Choose an existing epic or No epic."
-      let changed = { id = $selected.id; title = $selected.title; status = $fields.status; epic = $fields.epic; dependencies = $selected.dependencies }
-      let notice = "Plan updated."
+      assert not(and(eq($action, "mark-done"), eq($selected.status, "Done")))
+        otherwise "This item is already Done."
+      when and(eq($status, "Done"), not(eq($selected.status, "Done"))):
+        port kernel.invoke { query = "harbor.readiness"; input = { item = $selected; items = $items } } → readiness
+        assert $readiness.allowed
+          otherwise "Cannot mark this item Done while any blocker is open or missing. See the card for its blockers."
+      let changed = { id = $selected.id; title = $selected.title; status = $status; epic = $epic; dependencies = $selected.dependencies }
+      let notice = if(eq($action, "mark-done"), "Work item marked Done.", "Plan updated.")
     when includes(list("add-dependency", "remove-dependency"), $action):
       port kernel.invoke { query = "harbor.dependency"; input = { action = $action; items = $items; item = $selected; blocker = $fields.blocker } } → changed
       let notice = if(eq($action, "add-dependency"), "Dependency added.", "Dependency removed.")
