@@ -1,0 +1,543 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process ws.id:
+  port value.describe { value = $eventInput } → valueKind
+  assert eq($valueKind.type, "string")
+    otherwise "WS-TEXT: A text value is required."
+  port number.calculate { operation = "lessEqual"; values = list(count($eventInput), 32) } → bounded
+  assert $bounded
+    otherwise "WS-LIMIT: Text exceeds this field’s limit."
+  port text.trim { value = $eventInput } → trimmed
+  assert not(eq($trimmed, ""))
+    otherwise "WS-REQUIRED: This field cannot be empty."
+  port text.matches { value = $eventInput; pattern = "^[a-z][a-z0-9_]{0,31}$" } → valid
+  assert $valid
+    otherwise "WS-ID: Use a lowercase identifier with letters, numbers and underscores."
+  assert not(includes(list("constructor", "prototype", "__proto__"), $eventInput))
+    otherwise "WS-ID: Reserved identifier."
+  let result = true
+
+process ws.definition:
+  port value.describe { value = $eventInput } → valueKind
+  assert eq($valueKind.type, "string")
+    otherwise "WS-TEXT: A text value is required."
+  port number.calculate { operation = "lessEqual"; values = list(count($eventInput), 8000) } → bounded
+  assert $bounded
+    otherwise "WS-LIMIT: Text exceeds this field’s limit."
+  port text.trim { value = $eventInput } → trimmed
+  assert not(eq($trimmed, ""))
+    otherwise "WS-REQUIRED: This field cannot be empty."
+  let source = $eventInput
+  port text.split { value = $source; pattern = "\\r?\\n" } → lines
+  port text.trim { value = at($lines, 0) } → header
+  port text.match { value = $header; pattern = "^construct ([A-Z][A-Za-z0-9]{0,31})$" } → header
+  assert $header
+    otherwise "WS-LANGUAGE: Start with construct Name."
+  let name = at($header.groups, 0)
+  let parsed = { fields = list(); heading = null; paragraphs = list() }
+  fold $lines as line; parsed starts $parsed:
+    port text.trim { value = $line } → line
+    let known = or(eq($line, ""), eq($line, concat("construct ", $name)))
+    port text.matches { value = $line; pattern = "^#" } → comment
+    when $comment:
+      let known = true
+    port text.match { value = $line; pattern = "^field ([a-z][a-z0-9_]{0,23}) text (shared|local) (required|optional)(?: max ([1-9][0-9]{0,3}))?$" } → field
+    when $field:
+      let key = at($field.groups, 0)
+      assert not(includes(list("constructor", "prototype", "__proto__"), $key))
+        otherwise "WS-LANGUAGE: Reserved field name."
+      assert eq(count(filter($parsed.fields, "f", eq($f.name, $key))), 0)
+        otherwise "WS-LANGUAGE: Duplicate field."
+      let maximum = 4000
+      when not(eq(at($field.groups, 3), null)):
+        port number.parse { value = at($field.groups, 3) } → maximum
+      port number.calculate { operation = "lessEqual"; values = list($maximum, 4000) } → bounded
+      assert $bounded
+        otherwise "WS-LANGUAGE: Field limits cannot exceed 4000 characters."
+      port record.put { record = $parsed; key = "fields"; value = append($parsed.fields, list({ name = $key; scope = at($field.groups, 1); required = eq(at($field.groups, 2), "required"); maximum = $maximum })) } → parsed
+      let known = true
+    port text.match { value = $line; pattern = "^heading ([a-z][a-z0-9_]{0,23})$" } → heading
+    when $heading:
+      assert eq($parsed.heading, null)
+        otherwise "WS-LANGUAGE: Define one heading."
+      port record.put { record = $parsed; key = "heading"; value = at($heading.groups, 0) } → parsed
+      let known = true
+    port text.match { value = $line; pattern = "^paragraph ([a-z][a-z0-9_]{0,23})$" } → paragraph
+    when $paragraph:
+      port record.put { record = $parsed; key = "paragraphs"; value = append($parsed.paragraphs, list(at($paragraph.groups, 0))) } → parsed
+      let known = true
+    assert $known
+      otherwise "WS-LANGUAGE: Unknown declaration. Use field, heading or paragraph."
+    yield $parsed → parsed
+  assert not(eq(count($parsed.fields), 0))
+    otherwise "WS-LANGUAGE: Declare at least one field."
+  port number.calculate { operation = "lessEqual"; values = list(count($parsed.fields), 6) } → bounded
+  assert $bounded
+    otherwise "WS-LANGUAGE: At most six fields per construct."
+  port number.calculate { operation = "lessEqual"; values = list(count($parsed.paragraphs), 6) } → bounded
+  assert $bounded
+    otherwise "WS-LANGUAGE: At most six paragraph projections."
+  assert $parsed.heading
+    otherwise "WS-LANGUAGE: Declare a heading field."
+  each append(list($parsed.heading), $parsed.paragraphs) as key:
+    assert eq(count(filter($parsed.fields, "f", eq($f.name, $key))), 1)
+      otherwise "WS-LANGUAGE: A representation names an undeclared field."
+  let result = { name = $name; fields = $parsed.fields; heading = $parsed.heading; paragraphs = $parsed.paragraphs; source = $source }
+
+process ws.fieldCheck:
+  let field = $eventInput.field
+  port value.describe { value = $eventInput.value } → valueKind
+  assert eq($valueKind.type, "string")
+    otherwise "WS-TEXT: A text value is required."
+  port number.calculate { operation = "lessEqual"; values = list(count($eventInput.value), $field.maximum) } → bounded
+  assert $bounded
+    otherwise "WS-LIMIT: Text exceeds this field’s limit."
+  when $field.required:
+    port text.trim { value = $eventInput.value } → trimmed
+    assert not(eq($trimmed, ""))
+      otherwise "WS-REQUIRED: A required field is empty."
+  let result = true
+
+process ws.tuple:
+  port json.stringify { value = $eventInput; space = 0 } → encoded
+  port text.slice { value = $encoded; start = 1; end = -1 } → encoded
+  let result = concat("(", $encoded, ")\n")
+
+process ws.emit:
+  let doc = $eventInput.document
+  let schemas = $eventInput.schemas
+  let contract = $data.canonical.contractText
+  fold $schemas as schema; contract starts $contract:
+    let iface = concat("iface.ws.", $schema.name)
+    fold list(list($iface, "isa", "Interface"), list($iface, "type", concat("C", $schema.name)), list($iface, "mode", "closed")) as triple; contract starts $contract:
+      port kernel.invoke { query = "ws.tuple"; input = $triple } → line
+      yield concat($contract, $line) → contract
+    fold $schema.fields as field; contract starts $contract:
+      let slot = concat("slot.ws.", $schema.name, ".", $field.name)
+      fold list(list($iface, "slot", $slot), list($slot, "isa", "Slot"), list($slot, "predicate", concat("F.", $field.name)), list($slot, "valueType", "string"), list($slot, "cardinality", "one")) as triple; contract starts $contract:
+        port kernel.invoke { query = "ws.tuple"; input = $triple } → line
+        yield concat($contract, $line) → contract
+      when $field.required:
+        port kernel.invoke { query = "ws.tuple"; input = list($slot, "nonempty", "true") } → line
+        let contract = concat($contract, $line)
+      yield $contract → contract
+    yield $contract → contract
+  fold $doc.objects as object; facts starts "":
+    port kernel.invoke { query = "ws.tuple"; input = list($object.id, "isa", concat("C", $object.type)) } → line
+    let facts = concat($facts, $line)
+    port record.entries { value = $object.values } → values
+    fold $values as value; facts starts $facts:
+      port kernel.invoke { query = "ws.tuple"; input = list($object.id, concat("F.", at($value, 0)), at($value, 1)) } → line
+      yield concat($facts, $line) → facts
+    yield $facts → facts
+  fold $doc.journeys as journey; facts starts $facts:
+    fold $journey.entries as entry; facts starts $facts:
+      let context = concat("journey.", $journey.id, ".", $entry.id)
+      fold list(list($context, "isa", "Context"), list($context, "C.view", concat("object.", $entry.object))) as triple; facts starts $facts:
+        port kernel.invoke { query = "ws.tuple"; input = $triple } → line
+        yield concat($facts, $line) → facts
+      yield $facts → facts
+    yield $facts → facts
+  fold $doc.objects as object; code starts "module workspace\n":
+    let schema = at(filter($schemas, "s", eq($s.name, $object.type)), 0)
+    let code = concat($code, "\nview object.", $object.id, " of @", $object.id, " isa C", $object.type, ":\n")
+    fold $schema.fields as field; code starts $code:
+      yield concat($code, "  F.", $field.name, ": source.F.", $field.name, "\n", if(eq($field.scope, "shared"), concat("  edit F.", $field.name, " through source.F.", $field.name, "\n"), "")) → code
+    let code = concat($code, "  show as Rep", $object.type, "\n")
+    fold $doc.journeys as journey; code starts $code:
+      fold filter($journey.entries, "e", eq($e.object, $object.id)) as entry; code starts $code:
+        let code = concat($code, "\n  in @journey.", $journey.id, ".", $entry.id, ":\n")
+        fold filter($schema.fields, "f", eq($f.scope, "local")) as field; code starts $code:
+          port record.get { record = $entry.overrides; key = $field.name } → override
+          let value = if(eq($override, null), at($object.values, $field.name), $override)
+          port json.stringify { value = $value; space = 0 } → quoted
+          yield concat($code, "    F.", $field.name, ": ", $quoted, "\n    edit F.", $field.name, " here\n") → code
+        let code = concat($code, "    show as Rep", $object.type, "\n")
+        yield $code → code
+      yield $code → code
+    yield $code → code
+  fold $schemas as schema; code starts $code:
+    let code = concat($code, "\nrepresentation Rep", $schema.name, ":\n  given item as C", $schema.name, "\n  return C", $schema.name, ":\n")
+    fold $schema.fields as field; code starts $code:
+      yield concat($code, "    F.", $field.name, ": item.F.", $field.name, "\n") → code
+    let code = concat($code, "  render:\n    tag: \"article\"\n    children:\n      - tag: \"h2\"\n        children:\n          - result.F.", $schema.heading, "\n")
+    fold $schema.paragraphs as field; code starts $code:
+      yield concat($code, "      - tag: \"p\"\n        children:\n          - result.F.", $field, "\n") → code
+    yield $code → code
+  let result = { codeText = $code; factText = $facts; contractText = $contract; definitions = $data.canonical.definitions; primitives = $data.canonical.primitives; profile = $data.canonical.profile }
+
+process ws.semantic:
+  fold $eventInput as p; values starts list():
+    yield append($values, list({ view = $p.view; source = $p.source; context = if($p.contribution, $p.contribution.id, null); values = $p.values; output = $p.output })) → result
+
+process ws.project:
+  port kernel.invoke { query = "ws.validate"; input = $eventInput } → schemas
+  port kernel.invoke { query = "ws.emit"; input = { document = $eventInput; schemas = $schemas } } → inputs
+  let projections = list()
+  when not(eq(count($eventInput.objects), 0)):
+    port kernel.invoke { query = "ec.prepare"; input = $inputs } → candidate
+    port kernel.invoke { query = "ec.run"; input = { candidate = $candidate } } → projections
+  port kernel.invoke { query = "uw.hash"; input = $eventInput } → documentHash
+  port kernel.invoke { query = "uw.hash"; input = $projections } → projectionHash
+  let result = { document = $eventInput; schemas = $schemas; inputs = $inputs; projections = $projections; documentHash = $documentHash; projectionHash = $projectionHash }
+
+process ws.initial:
+  let basis = $data.workspaceSeed
+  when at($eventInput, "basis"):
+    let basis = $eventInput.basis
+  port kernel.invoke { query = "ws.project"; input = $basis } → snapshot
+  let result = { basis = $basis; predecessor = if(at($eventInput, "predecessor"), $eventInput.predecessor, null); document = $basis; schemas = $snapshot.schemas; inputs = $snapshot.inputs; projections = $snapshot.projections; documentHash = $snapshot.documentHash; projectionHash = $snapshot.projectionHash; revision = 0; journal = list() }
+
+process ws.apply:
+  let state = $eventInput.state
+  let request = $eventInput.request
+  port kernel.invoke { query = "s01.portable"; input = { value = $request; ancestors = list() } } → portable
+  assert $portable
+    otherwise "WS-REQUEST: Finite own-data is required."
+  assert eq($request.baseRevision, $state.revision)
+    otherwise "WS-STALE: Reinspect the current workspace before changing it."
+  port number.calculate { operation = "lessEqual"; values = list(count($state.journal), 15) } → bounded
+  assert $bounded
+    otherwise "WS-SEGMENT: Accept and start a new segment before making more changes."
+  let doc = $state.document
+  when at($doc, "matter"):
+    assert or(eq($request.kind, "matter-manage"), not(includes(list("concluded", "archived"), $doc.matter.status)))
+      otherwise "MM-CLOSED: Reopen this matter before changing work."
+  let destination = null
+  assert includes(list("define", "object", "journey", "compose", "edit", "matter-item", "matter-manage"), $request.kind)
+    otherwise "WS-ACTION: Unknown authoring action."
+  when eq($request.kind, "define"):
+    port kernel.invoke { query = "ws.definition"; input = $request.source } → schema
+    let existing = filter($state.schemas, "s", eq($s.name, $schema.name))
+    let definitions = append(map(filter($state.schemas, "s", not(eq($s.name, $schema.name))), "s", $s.source), list($request.source))
+    port record.put { record = $doc; key = "definitions"; value = $definitions } → doc
+    let destination = { kind = "definition"; construct = $schema.name }
+  when eq($request.kind, "object"):
+    port kernel.invoke { query = "ws.id"; input = $request.id } → valid
+    assert eq(count(filter($doc.objects, "o", eq($o.id, $request.id))), 0)
+      otherwise "WS-OBJECT: This identifier already exists."
+    let matches = filter($state.schemas, "s", eq($s.name, $request.type))
+    assert eq(count($matches), 1)
+      otherwise "WS-TYPE: Define the construct before creating an object."
+    let schema = at($matches, 0)
+    port value.describe { value = $request.values } → valuesKind
+    assert $valuesKind.plain
+      otherwise "WS-TYPE: Object fields must be a record."
+    port record.entries { value = $request.values } → suppliedValues
+    each $suppliedValues as supplied:
+      assert eq(count(filter($schema.fields, "field", eq($field.name, at($supplied, 0)))), 1)
+        otherwise "WS-FIELD: The object contains an undeclared field."
+    fold $schema.fields as field; values starts {  }:
+      let supplied = filter($suppliedValues, "pair", eq(at($pair, 0), $field.name))
+      let value = if(eq(count($supplied), 0), "", at(at($supplied, 0), 1))
+      port record.put { record = $values; key = $field.name; value = $value } → values
+      yield $values → values
+    port record.put { record = $doc; key = "objects"; value = append($doc.objects, list({ id = $request.id; type = $request.type; values = $values })) } → doc
+    let destination = { kind = "object"; object = $request.id }
+  when eq($request.kind, "journey"):
+    port kernel.invoke { query = "ws.id"; input = $request.id } → valid
+    assert eq(count(filter($doc.journeys, "j", eq($j.id, $request.id))), 0)
+      otherwise "WS-JOURNEY: This journey already exists."
+    port record.put { record = $doc; key = "journeys"; value = append($doc.journeys, list({ id = $request.id; name = $request.name; entries = list() })) } → doc
+    let destination = { kind = "journey"; journey = $request.id }
+  when eq($request.kind, "compose"):
+    let matches = filter($doc.journeys, "j", eq($j.id, $request.journey))
+    assert eq(count($matches), 1)
+      otherwise "WS-REFERENCE: Choose an existing journey."
+    port kernel.invoke { query = "ws.id"; input = $request.entry } → valid
+    let journey = at($matches, 0)
+    assert eq(count(filter($journey.entries, "e", eq($e.id, $request.entry))), 0)
+      otherwise "WS-JOURNEY: The entry identifier already exists."
+    port record.put { record = $journey; key = "entries"; value = append($journey.entries, list({ id = $request.entry; object = $request.object; overrides = {  } })) } → journey
+    port record.put { record = $doc; key = "journeys"; value = map($doc.journeys, "j", if(eq($j.id, $request.journey), $journey, $j)) } → doc
+    let destination = { kind = "composition"; journey = $request.journey; entry = $request.entry; object = $request.object }
+  when eq($request.kind, "edit"):
+    assert includes(list("shared", "local"), $request.scope)
+      otherwise "WS-SCOPE: Choose shared or local."
+    let objectId = $request.object
+    let context = null
+    when eq($request.scope, "local"):
+      let journeys = filter($doc.journeys, "j", eq($j.id, $request.journey))
+      assert eq(count($journeys), 1)
+        otherwise "WS-REFERENCE: Unknown journey."
+      let journey = at($journeys, 0)
+      let entries = filter($journey.entries, "e", eq($e.id, $request.entry))
+      assert eq(count($entries), 1)
+        otherwise "WS-REFERENCE: Unknown journey entry."
+      let entry = at($entries, 0)
+      let objectId = $entry.object
+      let context = concat("journey.", $journey.id, ".", $entry.id)
+    let objects = filter($doc.objects, "o", eq($o.id, $objectId))
+    assert eq(count($objects), 1)
+      otherwise "WS-REFERENCE: Choose an existing object."
+    let object = at($objects, 0)
+    let schema = at(filter($state.schemas, "s", eq($s.name, $object.type)), 0)
+    let fields = filter($schema.fields, "f", eq($f.name, $request.field))
+    assert eq(count($fields), 1)
+      otherwise "WS-FIELD: Unknown field."
+    let field = at($fields, 0)
+    assert eq($field.scope, $request.scope)
+      otherwise "WS-SCOPE: This field has a different declared ownership scope."
+    port kernel.invoke { query = "ws.fieldCheck"; input = { field = $field; value = $request.value } } → valid
+    let matches = filter($state.projections, "p", and(eq($p.source, $objectId), eq(if($p.contribution, $p.contribution.id, null), $context)))
+    assert eq(count($matches), 1)
+      otherwise "WS-PROJECTION: Reopen the current object or journey projection."
+    port kernel.invoke { query = "ec.prepare"; input = $state.inputs } → candidate
+    port kernel.invoke { query = "ec.patch"; input = { candidate = $candidate; projection = at($matches, 0); field = concat("F.", $request.field); value = $request.value } } → patched
+    let destination = $patched.destination
+    when eq($request.scope, "shared"):
+      assert eq($destination.kind, "source")
+        otherwise "WS-CORRESPONDENCE: Expected a source inverse route."
+      port record.put { record = $object.values; key = $request.field; value = $request.value } → values
+      port record.put { record = $object; key = "values"; value = $values } → object
+      port record.put { record = $doc; key = "objects"; value = map($doc.objects, "o", if(eq($o.id, $objectId), $object, $o)) } → doc
+    when eq($request.scope, "local"):
+      assert eq($destination.kind, "literal")
+        otherwise "WS-CORRESPONDENCE: Expected a contextual inverse route."
+      port record.put { record = $entry.overrides; key = $request.field; value = $request.value } → overrides
+      port record.put { record = $entry; key = "overrides"; value = $overrides } → entry
+      port record.put { record = $journey; key = "entries"; value = map($journey.entries, "e", if(eq($e.id, $request.entry), $entry, $e)) } → journey
+      port record.put { record = $doc; key = "journeys"; value = map($doc.journeys, "j", if(eq($j.id, $request.journey), $journey, $j)) } → doc
+  when eq($request.kind, "matter-item"):
+    port kernel.invoke { query = "mw.add"; input = { document = $doc; change = $request } } → doc
+    let destination = { kind = "matter-item"; matter = $request.matterId; item = $request.item.id }
+  when eq($request.kind, "matter-manage"):
+    port kernel.invoke { query = "mm.apply"; input = { document = $doc; change = $request } } → doc
+    let destination = { kind = "matter-management"; matter = $request.matterId; operation = $request.operation }
+  port kernel.invoke { query = "ws.project"; input = $doc } → next
+  assert not(eq($next.documentHash, $state.documentHash))
+    otherwise "WS-NOOP: This action does not change the workspace."
+  when eq($request.kind, "edit"):
+    port kernel.invoke { query = "ws.semantic"; input = $patched.projections } → expected
+    port kernel.invoke { query = "ws.semantic"; input = $next.projections } → actual
+    assert eq($expected, $actual)
+      otherwise "WS-CORRESPONDENCE: Semantic regeneration differs from the retained inverse edit."
+  let result = { basis = $state.basis; predecessor = $state.predecessor; document = $doc; schemas = $next.schemas; inputs = $next.inputs; projections = $next.projections; documentHash = $next.documentHash; projectionHash = $next.projectionHash; revision = add($state.revision, 1); journal = append($state.journal, list({ request = $request; before = $state.documentHash; after = $next.documentHash; projectionHash = $next.projectionHash; destination = $destination })) }
+
+process ws.receipt:
+  let state = $eventInput.state
+  assert eq($eventInput.expectedRevision, $state.revision)
+    otherwise "WS-STALE: Acceptance revision changed."
+  assert eq($eventInput.expectedHash, $state.documentHash)
+    otherwise "WS-STALE: Acceptance source changed."
+  let body = { programHash = $data.programHash; basis = $state.basis; predecessor = $state.predecessor; journal = $state.journal; revision = $state.revision; documentHash = $state.documentHash; projectionHash = $state.projectionHash }
+  port kernel.invoke { query = "uw.hash"; input = $body } → hash
+  let result = { protocol = "usewords/workspace-acceptance/1"; body = $body; sha256 = $hash }
+
+process ws.reconstruct:
+  let receipt = $eventInput
+  assert eq($receipt.protocol, "usewords/workspace-acceptance/1")
+    otherwise "WS-REPLAY: Unsupported receipt."
+  assert eq($receipt.body.programHash, $data.programHash)
+    otherwise "WS-REPLAY: This receipt belongs to a different process version."
+  assert isArray($receipt.body.journal)
+    otherwise "WS-REPLAY: Journal must be a list."
+  port number.calculate { operation = "lessEqual"; values = list(count($receipt.body.journal), 16) } → bounded
+  assert $bounded
+    otherwise "WS-REPLAY: Journal segment is too large."
+  port kernel.invoke { query = "uw.hash"; input = $receipt.body } → hash
+  assert eq($hash, $receipt.sha256)
+    otherwise "WS-REPLAY: Receipt hash mismatch."
+  port kernel.invoke { query = "ws.initial"; input = { basis = $receipt.body.basis; predecessor = $receipt.body.predecessor } } → state
+  fold $receipt.body.journal as event; state starts $state:
+    port kernel.invoke { query = "ws.apply"; input = { state = $state; request = $event.request } } → state
+    assert eq(at($state.journal, add(count($state.journal), -1)), $event)
+      otherwise "WS-REPLAY: Operation or inverse destination differs."
+    yield $state → state
+  assert and(eq($state.revision, $receipt.body.revision), eq($state.documentHash, $receipt.body.documentHash), eq($state.projectionHash, $receipt.body.projectionHash))
+    otherwise "WS-REPLAY: Reconstructed source or projections differ."
+  let result = $state
+
+process ws.accept:
+  port kernel.invoke { query = "ws.receipt"; input = $eventInput } → receipt
+  port kernel.invoke { query = "ws.reconstruct"; input = $receipt } → replayed
+  assert eq($replayed.document, $eventInput.state.document)
+    otherwise "WS-ACCEPT: Source was not reproduced."
+  assert eq($replayed.projections, $eventInput.state.projections)
+    otherwise "WS-ACCEPT: Projections were not reproduced."
+  let result = $receipt
+
+process ws.propose:
+  let proposal = $eventInput
+  port kernel.invoke { query = "ws.initial"; input = { } } → state
+  when at($proposal, "receipt"):
+    port kernel.invoke { query = "ws.reconstruct"; input = $proposal.receipt } → state
+  port kernel.invoke { query = "ws.apply"; input = { state = $state; request = $proposal.request } } → next
+  port kernel.invoke { query = "ws.accept"; input = { state = $next; expectedRevision = $next.revision; expectedHash = $next.documentHash } } → result
+
+process cw.member:
+  assert includes(list("alice", "bob", "casey"), $eventInput)
+    otherwise "CW-ACTOR: Choose a declared local persona."
+  let result = { id = $eventInput; canChange = not(eq($eventInput, "casey")) }
+
+process cw.initial:
+  port kernel.invoke { query = "ws.reconstruct"; input = $eventInput } → head
+  let result = { basis = $eventInput; head = $head; proposals = list(); assertions = list(); revision = 0; events = list() }
+
+process cw.apply:
+  let board = $eventInput.board
+  let request = $eventInput.request
+  port kernel.invoke { query = "s01.portable"; input = { value = $request; ancestors = list() } } → portable
+  assert $portable
+    otherwise "CW-REQUEST: Finite own-data is required."
+  assert eq($request.expectedBoardRevision, $board.revision)
+    otherwise "CW-STALE: The proposal board changed. Inspect it again."
+  port kernel.invoke { query = "cw.member"; input = $request.actor } → actor
+  assert $actor.canChange
+    otherwise "CW-ROLE: Casey is an observer in this local simulation."
+  port number.calculate { operation = "lessEqual"; values = list(count($board.events), 47) } → bounded
+  assert $bounded
+    otherwise "CW-LIMIT: This local board supports 48 events. Export its history before starting a separate workspace."
+  assert includes(list("propose", "review", "accept", "reject", "attest", "withdraw-attestation"), $request.action)
+    otherwise "CW-ACTION: Unsupported collaboration action."
+  let proposals = $board.proposals
+  let assertions = $board.assertions
+  let head = $board.head
+  when at($head.document, "matter"):
+    port kernel.invoke { query = "mm.authority"; input = { matter = $head.document.matter; actor = $actor.id; change = if(eq($request.action, "propose"), $request.change, { kind = "review" }) } } → valid
+  when eq($request.action, "propose"):
+    when eq($request.change.kind, "matter-item"):
+      when eq($request.change.origin.kind, "participant"):
+        assert eq($request.change.origin.label, $actor.id)
+          otherwise "PC-AUTHORITY: Participant contributions must name their actual proposing persona."
+    when at($head.document, "matter"):
+      assert or(eq($request.change.kind, "matter-manage"), not(includes(list("concluded", "archived"), $head.document.matter.status)))
+        otherwise "MM-CLOSED: Reopen this matter before proposing work."
+    port kernel.invoke { query = "ws.id"; input = $request.id } → valid
+    assert eq(count(filter($proposals, "p", eq($p.id, $request.id))), 0)
+      otherwise "CW-ID: Proposal identifier already exists."
+    port number.calculate { operation = "lessEqual"; values = list(count($proposals), 11) } → bounded
+    assert $bounded
+      otherwise "CW-LIMIT: This board supports twelve proposals."
+    port kernel.invoke { query = "ws.fieldCheck"; input = { field = { required = true; maximum = 160 }; value = $request.title } } → valid
+    port kernel.invoke { query = "ws.apply"; input = { state = $head; request = $request.change } } → preview
+    port kernel.invoke { query = "ws.receipt"; input = { state = $head; expectedRevision = $head.revision; expectedHash = $head.documentHash } } → base
+    let content = { author = $actor.id; title = $request.title; change = $request.change; baseHash = $head.documentHash; baseRevision = $head.revision }
+    port kernel.invoke { query = "uw.hash"; input = $content } → contentHash
+    port kernel.invoke { query = "cw.difference"; input = { base = $head; preview = $preview; change = $request.change } } → difference
+    let proposal = { id = $request.id; difference = $difference; content = $content; contentHash = $contentHash; base = $base; previewHash = $preview.documentHash; projectionHash = $preview.projectionHash; status = "open"; reviews = list(); acceptedBy = null; rejectedBy = null }
+    let proposals = append($proposals, list($proposal))
+  when includes(list("review", "accept", "reject"), $request.action):
+    let matches = filter($proposals, "p", eq($p.id, $request.id))
+    assert eq(count($matches), 1)
+      otherwise "CW-PROPOSAL: Proposal does not exist."
+    let proposal = at($matches, 0)
+    assert eq($proposal.status, "open")
+      otherwise "CW-CLOSED: This proposal has already been accepted or rejected."
+    when eq($request.action, "review"):
+      assert not(eq($actor.id, $proposal.content.author))
+        otherwise "CW-REVIEW: The author cannot review their own proposal."
+      assert includes(list("approve", "request-changes"), $request.decision)
+        otherwise "CW-REVIEW: Approve or request changes."
+      assert eq($request.contentHash, $proposal.contentHash)
+        otherwise "CW-REVIEW: The review must name the exact proposal content."
+      port kernel.invoke { query = "ws.fieldCheck"; input = { field = { required = true; maximum = 1000 }; value = $request.comment } } → valid
+      let reviews = append(filter($proposal.reviews, "r", not(eq($r.actor, $actor.id))), list({ actor = $actor.id; decision = $request.decision; comment = $request.comment; contentHash = $proposal.contentHash }))
+      port record.put { record = $proposal; key = "reviews"; value = $reviews } → proposal
+    when eq($request.action, "accept"):
+      assert and(eq($proposal.content.baseHash, $head.documentHash), eq($proposal.content.baseRevision, $head.revision))
+        otherwise "CW-CONFLICT: The accepted head changed. Create and review a new proposal against the current head; no automatic rebase is performed."
+      assert eq($request.contentHash, $proposal.contentHash)
+        otherwise "CW-ACCEPT: Select the exact reviewed proposal."
+      assert not(eq(count(filter($proposal.reviews, "r", and(eq($r.decision, "approve"), not(eq($r.actor, $proposal.content.author)), eq($r.contentHash, $proposal.contentHash)))), 0))
+        otherwise "CW-APPROVAL: An independent persona must approve this exact proposal."
+      assert eq(count(filter($proposal.reviews, "r", eq($r.decision, "request-changes"))), 0)
+        otherwise "CW-CHANGES: A reviewer has requested changes."
+      port kernel.invoke { query = "ws.apply"; input = { state = $head; request = $proposal.content.change } } → next
+      assert and(eq($next.documentHash, $proposal.previewHash), eq($next.projectionHash, $proposal.projectionHash))
+        otherwise "CW-PREVIEW: Accepted result differs from the reviewed preview."
+      let head = $next
+      port record.put { record = $proposal; key = "status"; value = "accepted" } → proposal
+      port record.put { record = $proposal; key = "acceptedBy"; value = $actor.id } → proposal
+    when eq($request.action, "reject"):
+      assert not(eq($actor.id, $proposal.content.author))
+        otherwise "CW-REJECT: A different persona must reject the proposal."
+      port kernel.invoke { query = "ws.fieldCheck"; input = { field = { required = true; maximum = 1000 }; value = $request.comment } } → valid
+      port record.put { record = $proposal; key = "status"; value = "rejected" } → proposal
+      port record.put { record = $proposal; key = "rejectedBy"; value = { actor = $actor.id; comment = $request.comment } } → proposal
+    let proposals = map($proposals, "p", if(eq($p.id, $proposal.id), $proposal, $p))
+  when includes(list("attest", "withdraw-attestation"), $request.action):
+    port kernel.invoke { query = "pc.attest"; input = { board = $board; request = $request } } → assertions
+  let event = { request = $request; headHash = $head.documentHash }
+  let result = { basis = $board.basis; head = $head; proposals = $proposals; assertions = $assertions; revision = add($board.revision, 1); events = append($board.events, list($event)) }
+
+process cw.receipt:
+  let board = $eventInput
+  port kernel.invoke { query = "uw.hash"; input = $board } → stateHash
+  let body = { programHash = $data.programHash; basis = $board.basis; events = $board.events; revision = $board.revision; stateHash = $stateHash }
+  port kernel.invoke { query = "uw.hash"; input = $body } → hash
+  let result = { protocol = "usewords/collaboration/1"; body = $body; sha256 = $hash }
+
+process cw.reconstruct:
+  let receipt = $eventInput
+  assert eq($receipt.protocol, "usewords/collaboration/1")
+    otherwise "CW-REPLAY: Unsupported collaboration receipt."
+  assert eq($receipt.body.programHash, $data.programHash)
+    otherwise "CW-REPLAY: This board belongs to a different runtime. Exported source can be imported separately; no automatic history migration."
+  assert isArray($receipt.body.events)
+    otherwise "CW-REPLAY: Events must be a list."
+  port number.calculate { operation = "lessEqual"; values = list(count($receipt.body.events), 48) } → bounded
+  assert $bounded
+    otherwise "CW-LIMIT: Too many board events."
+  port kernel.invoke { query = "uw.hash"; input = $receipt.body } → hash
+  assert eq($hash, $receipt.sha256)
+    otherwise "CW-REPLAY: History hash mismatch."
+  port kernel.invoke { query = "cw.initial"; input = $receipt.body.basis } → board
+  fold $receipt.body.events as event; board starts $board:
+    port kernel.invoke { query = "cw.apply"; input = { board = $board; request = $event.request } } → board
+    assert eq(at($board.events, add(count($board.events), -1)), $event)
+      otherwise "CW-REPLAY: Event outcome differs."
+    yield $board → board
+  port kernel.invoke { query = "uw.hash"; input = $board } → stateHash
+  assert and(eq($board.revision, $receipt.body.revision), eq($stateHash, $receipt.body.stateHash))
+    otherwise "CW-REPLAY: Reconstructed board differs."
+  let result = $board
+
+process cw.inspect:
+  let board = $eventInput.board
+  let proposal = at(filter($board.proposals, "p", eq($p.id, $eventInput.id)), 0)
+  assert $proposal
+    otherwise "CW-PROPOSAL: Select a proposal."
+  let result = { proposal = $proposal; stale = not(and(eq($proposal.content.baseHash, $board.head.documentHash), eq($proposal.content.baseRevision, $board.head.revision))); before = $proposal.difference.before; after = $proposal.difference.after; destination = $proposal.difference.destination }
+
+process cw.difference:
+  let base = $eventInput.base
+  let preview = $eventInput.preview
+  let change = $eventInput.change
+  let before = $base.document
+  let after = $preview.document
+  when eq($change.kind, "define"):
+    port kernel.invoke { query = "ws.definition"; input = $change.source } → schema
+    let matches = filter($base.schemas, "s", eq($s.name, $schema.name))
+    let before = if(eq(count($matches), 0), null, at(at($matches, 0), "source"))
+    let after = $change.source
+  when eq($change.kind, "edit"):
+    let objectId = $change.object
+    when eq($change.scope, "local"):
+      let journey = at(filter($base.document.journeys, "j", eq($j.id, $change.journey)), 0)
+      let entry = at(filter($journey.entries, "e", eq($e.id, $change.entry)), 0)
+      let objectId = $entry.object
+    let object = at(filter($base.document.objects, "o", eq($o.id, $objectId)), 0)
+    let before = at($object.values, $change.field)
+    when eq($change.scope, "local"):
+      let journey = at(filter($base.document.journeys, "j", eq($j.id, $change.journey)), 0)
+      let entry = at(filter($journey.entries, "e", eq($e.id, $change.entry)), 0)
+      port record.entries { value = $entry.overrides } → pairs
+      let matches = filter($pairs, "pair", eq(at($pair, 0), $change.field))
+      when not(eq(count($matches), 0)):
+        let before = at(at($matches, 0), 1)
+    let after = $change.value
+  when eq($change.kind, "matter-item"):
+    let before = null
+    let after = at(filter($preview.document.matter.items, "r", eq($r.item.id, $change.item.id)), 0)
+  when eq($change.kind, "matter-manage"):
+    let before = { status = $base.document.matter.status; management = at($base.document.matter, "management") }
+    let after = { status = $preview.document.matter.status; management = $preview.document.matter.management }
+  let event = at($preview.journal, add(count($preview.journal), -1))
+  let result = { before = $before; after = $after; destination = $event.destination }
+
+process mw.cliBrief:
+  port kernel.invoke { query = "ws.initial"; input = { basis = $eventInput.document } } → state
+  port kernel.invoke { query = "mw.brief"; input = $state } → brief
+  let result = { request = $brief.request; sha256 = $brief.sha256 }

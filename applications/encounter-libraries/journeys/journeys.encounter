@@ -1,0 +1,157 @@
+# Experimental syntax: facts and type contracts stay in REL.
+module story
+
+view experiment.page.story of @place.water isa Page:
+  P.subject: source
+  P.title: source.S.Title
+  P.paragraphs: source.S.Content
+  P.route: "encounter-story.html"
+  edit P.title through source.S.Title
+  show as StoryPage
+
+view experiment.nav.story of @place.water isa NavigationItem:
+  N.label: source.S.Title
+  N.target: source
+  edit N.label through source.S.Title
+
+  in @experiment.WebMainMenu:
+    N.label: "The story"
+    edit N.label here
+    show as WebLink:
+      page: @experiment.page.story
+
+  in @experiment.MainframeStories:
+    show as MainframeRow:
+      option: "01"
+      open: @experiment.openStory
+
+representation WebLink:
+  given navigation as NavigationItem
+  given page as Page
+  require page.P.subject equals navigation.N.target
+  return WebLink:
+    W.text: navigation.N.label
+    W.href: page.P.route
+  render:
+    tag: "a"
+    attrs:
+      id: "experiment-web-link"
+      href: result.W.href
+    children:
+      - result.W.text
+  events:
+    - selector: "#experiment-web-link"
+      open: page
+
+representation MainframeRow:
+  given navigation as NavigationItem
+  given option as text
+  given open as StoryPanelAction
+  return MainframeRow:
+    R.option: option
+    R.label: navigation.N.label
+    R.target: navigation.N.target
+  render:
+    tag: "table"
+    attrs:
+      class: "experiment-row"
+    children:
+      - tag: "tbody"
+        children:
+          - tag: "tr"
+            children:
+              - tag: "td"
+                children:
+                  - result.R.option
+              - tag: "td"
+                children:
+                  - tag: "button"
+                    attrs:
+                      id: "experiment-mainframe-row"
+                      type: "button"
+                    children:
+                      - result.R.label
+  events:
+    - selector: "#experiment-mainframe-row"
+      run: open.A.process
+      arguments:
+        story: navigation.N.target
+
+representation StoryPage:
+  given navigation as Page
+  return Page:
+    P.subject: navigation.P.subject
+    P.title: navigation.P.title
+    P.paragraphs: navigation.P.paragraphs
+    P.route: navigation.P.route
+  render:
+    tag: "article"
+    children:
+      - tag: "h2"
+        children:
+          - result.P.title
+      - each paragraph in result.P.paragraphs:
+        tag: "p"
+        children:
+          - paragraph
+
+representation OpenStory:
+  given story as Story
+  return StoryPanel:
+    P.title: story.S.Title
+    P.paragraphs: story.S.Content
+  render:
+    tag: "article"
+    children:
+      - tag: "h2"
+        children:
+          - result.P.title
+      - each paragraph in result.P.paragraphs:
+        tag: "p"
+        children:
+          - paragraph
+
+# One encounter is composed into two new journeys.
+view journey.water of @place.water isa JourneyEntry:
+  J.subject: source
+  J.title: source.S.Title
+  J.paragraphs: source.S.Content
+  J.introduction: "An encounter at the water’s edge."
+  J.route: "encounter-story.html"
+  edit J.title through source.S.Title
+
+  in @journey.Listening:
+    J.introduction: "Start by noticing what the other person is encountering, before offering your explanation."
+    edit J.introduction here
+    show as JourneyPage
+
+  in @journey.Making:
+    J.introduction: "Begin with the invitation you are making. What room does your design leave for another response?"
+    edit J.introduction here
+    show as JourneyPage
+
+representation JourneyPage:
+  given entry as JourneyEntry
+  return JourneyEntry:
+    J.subject: entry.J.subject
+    J.title: entry.J.title
+    J.paragraphs: entry.J.paragraphs
+    J.introduction: entry.J.introduction
+    J.route: entry.J.route
+  render:
+    tag: "article"
+    attrs:
+      class: "journey-article"
+    children:
+      - tag: "p"
+        attrs:
+          class: "journey-introduction"
+        children:
+          - result.J.introduction
+      - tag: "h2"
+        children:
+          - result.J.title
+      - each paragraph in result.J.paragraphs:
+        tag: "p"
+        children:
+          - paragraph

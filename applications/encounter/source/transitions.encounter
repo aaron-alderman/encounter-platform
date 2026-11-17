@@ -1,0 +1,94 @@
+process-module "temple/surface-process-module/1"
+
+process transition.checkWrite:
+  let edit = $eventInput
+  each $state.transitions as transition:
+    assert not(and(eq($transition.type, $edit.type), eq($transition.field, $edit.field), eq($transition.to, $edit.value)))
+      otherwise "TRANSITION: Use the guarded command to enter this status."
+  assert not(some($state.occurrences, "binding", and(eq($binding.type, $edit.type), includes(list($binding.phase, $binding.appointment), $edit.field))))
+    otherwise "OCCURRENCE: Use the scheduling or cancellation command to change lifecycle fields."
+  let result = true
+
+process transition.commands:
+  let type = $eventInput
+  let result = filter($state.transitions, "transition", eq($transition.type, $type))
+  let binding = at(filter($state.occurrences, "binding", eq($binding.type, $type)), 0)
+  when $binding:
+    let source = concat("occurrences/", $binding.id)
+    let result = append($result, list(
+      { id = concat($source, "/schedule"); label = "Schedule"; field = $binding.phase; kind = "schedule"; binding = $binding },
+      { id = concat($source, "/cancel"); label = "Cancel occurrence"; field = $binding.phase; kind = "cancel"; binding = $binding }
+    ))
+
+process transition.availability:
+  let transition = $eventInput.transition
+  let thing = $eventInput.thing
+  let role = $eventInput.role
+  let status = at($role.values, $transition.field)
+  let message = ""
+  let to = at($transition, "to")
+  let kind = at($transition, "kind")
+  when not(eq($kind, at({}, "absent"))):
+    port kernel.invoke { query = "occurrence.rule"; input = { kind = $kind; phase = $status } } → rule
+    let message = $rule.message
+    let to = $rule.to
+  when and(eq($kind, at({}, "absent")), not(eq($status, at($transition, "from")))):
+    let message = concat("Requires status ", $transition.from, "; current status is ", $status, ".")
+  when and(eq($kind, at({}, "absent")), eq($status, at($transition, "from"))):
+    let definition = at(filter($state.definitions, "type", eq($type.id, $transition.type)), 0)
+    let references = filter(list($transition.reference, at($transition, "secondReference")), "id", not(eq($id, at({}, "absent"))))
+    fold $references as id; blockers starts list():
+      let reference = at(filter($definition.fields, "field", eq($field.id, $id)), 0)
+      let blockerId = at($role.values, $id)
+      let blocker = at(filter($state.things, "other", eq($other.id, $blockerId)), 0)
+      let blockerRole = at(filter($blocker.roles, "other", eq($other.type, $reference.expects)), 0)
+      let candidate = { id = $blockerId; label = $blocker.label; status = at($blockerRole.values, $transition.blockerField) }
+      yield append($blockers, list($candidate)) → blockers
+    port kernel.invoke { query = "dependency.guard"; input = { target = $thing.id; required = $transition.ready; blockers = $blockers } } → guard
+    when not($guard.allowed):
+      let names = map($guard.blocked, "blocker", concat($blocker.label, " (", $blocker.id, ")"))
+      port text.join { values = $names; separator = ", " } → blocked
+      let message = concat("Blocked by: ", $blocked, ". Requires ", $transition.ready, ".")
+    let ids = map($blockers, "blocker", $blocker.id)
+    when includes($ids, $thing.id):
+      let message = "An item cannot complete itself as its own blocker."
+    when not(eq(count($ids), count(distinct($ids)))):
+      let message = "The blocker fields must refer to different things."
+  let result = { status = $status; to = $to; message = $message }
+
+process occurrence.check:
+  let binding = $eventInput
+  let definition = at(filter($state.definitions, "type", eq($type.id, $binding.type)), 0)
+  assert $definition
+    otherwise "OCCURRENCE: Choose an existing target type."
+  assert and(not(eq($binding.phase, $binding.appointment)), every(list($binding.phase, $binding.appointment), "id", some($definition.fields, "field", and(eq($field.id, $id), eq($field.kind, "Text")))))
+    otherwise "OCCURRENCE: Choose distinct Text fields for phase and appointment."
+  assert eq(count(filter($state.occurrences, "other", eq($other.type, $binding.type))), 1)
+    otherwise "OCCURRENCE: Only one lifecycle can govern a type."
+  assert not(some($state.transitions, "transition", and(eq($transition.type, $binding.type), includes(list($binding.phase, $binding.appointment), $transition.field))))
+    otherwise "OCCURRENCE: These fields cannot also be governed by another command."
+  let ids = map($binding.events, "event", $event.id)
+  assert eq(count($ids), count(distinct($ids)))
+    otherwise "OCCURRENCE: Duplicate event identity."
+  let participants = filter($state.things, "thing", some($thing.roles, "role", eq($role.type, $binding.type)))
+  assert every($binding.events, "event", and(count($event.id), count($event.reason), some($participants, "thing", eq($thing.id, $event.thing))))
+    otherwise "OCCURRENCE: Every event needs an identity, reason and participating target."
+  each $participants as thing:
+    let role = at(filter($thing.roles, "role", eq($role.type, $binding.type)), 0)
+    let events = filter($binding.events, "event", eq($event.thing, $thing.id))
+    port kernel.invoke { query = "occurrence.replay"; input = $events } → lifecycle
+    assert and(eq(at($role.values, $binding.phase), $lifecycle.phase), eq(at($role.values, $binding.appointment), $lifecycle.appointment))
+      otherwise "OCCURRENCE: Phase and appointment must match the retained events. Start new records unscheduled with an empty appointment."
+  let result = true
+
+process occurrence.record:
+  let input = $eventInput
+  let binding = $input.binding
+  let events = filter($binding.events, "event", eq($event.thing, $input.thing))
+  port kernel.invoke { query = "occurrence.prepare"; input = { events = $events; kind = $input.kind; thing = $input.thing; values = $input.values; reason = $input.reason; operationId = $input.operationId } } → proposal
+  when eq($input.kind, "schedule"):
+    port kernel.invoke { query = "thing.replaceValue"; input = { thing = $input.thing; alias = $input.alias; field = $binding.appointment; value = $proposal.appointment } } → state
+  let event = at($proposal.events, count($events))
+  port record.put { record = $binding; key = "events"; value = append($binding.events, list($event)) } → updated
+  let occurrences = map($state.occurrences, "other", if(eq($other.id, $binding.id), $updated, $other))
+  port record.put { record = $state; key = "occurrences"; value = $occurrences } → result

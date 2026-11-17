@@ -1,0 +1,4 @@
+process-module "temple/surface-process-module/1"
+
+process cli.main:
+  call sourcery.codeInput.styles

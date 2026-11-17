@@ -1,0 +1,24 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process assurance.refuseChild:
+  let refused = false
+  try:
+    port kernel.invoke { query = "ec.run"; input = { candidate = $eventInput } } → unexpected
+  catch fault:
+    let refused = includes($fault.message, "EC-CHILD:")
+  assert $refused
+    otherwise "ASSURANCE-CHILD: An unprepared child reached execution."
+
+process assurance.childExecution:
+  port kernel.invoke { query = "ec.prepare"; input = $data.journeyCanonical } → prepared
+  port record.put { record = $prepared; key = "model"; value = { queries = {} } } → raw
+  port kernel.invoke { query = "assurance.refuseChild"; input = $raw } → _
+  port json.stringify { value = $prepared.model } → modelText
+  port json.parse { text = $modelText } → copied
+  port record.put { record = $prepared; key = "model"; value = $copied } → forged
+  port kernel.invoke { query = "assurance.refuseChild"; input = $forged } → _
+  port kernel.invoke { query = "ec.run"; input = { candidate = $prepared } } → projections
+  assert eq(count(filter($projections, "projection", eq($projection.output.type, "JourneyEntry"))), 2)
+    otherwise "ASSURANCE-CHILD: Prepared journey entries must still execute."
+  let result = 3

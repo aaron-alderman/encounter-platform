@@ -1,0 +1,29 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process build.browserData:
+  let source = $eventInput
+  port record.entries { value = $source.canonical } → canonicalFields
+  port record.fromEntries { entries = append($canonicalFields, list(
+    list("codeText", $source.codeText),
+    list("factText", $source.factText),
+    list("contractText", $source.contractText)
+  )) } → journey
+  port json.stringify { value = $source.canonical } → canonicalText
+  port digest.sha256 { text = $canonicalText } → canonicalHash
+  port json.stringify { value = $journey } → journeyText
+  port digest.sha256 { text = $journeyText } → journeyHash
+  port record.put { record = $source.presentation; key = "lexPolicy"; value = $source.lexical } → bindings
+  let result = {
+    canonical = $source.canonical;
+    canonicalHash = $canonicalHash;
+    words = $source.words;
+    page = $source.page;
+    style = $source.style;
+    journeys = $source.journeys;
+    journeyCanonical = $journey;
+    journeyCanonicalHash = $journeyHash;
+    languages = $source.languages;
+    workspaceSeed = $source.workspaceSeed;
+    bindings = $bindings
+  }

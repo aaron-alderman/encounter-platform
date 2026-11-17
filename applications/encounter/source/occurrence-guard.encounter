@@ -1,0 +1,50 @@
+process-module "temple/surface-process-module/1"
+
+# Shared by Encounter Authoring and Super CRM. Each release declares these exact bytes.
+process occurrence.rule:
+  let phase = $eventInput.phase
+  let kind = $eventInput.kind
+  let to = ""
+  let message = "Unknown occurrence command."
+  when eq($kind, "schedule"):
+    let to = "scheduled"
+    let message = if(eq($phase, "unscheduled"), "", concat("Requires status unscheduled; current status is ", $phase, "."))
+  when eq($kind, "cancel"):
+    let to = "cancelled"
+    let message = if(includes(list("unscheduled", "scheduled"), $phase), "", concat("Requires an open occurrence; current status is ", $phase, "."))
+  let result = { to = $to; message = $message }
+
+process occurrence.replay:
+  fold $eventInput as event; lifecycle starts { phase = "unscheduled"; appointment = "" }:
+    port kernel.invoke { query = "occurrence.rule"; input = { kind = $event.kind; phase = $lifecycle.phase } } → rule
+    assert eq($rule.message, "")
+      otherwise "OCCURRENCE: Event history contains a forbidden transition."
+    assert if(eq($event.kind, "schedule"), count($event.appointment), eq($event.appointment, ""))
+      otherwise "OCCURRENCE: Only a schedule event supplies an appointment."
+    let appointment = if(eq($event.kind, "schedule"), $event.appointment, $lifecycle.appointment)
+    yield { phase = $rule.to; appointment = $appointment } → lifecycle
+  let result = $lifecycle
+
+process occurrence.prepare:
+  let input = $eventInput
+  port kernel.invoke { query = "occurrence.replay"; input = $input.events } → prior
+  port kernel.invoke { query = "occurrence.rule"; input = { kind = $input.kind; phase = $prior.phase } } → rule
+  assert eq($rule.message, "")
+    otherwise "OCCURRENCE: This command is unavailable in the current phase."
+  let scheduling = eq($input.kind, "schedule")
+  let offered = at($input.values, "appointment")
+  let appointment = ""
+  when $scheduling:
+    assert not(eq($offered, at({}, "absent")))
+      otherwise "OCCURRENCE: Supply an appointment to schedule."
+    port text.trim { value = $offered } → appointment
+    assert count($appointment)
+      otherwise "OCCURRENCE: Supply a non-blank appointment to schedule."
+  when not($scheduling):
+    assert eq($offered, at({}, "absent"))
+      otherwise "OCCURRENCE: Cancellation cannot supply or replace an appointment."
+  port text.trim { value = $input.reason } → reason
+  assert count($reason)
+    otherwise "OCCURRENCE: Give a reason for the event."
+  let event = { id = $input.operationId; thing = $input.thing; kind = $input.kind; appointment = $appointment; reason = $reason }
+  let result = { events = append($input.events, list($event)); from = $prior.phase; phase = $rule.to; appointment = if($scheduling, $appointment, $prior.appointment) }

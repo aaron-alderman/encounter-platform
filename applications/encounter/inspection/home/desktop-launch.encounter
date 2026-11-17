@@ -1,0 +1,159 @@
+process-module "temple/surface-process-module/1"
+
+process desktop.apps:
+  let profile = { open = { destination = "desktop"; surface = "independent-window"; repeat = "focus-or-restore" } }
+  let result = map(list(
+    { key = "about"; stem = "notes-about-build"; id = "notes-about-build-launch"; title = "About this build"; detail = "Home build identity and fingerprint"; icon = "workspace"; defaultAction = "open"; layout = "compact"; group = "banner" },
+    { key = "assurance"; stem = "notes-assurance"; id = "notes-assurance-launch"; title = "Assurance"; detail = "App definitions, consistency and decision history"; icon = "trace"; defaultAction = "open"; layout = "compact" },
+    { key = "performance"; stem = "notes-performance"; id = "notes-performance-launch"; title = "Performance"; detail = "Slow or failed launches, launch timings, and server RAM and disk capacity."; icon = "computer"; defaultAction = "open"; layout = "compact" },
+    { key = "design"; stem = "notes-design-demo"; id = "notes-design-demo"; title = "Sourcery OS Customization"; detail = "Inspect shared window styles and customize the preview"; icon = "workspace"; defaultAction = "open"; layout = "compact" },
+    { key = "system-catalogue"; stem = "system-catalogue"; id = "system-catalogue-launch"; title = "System Catalogue"; detail = "Browse Home apps, window contracts and shared styles"; icon = "trace"; defaultAction = "open"; layout = "document" },
+    { key = "certificates"; stem = "notes-certificates"; id = "notes-settings-certificates"; title = "Certificates"; detail = "Managed Super CRM certificate and issuer expiry"; icon = "notes"; defaultAction = "open"; layout = "compact"; group = "administration"; inventory = "[data-certificate-inventory]" },
+    { key = "acting-as"; stem = "acting-as"; id = "notes-inspect-identity"; title = "Steward"; detail = "Acting roles, stewardship and delegation"; icon = "notes"; defaultAction = "open"; layout = "compact"; group = "administration" },
+    { key = "keys"; stem = "notes-keys"; id = "notes-settings-keys"; title = "Keys"; detail = "Managed Super CRM public key fingerprints"; icon = "tools"; defaultAction = "open"; layout = "compact"; group = "administration"; inventory = "[data-key-inventory]" },
+    { key = "store"; stem = "notes-store"; id = "store"; title = "Store"; detail = "Encounter apps, games and assets"; icon = "folder"; defaultAction = "open"; layout = "compact"; group = "hosted" },
+    { key = "game"; stem = "notes-game-hub"; id = "game"; title = "Game Zone"; detail = "Play, build and manage games"; icon = "game"; defaultAction = "open"; layout = "compact"; group = "hosted" },
+    { key = "file-manager"; stem = "file-manager"; id = "file-manager-launch"; title = "File Manager"; detail = "Browse and preview published files by context"; icon = "folder"; defaultAction = "open"; group = "desktop"; layout = "document"; start = "tools" },
+    { key = "file-viewer"; stem = "file-viewer"; id = "file-viewer-launch"; title = "File Viewer"; detail = "Read code and REL, view images, and play movies"; icon = "notes"; defaultAction = "open"; group = "desktop"; layout = "document"; start = "tools" },
+    { key = "semantic-compiler"; stem = "semantic-compiler"; id = "semantic-compiler-launch"; title = "Semantic Compiler"; detail = "Inspect stable identities, contracts and coverage"; icon = "trace"; defaultAction = "open"; group = "desktop"; layout = "document"; start = "tools" },
+    { key = "service-manager"; stem = "service-manager"; id = "service-manager-launch"; title = "Service Manager"; detail = "Inspect apps, services, schedules and run receipts"; icon = "computer"; defaultAction = "open"; group = "administration"; layout = "document"; start = "tools" },
+    { key = "temple-manager"; stem = "temple-manager"; id = "temple-manager-launch"; title = "Temple Manager"; detail = "Memory and journal"; icon = "notes"; defaultAction = "open"; group = "administration"; layout = "document"; start = "tools" },
+    { key = "front-gate"; stem = "front-gate"; id = "front-gate"; title = "Front Gate"; detail = "Private service directory"; icon = "computer"; defaultAction = "open"; layout = "compact"; group = "hosted"; start = "tools" }
+  ), "entry", {
+    key = $entry.key; id = $entry.id; title = $entry.title; detail = $entry.detail; icon = $entry.icon;
+    defaultAction = $entry.defaultAction; actions = $profile; inventory = at($entry, "inventory"); group = or(at($entry, "group"), "quality");
+    window = concat($entry.stem, "-window"); task = concat($entry.stem, "-task");
+    heading = concat($entry.stem, "-title"); content = concat($entry.stem, "-content");
+    minimize = concat($entry.stem, "-minimize"); close = concat($entry.stem, "-close");
+    layout = if(eq(at($entry, "layout"), at({}, "missing")), null, $entry.layout); start = at($entry, "start");
+    maximize = if(eq(at($entry, "layout"), "document"), concat($entry.stem, "-maximize"), null)
+  })
+
+process desktop.refuseLayout:
+  let result = raise(concat("Sourcery OS > Home > Desktop > ", $layoutApp,
+    " > Window > layout: declare document or compact."))
+
+process desktop.inspectorCoverage:
+  let result = list("temple-manager", "about", "file-manager", "file-viewer", "service-manager")
+
+process desktop.aboutBody:
+  let result = list(
+    { tag = "div"; attrs = { class = "build-about-heading" }; children = list(
+      { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" }; children = list({ tag = "use"; attrs = { href = "#icon-workspace" } }) },
+      { tag = "div"; children = list({ tag = "span"; children = list("Home") }, { tag = "h3"; children = list("Sourcery Workspace") }) }
+    ) },
+    { tag = "dl"; attrs = { class = "build-details" }; children = list(
+      { tag = "div"; children = list({ tag = "dt"; children = list("Build ID") },
+        { tag = "dd"; children = list({ tag = "code"; attrs = { id = "about-build-id" }; children = list($build) }) }) },
+      { tag = "div"; children = list({ tag = "dt"; children = list("Home fingerprint ", { tag = "span"; children = list("SHA-256") }) },
+        { tag = "dd"; children = list({ tag = "code"; attrs = { id = "about-build-fingerprint" }; children = list("sourcery-home-full-build-placeholder") }) }) }
+    ) }
+  )
+
+process desktop.appContent:
+  let result = { tag = "div"; attrs = { id = $app.content; class = "desktop-app-content"; "data-window-slot" = "content" } }
+
+process desktop.appWindow:
+  let windowTypeId = $app.layout
+  call windowShell.typeById
+  when not($result):
+    let layoutApp = $app.key
+    call desktop.refuseLayout
+  let windowType = $result
+  let documentWindow = eq($windowType.id, "document")
+  call desktop.appContent
+  let content = $result
+  let menu = null
+  let banner = null
+  when $documentWindow:
+    let content = { tag = $content.tag; attrs = $content.attrs; children = list($documentSlots.content) }
+    let menu = $documentSlots.menu
+    let banner = $documentSlots.banner
+  let actions = null
+  when eq($app.key, "acting-as"):
+    let actions = { tag = "footer"; attrs = { class = "dialog-actions" }; children = list(
+      { tag = "a"; attrs = { class = "button"; href = "/settings/identity/"; "data-open-identity-management" = true; "data-identity-page" = true }; children = list("Identity Management") },
+      { tag = "a"; attrs = { class = "button"; href = "/workspace/home#handover-demo"; "data-open-handover-demo" = true }; children = list("Try the handover demo") }
+    ) }
+  let controlTarget = $app.title
+  let controlBindings = {
+    maximize = if($app.maximize, { tag = "button"; attrs = { id = $app.maximize; type = "button"; "aria-pressed" = "false" } }, null);
+    minimize = { tag = "button"; attrs = { id = $app.minimize; type = "button" } };
+    close = { tag = "button"; attrs = { id = $app.close; type = "button" } }
+  }
+  call windowShell.titleControls
+  let title = { tag = "header"; attrs = { class = "titlebar" }; children = list(
+    { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" }; children = list({ tag = "use"; attrs = { href = concat("#icon-", $app.icon) } }) },
+    { tag = "h2"; attrs = { id = $app.heading; tabindex = "-1" }; children = list($app.title) },
+    $result
+  ) }
+  let slots = if($documentWindow, { title = $title; menu = $menu; banner = $banner; content = $content; actions = $actions },
+    { title = $title; content = $content; actions = $actions })
+  let frame = { tag = "section"; attrs = { id = $app.window; class = "desktop-app-window"; hidden = true; "data-desktop-layout" = $app.layout; "aria-labelledby" = $app.heading } }
+  call windowShell.frame
+
+process desktop.documentMenu:
+  let menuId = concat($app.key, "-menu-", $menu.id)
+  let result = list(
+    { tag = "button"; attrs = { type = "button"; popovertarget = $menuId; "aria-controls" = $menuId };
+      children = list($menu.label) },
+    { tag = "div"; attrs = { id = $menuId; class = "document-menu-panel"; popover = "auto"; role = "group"; "aria-label" = $menu.label };
+      children = append(map($menu.commands, "entry", { tag = "button"; attrs = {
+        type = "button"; popovertarget = $menuId; popovertargetaction = "hide";
+        "data-desktop-close" = if(and(not(at($document, "preview")), eq($entry.id, "close")), "true", null);
+        "data-document-command" = if(or(at($document, "preview"), eq($entry.id, "close")), null, $entry.id)
+      }; children = list($entry.label) }), $menu.content) }
+  )
+
+process desktop.documentMenus:
+  let fileCommands = append(or(at($document, "fileCommands"), list()), list({ id = "close"; label = concat("Close ", $app.title) }))
+  let menus = list({ id = "file"; label = "File"; commands = $fileCommands; content = list() },
+    { id = "help"; label = "Help"; commands = list(); content = list({ tag = "p"; children = list($document.help) }) })
+  fold $menus as menu; children starts list():
+    call desktop.documentMenu
+    yield append($children, $result) → children
+  let result = { tag = "nav"; attrs = { class = "menu-bar document-menu-bar"; "aria-label" = concat($app.title, " menus") }; children = $children }
+
+process desktop.documentPane:
+  let result = { tag = "section"; attrs = { id = $pane.id; class = concat("desktop-scroll-pane ", $pane.class);
+    "aria-label" = $pane.label; tabindex = "0" }; children = $pane.children }
+
+process desktop.documentBody:
+  let indexLabel = at($document, "indexLabel")
+  let pane = { id = concat($app.key, "-detail"); class = "manager-main"; label = $document.detailLabel; children = or(at($document, "detail"), list()) }
+  call desktop.documentPane
+  let detailPane = $result
+  let indexPane = null
+  when $indexLabel:
+    let pane = { id = concat($app.key, "-index"); class = "manager-tree"; label = $indexLabel; children = or(at($document, "index"), list()) }
+    call desktop.documentPane
+    let indexPane = $result
+  let result = { tag = "div"; attrs = { id = concat($app.key, "-panel"); class = "manager-panel"; "data-density-control" = if(at($document, "density"), "true", null) }; children = list(
+    if($indexLabel, { tag = "div"; attrs = { id = concat($app.key, "-tabs"); class = "manager-tabs";
+      role = "group"; "aria-label" = concat($app.title, " views") }; children = or(at($document, "tabs"), list()) }, null),
+    if(and($indexLabel, not(eq(at($document, "showLocation"), false))), { tag = "div"; attrs = { id = concat($app.key, "-location"); class = "manager-location" }; children = list(
+      { tag = "span"; attrs = { id = concat($app.key, "-status"); role = "status"; "aria-live" = "polite" }; children = list(or(at($document, "status"), "Opening…")) },
+      at($document, "locationAction")
+    ) }, null),
+    { tag = "div"; attrs = { class = if($indexLabel, "manager-panes", "manager-panes manager-single-pane") };
+      children = list($indexPane, $detailPane) }
+  ) }
+
+process desktop.documentSlots:
+  call desktop.documentMenus
+  let menu = $result
+  call desktop.documentBody
+  let content = $result
+  call desktop.documentBanner
+  let result = { menu = $menu; banner = $result; content = $content }
+
+process desktop.documentBanner:
+  let glyph = { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" };
+    children = list({ tag = "use"; attrs = { href = concat("#icon-", $app.icon) } }) }
+  let result = { tag = "header"; attrs = { class = "banner manager-banner" }; children = list(
+    { tag = "div"; attrs = { class = "banner-icon" }; children = list($glyph) },
+    { tag = "div"; children = list({ tag = "p"; children = list("SOURCERY OS / HOME") },
+      { tag = "h3"; attrs = { class = "manager-title" }; children = list($app.title) }, { tag = "span"; children = list($document.description) }) },
+    { tag = "div"; attrs = { class = "edition" }; children = list({ tag = "span"; children = list("BUILD") },
+      { tag = "b"; children = list(or(at($document, "build"), "Development")) }) }
+  ) }

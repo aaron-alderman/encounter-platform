@@ -1,0 +1,301 @@
+process-module "temple/surface-process-module/1"
+
+process managers.densities:
+  let result = list({ id = "compact"; label = "Compact" }, { id = "roomier"; label = "Roomier" })
+
+process managers.densityControl:
+  call managers.densities
+  let result = { tag = "label"; attrs = { class = "manager-density-control" }; children = list($densityLabel,
+    { tag = "select"; attrs = $densityAttrs; children = map($result, "mode", {
+      tag = "option"; attrs = { value = $mode.id; selected = eq($mode.id, $density) }; children = list($mode.label)
+    }) }) }
+
+process managers.slots:
+  let service = eq($app.key, "service-manager")
+  let locationAction = null
+  when $service:
+    let density = "compact"
+    let densityLabel = "Density"
+    let densityAttrs = { id = "service-manager-density"; "data-manager-action" = "density" }
+    call managers.densityControl
+    let locationAction = { tag = "div"; attrs = { class = "manager-location-controls" }; children = list($result,
+      { tag = "button"; attrs = { type = "button"; class = "button"; "data-manager-action" = "refresh"; id = "service-manager-refresh" };
+        children = list("Refresh observations") }) }
+  let managed = not(eq($app.key, "temple-manager"))
+  let fileViewer = eq($app.key, "file-viewer")
+  let help = if(eq($app.key, "file-manager"), "Choose a folder, then click a filename to open its preview or details. Refresh to check access and read the latest index.",
+    if(eq($app.key, "service-manager"), "Services shows observed state. Schedules shows timer observations. Runs shows published outcomes and their receipts.",
+      "Open the Memory or Journal editor to make a change. Use Refresh saved records to pick up changes from another device."))
+  when $fileViewer:
+    let help = "Use File → Open to browse indexed files."
+  let description = if(eq($app.key, "file-manager"), "Browse indexed files by context.",
+    if(eq($app.key, "service-manager"), "Inspect apps, internal services and scheduled work.", "Memory and journal"))
+  when $fileViewer:
+    let description = "Read code and REL, view images, and play movies."
+  let document = {
+    description = $description; help = $help; build = $releaseId;
+    fileCommands = if($fileViewer, list({ id = "viewer-open"; label = "Open…" }, { id = "viewer-refresh"; label = "Reload file" }), if(eq($app.key, "service-manager"), list({ id = "refresh"; label = "Refresh observations" }), if(eq($app.key, "file-manager"), list({ id = "refresh"; label = "Refresh index" }), list({ id = "temple-refresh"; label = "Refresh saved records" }))));
+    indexLabel = if(eq($app.key, "file-manager"), "File contexts", if(eq($app.key, "service-manager"), "Service Manager records", null));
+    detailLabel = if($fileViewer, "File preview", if(eq($app.key, "file-manager"), "File details", if($managed, "Service details", "Temple records")));
+    showLocation = not(eq($app.key, "file-manager"));
+    tabs = if(eq($app.key, "file-manager"), list({ tag = "span"; children = list("Files") }), list());
+    detail = if($managed, list(), list({ tag = "p"; attrs = { role = "status" }; children = list("Opening saved records…") }));
+    density = if($service, "compact", null);
+    locationAction = $locationAction
+  }
+  call desktop.documentSlots
+
+process managers.templeDetails:
+  let signedIn = eq($custody.mode, "signed-in")
+  let signedOut = eq($custody.mode, "browser")
+  let loading = eq($custody.mode, "loading")
+  let status = if($signedIn, "Showing your signed-in records.", if($loading, "Opening saved records…",
+    if($signedOut, "Sign in to Temple to see your saved records.", "Saved records could not be loaded.")))
+  let refresh = { tag = "button"; attrs = { type = "button"; class = "button"; "data-document-command" = "temple-refresh"; disabled = $loading };
+    children = list("Refresh") }
+  let result = list({ tag = "p"; attrs = { role = "status" }; children = list($status) })
+  when $signedOut:
+    let result = append($result, list(
+      { tag = "p"; children = list({ tag = "a"; attrs = { href = "/settings/identity/"; target = "_blank"; rel = "noopener" };
+        children = list("Sign in to Temple (new tab)") }) }))
+  let result = append($result, list($refresh))
+  when $signedIn:
+    let sections = list(
+      { id = "memory"; title = "Memory"; kind = "note"; editor = "Edit memory"; empty = "No memory saved yet." },
+      { id = "journal"; title = "Journal"; kind = "project"; editor = "Edit journal"; empty = "No journal entry saved yet." })
+    let result = append($result, map($sections, "section", {
+      tag = "section"; attrs = { "aria-labelledby" = concat("temple-", $section.id, "-heading") };
+      children = list(
+        { tag = "h3"; attrs = { id = concat("temple-", $section.id, "-heading") }; children = list($section.title) },
+        { tag = "pre"; attrs = { class = "published-evidence"; "data-temple-record" = $section.kind };
+          children = list(or(at(at($custody.records, $section.kind), "text"), $section.empty)) },
+        { tag = "button"; attrs = { type = "button"; class = "button"; "data-first-run" = $section.kind };
+          children = list($section.editor) })
+    }))
+
+# Captured Home renderers for Schedules and Runs before browser serialization.
+
+process files.publishedReceipts:
+  let published = list(
+    { id = "standalone-release"; run = "qualification"; name = "Encounter 0.1.7 qualification"; state = "Passed";
+      detail = "Standalone platform release verification"; started = "9 Nov 2026, 15:46:12 AWST"; duration = "66 seconds";
+      text = "Run: 20261109T074612193955Z-encounter-standalone-release-bc2a8e91\nResult: Passed\nStarted: 9 Nov 2026, 15:46:12 AWST\nFinished: 9 Nov 2026, 15:47:18 AWST\nExit code: 0\n\nThe standalone Linux release passed the manifest pin checks, native contracts, and installed browser workflows." }
+  )
+  fold $published as receipt; receipts starts list():
+    # The captured published receipt is ASCII.
+    let bytes = count($receipt.text)
+    let file = { id = $receipt.id; parent = "platform-receipts"; name = $receipt.name; kind = "Run receipt";
+      path = concat("Platform/Receipts/", $receipt.name); permission = "Platform steward"; text = $receipt.text; bytes = $bytes; viewer = "text" }
+    yield append($receipts, list({ file = $file; run = { id = $receipt.run; name = $receipt.name; state = $receipt.state;
+      detail = $receipt.detail; started = $receipt.started; duration = $receipt.duration; receipt = $receipt.id;
+      receiptFolder = $file.parent; receiptPath = $file.path } })) → result
+
+process files.catalogue:
+  let collections = or(at($snapshot, "collections"), {})
+  let sources = list("Platform/Releases/Home", "Platform/Kernel/Releases", "Platform/Scheduled run receipts", "Apps/Game Hub/Assets",
+    "Apps/Game Hub/Store/Published assets", "Apps/North River/Source", "Apps/North River/Receipts")
+  fold $sources as source; rows starts list():
+    yield append($rows, or(at($collections, $source), list())) → rows
+  when at($snapshot, "platform"):
+    call files.publishedReceipts
+    let receipts = map($result, "receipt", $receipt.file)
+    fold $receipts as receipt; total starts 0:
+      yield add($total, $receipt.bytes) → bytes
+    let folder = { id = "platform-receipts"; name = "Receipts"; path = "Platform/Receipts"; kind = "Folder";
+      permission = "Platform steward"; bytes = $bytes; uniqueBytes = $bytes; fileCount = count($receipts) }
+    let rows = append($rows, append(list($folder), $receipts))
+  let result = $rows
+
+process services.views:
+  let result = list({ id = "services"; name = "Services" }, { id = "schedules"; name = "Schedules" }, { id = "runs"; name = "Runs" })
+
+process services.runs:
+  call files.publishedReceipts
+  let published = map($result, "receipt", $receipt.run)
+  let indexed = filter($receiptFiles, "file", at($file, "execution"))
+  let scheduled = map($indexed, "file", {
+    id = concat("systemd-invocation:", $file.execution.invocationId);
+    name = $file.execution.service; state = if(eq($file.execution.result, "success"), "Succeeded", concat("Failed · ", $file.execution.result));
+    detail = "Published receipt for a scheduled systemd execution.";
+    started = concat($file.execution.started, " AWST"); duration = concat($file.execution.duration, " seconds");
+    receipt = $file.id; receiptFolder = $file.parent; receiptPath = $file.path
+  })
+  let result = append($published, $scheduled)
+
+process services.entryButton:
+  let command = "service-item"
+  let item = $entry.id
+  let label = concat($entry.name, " · ", $entry.state)
+  let pressed = if(eq($item, $selected), "true", "false")
+  let buttonClass = null
+  call managers.button
+
+# Front Gate's service and unit projection, after the browser response is validated.
+process frontGate.inspectionObservations:
+  let pilot = { group = "Encounter platform"; name = "North River"; detail = "Open the Encounter pilot and sign in with your approved account.";
+    status = "HTTPS pilot"; href = "https://appdev.sourcerytech.com.au/encounter-pilot/" }
+  fold $status.services as service; services starts list($pilot):
+    port text.matches { value = $service.id; pattern = "^[a-z][a-z0-9-]*$" } → validId
+    port value.type { value = $service.online } → onlineType
+    assert and($validId, eq($onlineType, "boolean"))
+      otherwise "The gateway returned an invalid Front Gate service."
+    let href = if($service.online, concat("http://", $service.id, ".localhost:", $port, "/"), null)
+    yield append($services, list({ group = $service.group; name = $service.name; detail = $service.detail;
+      status = if($service.online, "Listening", "Offline"); href = $href })) → services
+  let units = map($status.units, "group", { scope = $group.scope; names = or($group.names, list());
+    empty = if(eq($group.names, null), "Status unavailable.", "No running units.") })
+  let result = { services = $services; units = $units; time = $status.time }
+
+process services.inspectionGroups:
+  when eq($view, "services"):
+    let services = map($snapshot.services, "entry", {
+      id = concat("app-", $entry.name); name = $entry.name; state = $entry.status; detail = $entry.detail; href = $entry.href
+    })
+    let units = list()
+    when $snapshot:
+      fold $snapshot.units as scope; units starts list():
+        yield append($units, map($scope.names, "name", {
+          id = concat($scope.scope, "-", $name); name = $name; state = "Running"; detail = concat("Observed systemd ", $scope.scope, " service unit.")
+        })) → units
+    let listening = filter($services, "entry", eq($entry.state, "Listening"))
+    let other = filter($services, "entry", not(eq($entry.state, "Listening")))
+    let apps = if(count($listening), list({ label = "Listening apps"; items = $listening }), list())
+    let result = append($apps, list(
+      { label = if(count($listening), "Other registered apps", "Registered apps"); items = $other; empty = "No other apps are listed." },
+      { label = "Internal services"; items = $units; empty = if($snapshot, "No running units were reported.", "Refresh through Front Gate to see running units.") }
+    ))
+  when eq($view, "schedules"):
+    let schedules = if($snapshot, or(at($snapshot, "schedules"), list()), list())
+    let result = list({ label = "Systemd timers"; items = $schedules;
+      empty = if(and($snapshot, at($snapshot, "timerStatus")), $snapshot.timerStatus, "Timer observations are unavailable from this Front Gate connection.") })
+  when eq($view, "runs"):
+    call services.runGroups
+
+process services.runGroups:
+  call services.runs
+  let published = $result
+  let publishedIds = map($published, "run", $run.id)
+  let executions = or(at($snapshot, "runs"), list())
+  let observed = filter($executions, "run", not(includes($publishedIds, $run.id)))
+  when and($returnRun, not(includes($publishedIds, $returnRun.id)), not(some($observed, "run", eq($run.id, $returnRun.id)))):
+    let observed = append($observed, list({
+      id = $returnRun.id; name = $returnRun.name; state = $returnRun.state; detail = $returnRun.detail;
+      started = $returnRun.started; duration = $returnRun.duration
+    }))
+  let empty = if(count($executions), "Executions with receipts are listed under Published runs.",
+    "No completed timer service executions are available.")
+  let result = list(
+    { label = "Published runs"; items = $published; empty = "No run receipts have been published." },
+    { label = "Observed service executions"; items = $observed; empty = $empty }
+  )
+
+process services.observationFacts:
+  let state = $entry.state
+  port text.indexOf { value = $state; search = "Failed · " } → failure
+  let tone = if(eq($failure, 0), "error", if(eq($state, "Offline"), "warning",
+    if(includes(list("Listening", "Running", "Connected", "Succeeded", "Passed"), $state), "success",
+      if(eq($state, "Not observed"), "muted", null))))
+  let result = filter(list(
+    { label = if(eq($observationView, "runs"), "Outcome", "State"); value = $state; role = if(eq($state, "Timer"), null, "state"); tone = $tone; action = $runOutcomeAction },
+    { label = "Next trigger"; value = at($entry, "next"); role = "next" },
+    { label = "Last trigger"; value = or(at($entry, "last"), if($lastTriggerAction, "Not reported", null)); action = $lastTriggerAction },
+    { label = "Started"; value = at($entry, "started") },
+    { label = "Duration"; value = at($entry, "duration") },
+    { label = "Description"; value = at($entry, "detail"); role = "context" }
+  ), "fact", $fact.value)
+
+process services.observationTable:
+  fold $facts as fact; rows starts list():
+    let role = at($fact, "role")
+    let value = if(includes(list("state", "next"), $role), { tag = "strong"; children = list($fact.value) },
+      if(eq($role, "context"), { tag = "em"; children = list($fact.value) }, $fact.value))
+    let action = at($fact, "action")
+    when $action:
+      let value = { tag = "div"; attrs = { class = "service-observation-with-action" }; children = list(
+        { tag = "span"; children = list($value) }, $action) }
+    let row = { tag = "tr"; children = list(
+      { tag = "th"; attrs = { scope = "row" }; children = list($fact.label) },
+      { tag = "td"; attrs = { "data-observation-role" = $role; "data-observation-tone" = at($fact, "tone") }; children = list($value) }
+    ) }
+    yield append($rows, list($row)) → rows
+  let result = { tag = "table"; attrs = { class = "sourcery-data-table service-observations"; "data-table-layout" = $tableLayout;
+    "aria-label" = "Service observations" }; children = list(
+    { tag = "thead"; children = list({ tag = "tr"; children = list(
+      { tag = "th"; attrs = { scope = "col" }; children = list("Field") },
+      { tag = "th"; attrs = { scope = "col" }; children = list("Observation") }
+    ) }) },
+    { tag = "tbody"; children = $rows }
+  ) }
+
+process services.inspectionSurface:
+  call services.inspectionGroups
+  let groups = $result
+  fold $groups as group; items starts list():
+    yield append($items, $group.items) → items
+  let entry = at(filter($items, "entry", eq($entry.id, $selected)), 0)
+  when not($entry):
+    let entry = at($items, 0)
+  let selected = at($entry, "id")
+  call services.views
+  fold $result as tab; tabs starts list():
+    let command = "service-view"
+    let item = $tab.id
+    let label = $tab.name
+    let buttonClass = null
+    let pressed = if(eq($view, $tab.id), "true", "false")
+    call managers.button
+    yield append($tabs, list($result)) → tabs
+  fold $groups as group; sections starts list():
+    fold $group.items as entry; rows starts list():
+      call services.entryButton
+      yield append($rows, list({ tag = "li"; children = list($result) })) → rows
+    yield append($sections, list({ tag = "section"; children = list(
+      { tag = "h4"; children = list($group.label) },
+      if(count($rows), { tag = "ul"; children = $rows }, { tag = "p"; children = list($group.empty) })
+    ) })) → sections
+  let receipt = at($entry, "receipt")
+  let detail = list({ tag = "p"; children = list("Select an available entry.") })
+  when $entry:
+    let observed = or(at($snapshot, "runs"), list())
+    let service = at($entry, "service")
+    let scope = at($entry, "scope")
+    let execution = at(filter($observed, "run", and($service, eq($run.name, $service), eq($run.scope, $scope))), 0)
+    let invocation = at($execution, "id")
+    when $service:
+      let matched = filter($receiptFiles, "file", and(
+        eq(at(at($file, "execution"), "scope"), $scope),
+        eq(at(at($file, "execution"), "service"), $service),
+        eq(at(at($file, "execution"), "timer"), $entry.name),
+        eq(at(at($file, "execution"), "lastTrigger"), at($entry, "last"))))
+      when eq(count($matched), 1):
+        let receiptExecution = at(at($matched, 0), "execution")
+        let invocation = concat("systemd-invocation:", $receiptExecution.invocationId)
+    let command = "invocation"
+    let item = $invocation
+    let label = "View last service execution"
+    let buttonClass = "button"
+    let pressed = null
+    call managers.button
+    let invocationButton = $result
+    let command = "receipt"
+    let item = $receipt
+    let label = "Open receipt in File Manager"
+    let buttonClass = "button"
+    let pressed = null
+    call managers.button
+    let runOutcomeAction = if($receipt, $result, null)
+    let lastTriggerAction = if($invocation, $invocationButton, null)
+    let observationView = $view
+    call services.observationFacts
+    let facts = $result
+    let tableLayout = "grid"
+    call services.observationTable
+    let detail = list(
+      { tag = "h3"; children = list($entry.name) },
+      $result,
+      if(at($entry, "href"), { tag = "p"; children = list({ tag = "a"; attrs = { href = $entry.href; target = "_blank"; rel = "noopener" }; children = list("Open app") }) }, null),
+      if($receipt, { tag = "section"; children = list({ tag = "h4"; children = list("Run receipt") },
+        { tag = "p"; children = list($entry.receiptPath) }) },
+        if(eq($view, "runs"), { tag = "p"; children = list("No published receipt for this execution.") }, null))
+    )
+  let result = { tabs = $tabs; index = $sections; detail = $detail }

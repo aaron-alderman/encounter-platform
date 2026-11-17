@@ -1,0 +1,39 @@
+# Admission schemas are produced by Encounter and hydrated into real REL.
+process-module "temple/surface-process-module/1"
+
+process foundation.schema:
+  let variableArities = append(list(0), range(63))
+  let result = {
+    protocol = "temple/kernel-profile/1";
+    valueProfile = "ordered-json-observation/1";
+    operators = {
+      fold = { arities = list(5); binders = list(1, 2) };
+      let = { arities = list(3); binders = list(0) };
+      raise = { arities = list(1); binders = list() };
+      isArray = { arities = list(1); binders = list() };
+      list = { arities = $variableArities; binders = list() };
+      append = { arities = list(2); binders = list() };
+      eq = { arities = list(2); binders = list() };
+      includes = { arities = list(2); binders = list() };
+      if = { arities = list(3); binders = list() };
+      count = { arities = list(1); binders = list() };
+      at = { arities = list(2); binders = list() };
+      concat = { arities = $variableArities; binders = list() };
+      add = { arities = list(2); binders = list() };
+      range = { arities = list(1); binders = list() };
+      distinct = { arities = list(1); binders = list() }
+    };
+    statements = {
+      let = { strings = list(); bindings = list("let"); expressions = list("value"); programmes = list(); fields = list("let", "value"); construction = { let = "value"; value = null } };
+      assert = { strings = list("message"); bindings = list(); expressions = list("assert"); programmes = list(); fields = list("assert", "message"); construction = { assert = true; message = "Check failed." } };
+      when = { strings = list(); bindings = list(); expressions = list("when"); programmes = list("then"); fields = list("when", "then"); construction = { when = false; then = list() } };
+      each = { strings = list(); bindings = list("as"); expressions = list("each"); programmes = list("steps"); fields = list("each", "as", "steps"); construction = { each = list("list"); as = "item"; steps = list() } };
+      fold = { strings = list(); bindings = list("as", "accumulator", "into"); expressions = list("fold", "initial", "yield"); programmes = list("steps"); fields = list("fold", "as", "accumulator", "initial", "steps", "yield", "into"); construction = { fold = list("list"); as = "item"; accumulator = "total"; initial = null; steps = list(); yield = concat(at(" $", 1), "total"); into = "result" } };
+      call = { strings = list("call"); bindings = list(); expressions = list(); programmes = list(); fields = list("call"); construction = { call = "" } };
+      port = { strings = list("port"); bindings = list("into"); expressions = list("args"); programmes = list(); fields = list("port", "args", "into"); construction = { port = ""; args = {}; into = "result" } };
+      try = { strings = list(); bindings = list("error"); expressions = list(); programmes = list("try", "catch"); fields = list("try", "error", "catch"); construction = { try = list(); error = "fault"; catch = list() } }
+    };
+    execution = { ordering = "sequential-awaited"; budgetFault = "uncatchable"; hostFault = "identity-unless-explicit-try"; catchProjection = list("name", "message"); absence = "undefined-internal-not-transportable"; concurrency = "not-in-this-profile"; transactions = "explicit-host-protocol"; cancellation = "explicit-host-protocol" }
+  }
+  port rel.encode { value = $result; kind = "AdmissionSchema" } → document
+  port rel.decode { text = $document; kind = "AdmissionSchema" } → result

@@ -1,0 +1,52 @@
+process-module "temple/surface-process-module/1"
+
+process authoring.request:
+  let fields = $request.fields
+  let snapshot = $request.snapshot
+  let documents = $snapshot.documents
+  port kernel.invoke { query = "app.load"; input = $snapshot } → state
+  let reply = {}
+  let kind = "EncounterAuthoringContract"
+  when eq($request.method, "GET"):
+    call authoring.sourceSet
+    let reply = { version = "encounter/authoring/1"; operation = "check-action"; route = "/authoring"; method = "POST"; encoding = "application/x-www-form-urlencoded"; fields = list("base", "basis", "sourceSetSha256", "reason", "target", "goal", "id", "label", "input", "output", "code"); csrf = $request.csrf; base = $snapshot.revision; basis = $request.basis; sourceSetSha256 = $result; profile = $request.profile; intent = $state.intent; scalarTypes = list("Text", "Number", "Boolean"); actionGrants = list(); review = "/?view=actions" }
+  when eq($request.method, "POST"):
+    let kind = "EncounterAuthoringCheck"
+    try:
+      port scalar.read { text = $fields.base } → base
+      port record.put { record = $fields; key = "base"; value = $base } → candidate
+      port kernel.invoke { query = "authoring.check"; input = $candidate } → prepared
+      port rel.encode { value = $candidate; kind = "EncounterActionCandidate" } → handoff
+      port digest.sha256 { text = $candidate.code } → digest
+      let reply = { status = "reviewable"; candidate = $handoff; description = $prepared.description; base = $base; basis = $request.basis; actionSha256 = $digest }
+    catch fault:
+      let reply = { status = "refused"; diagnostic = $fault.message; base = $snapshot.revision; basis = $request.basis }
+  port rel.encode { value = $reply; kind = $kind } → text
+  let result = { text = $text; session = $request.session }
+
+process authoring.check:
+  let candidate = $eventInput
+  port kernel.invoke { query = "types.named"; input = { name = "ActionCandidate"; value = $candidate } } → _
+  assert eq($candidate.base, $snapshot.revision)
+    otherwise "STALE: Check the proposal against the current revision."
+  assert eq($candidate.basis, $request.basis)
+    otherwise "BASIS: Check the proposal against the current authoring basis."
+  call authoring.sourceSet
+  assert eq($candidate.sourceSetSha256, $result)
+    otherwise "SOURCE: Check the proposal against the current accepted source set."
+  assert and(count($candidate.reason), count($candidate.target), count($candidate.goal))
+    otherwise "INTENT: Give the reason, exact target and goal of this one change."
+  port number.calculate { operation = "lessEqual"; values = list(count($candidate.code), 8192) } → bounded
+  assert $bounded
+    otherwise "SOURCE: An action proposal is limited to 8192 source characters."
+  let command = {
+    operation = "action"; base = $candidate.base; operationId = $request.nonce;
+    profile = $request.profile; basis = $request.basis; source = "authoring/action";
+    reason = $candidate.reason; target = $candidate.target; goal = $candidate.goal;
+    values = { id = $candidate.id; label = $candidate.label; input = $candidate.input; output = $candidate.output; code = $candidate.code }
+  }
+  port kernel.invoke { query = "app.review"; input = $command } → result
+
+process authoring.sourceSet:
+  port rel.encode { value = $snapshot.documents; kind = "Documents" } → sourceSet
+  port digest.sha256 { text = $sourceSet } → result

@@ -1,0 +1,369 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process ws.options:
+  fold $eventInput.items as item; html starts "":
+    let input = { tag = "option"; attrs = if(eq($item.value, $eventInput.selected), { value = $item.value; selected = "selected" }, { value = $item.value }); children = list($item.label) }
+    call html.serialize
+    yield concat($html, $result) → result
+
+process ws.newFields:
+  port state.get { key = "workspace" } → state
+  port browser.property { ref = "#ws-object-type"; name = "value" } → selectedType
+  let schema = at(filter($state.schemas, "s", eq($s.name, $selectedType)), 0)
+  port state.get { key = "workspaceObjectFormType" } → previousType
+  let html = ""
+  when $schema:
+    fold $schema.fields as field; html starts "":
+      let value = ""
+      port dom.exists { selector = concat("#ws-new-", $field.name) } → exists
+      when and($exists, eq($previousType, $selectedType)):
+        port browser.property { ref = concat("#ws-new-", $field.name); name = "value" } → value
+      let input = { tag = "label"; attrs = {  }; children = list(concat($field.name, " · ", $field.scope, if($field.required, " · required", "")), { tag = "textarea"; attrs = { id = concat("ws-new-", $field.name); rows = 2; maxlength = $field.maximum }; children = list($value) }) }
+      call html.serialize
+      yield concat($html, $result) → html
+  port browser.content { ref = "#ws-new-fields"; html = $html } → _
+  port state.set { key = "workspaceObjectFormType"; value = $selectedType } → _
+
+process ws.editorFields:
+  port state.get { key = "workspace" } → state
+  port browser.property { ref = "#ws-edit-scope"; name = "value" } → scope
+  port browser.property { ref = "#ws-edit-object"; name = "value" } → objectId
+  port browser.property { ref = "#ws-edit-entry"; name = "value" } → entryKey
+  let overrides = {  }
+  when eq($scope, "local"):
+    port text.split { value = $entryKey; pattern = "/" } → parts
+    let journey = at(filter($state.document.journeys, "j", eq($j.id, at($parts, 0))), 0)
+    let objectId = ""
+    when $journey:
+      let entry = at(filter($journey.entries, "e", eq($e.id, at($parts, 1))), 0)
+      when $entry:
+        let objectId = $entry.object
+        let overrides = $entry.overrides
+  let object = at(filter($state.document.objects, "o", eq($o.id, $objectId)), 0)
+  let fields = list()
+  when $object:
+    let schema = at(filter($state.schemas, "s", eq($s.name, $object.type)), 0)
+    let fields = filter($schema.fields, "f", eq($f.scope, $scope))
+  port browser.property { ref = "#ws-edit-field"; name = "value" } → selected
+  port kernel.invoke { query = "ws.options"; input = { items = map($fields, "f", { value = $f.name; label = $f.name }); selected = $selected } } → html
+  port browser.content { ref = "#ws-edit-field"; html = $html } → _
+  port browser.property { ref = "#ws-edit-field"; name = "value" } → field
+  let value = ""
+  when and($object, not(eq($field, ""))):
+    port record.get { record = $overrides; key = $field } → override
+    let value = if(eq($override, null), at($object.values, $field), $override)
+  port browser.write { ref = "#ws-edit-value"; name = "value"; value = $value } → _
+  port browser.write { ref = "#ws-shared-target"; name = "hidden"; value = eq($scope, "local") } → _
+  port browser.write { ref = "#ws-local-target"; name = "hidden"; value = not(eq($scope, "local")) } → _
+
+process ws.inspectUI:
+  port state.get { key = "workspace" } → state
+  port browser.property { ref = "#ws-inspect-choice"; name = "value" } → choice
+  let text = $state.inputs.codeText
+  let file = "generated-workspace.encounter"
+  when eq($choice, "facts"):
+    let text = $state.inputs.factText
+    let file = "generated-workspace.rel"
+  when eq($choice, "contracts"):
+    let text = $state.inputs.contractText
+    let file = "generated-contracts.rel"
+  when eq($choice, "definitions"):
+    port text.join { values = $state.document.definitions; separator = "\n\n" } → text
+    let file = "construct-definitions.encounter"
+    port record.put { record = $spPolicy; key = "keywords"; value = append($spPolicy.keywords, list("construct", "field", "text", "shared", "local", "required", "optional", "max", "heading", "paragraph")) } → spPolicy
+  when eq($choice, "source"):
+    port json.stringify { value = $state.document; space = 2 } → text
+    let file = "workspace-source.json"
+  when eq($choice, "history"):
+    port json.stringify { value = { revision = $state.revision; predecessor = $state.predecessor; journal = $state.journal }; space = 2 } → text
+    let file = "workspace-events.json"
+  when eq($choice, "collaboration"):
+    port state.get { key = "collaboration" } → board
+    port json.stringify { value = { revision = $board.revision; events = $board.events }; space = 2 } → text
+    let file = "proposal-review-events.json"
+  port digest.sha256 { text = $text } → hash
+  port kernel.invoke { query = "uw.sourceView"; input = { file = $file; text = $text; sha256 = $hash } } → view
+  port browser.content { ref = "#ws-source"; html = $view.html } → _
+  port browser.write { ref = "#ws-source-label"; name = "textContent"; value = concat($file, " · SHA-256 ", $hash) } → _
+
+process ws.paint:
+  port state.get { key = "workspace" } → state
+  port state.get { key = "workspaceNotice" } → notice
+  port browser.write { ref = "#ws-notice"; name = "textContent"; value = $notice } → _
+  port browser.write { ref = "#ws-revision"; name = "textContent"; value = concat("Revision ", $state.revision, " · ", count($state.document.objects), " objects · ", count($state.document.journeys), " journeys") } → _
+  port browser.write { ref = "#ws-identity"; name = "textContent"; value = $state.documentHash } → _
+  port browser.property { ref = "#ws-object-type"; name = "value" } → selectedType
+  port kernel.invoke { query = "ws.options"; input = { items = map($state.schemas, "s", { value = $s.name; label = $s.name }); selected = $selectedType } } → html
+  port browser.content { ref = "#ws-object-type"; html = $html } → _
+  call ws.newFields
+  fold $state.document.objects as object; html starts "":
+    let schema = at(filter($state.schemas, "s", eq($s.name, $object.type)), 0)
+    let input = { tag = "li"; attrs = {  }; children = list({ tag = "strong"; attrs = {  }; children = list(at($object.values, $schema.heading)) }, { tag = "span"; attrs = {  }; children = list(concat($object.type, " · ", $object.id)) }) }
+    call html.serialize
+    yield concat($html, $result) → html
+  port browser.content { ref = "#ws-library"; html = $html } → _
+  each list("#ws-compose-object", "#ws-edit-object") as ref:
+    port browser.property { ref = $ref; name = "value" } → selected
+    port kernel.invoke { query = "ws.options"; input = { items = map($state.document.objects, "o", { value = $o.id; label = concat($o.id, " · ", $o.type) }); selected = $selected } } → html
+    port browser.content { ref = $ref; html = $html } → _
+  port browser.property { ref = "#ws-compose-journey"; name = "value" } → selected
+  port kernel.invoke { query = "ws.options"; input = { items = map($state.document.journeys, "j", { value = $j.id; label = $j.name }); selected = $selected } } → html
+  port browser.content { ref = "#ws-compose-journey"; html = $html } → _
+  fold $state.document.journeys as journey; entries starts list():
+    yield append($entries, map($journey.entries, "e", { value = concat($journey.id, "/", $e.id); label = concat($journey.name, " / ", $e.id, " → ", $e.object) })) → entries
+  port browser.property { ref = "#ws-edit-entry"; name = "value" } → selected
+  port kernel.invoke { query = "ws.options"; input = { items = $entries; selected = $selected } } → html
+  port browser.content { ref = "#ws-edit-entry"; html = $html } → _
+  fold $state.document.journeys as journey; html starts "":
+    fold $journey.entries as entry; trees starts list():
+      let projection = at(filter($state.projections, "p", eq(at($p.contribution, "id"), concat("journey.", $journey.id, ".", $entry.id))), 0)
+      yield append($trees, list({ tag = "div"; attrs = { class = "ws-entry" }; children = list({ tag = "p"; attrs = { class = "ws-entry-id" }; children = list(concat($entry.object, " · shared object / local context")) }, $projection.output.tree) })) → trees
+    let input = { tag = "section"; attrs = { class = "ws-journey" }; children = append(list({ tag = "p"; attrs = { class = "eyebrow" }; children = list("JOURNEY") }, { tag = "h3"; attrs = {  }; children = list($journey.name) }), if(eq(count($trees), 0), list({ tag = "p"; attrs = { class = "muted" }; children = list("Add an object to begin this journey.") }), $trees)) }
+    call html.serialize
+    yield concat($html, $result) → html
+  port browser.content { ref = "#ws-journey-preview"; html = $html } → _
+  call ws.editorFields
+  call ws.inspectUI
+  port dom.exists { selector = "#mw-root" } → mattersUI
+  when $mattersUI:
+    call mw.paint
+  port state.get { key = "collaboration" } → board
+  when $board:
+    call cw.paint
+
+process ws.readRequest:
+  port state.get { key = "workspace" } → state
+  let kind = $eventInput.kind
+  let request = null
+  when eq($kind, "define"):
+    port browser.property { ref = "#ws-definition"; name = "value" } → source
+    let request = { kind = "define"; source = $source; baseRevision = $state.revision }
+  when eq($kind, "object"):
+    port browser.property { ref = "#ws-object-id"; name = "value" } → id
+    port browser.property { ref = "#ws-object-type"; name = "value" } → type
+    let schema = at(filter($state.schemas, "s", eq($s.name, $type)), 0)
+    fold $schema.fields as field; values starts {  }:
+      port browser.property { ref = concat("#ws-new-", $field.name); name = "value" } → value
+      port record.put { record = $values; key = $field.name; value = $value } → values
+      yield $values → values
+    let request = { kind = "object"; id = $id; type = $type; values = $values; baseRevision = $state.revision }
+  when eq($kind, "journey"):
+    port browser.property { ref = "#ws-journey-id"; name = "value" } → id
+    port browser.property { ref = "#ws-journey-name"; name = "value" } → name
+    let request = { kind = "journey"; id = $id; name = $name; baseRevision = $state.revision }
+  when eq($kind, "compose"):
+    port browser.property { ref = "#ws-compose-journey"; name = "value" } → journey
+    port browser.property { ref = "#ws-compose-object"; name = "value" } → object
+    port browser.property { ref = "#ws-entry-id"; name = "value" } → id
+    when eq($id, ""):
+      let id = $object
+    let request = { kind = "compose"; journey = $journey; object = $object; entry = $id; baseRevision = $state.revision }
+  when eq($kind, "edit"):
+    port browser.property { ref = "#ws-edit-scope"; name = "value" } → scope
+    port browser.property { ref = "#ws-edit-object"; name = "value" } → object
+    port browser.property { ref = "#ws-edit-entry"; name = "value" } → entryKey
+    port text.split { value = $entryKey; pattern = "/" } → parts
+    port browser.property { ref = "#ws-edit-field"; name = "value" } → field
+    port browser.property { ref = "#ws-edit-value"; name = "value" } → value
+    let request = { kind = "edit"; scope = $scope; object = $object; journey = at($parts, 0); entry = at($parts, 1); field = $field; value = $value; baseRevision = $state.revision }
+  assert $request
+    otherwise "WS-ACTION: Unknown form action."
+  let result = $request
+
+process ws.action:
+  call cw.stageUI
+
+process ws.checkDefinition:
+  try:
+    port browser.property { ref = "#ws-definition"; name = "value" } → source
+    port state.get { key = "workspace" } → state
+    port kernel.invoke { query = "ws.apply"; input = { state = $state; request = { kind = "define"; source = $source; baseRevision = $state.revision } } } → checked
+    port state.set { key = "workspaceNotice"; value = "Definition checks passed. Choose Propose construct, then obtain review and acceptance to use it." } → _
+    call ws.paint
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process ws.acceptUI:
+  call cw.saveUI
+
+process ws.segmentUI:
+  try:
+    port state.get { key = "collaboration" } → board
+    assert not($board)
+      otherwise "CW-HISTORY: Collaborative history keeps its explicit baseline; standalone segment reset is unavailable."
+    port state.get { key = "workspace" } → state
+    port state.get { key = "workspaceAccepted" } → receipt
+    assert $receipt
+      otherwise "WS-SEGMENT: Accept the workspace first."
+    assert eq($state.documentHash, $receipt.body.documentHash)
+      otherwise "WS-SEGMENT: Accept current changes before starting another segment."
+    port kernel.invoke { query = "ws.initial"; input = { basis = $state.document; predecessor = $receipt.sha256 } } → next
+    port state.set { key = "workspace"; value = $next } → _
+    port state.set { key = "workspaceNotice"; value = "Started a new editing segment from the accepted source. The predecessor receipt hash remains attached." } → _
+    call ws.persist
+    call ws.paint
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process ws.exportUI:
+  call cw.exportUI
+
+process ws.sourceUI:
+  port state.get { key = "workspace" } → state
+  port json.stringify { value = { protocol = "usewords/workspace-source/1"; document = $state.document }; space = 2 } → encoded
+  port browser.write { ref = "#ws-package"; name = "value"; value = $encoded } → _
+  port state.set { key = "workspaceNotice"; value = "Current source is ready below. It includes your construct definitions, objects, journeys and local overrides." } → _
+  call ws.paint
+
+process ws.downloadSourceUI:
+  call ws.sourceUI
+  port download.text { name = "usewords-workspace-source.json"; text = $encoded } → _
+
+process ws.importUI:
+  try:
+    port state.get { key = "workspace" } → active
+    assert not(at($active.document, "matter"))
+      otherwise "MW-IMPORT: Keep this matter intact. Import matter history through the matter controls."
+    port state.get { key = "collaboration" } → board
+    when $board:
+      assert eq($board.revision, 0)
+        otherwise "CW-IMPORT: Import source only into an empty proposal board. Existing proposal history cannot be replaced by a source import."
+    port browser.property { ref = "#ws-package"; name = "value" } → encoded
+    port number.calculate { operation = "lessEqual"; values = list(count($encoded), 180000) } → bounded
+    assert $bounded
+      otherwise "WS-IMPORT: Source package exceeds the import limit."
+    port json.parse { text = $encoded } → package
+    assert includes(list("usewords/workspace-source/1", "usewords/workspace-acceptance/1"), $package.protocol)
+      otherwise "WS-IMPORT: Import a workspace source package or acceptance receipt."
+    let next = null
+    when eq($package.protocol, "usewords/workspace-source/1"):
+      port kernel.invoke { query = "ws.initial"; input = { basis = $package.document; predecessor = null } } → next
+    when eq($package.protocol, "usewords/workspace-acceptance/1"):
+      port kernel.invoke { query = "ws.reconstruct"; input = $package } → next
+    port state.set { key = "workspace"; value = $next } → _
+    port state.set { key = "workspaceNotice"; value = "Imported checked source as this empty board’s explicit baseline. Previous reviews and authority are not inferred." } → _
+    call ws.persist
+    call cw.resetUI
+    call cw.saveUI
+    call ws.paint
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process ws.openDemo:
+  port state.get { key = "earlierDemoLoaded" } → loaded
+  when not($loaded):
+    call uw.boot
+    port state.set { key = "earlierDemoLoaded"; value = true } → _
+
+process ws.showNotice:
+  port state.get { key = "workspaceNotice" } → notice
+  port browser.write { ref = "#ws-notice"; name = "textContent"; value = $notice } → _
+
+process cw.resetUI:
+  port state.get { key = "workspace" } → state
+  port kernel.invoke { query = "ws.accept"; input = { state = $state; expectedRevision = $state.revision; expectedHash = $state.documentHash } } → basis
+  port kernel.invoke { query = "cw.initial"; input = $basis } → board
+  port state.set { key = "collaboration"; value = $board } → _
+
+process cw.stageUI:
+  try:
+    port browser.write { ref = "#ws-notice"; name = "textContent"; value = "Checking this proposal against the current accepted material…" } → _
+    port browser.delay { milliseconds = 1 } → _
+    port kernel.invoke { query = "ws.readRequest"; input = $eventInput } → change
+    port state.get { key = "collaboration" } → board
+    port browser.property { ref = "#cw-actor"; name = "value" } → actor
+    port browser.property { ref = "#cw-title"; name = "value" } → title
+    when eq($title, ""):
+      let title = concat("Proposed ", $change.kind, " by ", $actor)
+    let input = { action = "propose"; actor = $actor; expectedBoardRevision = $board.revision; id = concat("proposal_", add(count($board.proposals), 1)); title = $title; change = $change }
+    call cw.commitUI
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process cw.decisionUI:
+  try:
+    port browser.write { ref = "#ws-notice"; name = "textContent"; value = "Checking review and acceptance rules…" } → _
+    port browser.delay { milliseconds = 1 } → _
+    port state.get { key = "collaboration" } → board
+    port browser.property { ref = "#cw-actor"; name = "value" } → actor
+    port browser.property { ref = "#cw-selection"; name = "value" } → id
+    let proposal = at(filter($board.proposals, "p", eq($p.id, $id)), 0)
+    assert $proposal
+      otherwise "CW-PROPOSAL: Create and select a proposal first."
+    port browser.property { ref = "#cw-decision"; name = "value" } → decision
+    port browser.property { ref = "#cw-comment"; name = "value" } → comment
+    let input = { action = $eventInput.action; actor = $actor; expectedBoardRevision = $board.revision; id = $id; contentHash = $proposal.contentHash; decision = $decision; comment = $comment }
+    call cw.commitUI
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process cw.selectionUI:
+  port browser.property { ref = "#cw-selection"; name = "value" } → id
+  port state.set { key = "collaborationSelected"; value = $id } → _
+  call cw.paint
+
+process cw.paint:
+  port state.get { key = "collaboration" } → board
+  port state.get { key = "collaborationSelected" } → selected
+  port browser.write { ref = "#cw-revision"; name = "textContent"; value = concat("Board ", $board.revision, " · ", count($board.proposals), "/12 proposals · ", count($board.events), "/48 events") } → _
+  fold $board.proposals as proposal; items starts list():
+    let stale = not(and(eq($proposal.content.baseHash, $board.head.documentHash), eq($proposal.content.baseRevision, $board.head.revision)))
+    yield append($items, list({ value = $proposal.id; label = concat($proposal.content.title, " · ", $proposal.status, if(and(eq($proposal.status, "open"), $stale), " · needs resubmission", "")) })) → items
+  port kernel.invoke { query = "ws.options"; input = { items = $items; selected = $selected } } → html
+  port browser.content { ref = "#cw-selection"; html = $html } → _
+  port browser.property { ref = "#cw-selection"; name = "value" } → selected
+  port state.set { key = "collaborationSelected"; value = $selected } → _
+  port browser.write { ref = "#cw-details"; name = "textContent"; value = "Use the encounter and construct forms to propose a change. Accepted material stays visible below until a reviewed proposal is accepted." } → _
+  each list("#cw-before", "#cw-after", "#cw-reviews") as ref:
+    port browser.content { ref = $ref; html = "" } → _
+  when not(eq(count($board.proposals), 0)):
+    port kernel.invoke { query = "cw.inspect"; input = { board = $board; id = $selected } } → inspection
+    let proposal = $inspection.proposal
+    port browser.write { ref = "#cw-details"; name = "textContent"; value = concat($proposal.id, " · by ", $proposal.content.author, " · ", $proposal.status, if(and(eq($proposal.status, "open"), $inspection.stale), " · CONFLICT: accepted material changed; resubmit and obtain a fresh review.", ""), " · content ", $proposal.contentHash, " · inverse: ", $inspection.destination.kind) } → _
+    each list({ ref = "#cw-before"; value = $inspection.before; file = "proposal-before.json" }, { ref = "#cw-after"; value = $inspection.after; file = "proposal-after.json" }) as side:
+      port json.stringify { value = $side.value; space = 2 } → text
+      port digest.sha256 { text = $text } → hash
+      port kernel.invoke { query = "uw.sourceView"; input = { file = $side.file; text = $text; sha256 = $hash } } → view
+      port browser.content { ref = $side.ref; html = $view.html } → _
+    fold $proposal.reviews as review; html starts "":
+      let input = { tag = "p"; attrs = { }; children = list(concat($review.actor, " · ", $review.decision, ": ", $review.comment)) }
+      call html.serialize
+      yield concat($html, $result) → html
+    when $proposal.rejectedBy:
+      let input = { tag = "p"; attrs = { }; children = list(concat("Rejected by ", $proposal.rejectedBy.actor, ": ", $proposal.rejectedBy.comment)) }
+      call html.serialize
+      let html = concat($html, $result)
+    when $proposal.acceptedBy:
+      let input = { tag = "p"; attrs = { }; children = list(concat("Accepted by ", $proposal.acceptedBy, ".")) }
+      call html.serialize
+      let html = concat($html, $result)
+    fold filter($board.events, "e", eq($e.request.id, $proposal.id)) as event; activity starts list():
+      let request = $event.request
+      yield append($activity, list({ tag = "li"; attrs = { }; children = list(concat($request.actor, " · ", $request.action, if(eq($request.action, "review"), concat(" · ", at($request, "decision")), ""), if(at($request, "comment"), concat(": ", at($request, "comment")), ""))) })) → activity
+    let input = { tag = "details"; attrs = { }; children = list({ tag = "summary"; attrs = { }; children = list("Proposal activity, including earlier reviews") }, { tag = "ol"; attrs = { }; children = $activity }) }
+    call html.serialize
+    let html = concat($html, $result)
+    port browser.content { ref = "#cw-reviews"; html = $html } → _
+
+process cw.exportUI:
+  try:
+    port state.get { key = "collaboration" } → board
+    port kernel.invoke { query = "cw.receipt"; input = $board } → receipt
+    port kernel.invoke { query = "cw.reconstruct"; input = $receipt } → checked
+    assert eq($checked, $board)
+      otherwise "CW-REPLAY: Board does not match its history."
+    port json.stringify { value = $receipt; space = 2 } → encoded
+    port browser.write { ref = "#ws-package"; name = "value"; value = $encoded } → _
+    port download.text { name = "usewords-proposal-history.json"; text = $encoded } → _
+    port state.set { key = "workspaceNotice"; value = "Exported verified proposal history, including open and rejected proposals. Only accepted proposals affect the material." } → _
+    call ws.showNotice
+
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
