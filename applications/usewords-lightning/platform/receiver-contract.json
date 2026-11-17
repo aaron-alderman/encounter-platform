@@ -1,0 +1,33 @@
+{
+  "protocol": "usewords/platform-receiver-contract/1",
+  "status": "proposed-not-installed",
+  "policy": "platform/service.encounter#wp.prepare",
+  "applicationId": "app.usewords",
+  "origin": "https://usewords.ai",
+  "authority": "Owner-authorized application mutations; no supervisor or platform administration delegated to browsers",
+  "routes": [
+    {"method": "GET", "path": "/api/usewords/workspaces", "authority": "authenticated-owner", "effect": "bounded owner-scoped list"},
+    {"method": "GET", "path": "/api/usewords/workspaces/:id", "authority": "authenticated-owner", "effect": "read current draft, accepted receipt and head"},
+    {"method": "POST", "path": "/api/usewords/workspaces/:id/commands", "authority": "authenticated-owner-and-csrf", "actions": ["save-draft", "accept", "publish"], "policy": "wp.prepare"},
+    {"method": "GET", "path": "/api/usewords/workspaces/:id/operations/:operationId", "authority": "authenticated-owner", "effect": "reconcile an uncertain mutation without replaying it"},
+    {"method": "GET", "path": "/j/:slug", "authority": "public", "effect": "read only the atomically published journey artifact"}
+  ],
+  "transactionRequirements": [
+    "Authenticate and authorize on the server; trusted context is never copied from client JSON.",
+    "Bind the platform policy hash and exact app runtime hash. Replay uses the app runtime pinned by acceptance; never silently reinterpret an old receipt under a new runtime.",
+    "Bound input bytes, document sizes, operation count, execution budget and list page sizes.",
+    "Within one transaction, revalidate principal/session and owner, read current head, execute policy, compare expected head and commit immutable value plus operation outcome.",
+    "Unique owner/workspace/operationId binds requestHash. Repeated matching requests return the original outcome; a reused ID with another hash refuses.",
+    "Workspace head, accepted pointer and command outcome must commit atomically; failures cannot claim persistence.",
+    "Publish reads accepted source, never the mutable draft. Claim a global slug only if absent or already owned by this workspace; enforce this inside the publication transaction.",
+    "Publication artifact, global slug pointer, workspace head and operation outcome commit atomically. Return durable publication ID and exact artifact hash.",
+    "Public reads expose only the selected journey artifact; never workspace documents, other journeys, receipts, operation logs, ownership IDs, credentials or authoring controls.",
+    "Render generated trees using the retained escaped serializer. No executable markup or arbitrary scripts.",
+    "On transport failure, query operation status; do not automatically resubmit an uncertain mutation.",
+    "Deny caller-supplied owners, trusted contexts, runtime activation, arbitrary queries and filesystem paths."
+  ],
+  "requiredEvidence": ["cross-owner denial", "missing session and CSRF denial", "concurrent stale-head conflict", "idempotent reconciliation after lost response", "transaction rollback", "restart durability", "draft excluded from publication", "cross-workspace slug collision denial", "public projection isolation", "exact acceptance replay", "custom domain and TLS verified"],
+  "currentConnectedGeneration": "sqlite-sourcery-mcp-live-interaction-v5",
+  "currentConnectedApplicationSurface": "Captured Claimipedia reads only; no application mutation/admission/public projection",
+  "deployment": {"siteId": "appgprj_6aedeedb7bd88191baf640255db56cc9", "deployed": false, "domainAttached": false}
+}

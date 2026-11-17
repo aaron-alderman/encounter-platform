@@ -1,0 +1,10 @@
+{
+  "protocol": "usewords/encounter-correspondence/1",
+  "sourceHash": "a479a02b519c149f1a798e6242ce77bceeacf08358f17c0ed3a79e35ae9898fa",
+  "predecessorHash": "24beae23fe0da3fb5d4b6cc9745160fa7473d315932adf47882a5d535abaa652",
+  "orderedModuleHash": "a4f470360d04df327b0203af074f197c424aa31e73ae6c19c484e803cb03737d",
+  "queries": 24,
+  "compilerSteps": 1613618,
+  "status": "Exact ordered JSON correspondence passed before source-owner switch",
+  "scope": "Same-run migration check, not universal equivalence."
+}

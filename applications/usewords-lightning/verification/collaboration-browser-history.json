@@ -1,0 +1,240 @@
+{
+  "protocol": "usewords/collaboration/1",
+  "body": {
+    "programHash": "53cd7899d84b8053fa2020c22e7eda3f8cca72b23679972bc819a6a2ba58a172",
+    "basis": {
+      "protocol": "usewords/workspace-acceptance/1",
+      "body": {
+        "programHash": "53cd7899d84b8053fa2020c22e7eda3f8cca72b23679972bc819a6a2ba58a172",
+        "basis": {
+          "protocol": "usewords/workspace/1",
+          "definitions": [
+            "construct Encounter\nfield title text shared required max 160\nfield body text shared required max 4000\nfield introduction text local optional max 600\nheading title\nparagraph introduction\nparagraph body",
+            "construct Question\nfield prompt text shared required max 240\nfield invitation text local optional max 600\nheading prompt\nparagraph invitation"
+          ],
+          "objects": [
+            {
+              "id": "water",
+              "type": "Encounter",
+              "values": {
+                "title": "The horse has a few questions.",
+                "body": "The guide points at the water. The horse looks down. There is already a horse in there, and it seems to have strong opinions about the guide. Nobody mentioned a committee.\n\nPerhaps the next explanation can wait. What is the horse being invited into? The guide can look at the reflection too. You can read the little fable your own way—or just enjoy a horse declining a well-prepared presentation.",
+                "introduction": "An encounter at the water’s edge."
+              },
+              "origin": {
+                "subject": "place.water",
+                "snapshot": "source/reference/water.rel"
+              }
+            },
+            {
+              "id": "first_light",
+              "type": "Encounter",
+              "values": {
+                "title": "An unexpected beginning",
+                "body": "An encounter starts when the visitor can answer back.",
+                "introduction": "Begin here."
+              }
+            },
+            {
+              "id": "question1",
+              "type": "Question",
+              "values": {
+                "prompt": "What changes when we make room for an answer?",
+                "invitation": "Pause before explaining."
+              }
+            }
+          ],
+          "journeys": [
+            {
+              "id": "listening",
+              "name": "Listening well",
+              "entries": [
+                {
+                  "id": "water",
+                  "object": "water",
+                  "overrides": {
+                    "introduction": "Start by noticing what the other person is encountering, before offering your explanation."
+                  }
+                },
+                {
+                  "id": "question1",
+                  "object": "question1",
+                  "overrides": {}
+                }
+              ]
+            },
+            {
+              "id": "making",
+              "name": "Making with care",
+              "entries": [
+                {
+                  "id": "water",
+                  "object": "water",
+                  "overrides": {
+                    "introduction": "Begin with the invitation you are making. What room does your design leave for another response?"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "discovery",
+              "name": "A journey of discovery",
+              "entries": [
+                {
+                  "id": "first_light",
+                  "object": "first_light",
+                  "overrides": {}
+                },
+                {
+                  "id": "question1",
+                  "object": "question1",
+                  "overrides": {
+                    "invitation": "This invitation belongs to discovery alone."
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "predecessor": null,
+        "journal": [],
+        "revision": 0,
+        "documentHash": "d874a1f90dc285f6235a81df7a06ebea6e8f80134d85b4bb05e779d4c7e8ef66",
+        "projectionHash": "86ed93b81ded5de07598204d9849bf252904ca02a9c7a9c66c359870864044ff"
+      },
+      "sha256": "26760dca63dccc58e83621a7020e971a769c2b1fe95899d445ee90dc28175edf"
+    },
+    "events": [
+      {
+        "request": {
+          "action": "propose",
+          "actor": "alice",
+          "expectedBoardRevision": 0,
+          "id": "proposal_1",
+          "title": "Open the shared encounter to listening",
+          "change": {
+            "kind": "edit",
+            "scope": "shared",
+            "object": "water",
+            "journey": "listening",
+            "entry": "water",
+            "field": "title",
+            "value": "The horse invites us to listen.",
+            "baseRevision": 0
+          }
+        },
+        "headHash": "d874a1f90dc285f6235a81df7a06ebea6e8f80134d85b4bb05e779d4c7e8ef66"
+      },
+      {
+        "request": {
+          "action": "review",
+          "actor": "bob",
+          "expectedBoardRevision": 1,
+          "id": "proposal_1",
+          "contentHash": "cc10a0975a555239d6edf442b0698979e73ce0e47c42bc053e7b737851511713",
+          "decision": "approve",
+          "comment": "Both journeys receive the shared title; their local introductions remain distinct."
+        },
+        "headHash": "d874a1f90dc285f6235a81df7a06ebea6e8f80134d85b4bb05e779d4c7e8ef66"
+      },
+      {
+        "request": {
+          "action": "accept",
+          "actor": "bob",
+          "expectedBoardRevision": 2,
+          "id": "proposal_1",
+          "contentHash": "cc10a0975a555239d6edf442b0698979e73ce0e47c42bc053e7b737851511713",
+          "decision": "approve",
+          "comment": "Both journeys receive the shared title; their local introductions remain distinct."
+        },
+        "headHash": "b60bf17389a24e32168cc022ed97f3b18758fcd1608276d448b30a4338c68480"
+      },
+      {
+        "request": {
+          "action": "propose",
+          "actor": "alice",
+          "expectedBoardRevision": 3,
+          "id": "proposal_2",
+          "title": "Introduce Invitation as a shared language construct",
+          "change": {
+            "kind": "define",
+            "source": "construct Invitation\nfield prompt text shared required max 240\nfield introduction text local optional max 600\nheading prompt\nparagraph introduction",
+            "baseRevision": 1
+          }
+        },
+        "headHash": "b60bf17389a24e32168cc022ed97f3b18758fcd1608276d448b30a4338c68480"
+      },
+      {
+        "request": {
+          "action": "review",
+          "actor": "bob",
+          "expectedBoardRevision": 4,
+          "id": "proposal_2",
+          "contentHash": "6a0370e235429489ae4eb44c8bb1ff929fd00ee3d9cb441bc0d405db49d0f1e8",
+          "decision": "approve",
+          "comment": "Checked the new construct and its shared/local field ownership."
+        },
+        "headHash": "b60bf17389a24e32168cc022ed97f3b18758fcd1608276d448b30a4338c68480"
+      },
+      {
+        "request": {
+          "action": "accept",
+          "actor": "bob",
+          "expectedBoardRevision": 5,
+          "id": "proposal_2",
+          "contentHash": "6a0370e235429489ae4eb44c8bb1ff929fd00ee3d9cb441bc0d405db49d0f1e8",
+          "decision": "approve",
+          "comment": "Checked the new construct and its shared/local field ownership."
+        },
+        "headHash": "283e978e0e598e1486c44fef6765804c15fc472dd43f7087d3595dd4407e0fb3"
+      },
+      {
+        "request": {
+          "action": "propose",
+          "actor": "alice",
+          "expectedBoardRevision": 6,
+          "id": "proposal_3",
+          "title": "Keep the listening introduction local",
+          "change": {
+            "kind": "edit",
+            "scope": "local",
+            "object": "water",
+            "journey": "listening",
+            "entry": "water",
+            "field": "introduction",
+            "value": "Listen for the question before offering your answer.",
+            "baseRevision": 2
+          }
+        },
+        "headHash": "283e978e0e598e1486c44fef6765804c15fc472dd43f7087d3595dd4407e0fb3"
+      },
+      {
+        "request": {
+          "action": "review",
+          "actor": "bob",
+          "expectedBoardRevision": 7,
+          "id": "proposal_3",
+          "contentHash": "fe214b7cf3697ed19eefefb7de070d3ed513432730d5bb59f2d906fceea7e2cf",
+          "decision": "approve",
+          "comment": "The listening invitation changes only here; the other journey keeps its introduction."
+        },
+        "headHash": "283e978e0e598e1486c44fef6765804c15fc472dd43f7087d3595dd4407e0fb3"
+      },
+      {
+        "request": {
+          "action": "accept",
+          "actor": "bob",
+          "expectedBoardRevision": 8,
+          "id": "proposal_3",
+          "contentHash": "fe214b7cf3697ed19eefefb7de070d3ed513432730d5bb59f2d906fceea7e2cf",
+          "decision": "approve",
+          "comment": "The listening invitation changes only here; the other journey keeps its introduction."
+        },
+        "headHash": "a3b9c6a94a7da3967b6e561293221f63fe6656d18f2f985bbe5e490f22117c75"
+      }
+    ],
+    "revision": 9,
+    "stateHash": "128704a001e976ebb98b15ba720a6467c78eda27df0027b902e4f8969adf54cd"
+  },
+  "sha256": "4d46f2b929982517f4efd6b0cd2da8a51d8223ec1e7d55937aaf5969052b20ac"
+}

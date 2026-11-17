@@ -1,0 +1,36 @@
+{
+  "protocol": "usewords/two-journeys/1",
+  "subject": "place.water",
+  "source": {
+    "repository": "aaron-alderman/aaronalderman-com",
+    "file": "source/expedition.rel",
+    "selectedPredicates": [
+      "title",
+      "paragraph"
+    ],
+    "originalTitle": "The horse has a few questions.",
+    "publicRoute": "https://aaronalderman.com/places/water.html",
+    "snapshot": "source/reference/water.rel",
+    "sha256": "695b4067e51ffdc265de7f72c9c5b653ab2f40b4762d896b325e2e5f3663fe86",
+    "scope": "Source-bounded reconstruction of the two short encounter paragraphs. The two journey compositions and introductions are new Usewords authored material.",
+    "upstreamGitBlob": "ae83e248c3e53e1ccfa46c9c9f2cf936dd810233",
+    "upstreamObservedLines": {
+      "start": 405,
+      "end": 430
+    }
+  },
+  "journeys": [
+    {
+      "id": "journey.Listening",
+      "name": "Listening well",
+      "mount": "#journey-listening",
+      "badge": "#listening-scope"
+    },
+    {
+      "id": "journey.Making",
+      "name": "Making with care",
+      "mount": "#journey-making",
+      "badge": "#making-scope"
+    }
+  ]
+}

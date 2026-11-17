@@ -1,0 +1,58 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process pc.openRoom:
+  port state.set { key = "preparation"; value = null } → _
+  call pc.clearUI
+  when not(eq($actor, "casey")):
+    port kernel.invoke { query = "pc.room"; input = { matterId = $matter.id; actor = $actor } } → room
+    let key = concat("usewords.preparation.v1.", $data.programHash, ".", $matter.id, ".", $actor)
+    port storage.read { key = $key; maxLength = 70000 } → saved
+    assert $saved.ok
+      otherwise "PC-STORAGE: Preparation could not be read; refuse to overwrite it."
+    when not(eq($saved.value, null)):
+      port json.parse { text = $saved.value } → room
+      port kernel.invoke { query = "pc.roomCheck"; input = $room } → valid
+      assert and(eq($room.actor, $actor), eq($room.matterId, $matter.id))
+        otherwise "PC-SCOPE: Saved preparation belongs to another party or matter."
+    port state.set { key = "preparation"; value = $room } → _
+
+process pc.saveUI:
+  try:
+    port state.get { key = "preparation" } → room
+    port state.get { key = "workspace" } → state
+    port browser.property { ref = "#cw-actor"; name = "value" } → actor
+    assert $room
+      otherwise "PC-ROOM: Open a contributing party's preparation first."
+    port browser.property { ref = "#pc-id"; name = "value" } → id
+    port browser.property { ref = "#pc-kind"; name = "value" } → kind
+    port browser.property { ref = "#pc-title"; name = "value" } → title
+    port browser.property { ref = "#pc-body"; name = "value" } → body
+    port browser.property { ref = "#pc-issue"; name = "value" } → issue
+    port browser.property { ref = "#pc-voice"; name = "value" } → voice
+    port browser.property { ref = "#pc-note"; name = "value" } → note
+    let draft = { item = { id = $id; kind = $kind; title = $title; body = $body; issue = if(eq($kind, "issue"), null, $issue); voice = if(eq($kind, "position"), $voice, null) }; privateNote = $note }
+    port kernel.invoke { query = "pc.saveDraft"; input = { room = $room; actor = $actor; matterId = $state.document.matter.id; expectedRevision = $room.revision; draft = $draft } } → nextRoom
+    port json.stringify { value = $nextRoom; space = 0 } → encoded
+    let key = concat("usewords.preparation.v1.", $data.programHash, ".", $room.matterId, ".", $actor)
+    # Local optimistic check only. A real receiver must do this atomically.
+    port storage.read { key = $key; maxLength = 70000 } → saved
+    assert $saved.ok
+      otherwise "PC-STORAGE: Cannot check the preparation head."
+    when not(eq($saved.value, null)):
+      port json.parse { text = $saved.value } → currentRoom
+      assert eq($currentRoom, $room)
+        otherwise "PC-CONFLICT: Preparation changed in another tab. Reload before saving."
+    when eq($saved.value, null):
+      assert eq($room.revision, 0)
+        otherwise "PC-CONFLICT: Saved preparation disappeared. Reload before saving."
+    port storage.write { key = $key; value = $encoded } → stored
+    assert $stored.ok
+      otherwise "PC-STORAGE: Preparation was not saved; prior draft remains active."
+    port state.set { key = "preparation"; value = $nextRoom } → _
+    port state.set { key = "disclosure"; value = null } → _
+    call pc.paint
+    port state.set { key = "workspaceNotice"; value = "Preparation saved for this simulated party. Nothing was shared. This browser owner can access every persona's local storage." } → _
+    call ws.showNotice
+  catch fault:
+    call mm.refused

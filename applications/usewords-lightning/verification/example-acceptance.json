@@ -1,0 +1,56 @@
+{
+  "protocol": "usewords/acceptance/1",
+  "body": {
+    "profile": "journeys.v1",
+    "programHash": "0eb5534137cb04bf5dd591e02ba1d9e0779fa6a910dfd64a8c06084ce9671de9",
+    "canonicalHash": "86ffcbd91908c9b030ce94483a8e87501d8b1923e5ba325e4e3bb1f57bedae6e",
+    "revision": 2,
+    "events": [
+      {
+        "kind": "shared-title",
+        "target": null,
+        "value": "The horse asks us to listen.",
+        "beforeInputHash": "86ffcbd91908c9b030ce94483a8e87501d8b1923e5ba325e4e3bb1f57bedae6e",
+        "afterInputHash": "2d2a849dcd00323f6baabab435fc014a6a13ff292e93f45b905e06172ec0eddb",
+        "afterProjectionHash": "5263c47239f0838f8b06c391ebfb8bce4d212e51980235e3ac27d285c693f5ab",
+        "destination": {
+          "kind": "source",
+          "field": "S.Title",
+          "node": {
+            "id": 6,
+            "line": 6,
+            "offset": 148,
+            "raw": "  P.title: source.S.Title",
+            "text": "P.title: source.S.Title",
+            "indent": 2,
+            "parent": 4
+          }
+        }
+      },
+      {
+        "kind": "journey-intro",
+        "target": "journey.Listening",
+        "value": "Before offering a lesson, notice the question you are being asked.",
+        "beforeInputHash": "2d2a849dcd00323f6baabab435fc014a6a13ff292e93f45b905e06172ec0eddb",
+        "afterInputHash": "d1213854ec11e8854a7b3e6a0b0c201a7013806a34b3513668cb5d5977d61da5",
+        "afterProjectionHash": "2db6b9b5c33788764426ae394802d1b49d2d2a155beae21d051bdb988e44c6fb",
+        "destination": {
+          "kind": "literal",
+          "node": {
+            "id": 124,
+            "line": 124,
+            "offset": 3086,
+            "raw": "    J.introduction: \"Start by noticing what the other person is encountering, before offering your explanation.\"",
+            "text": "J.introduction: \"Start by noticing what the other person is encountering, before offering your explanation.\"",
+            "indent": 4,
+            "parent": 123
+          },
+          "token": "\"Start by noticing what the other person is encountering, before offering your explanation.\""
+        }
+      }
+    ],
+    "inputHash": "d1213854ec11e8854a7b3e6a0b0c201a7013806a34b3513668cb5d5977d61da5",
+    "projectionHash": "2db6b9b5c33788764426ae394802d1b49d2d2a155beae21d051bdb988e44c6fb"
+  },
+  "sha256": "948a33bf0616bea0f48d085941d7e85f233421e6bb1aef9ff184f2a8431c7eed"
+}

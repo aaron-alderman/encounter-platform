@@ -1,0 +1,63 @@
+# Proposed platform policy. Not loaded by the current browser or live host.
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+# The receiver supplies trusted principal/current/origin from its own authority.
+# This process prepares a command; it does not acquire authority or persist it.
+process wp.prepare:
+  let request = $eventInput.request
+  let trusted = $eventInput.trusted
+  assert eq($trusted.origin, "https://usewords.ai")
+    otherwise "WP-ORIGIN: Publication origin is not the admitted Usewords origin."
+  port value.describe { value = at($trusted, "principal") } → identityKind
+  assert eq($identityKind.type, "string")
+    otherwise "WP-AUTH: An authenticated platform principal is required."
+  assert and(eq(at($trusted, "authenticated"), true), not(eq($trusted.principal, "")))
+    otherwise "WP-AUTH: An authenticated platform principal is required."
+  port kernel.invoke { query = "ws.id"; input = $request.workspace } → valid
+  port kernel.invoke { query = "ws.id"; input = $request.operationId } → valid
+  assert includes(list("save-draft", "accept", "publish"), $request.action)
+    otherwise "WP-ACTION: Unsupported operation."
+  let current = $trusted.current
+  let head = null
+  let accepted = null
+  when $current:
+    assert and(eq($current.owner, $trusted.principal), eq($current.workspace, $request.workspace))
+      otherwise "WP-OWNER: Workspace is outside this principal's scope."
+    let head = $current.head
+    let accepted = $current.accepted
+  assert eq($request.expectedHead, $head)
+    otherwise "WP-CONFLICT: Workspace changed; read its current head before proposing again."
+  let next = null
+  let public = null
+  when eq($request.action, "save-draft"):
+    port kernel.invoke { query = "ws.project"; input = $request.document } → checked
+    let next = { owner = $trusted.principal; workspace = $request.workspace; draft = $checked.document; accepted = $accepted }
+  when eq($request.action, "accept"):
+    port kernel.invoke { query = "ws.reconstruct"; input = $request.receipt } → checked
+    let next = { owner = $trusted.principal; workspace = $request.workspace; draft = $checked.document; accepted = $request.receipt }
+  when eq($request.action, "publish"):
+    assert $accepted
+      otherwise "WP-ACCEPT: Accept a workspace revision before publishing a journey."
+    assert eq($request.acceptedHash, $accepted.sha256)
+      otherwise "WP-ACCEPT: Selected acceptance is no longer current."
+    port kernel.invoke { query = "ws.id"; input = $request.journey } → valid
+    port kernel.invoke { query = "ws.id"; input = $request.slug } → valid
+    port kernel.invoke { query = "ws.reconstruct"; input = $accepted } → checked
+    let matches = filter($checked.document.journeys, "j", eq($j.id, $request.journey))
+    assert eq(count($matches), 1)
+      otherwise "WP-JOURNEY: Journey does not exist in the selected acceptance."
+    let journey = at($matches, 0)
+    assert not(eq(count($journey.entries), 0))
+      otherwise "WP-JOURNEY: An empty journey cannot be published."
+    fold $journey.entries as entry; entries starts list():
+      let projections = filter($checked.projections, "p", eq(at(at($p, "contribution"), "id"), concat("journey.", $journey.id, ".", $entry.id)))
+      assert eq(count($projections), 1)
+        otherwise "WP-PROJECTION: Accepted entry projection is missing or ambiguous."
+      let projection = at($projections, 0)
+      yield append($entries, list({ id = $entry.id; tree = $projection.output.tree })) → entries
+    let public = { protocol = "usewords/published-journey/1"; slug = $request.slug; name = $journey.name; entries = $entries; acceptanceHash = $accepted.sha256; documentHash = $checked.documentHash; projectionHash = $checked.projectionHash; programHash = $data.programHash }
+  port kernel.invoke { query = "uw.hash"; input = $request } → requestHash
+  let value = if($public, $public, $next)
+  port kernel.invoke { query = "uw.hash"; input = $value } → valueHash
+  let result = { protocol = "usewords/platform-command-candidate/1"; owner = $trusted.principal; workspace = $request.workspace; operationId = $request.operationId; requestHash = $requestHash; expectedHead = $head; action = $request.action; value = $value; valueHash = $valueHash; publicPath = if($public, concat("/j/", $request.slug), null); requiredEffect = "authenticated-atomic-compare-and-swap-with-idempotency"; applicationAdmission = false }

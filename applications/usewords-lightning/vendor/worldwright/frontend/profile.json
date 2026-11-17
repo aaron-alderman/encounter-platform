@@ -1,0 +1,51 @@
+{
+  "protocol": "encounter-process-text/2",
+  "status": "supplied-bootstrap-syntax-definition",
+  "operators": [
+    "at",
+    "list",
+    "and",
+    "not",
+    "eq",
+    "concat",
+    "count",
+    "includes",
+    "or",
+    "if",
+    "add",
+    "append",
+    "isArray",
+    "range",
+    "fold",
+    "map",
+    "distinct",
+    "filter"
+  ],
+  "forbidden": [
+    "__proto__",
+    "prototype",
+    "constructor"
+  ],
+  "referenceSigil": "$",
+  "directPorts": [
+    "digest.sha256",
+    "json.parse",
+    "json.stringify",
+    "kernel.invoke",
+    "record.entries",
+    "text.indexOf",
+    "text.join",
+    "text.matches",
+    "text.replaceAll",
+    "text.slice",
+    "text.split",
+    "text.trim",
+    "value.describe",
+    "value.string"
+  ],
+  "maxDepth": 64,
+  "maxCodeUnits": 160000,
+  "maxTokens": 36000,
+  "name": "encounter/shared-source-module/2",
+  "emitProfile": false
+}

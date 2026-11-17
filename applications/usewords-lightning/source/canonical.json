@@ -1,0 +1,946 @@
+{
+  "codeText": "# Experimental syntax: facts and type contracts stay in REL.\nmodule story\n\nview experiment.page.story of @TheStory isa Page:\n  P.subject: source\n  P.title: source.S.Title\n  P.paragraphs: source.S.Content\n  P.route: \"encounter-story.html\"\n  edit P.title through source.S.Title\n  show as StoryPage\n\nview experiment.nav.story of @TheStory isa NavigationItem:\n  N.label: source.S.Title\n  N.target: source\n  edit N.label through source.S.Title\n\n  in @experiment.WebMainMenu:\n    N.label: \"The story\"\n    edit N.label here\n    show as WebLink:\n      page: @experiment.page.story\n\n  in @experiment.MainframeStories:\n    show as MainframeRow:\n      option: \"01\"\n      open: @experiment.openStory\n\nrepresentation WebLink:\n  given navigation as NavigationItem\n  given page as Page\n  require page.P.subject equals navigation.N.target\n  return WebLink:\n    W.text: navigation.N.label\n    W.href: page.P.route\n  render:\n    tag: \"a\"\n    attrs:\n      id: \"experiment-web-link\"\n      href: result.W.href\n    children:\n      - result.W.text\n  events:\n    - selector: \"#experiment-web-link\"\n      open: page\n\nrepresentation MainframeRow:\n  given navigation as NavigationItem\n  given option as text\n  given open as StoryPanelAction\n  return MainframeRow:\n    R.option: option\n    R.label: navigation.N.label\n    R.target: navigation.N.target\n  render:\n    tag: \"table\"\n    attrs:\n      class: \"experiment-row\"\n    children:\n      - tag: \"tbody\"\n        children:\n          - tag: \"tr\"\n            children:\n              - tag: \"td\"\n                children:\n                  - result.R.option\n              - tag: \"td\"\n                children:\n                  - tag: \"button\"\n                    attrs:\n                      id: \"experiment-mainframe-row\"\n                      type: \"button\"\n                    children:\n                      - result.R.label\n  events:\n    - selector: \"#experiment-mainframe-row\"\n      run: open.A.process\n      arguments:\n        story: navigation.N.target\n\nrepresentation StoryPage:\n  given navigation as Page\n  return Page:\n    P.subject: navigation.P.subject\n    P.title: navigation.P.title\n    P.paragraphs: navigation.P.paragraphs\n    P.route: navigation.P.route\n  render:\n    tag: \"article\"\n    children:\n      - tag: \"h2\"\n        children:\n          - result.P.title\n      - each paragraph in result.P.paragraphs:\n        tag: \"p\"\n        children:\n          - paragraph\n\nrepresentation OpenStory:\n  given story as Story\n  return StoryPanel:\n    P.title: story.S.Title\n    P.paragraphs: story.S.Content\n  render:\n    tag: \"article\"\n    children:\n      - tag: \"h2\"\n        children:\n          - result.P.title\n      - each paragraph in result.P.paragraphs:\n        tag: \"p\"\n        children:\n          - paragraph\n",
+  "factText": "// Story data and explicitly addressed contexts. Facts remain REL.\n(\"TheStory\", \"isa\", \"Story\")\n(\"TheStory\", \"S.Title\", \"What happened\")\n(\"TheStory\", \"S.Content\", \"TheStory.first\")\n(\"TheStory\", \"S.Content\", \"TheStory.second\")\n(\"experiment.WebMainMenu\", \"isa\", \"Context\")\n(\"experiment.WebMainMenu\", \"C.view\", \"experiment.nav.story\")\n(\"experiment.MainframeStories\", \"isa\", \"Context\")\n(\"experiment.MainframeStories\", \"C.view\", \"experiment.nav.story\")\n(\"experiment.openStory\", \"isa\", \"StoryPanelAction\")\n(\"experiment.openStory\", \"A.process\", \"OpenStory\")\n(\"experiment.openStory\", \"A.accepts\", \"Story\")\n(\"experiment.openStory\", \"A.effect\", \"local-navigation\")\n\n(\"TheStory.first\", \"isa\", \"TextEntry\")\n(\"TheStory.first\", \"E.value\", \"The story is long and complicated\")\n(\"TheStory.second\", \"isa\", \"TextEntry\")\n(\"TheStory.second\", \"E.value\", \"It started 150 years ago\")\n",
+  "contractText": "// Experimental, closed contract profile. Vocabulary recovered from Sourcery; scope is this slice.\n(\"iface.experiment.Story\", \"isa\", \"Interface\")\n(\"iface.experiment.Story\", \"type\", \"Story\")\n(\"iface.experiment.Story\", \"mode\", \"closed\")\n(\"iface.experiment.Story\", \"slot\", \"slot.experiment.Story.S.Title\")\n(\"slot.experiment.Story.S.Title\", \"isa\", \"Slot\")\n(\"slot.experiment.Story.S.Title\", \"predicate\", \"S.Title\")\n(\"slot.experiment.Story.S.Title\", \"valueType\", \"string\")\n(\"slot.experiment.Story.S.Title\", \"cardinality\", \"one\")\n(\"iface.experiment.Story\", \"slot\", \"slot.experiment.Story.S.Content\")\n(\"slot.experiment.Story.S.Content\", \"isa\", \"Slot\")\n(\"slot.experiment.Story.S.Content\", \"predicate\", \"S.Content\")\n(\"slot.experiment.Story.S.Content\", \"valueType\", \"string\")\n(\"slot.experiment.Story.S.Content\", \"cardinality\", \"many\")\n(\"iface.experiment.NavigationItem\", \"isa\", \"Interface\")\n(\"iface.experiment.NavigationItem\", \"type\", \"NavigationItem\")\n(\"iface.experiment.NavigationItem\", \"mode\", \"closed\")\n(\"iface.experiment.NavigationItem\", \"slot\", \"slot.experiment.NavigationItem.N.label\")\n(\"slot.experiment.NavigationItem.N.label\", \"isa\", \"Slot\")\n(\"slot.experiment.NavigationItem.N.label\", \"predicate\", \"N.label\")\n(\"slot.experiment.NavigationItem.N.label\", \"valueType\", \"string\")\n(\"slot.experiment.NavigationItem.N.label\", \"cardinality\", \"one\")\n(\"iface.experiment.NavigationItem\", \"slot\", \"slot.experiment.NavigationItem.N.target\")\n(\"slot.experiment.NavigationItem.N.target\", \"isa\", \"Slot\")\n(\"slot.experiment.NavigationItem.N.target\", \"predicate\", \"N.target\")\n(\"slot.experiment.NavigationItem.N.target\", \"valueType\", \"ref\")\n(\"slot.experiment.NavigationItem.N.target\", \"cardinality\", \"one\")\n(\"slot.experiment.NavigationItem.N.target\", \"expects\", \"Story\")\n(\"iface.experiment.Page\", \"isa\", \"Interface\")\n(\"iface.experiment.Page\", \"type\", \"Page\")\n(\"iface.experiment.Page\", \"mode\", \"closed\")\n(\"iface.experiment.Page\", \"slot\", \"slot.experiment.Page.P.subject\")\n(\"slot.experiment.Page.P.subject\", \"isa\", \"Slot\")\n(\"slot.experiment.Page.P.subject\", \"predicate\", \"P.subject\")\n(\"slot.experiment.Page.P.subject\", \"valueType\", \"ref\")\n(\"slot.experiment.Page.P.subject\", \"cardinality\", \"one\")\n(\"slot.experiment.Page.P.subject\", \"expects\", \"Story\")\n(\"iface.experiment.Page\", \"slot\", \"slot.experiment.Page.P.title\")\n(\"slot.experiment.Page.P.title\", \"isa\", \"Slot\")\n(\"slot.experiment.Page.P.title\", \"predicate\", \"P.title\")\n(\"slot.experiment.Page.P.title\", \"valueType\", \"string\")\n(\"slot.experiment.Page.P.title\", \"cardinality\", \"one\")\n(\"iface.experiment.Page\", \"slot\", \"slot.experiment.Page.P.paragraphs\")\n(\"slot.experiment.Page.P.paragraphs\", \"isa\", \"Slot\")\n(\"slot.experiment.Page.P.paragraphs\", \"predicate\", \"P.paragraphs\")\n(\"slot.experiment.Page.P.paragraphs\", \"valueType\", \"string\")\n(\"slot.experiment.Page.P.paragraphs\", \"cardinality\", \"many\")\n(\"iface.experiment.Page\", \"slot\", \"slot.experiment.Page.P.route\")\n(\"slot.experiment.Page.P.route\", \"isa\", \"Slot\")\n(\"slot.experiment.Page.P.route\", \"predicate\", \"P.route\")\n(\"slot.experiment.Page.P.route\", \"valueType\", \"string\")\n(\"slot.experiment.Page.P.route\", \"cardinality\", \"one\")\n(\"iface.experiment.WebLink\", \"isa\", \"Interface\")\n(\"iface.experiment.WebLink\", \"type\", \"WebLink\")\n(\"iface.experiment.WebLink\", \"mode\", \"closed\")\n(\"iface.experiment.WebLink\", \"slot\", \"slot.experiment.WebLink.W.text\")\n(\"slot.experiment.WebLink.W.text\", \"isa\", \"Slot\")\n(\"slot.experiment.WebLink.W.text\", \"predicate\", \"W.text\")\n(\"slot.experiment.WebLink.W.text\", \"valueType\", \"string\")\n(\"slot.experiment.WebLink.W.text\", \"cardinality\", \"one\")\n(\"iface.experiment.WebLink\", \"slot\", \"slot.experiment.WebLink.W.href\")\n(\"slot.experiment.WebLink.W.href\", \"isa\", \"Slot\")\n(\"slot.experiment.WebLink.W.href\", \"predicate\", \"W.href\")\n(\"slot.experiment.WebLink.W.href\", \"valueType\", \"string\")\n(\"slot.experiment.WebLink.W.href\", \"cardinality\", \"one\")\n(\"iface.experiment.MainframeRow\", \"isa\", \"Interface\")\n(\"iface.experiment.MainframeRow\", \"type\", \"MainframeRow\")\n(\"iface.experiment.MainframeRow\", \"mode\", \"closed\")\n(\"iface.experiment.MainframeRow\", \"slot\", \"slot.experiment.MainframeRow.R.option\")\n(\"slot.experiment.MainframeRow.R.option\", \"isa\", \"Slot\")\n(\"slot.experiment.MainframeRow.R.option\", \"predicate\", \"R.option\")\n(\"slot.experiment.MainframeRow.R.option\", \"valueType\", \"string\")\n(\"slot.experiment.MainframeRow.R.option\", \"cardinality\", \"one\")\n(\"iface.experiment.MainframeRow\", \"slot\", \"slot.experiment.MainframeRow.R.label\")\n(\"slot.experiment.MainframeRow.R.label\", \"isa\", \"Slot\")\n(\"slot.experiment.MainframeRow.R.label\", \"predicate\", \"R.label\")\n(\"slot.experiment.MainframeRow.R.label\", \"valueType\", \"string\")\n(\"slot.experiment.MainframeRow.R.label\", \"cardinality\", \"one\")\n(\"iface.experiment.MainframeRow\", \"slot\", \"slot.experiment.MainframeRow.R.target\")\n(\"slot.experiment.MainframeRow.R.target\", \"isa\", \"Slot\")\n(\"slot.experiment.MainframeRow.R.target\", \"predicate\", \"R.target\")\n(\"slot.experiment.MainframeRow.R.target\", \"valueType\", \"ref\")\n(\"slot.experiment.MainframeRow.R.target\", \"cardinality\", \"one\")\n(\"slot.experiment.MainframeRow.R.target\", \"expects\", \"Story\")\n(\"iface.experiment.StoryPanel\", \"isa\", \"Interface\")\n(\"iface.experiment.StoryPanel\", \"type\", \"StoryPanel\")\n(\"iface.experiment.StoryPanel\", \"mode\", \"closed\")\n(\"iface.experiment.StoryPanel\", \"slot\", \"slot.experiment.StoryPanel.P.title\")\n(\"slot.experiment.StoryPanel.P.title\", \"isa\", \"Slot\")\n(\"slot.experiment.StoryPanel.P.title\", \"predicate\", \"P.title\")\n(\"slot.experiment.StoryPanel.P.title\", \"valueType\", \"string\")\n(\"slot.experiment.StoryPanel.P.title\", \"cardinality\", \"one\")\n(\"iface.experiment.StoryPanel\", \"slot\", \"slot.experiment.StoryPanel.P.paragraphs\")\n(\"slot.experiment.StoryPanel.P.paragraphs\", \"isa\", \"Slot\")\n(\"slot.experiment.StoryPanel.P.paragraphs\", \"predicate\", \"P.paragraphs\")\n(\"slot.experiment.StoryPanel.P.paragraphs\", \"valueType\", \"string\")\n(\"slot.experiment.StoryPanel.P.paragraphs\", \"cardinality\", \"many\")\n(\"iface.experiment.StoryPanelAction\", \"isa\", \"Interface\")\n(\"iface.experiment.StoryPanelAction\", \"type\", \"StoryPanelAction\")\n(\"iface.experiment.StoryPanelAction\", \"mode\", \"closed\")\n(\"iface.experiment.StoryPanelAction\", \"slot\", \"slot.experiment.StoryPanelAction.A.process\")\n(\"slot.experiment.StoryPanelAction.A.process\", \"isa\", \"Slot\")\n(\"slot.experiment.StoryPanelAction.A.process\", \"predicate\", \"A.process\")\n(\"slot.experiment.StoryPanelAction.A.process\", \"valueType\", \"string\")\n(\"slot.experiment.StoryPanelAction.A.process\", \"cardinality\", \"one\")\n(\"slot.experiment.StoryPanelAction.A.process\", \"allowed\", \"OpenStory\")\n(\"iface.experiment.StoryPanelAction\", \"slot\", \"slot.experiment.StoryPanelAction.A.accepts\")\n(\"slot.experiment.StoryPanelAction.A.accepts\", \"isa\", \"Slot\")\n(\"slot.experiment.StoryPanelAction.A.accepts\", \"predicate\", \"A.accepts\")\n(\"slot.experiment.StoryPanelAction.A.accepts\", \"valueType\", \"string\")\n(\"slot.experiment.StoryPanelAction.A.accepts\", \"cardinality\", \"one\")\n(\"slot.experiment.StoryPanelAction.A.accepts\", \"allowed\", \"Story\")\n(\"iface.experiment.StoryPanelAction\", \"slot\", \"slot.experiment.StoryPanelAction.A.effect\")\n(\"slot.experiment.StoryPanelAction.A.effect\", \"isa\", \"Slot\")\n(\"slot.experiment.StoryPanelAction.A.effect\", \"predicate\", \"A.effect\")\n(\"slot.experiment.StoryPanelAction.A.effect\", \"valueType\", \"string\")\n(\"slot.experiment.StoryPanelAction.A.effect\", \"cardinality\", \"one\")\n(\"slot.experiment.StoryPanelAction.A.effect\", \"allowed\", \"local-navigation\")\n(\"iface.experiment.Context\", \"isa\", \"Interface\")\n(\"iface.experiment.Context\", \"type\", \"Context\")\n(\"iface.experiment.Context\", \"mode\", \"closed\")\n(\"iface.experiment.Context\", \"slot\", \"slot.experiment.Context.C.view\")\n(\"slot.experiment.Context.C.view\", \"isa\", \"Slot\")\n(\"slot.experiment.Context.C.view\", \"predicate\", \"C.view\")\n(\"slot.experiment.Context.C.view\", \"valueType\", \"string\")\n(\"slot.experiment.Context.C.view\", \"cardinality\", \"one\")\n\n(\"slot.experiment.Story.S.Content\", \"storage\", \"entries\")\n(\"slot.experiment.Story.S.Content\", \"entryType\", \"TextEntry\")\n(\"slot.experiment.Story.S.Content\", \"entryField\", \"E.value\")\n(\"iface.experiment.TextEntry\", \"isa\", \"Interface\")\n(\"iface.experiment.TextEntry\", \"type\", \"TextEntry\")\n(\"iface.experiment.TextEntry\", \"mode\", \"closed\")\n(\"iface.experiment.TextEntry\", \"slot\", \"slot.experiment.TextEntry.E.value\")\n(\"slot.experiment.TextEntry.E.value\", \"isa\", \"Slot\")\n(\"slot.experiment.TextEntry.E.value\", \"predicate\", \"E.value\")\n(\"slot.experiment.TextEntry.E.value\", \"valueType\", \"string\")\n(\"slot.experiment.TextEntry.E.value\", \"cardinality\", \"one\")\n\n(\"slot.experiment.Story.S.Title\", \"nonempty\", \"true\")\n(\"slot.experiment.NavigationItem.N.label\", \"nonempty\", \"true\")\n(\"slot.experiment.Page.P.route\", \"pattern\", \"^encounter-[a-z0-9-]+\\\\.html$\")\n",
+  "definitions": {
+    "protocol": "temple/derived-expression-definitions/1",
+    "referenceSigil": "$",
+    "sourceRefs": [
+      "@sourcerytech/expression-algebra:operations/let.mjs",
+      "@sourcerytech/expression-algebra:operations/fold.mjs",
+      "@sourcerytech/expression-algebra:operations/raise.mjs",
+      "claimipedia-core:components/process-interpreter/src/surface-process-state-operators.mjs",
+      "claimipedia-core:components/process-interpreter/src/surface-process-collection-operators.mjs"
+    ],
+    "scope": "Lowering laws for admitted dense JSON arrays and string-valued REL facts. Core membership and equality semantics remain native. Non-array map/filter/some/every inputs refuse.",
+    "statementFields": {
+      "programmes": [
+        "steps",
+        "then",
+        "try",
+        "catch"
+      ],
+      "expressions": [
+        "value",
+        "assert",
+        "when",
+        "each",
+        "fold",
+        "initial",
+        "yield",
+        "args"
+      ]
+    },
+    "operators": {
+      "record": {
+        "arity": 1,
+        "body": {
+          "arg": 0
+        }
+      },
+      "not": {
+        "arity": 1,
+        "body": [
+          "if",
+          {
+            "arg": 0
+          },
+          false,
+          true
+        ]
+      },
+      "has": {
+        "arity": 3,
+        "body": [
+          "includes",
+          [
+            "objects",
+            {
+              "arg": 0
+            },
+            {
+              "arg": 1
+            }
+          ],
+          {
+            "arg": 2
+          }
+        ]
+      },
+      "map": {
+        "arity": 3,
+        "body": [
+          "if",
+          [
+            "isArray",
+            {
+              "arg": 0
+            }
+          ],
+          [
+            "fold",
+            {
+              "arg": 0
+            },
+            {
+              "arg": 1
+            },
+            {
+              "bind": "result"
+            },
+            [
+              "list"
+            ],
+            [
+              "append",
+              {
+                "ref": "result"
+              },
+              [
+                "list",
+                {
+                  "arg": 2
+                }
+              ]
+            ]
+          ],
+          [
+            "raise",
+            "map requires an array"
+          ]
+        ]
+      },
+      "filter": {
+        "arity": 3,
+        "body": [
+          "if",
+          [
+            "isArray",
+            {
+              "arg": 0
+            }
+          ],
+          [
+            "fold",
+            {
+              "arg": 0
+            },
+            {
+              "arg": 1
+            },
+            {
+              "bind": "result"
+            },
+            [
+              "list"
+            ],
+            [
+              "if",
+              {
+                "arg": 2
+              },
+              [
+                "append",
+                {
+                  "ref": "result"
+                },
+                [
+                  "list",
+                  {
+                    "refArg": 1
+                  }
+                ]
+              ],
+              {
+                "ref": "result"
+              }
+            ]
+          ],
+          [
+            "raise",
+            "filter requires an array"
+          ]
+        ]
+      },
+      "some": {
+        "arity": 3,
+        "body": [
+          "if",
+          [
+            "isArray",
+            {
+              "arg": 0
+            }
+          ],
+          [
+            "fold",
+            {
+              "arg": 0
+            },
+            {
+              "arg": 1
+            },
+            {
+              "bind": "result"
+            },
+            false,
+            [
+              "if",
+              {
+                "ref": "result"
+              },
+              true,
+              [
+                "if",
+                {
+                  "arg": 2
+                },
+                true,
+                false
+              ]
+            ]
+          ],
+          [
+            "raise",
+            "some requires an array"
+          ]
+        ]
+      },
+      "every": {
+        "arity": 3,
+        "body": [
+          "if",
+          [
+            "isArray",
+            {
+              "arg": 0
+            }
+          ],
+          [
+            "fold",
+            {
+              "arg": 0
+            },
+            {
+              "arg": 1
+            },
+            {
+              "bind": "result"
+            },
+            true,
+            [
+              "if",
+              {
+                "ref": "result"
+              },
+              [
+                "if",
+                {
+                  "arg": 2
+                },
+                true,
+                false
+              ],
+              false
+            ]
+          ],
+          [
+            "raise",
+            "every requires an array"
+          ]
+        ]
+      },
+      "one": {
+        "arity": 2,
+        "body": [
+          "let",
+          {
+            "bind": "found"
+          },
+          [
+            "objects",
+            {
+              "arg": 0
+            },
+            {
+              "arg": 1
+            }
+          ],
+          [
+            "if",
+            [
+              "eq",
+              [
+                "count",
+                {
+                  "ref": "found"
+                }
+              ],
+              1
+            ],
+            [
+              "at",
+              {
+                "ref": "found"
+              },
+              0
+            ],
+            [
+              "raise",
+              [
+                "concat",
+                "Fact cardinality: ",
+                {
+                  "arg": 0
+                },
+                ".",
+                {
+                  "arg": 1
+                }
+              ]
+            ]
+          ]
+        ]
+      },
+      "optional": {
+        "arity": 2,
+        "body": [
+          "let",
+          {
+            "bind": "found"
+          },
+          [
+            "objects",
+            {
+              "arg": 0
+            },
+            {
+              "arg": 1
+            }
+          ],
+          [
+            "if",
+            [
+              "eq",
+              [
+                "count",
+                {
+                  "ref": "found"
+                }
+              ],
+              0
+            ],
+            null,
+            [
+              "if",
+              [
+                "eq",
+                [
+                  "count",
+                  {
+                    "ref": "found"
+                  }
+                ],
+                1
+              ],
+              [
+                "at",
+                {
+                  "ref": "found"
+                },
+                0
+              ],
+              [
+                "raise",
+                [
+                  "concat",
+                  "Fact cardinality: ",
+                  {
+                    "arg": 0
+                  },
+                  ".",
+                  {
+                    "arg": 1
+                  }
+                ]
+              ]
+            ]
+          ]
+        ]
+      },
+      "and": {
+        "minimumArity": 0,
+        "body": {
+          "foldArgs": {
+            "initial": true,
+            "item": "test",
+            "accumulator": "rest",
+            "body": [
+              "if",
+              {
+                "term": "test"
+              },
+              {
+                "term": "rest"
+              },
+              false
+            ]
+          }
+        }
+      },
+      "or": {
+        "minimumArity": 0,
+        "body": [
+          "fold",
+          {
+            "arguments": true
+          },
+          {
+            "bind": "value"
+          },
+          {
+            "bind": "result"
+          },
+          null,
+          [
+            "if",
+            {
+              "ref": "result"
+            },
+            {
+              "ref": "result"
+            },
+            [
+              "if",
+              {
+                "ref": "value"
+              },
+              {
+                "ref": "value"
+              },
+              null
+            ]
+          ]
+        ]
+      },
+      "objects": {
+        "arity": 2,
+        "body": [
+          "let",
+          {
+            "bind": "indexed"
+          },
+          [
+            "at",
+            [
+              "at",
+              [
+                "at",
+                "$factIndex",
+                "objects"
+              ],
+              {
+                "arg": 0
+              }
+            ],
+            {
+              "arg": 1
+            }
+          ],
+          [
+            "if",
+            {
+              "ref": "indexed"
+            },
+            [
+              "append",
+              {
+                "ref": "indexed"
+              },
+              [
+                "list"
+              ]
+            ],
+            [
+              "list"
+            ]
+          ]
+        ]
+      },
+      "subjects": {
+        "arity": 2,
+        "body": [
+          "let",
+          {
+            "bind": "indexed"
+          },
+          [
+            "at",
+            [
+              "at",
+              [
+                "at",
+                "$factIndex",
+                "subjects"
+              ],
+              {
+                "arg": 0
+              }
+            ],
+            {
+              "arg": 1
+            }
+          ],
+          [
+            "if",
+            {
+              "ref": "indexed"
+            },
+            [
+              "append",
+              {
+                "ref": "indexed"
+              },
+              [
+                "list"
+              ]
+            ],
+            [
+              "list"
+            ]
+          ]
+        ]
+      }
+    }
+  },
+  "primitives": [
+    "fold",
+    "let",
+    "raise",
+    "isArray",
+    "list",
+    "append",
+    "eq",
+    "includes",
+    "if",
+    "count",
+    "at",
+    "concat",
+    "add",
+    "range",
+    "distinct"
+  ],
+  "profile": {
+    "protocol": "temple/kernel-profile/1",
+    "valueProfile": "ordered-json-observation/1",
+    "operators": {
+      "fold": {
+        "arities": [
+          5
+        ],
+        "binders": [
+          1,
+          2
+        ]
+      },
+      "let": {
+        "arities": [
+          3
+        ],
+        "binders": [
+          0
+        ]
+      },
+      "raise": {
+        "arities": [
+          1
+        ],
+        "binders": []
+      },
+      "isArray": {
+        "arities": [
+          1
+        ],
+        "binders": []
+      },
+      "list": {
+        "arities": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63
+        ],
+        "binders": []
+      },
+      "append": {
+        "arities": [
+          2
+        ],
+        "binders": []
+      },
+      "eq": {
+        "arities": [
+          2
+        ],
+        "binders": []
+      },
+      "includes": {
+        "arities": [
+          2
+        ],
+        "binders": []
+      },
+      "if": {
+        "arities": [
+          3
+        ],
+        "binders": []
+      },
+      "count": {
+        "arities": [
+          1
+        ],
+        "binders": []
+      },
+      "at": {
+        "arities": [
+          2
+        ],
+        "binders": []
+      },
+      "concat": {
+        "arities": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63
+        ],
+        "binders": []
+      },
+      "add": {
+        "arities": [
+          2
+        ],
+        "binders": []
+      },
+      "range": {
+        "arities": [
+          1
+        ],
+        "binders": []
+      },
+      "distinct": {
+        "arities": [
+          1
+        ],
+        "binders": []
+      }
+    },
+    "statements": {
+      "let": {
+        "strings": [],
+        "bindings": [
+          "let"
+        ],
+        "expressions": [
+          "value"
+        ],
+        "programmes": [],
+        "fields": [
+          "let",
+          "value"
+        ],
+        "construction": {
+          "let": "value",
+          "value": null
+        }
+      },
+      "assert": {
+        "strings": [
+          "message"
+        ],
+        "bindings": [],
+        "expressions": [
+          "assert"
+        ],
+        "programmes": [],
+        "fields": [
+          "assert",
+          "message"
+        ],
+        "construction": {
+          "assert": true,
+          "message": "Check failed."
+        }
+      },
+      "when": {
+        "strings": [],
+        "bindings": [],
+        "expressions": [
+          "when"
+        ],
+        "programmes": [
+          "then"
+        ],
+        "fields": [
+          "when",
+          "then"
+        ],
+        "construction": {
+          "when": false,
+          "then": []
+        }
+      },
+      "each": {
+        "strings": [],
+        "bindings": [
+          "as"
+        ],
+        "expressions": [
+          "each"
+        ],
+        "programmes": [
+          "steps"
+        ],
+        "fields": [
+          "each",
+          "as",
+          "steps"
+        ],
+        "construction": {
+          "each": [
+            "list"
+          ],
+          "as": "item",
+          "steps": []
+        }
+      },
+      "fold": {
+        "strings": [],
+        "bindings": [
+          "as",
+          "accumulator",
+          "into"
+        ],
+        "expressions": [
+          "fold",
+          "initial",
+          "yield"
+        ],
+        "programmes": [
+          "steps"
+        ],
+        "fields": [
+          "fold",
+          "as",
+          "accumulator",
+          "initial",
+          "steps",
+          "yield",
+          "into"
+        ],
+        "construction": {
+          "fold": [
+            "list"
+          ],
+          "as": "item",
+          "accumulator": "total",
+          "initial": null,
+          "steps": [],
+          "yield": "$total",
+          "into": "result"
+        }
+      },
+      "call": {
+        "strings": [
+          "call"
+        ],
+        "bindings": [],
+        "expressions": [],
+        "programmes": [],
+        "fields": [
+          "call"
+        ],
+        "construction": {
+          "call": ""
+        }
+      },
+      "port": {
+        "strings": [
+          "port"
+        ],
+        "bindings": [
+          "into"
+        ],
+        "expressions": [
+          "args"
+        ],
+        "programmes": [],
+        "fields": [
+          "port",
+          "args",
+          "into"
+        ],
+        "construction": {
+          "port": "",
+          "args": {},
+          "into": "result"
+        }
+      },
+      "try": {
+        "strings": [],
+        "bindings": [
+          "error"
+        ],
+        "expressions": [],
+        "programmes": [
+          "try",
+          "catch"
+        ],
+        "fields": [
+          "try",
+          "error",
+          "catch"
+        ],
+        "construction": {
+          "try": [],
+          "error": "fault",
+          "catch": []
+        }
+      }
+    },
+    "execution": {
+      "ordering": "sequential-awaited",
+      "budgetFault": "uncatchable",
+      "hostFault": "identity-unless-explicit-try",
+      "catchProjection": [
+        "name",
+        "message"
+      ],
+      "absence": "undefined-internal-not-transportable",
+      "concurrency": "not-in-this-profile",
+      "transactions": "explicit-host-protocol",
+      "cancellation": "explicit-host-protocol"
+    }
+  }
+}

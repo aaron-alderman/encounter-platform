@@ -1,0 +1,50 @@
+{
+  "protocol": "usewords/party-live-observation/1",
+  "date": "2026-11-07",
+  "activeGenerationId": "sqlite-sourcery-mcp-live-interaction-v5",
+  "hostGenerationId": "host-mcp-surface-classification-r105",
+  "hostRuntimeHash": "859c3147d10ab34a0a908cbba50a44fb66d21e080741c1a5964582f47c49216d",
+  "applicationSurface": {
+    "name": "temple_application_surface",
+    "description": "Owned SQLite-backed application read projection lifecycle. Explicit captured sources and resource limits;no business mutation or application-author grant.",
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action"
+      ],
+      "properties": {
+        "action": {
+          "enum": [
+            "start",
+            "status",
+            "stop"
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  "observedOperations": [
+    {
+      "operationId": "temple_application_context_load",
+      "summary": "Load the fixed SQLite-backed Claimipedia project declarations and inspect authored contexts using existing owners. Read-only; not application runtime extension loading or admission."
+    },
+    {
+      "operationId": "temple_application_context_read",
+      "summary": "Read the fixed SQLite-captured Claimipedia operator corpus with exact source identity. Not a live application, public projection, mutation or admission."
+    },
+    {
+      "operationId": "temple_application_surface",
+      "summary": "Owned SQLite-backed application read projection lifecycle. Explicit captured sources and resource limits;no business mutation or application-author grant."
+    }
+  ],
+  "finding": "No authenticated app.usewords mutation receiver, principal-session binding or private/shared transaction endpoint is exposed by this connected catalogue. Development lanes are not product matter persistence.",
+  "mutationsPerformed": false,
+  "applicationActivated": false,
+  "deploymentPerformed": false
+}

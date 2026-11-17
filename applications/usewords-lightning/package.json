@@ -1,0 +1,12 @@
+{
+  "name": "usewords-lightning",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "\"${ENCOUNTER_BIN:-encounter}\" build --browser . bootstrap/native-build.rel ../encounter-libraries \"${ENCOUNTER_BROWSER_OUTPUT:-native-dist}\"",
+    "test": "node tests/run.cjs",
+    "dev": "node bootstrap/serve.cjs",
+    "replay": "node bootstrap/cli.cjs replay"
+  }
+}

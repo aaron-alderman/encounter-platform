@@ -1,0 +1,271 @@
+{
+  "protocol": "usewords/live-platform-observation/1",
+  "observedAt": "2026-11-06 16:54:23 UTC",
+  "evidenceFamily": "connected-service-observation-same-author",
+  "host": {
+    "phase": "ready",
+    "runtimeHash": "859c3147d10ab34a0a908cbba50a44fb66d21e080741c1a5964582f47c49216d",
+    "generationId": "host-mcp-surface-classification-r105"
+  },
+  "application": {
+    "generation": "sqlite-sourcery-mcp-live-interaction-v5",
+    "workerAvailable": true,
+    "protocol": "sqlite-application-projection-status/1",
+    "applicationId": "app.claimipedia",
+    "phase": "stopped",
+    "readOnly": true,
+    "sourceHash": "82d9c5a47f4957ddbd302927baed0acb05522773762966a4c9ffc34ed86f94c3",
+    "applicationAdmission": false
+  },
+  "operationCatalogue": [
+    {
+      "operationId": "scientific_derivation_compose",
+      "summary": "Compose bounded typed scientific derivation paths into proposal-only candidates with explicit assumptions,losses,evidence and rejection receipts. No entailment,empirical authority,corpus admission or application activation."
+    },
+    {
+      "operationId": "sourcery_context_read",
+      "summary": "Read a host-resolved local context at an exact state and interpretation. Does not grant authority or start services."
+    },
+    {
+      "operationId": "temple_algebra_prepare_work_observed",
+      "summary": "Prepare an algebra-first work commit using one exact immutable-snapshot,hash-bound prior capability observation. No application activation,deployment or business authority."
+    },
+    {
+      "operationId": "temple_algebra_prepare_work_session",
+      "summary": "Legacy bounded inert-JSON preparation session. Use v2 for status,cancel and explicit limits."
+    },
+    {
+      "operationId": "temple_algebra_prepare_work_session_v2",
+      "summary": "Stage,inspect or cancel bounded inert JSON chunks by exact sequence and hash,then invoke observed algebra preparation after exact aggregate reassembly. Send at most 100000 characters per append;status never returns staged payload bytes. No supplied code execution or application authority."
+    },
+    {
+      "operationId": "temple_application_context_load",
+      "summary": "Load the fixed SQLite-backed Claimipedia project declarations and inspect authored contexts using existing owners. Read-only; not application runtime extension loading or admission."
+    },
+    {
+      "operationId": "temple_application_context_read",
+      "summary": "Read the fixed SQLite-captured Claimipedia operator corpus with exact source identity. Not a live application, public projection, mutation or admission."
+    },
+    {
+      "operationId": "temple_application_surface",
+      "summary": "Owned SQLite-backed application read projection lifecycle. Explicit captured sources and resource limits;no business mutation or application-author grant."
+    },
+    {
+      "operationId": "temple_context_binding",
+      "summary": "Inspect, initialize, prepare, admit and select exact reader-registry successors in SQLite. Does not activate a runtime or grant business authority."
+    },
+    {
+      "operationId": "temple_context_surface",
+      "summary": "Start, inspect, stop or select an exact SQLite-published work context. Selection grants no product activation or new authority."
+    },
+    {
+      "operationId": "temple_mcp_surface",
+      "summary": "Return the current Sourcery MCP surface and connection interaction context. List returns filters and pagination immediately; select binds a workspace for subsequent Status. Context selection does not acquire a writer lease."
+    },
+    {
+      "operationId": "temple_runtime_package",
+      "summary": "Legacy governed create-only runtime installation and qualification. Use temple_runtime_package_v2 for bounded resumable authoring. No activation or launcher modification."
+    },
+    {
+      "operationId": "temple_runtime_package_v2",
+      "summary": "Governed create-only runtime installation,qualification and resumable work preparation. prepare-session requires phase and session;status and cancel are bounded lifecycle actions. Exact SQLite package,discovery,review and installation admission required. No activation or launcher modification."
+    },
+    {
+      "operationId": "temple_runtime_package_v3",
+      "summary": "Governed create-only runtime installation,qualification and resumable work preparation. Phase-specific session arguments are schema-visible;status and cancel are bounded lifecycle actions. No activation or launcher modification."
+    },
+    {
+      "operationId": "temple_runtime_review_admission",
+      "summary": "Inspect or explicitly admit a changed inactive runtime-package review. Signed expiring eligibility only;no installation,activation or business authority."
+    },
+    {
+      "operationId": "temple_system_activate",
+      "summary": "Atomically activate an admitted generation after rechecking its exact bytes and baseline schema."
+    },
+    {
+      "operationId": "temple_system_admit",
+      "summary": "Sign an explicit bounded admission for a passing check against the current generation."
+    },
+    {
+      "operationId": "temple_system_check",
+      "summary": "Execute protected-runtime, transport and baseline-schema checks for a staged generation."
+    },
+    {
+      "operationId": "temple_system_describe",
+      "summary": "Describe the active fossil/runtime generation, retained transition evidence, compact workflows and operation catalogue."
+    },
+    {
+      "operationId": "temple_system_describe_operation",
+      "summary": "Describe any operation in the active worker catalog, including successor-only operations."
+    },
+    {
+      "operationId": "temple_system_execute_operation",
+      "summary": "Execute an operation from the active worker catalog through the stable extension surface."
+    },
+    {
+      "operationId": "temple_system_help",
+      "summary": "Return version-bound, read-only help for a Temple topic, operation or current lane context."
+    },
+    {
+      "operationId": "temple_system_recover",
+      "summary": "Create a signed recovery transition to the predecessor retained by an activation."
+    },
+    {
+      "operationId": "temple_system_stage",
+      "summary": "Stage a named generation from the supervisor-controlled manifest directory."
+    },
+    {
+      "operationId": "temple_workspace_archive",
+      "summary": "Logically archive a closed lane with a terminal disposition; bytes are not deleted."
+    },
+    {
+      "operationId": "temple_workspace_bless",
+      "summary": "Bless the exact tested head of an integration lane."
+    },
+    {
+      "operationId": "temple_workspace_checkout",
+      "summary": "Create a registered sparse editor projection inside the manager-controlled lane directory."
+    },
+    {
+      "operationId": "temple_workspace_close",
+      "summary": "Release one lane lease without an implicit commit."
+    },
+    {
+      "operationId": "temple_workspace_commit",
+      "summary": "Commit explicit changes to an open lane head."
+    },
+    {
+      "operationId": "temple_workspace_discard",
+      "summary": "Discard a registered editor projection and delete its disposable files without committing."
+    },
+    {
+      "operationId": "temple_workspace_fork",
+      "summary": "Create a thin task lane from the exact blessed snapshot of a closed integration lane."
+    },
+    {
+      "operationId": "temple_workspace_heartbeat",
+      "summary": "Renew an open lane writer lease."
+    },
+    {
+      "operationId": "temple_workspace_ingest",
+      "summary": "Commit the exact delta from a disposable projection."
+    },
+    {
+      "operationId": "temple_workspace_list",
+      "summary": "List registered lanes without opening their overlay databases for writing."
+    },
+    {
+      "operationId": "temple_workspace_list_files",
+      "summary": "List files in one open lane snapshot."
+    },
+    {
+      "operationId": "temple_workspace_materialize",
+      "summary": "Create a disposable native projection for a filesystem-only tool."
+    },
+    {
+      "operationId": "temple_workspace_merge",
+      "summary": "Merge a proposal from a registered source lane into an open integration lane."
+    },
+    {
+      "operationId": "temple_workspace_migrate",
+      "summary": "Create a fenced verified parallel successor lane on a new exact base without changing the source lane or reusing its snapshot identities."
+    },
+    {
+      "operationId": "temple_workspace_object_transfer",
+      "summary": "Upload an exact workspace object in bounded hash-verified chunks or read it by bounded byte range. Each action declares its required arguments;object references are lane-and-snapshot bound and grant no authority."
+    },
+    {
+      "operationId": "temple_workspace_open",
+      "summary": "Create or reopen a named task or integration lane and acquire its writer lease."
+    },
+    {
+      "operationId": "temple_workspace_prepare_session",
+      "summary": "Apply algebra-prepared workspace changes as ordered,hash-bound,restart-safe segments. Phase-specific session arguments are schema-visible;commits occur once at finalize and responses remain compact."
+    },
+    {
+      "operationId": "temple_workspace_prepare_session_v2",
+      "summary": "Apply algebra-prepared workspace changes through bounded segments while binding a large capability prior by exact immutable workspace reference. Prior bytes are verified internally and never cross the MCP request envelope;old preparation contracts remain unchanged."
+    },
+    {
+      "operationId": "temple_workspace_projection_list",
+      "summary": "List registered editor projections and their durable disposition."
+    },
+    {
+      "operationId": "temple_workspace_propose",
+      "summary": "Propose the exact tested head of a task lane."
+    },
+    {
+      "operationId": "temple_workspace_propose_normalized",
+      "summary": "Propose an exact tested task head with canonical artifact lineage and intended endpoints."
+    },
+    {
+      "operationId": "temple_workspace_read",
+      "summary": "Read one file from an open lane composed view."
+    },
+    {
+      "operationId": "temple_workspace_save",
+      "summary": "Ingest the exact declared scope of a registered editor projection and delete its disposable files."
+    },
+    {
+      "operationId": "temple_workspace_seal",
+      "summary": "Compose a blessed integration lane into a successor Temple package."
+    },
+    {
+      "operationId": "temple_workspace_status",
+      "summary": "Inspect one registered lane and its durable head/lease state."
+    },
+    {
+      "operationId": "temple_workspace_task_ownership",
+      "summary": "Describe the exclusive writer ownership of one task lane without locking files or artifacts."
+    },
+    {
+      "operationId": "temple_workspace_test",
+      "summary": "Run a bounded Node test in a disposable full, test-file or declared-closure projection and advance the lane head to its scope-bound receipt snapshot."
+    },
+    {
+      "operationId": "temple_workspace_test_v3",
+      "summary": "Run a bounded Node test in an explicitly selected disposable full, test-file or declared-closure projection and advance the lane head to its scope-bound telemetry receipt."
+    }
+  ],
+  "algebraFirst": {
+    "status": "enforced",
+    "policyRevision": "mandatory-algebra-first-20261023-observed-preparation-session-r54+exact-prior-reference-and-bounded-discovery-r95-mcp-current-surface-r105",
+    "scope": "All Sourcery representation migrations use exact evidence. Static capabilities remain predecessors;new mature boundary capabilities enter through exact package-local declaration,qualification,grammar,phase,port,adapter and evidence closure.",
+    "noNewExecutableSource": true,
+    "noOpaqueCallbacks": true,
+    "legacyCode": "compatibility-only;unchanged use or deletion;extensions enter grammar",
+    "provenance": {
+      "protocol": "algebra-first-guide-provenance/1",
+      "enforcementOwner": "createAlgebraFirstGate",
+      "revisionSource": "algebra-first-binding.json#revision",
+      "guideDeclarationRevision": "mandatory-algebra-first-20261019-semantic-review-operation-r38",
+      "mismatchCorrected": true
+    },
+    "packageLocalCapabilities": {
+      "status": "enforced",
+      "declarationPath": "sourcery-boundary-capabilities.json",
+      "extensionRule": "new phases are package-local grammar data;new mechanisms remain explicit mature adapters",
+      "authority": "eligibility only"
+    }
+  },
+  "site": {
+    "projectId": "appgprj_6aedeedb7bd88191baf640255db56cc9",
+    "role": "owner",
+    "accessMode": "custom",
+    "latestVersion": 0,
+    "liveUrl": null,
+    "customDomains": []
+  },
+  "blockedRequirements": [
+    "No Usewords owner-authorized application persistence or publication operation in the connected catalogue.",
+    "No admitted browser-facing Usewords receiver/authentication binding.",
+    "No installed atomic workspace/publication transaction adapter for the proposed policy.",
+    "No deployed Site or attached usewords.ai hostname."
+  ],
+  "notPerformed": [
+    "No runtime admission or activation",
+    "No owner/workspace credentials embedded in browser source",
+    "No public release or DNS change",
+    "No claim that a development lane is a persisted product workspace"
+  ]
+}

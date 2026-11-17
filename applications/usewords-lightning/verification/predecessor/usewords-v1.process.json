@@ -1,0 +1,1995 @@
+{
+  "protocol": "temple/surface-process-module/1",
+  "queries": {
+    "uw.hash": [
+      {
+        "port": "json.stringify",
+        "args": {
+          "value": "$eventInput",
+          "space": 0
+        },
+        "into": "encoded"
+      },
+      {
+        "port": "digest.sha256",
+        "args": {
+          "text": "$encoded"
+        },
+        "into": "result"
+      }
+    ],
+    "uw.project": [
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.prepare",
+          "input": "$eventInput"
+        },
+        "into": "candidate"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.run",
+          "input": {
+            "candidate": "$candidate"
+          }
+        },
+        "into": "projections"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "uw.hash",
+          "input": "$eventInput"
+        },
+        "into": "inputHash"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "uw.hash",
+          "input": "$projections"
+        },
+        "into": "projectionHash"
+      },
+      {
+        "let": "result",
+        "value": {
+          "inputs": "$eventInput",
+          "projections": "$projections",
+          "inputHash": "$inputHash",
+          "projectionHash": "$projectionHash"
+        }
+      }
+    ],
+    "uw.initial": [
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "uw.project",
+          "input": "$data.canonical"
+        },
+        "into": "base"
+      },
+      {
+        "let": "result",
+        "value": {
+          "inputs": "$base.inputs",
+          "projections": "$base.projections",
+          "inputHash": "$base.inputHash",
+          "projectionHash": "$base.projectionHash",
+          "revision": 0,
+          "events": [
+            "list"
+          ]
+        }
+      }
+    ],
+    "uw.parse": [
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$eventInput"
+        },
+        "into": "kind"
+      },
+      {
+        "assert": [
+          "eq",
+          "$kind.type",
+          "string"
+        ],
+        "message": "UW-WORDS: Enter a supported sentence."
+      },
+      {
+        "port": "number.calculate",
+        "args": {
+          "operation": "lessEqual",
+          "values": [
+            "list",
+            [
+              "count",
+              "$eventInput"
+            ],
+            512
+          ]
+        },
+        "into": "bounded"
+      },
+      {
+        "assert": "$bounded",
+        "message": "UW-LIMIT: Words must fit within 512 characters."
+      },
+      {
+        "port": "text.trim",
+        "args": {
+          "value": "$eventInput"
+        },
+        "into": "words"
+      },
+      {
+        "let": "parsed",
+        "value": null
+      },
+      {
+        "fold": "$data.words.commands",
+        "as": "grammar",
+        "accumulator": "parsed",
+        "initial": null,
+        "steps": [
+          {
+            "port": "text.match",
+            "args": {
+              "value": "$words",
+              "pattern": "$grammar.pattern"
+            },
+            "into": "match"
+          },
+          {
+            "when": "$match",
+            "then": [
+              {
+                "assert": [
+                  "eq",
+                  "$parsed",
+                  null
+                ],
+                "message": "UW-WORDS: Ambiguous command."
+              },
+              {
+                "let": "parsed",
+                "value": {
+                  "kind": "$grammar.kind",
+                  "value": [
+                    "if",
+                    [
+                      "eq",
+                      [
+                        "count",
+                        "$match.groups"
+                      ],
+                      0
+                    ],
+                    "",
+                    [
+                      "at",
+                      "$match.groups",
+                      0
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "yield": "$parsed",
+        "into": "parsed"
+      },
+      {
+        "assert": "$parsed",
+        "message": "UW-WORDS: Use one of the three supported sentence forms below."
+      },
+      {
+        "let": "result",
+        "value": "$parsed"
+      }
+    ],
+    "uw.change": [
+      {
+        "let": "current",
+        "value": "$eventInput.state"
+      },
+      {
+        "let": "request",
+        "value": "$eventInput.request"
+      },
+      {
+        "assert": [
+          "eq",
+          "$request.baseRevision",
+          "$current.revision"
+        ],
+        "message": "UW-STALE: The revision changed. Reinspect before editing."
+      },
+      {
+        "assert": [
+          "includes",
+          [
+            "list",
+            "shared-title",
+            "menu-label"
+          ],
+          "$request.kind"
+        ],
+        "message": "UW-AUTHORITY: Only shared-title and menu-label edits are supported."
+      },
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$request.value"
+        },
+        "into": "valueKind"
+      },
+      {
+        "assert": [
+          "eq",
+          "$valueKind.type",
+          "string"
+        ],
+        "message": "UW-TYPE: An edit value must be text."
+      },
+      {
+        "port": "number.calculate",
+        "args": {
+          "operation": "lessEqual",
+          "values": [
+            "list",
+            [
+              "count",
+              "$request.value"
+            ],
+            160
+          ]
+        },
+        "into": "bounded"
+      },
+      {
+        "assert": "$bounded",
+        "message": "UW-LIMIT: Labels are limited to 160 characters."
+      },
+      {
+        "port": "number.calculate",
+        "args": {
+          "operation": "less",
+          "values": [
+            "list",
+            [
+              "count",
+              "$current.events"
+            ],
+            32
+          ]
+        },
+        "into": "bounded"
+      },
+      {
+        "assert": "$bounded",
+        "message": "UW-LIMIT: Accept or start a new reconstruction after 32 edits."
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.prepare",
+          "input": "$current.inputs"
+        },
+        "into": "candidate"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "lab.edit",
+          "input": {
+            "candidate": "$candidate",
+            "kind": [
+              "if",
+              [
+                "eq",
+                "$request.kind",
+                "shared-title"
+              ],
+              "title",
+              "web-label"
+            ],
+            "value": "$request.value"
+          }
+        },
+        "into": "patched"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "uw.project",
+          "input": "$patched.candidate.inputs"
+        },
+        "into": "next"
+      },
+      {
+        "assert": [
+          "not",
+          [
+            "eq",
+            "$next.inputHash",
+            "$current.inputHash"
+          ]
+        ],
+        "message": "UW-NOOP: This edit does not change the source."
+      },
+      {
+        "let": "record",
+        "value": {
+          "kind": "$request.kind",
+          "value": "$request.value",
+          "beforeInputHash": "$current.inputHash",
+          "afterInputHash": "$next.inputHash",
+          "afterProjectionHash": "$next.projectionHash",
+          "destination": "$patched.destination"
+        }
+      },
+      {
+        "let": "result",
+        "value": {
+          "inputs": "$next.inputs",
+          "projections": "$next.projections",
+          "inputHash": "$next.inputHash",
+          "projectionHash": "$next.projectionHash",
+          "revision": [
+            "add",
+            "$current.revision",
+            1
+          ],
+          "events": [
+            "append",
+            "$current.events",
+            [
+              "list",
+              "$record"
+            ]
+          ]
+        }
+      }
+    ],
+    "uw.reconstruct": [
+      {
+        "assert": [
+          "eq",
+          "$eventInput.protocol",
+          "usewords/acceptance/1"
+        ],
+        "message": "UW-REPLAY: Unsupported acceptance format."
+      },
+      {
+        "let": "receipt",
+        "value": "$eventInput"
+      },
+      {
+        "assert": [
+          "eq",
+          "$receipt.body.programHash",
+          "$data.programHash"
+        ],
+        "message": "UW-REPLAY: Process identity differs."
+      },
+      {
+        "assert": [
+          "eq",
+          "$receipt.body.canonicalHash",
+          "$data.canonicalHash"
+        ],
+        "message": "UW-REPLAY: Canonical source identity differs."
+      },
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$receipt.body.events"
+        },
+        "into": "eventsKind"
+      },
+      {
+        "assert": "$eventsKind.array",
+        "message": "UW-REPLAY: Events must be a list."
+      },
+      {
+        "port": "number.calculate",
+        "args": {
+          "operation": "lessEqual",
+          "values": [
+            "list",
+            [
+              "count",
+              "$receipt.body.events"
+            ],
+            32
+          ]
+        },
+        "into": "bounded"
+      },
+      {
+        "assert": "$bounded",
+        "message": "UW-LIMIT: Too many replay events."
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "uw.hash",
+          "input": "$receipt.body"
+        },
+        "into": "receiptHash"
+      },
+      {
+        "assert": [
+          "eq",
+          "$receiptHash",
+          "$receipt.sha256"
+        ],
+        "message": "UW-REPLAY: Receipt hash mismatch."
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "uw.initial",
+          "input": {}
+        },
+        "into": "replayed"
+      },
+      {
+        "fold": "$receipt.body.events",
+        "as": "event",
+        "accumulator": "replayed",
+        "initial": "$replayed",
+        "steps": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "uw.change",
+              "input": {
+                "state": "$replayed",
+                "request": {
+                  "kind": "$event.kind",
+                  "value": "$event.value",
+                  "baseRevision": "$replayed.revision"
+                }
+              }
+            },
+            "into": "replayed"
+          },
+          {
+            "assert": [
+              "eq",
+              [
+                "at",
+                "$replayed.events",
+                [
+                  "add",
+                  [
+                    "count",
+                    "$replayed.events"
+                  ],
+                  -1
+                ]
+              ],
+              "$event"
+            ],
+            "message": "UW-REPLAY: Event or edit destination differs."
+          }
+        ],
+        "yield": "$replayed",
+        "into": "replayed"
+      },
+      {
+        "assert": [
+          "eq",
+          "$replayed.inputHash",
+          "$receipt.body.inputHash"
+        ],
+        "message": "UW-REPLAY: Final source differs."
+      },
+      {
+        "assert": [
+          "eq",
+          "$replayed.projectionHash",
+          "$receipt.body.projectionHash"
+        ],
+        "message": "UW-REPLAY: Final projections differ."
+      },
+      {
+        "assert": [
+          "eq",
+          "$replayed.revision",
+          "$receipt.body.revision"
+        ],
+        "message": "UW-REPLAY: Final revision differs."
+      },
+      {
+        "let": "result",
+        "value": "$replayed"
+      }
+    ],
+    "uw.accept": [
+      {
+        "let": "current",
+        "value": "$eventInput.state"
+      },
+      {
+        "assert": [
+          "eq",
+          "$eventInput.expectedRevision",
+          "$current.revision"
+        ],
+        "message": "UW-STALE: Acceptance revision changed."
+      },
+      {
+        "assert": [
+          "eq",
+          "$eventInput.expectedInputHash",
+          "$current.inputHash"
+        ],
+        "message": "UW-STALE: Acceptance source changed."
+      },
+      {
+        "let": "body",
+        "value": {
+          "programHash": "$data.programHash",
+          "canonicalHash": "$data.canonicalHash",
+          "revision": "$current.revision",
+          "events": "$current.events",
+          "inputHash": "$current.inputHash",
+          "projectionHash": "$current.projectionHash"
+        }
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "uw.hash",
+          "input": "$body"
+        },
+        "into": "receiptHash"
+      },
+      {
+        "let": "receipt",
+        "value": {
+          "protocol": "usewords/acceptance/1",
+          "body": "$body",
+          "sha256": "$receiptHash"
+        }
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "uw.reconstruct",
+          "input": "$receipt"
+        },
+        "into": "replayed"
+      },
+      {
+        "assert": [
+          "eq",
+          "$replayed.inputs",
+          "$current.inputs"
+        ],
+        "message": "UW-ACCEPT: Replay does not reconstruct this source."
+      },
+      {
+        "assert": [
+          "eq",
+          "$replayed.projections",
+          "$current.projections"
+        ],
+        "message": "UW-ACCEPT: Replay does not reconstruct these projections."
+      },
+      {
+        "let": "result",
+        "value": "$receipt"
+      }
+    ],
+    "uw.replay": [
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "uw.reconstruct",
+          "input": "$eventInput"
+        },
+        "into": "state"
+      },
+      {
+        "let": "result",
+        "value": {
+          "ok": true,
+          "revision": "$state.revision",
+          "inputHash": "$state.inputHash",
+          "projectionHash": "$state.projectionHash",
+          "projections": "$state.projections"
+        }
+      }
+    ],
+    "uw.propose": [
+      {
+        "let": "proposal",
+        "value": "$eventInput"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "uw.initial",
+          "input": {}
+        },
+        "into": "current"
+      },
+      {
+        "when": "$proposal.receipt",
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "uw.reconstruct",
+              "input": "$proposal.receipt"
+            },
+            "into": "current"
+          }
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "uw.change",
+          "input": {
+            "state": "$current",
+            "request": "$proposal.request"
+          }
+        },
+        "into": "changed"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "uw.accept",
+          "input": {
+            "state": "$changed",
+            "expectedRevision": "$changed.revision",
+            "expectedInputHash": "$changed.inputHash"
+          }
+        },
+        "into": "result"
+      }
+    ],
+    "uw.inspect": [
+      {
+        "let": "current",
+        "value": "$eventInput.state"
+      },
+      {
+        "let": "selection",
+        "value": "$eventInput.selection"
+      },
+      {
+        "assert": [
+          "includes",
+          [
+            "list",
+            "facts",
+            "meaning",
+            "contract",
+            "process",
+            "receipt"
+          ],
+          "$selection"
+        ],
+        "message": "UW-INSPECT: Unknown source selection."
+      },
+      {
+        "let": "document",
+        "value": {
+          "file": "source/experiment/story.rel",
+          "text": "$current.inputs.factText"
+        }
+      },
+      {
+        "when": [
+          "eq",
+          "$selection",
+          "meaning"
+        ],
+        "then": [
+          {
+            "let": "document",
+            "value": {
+              "file": "source/experiment/story.encounter",
+              "text": "$current.inputs.codeText"
+            }
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$selection",
+          "contract"
+        ],
+        "then": [
+          {
+            "let": "document",
+            "value": {
+              "file": "source/experiment/contracts.rel",
+              "text": "$current.inputs.contractText"
+            }
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$selection",
+          "process"
+        ],
+        "then": [
+          {
+            "port": "json.stringify",
+            "args": {
+              "value": "$data.policy",
+              "space": 2
+            },
+            "into": "text"
+          },
+          {
+            "let": "document",
+            "value": {
+              "file": "algebra/usewords.process.json",
+              "text": "$text"
+            }
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$selection",
+          "receipt"
+        ],
+        "then": [
+          {
+            "port": "json.stringify",
+            "args": {
+              "value": {
+                "revision": "$current.revision",
+                "inputHash": "$current.inputHash",
+                "projectionHash": "$current.projectionHash",
+                "events": "$current.events"
+              },
+              "space": 2
+            },
+            "into": "text"
+          },
+          {
+            "let": "document",
+            "value": {
+              "file": "current-session-events.json",
+              "text": "$text"
+            }
+          }
+        ]
+      },
+      {
+        "port": "digest.sha256",
+        "args": {
+          "text": "$document.text"
+        },
+        "into": "sourceHash"
+      },
+      {
+        "let": "result",
+        "value": {
+          "file": "$document.file",
+          "text": "$document.text",
+          "sha256": "$sourceHash",
+          "revision": "$current.revision",
+          "scope": "Exact current source or recorded session events. Static definitions are not execution traces."
+        }
+      }
+    ],
+    "uw.document": [
+      {
+        "let": "input",
+        "value": "$data.page"
+      },
+      {
+        "call": "html.serialize"
+      }
+    ],
+    "uw.styles": [
+      {
+        "let": "styleRules",
+        "value": "$data.style.rules"
+      },
+      {
+        "call": "uw.styleRules"
+      },
+      {
+        "let": "css",
+        "value": "$result"
+      },
+      {
+        "fold": "$data.style.media",
+        "as": "media",
+        "accumulator": "css",
+        "initial": "$css",
+        "steps": [
+          {
+            "let": "styleRules",
+            "value": "$media.rules"
+          },
+          {
+            "call": "uw.styleRules"
+          }
+        ],
+        "yield": [
+          "concat",
+          "$css",
+          "@media",
+          "$media.condition",
+          "{",
+          "$result",
+          "}\n"
+        ],
+        "into": "result"
+      }
+    ],
+    "uw.paint": [
+      {
+        "port": "state.get",
+        "args": {
+          "key": "current"
+        },
+        "into": "current"
+      },
+      {
+        "let": "page",
+        "value": [
+          "at",
+          [
+            "filter",
+            "$current.projections",
+            "p",
+            [
+              "eq",
+              "$p.output.type",
+              "Page"
+            ]
+          ],
+          0
+        ]
+      },
+      {
+        "let": "row",
+        "value": [
+          "at",
+          [
+            "filter",
+            "$current.projections",
+            "p",
+            [
+              "eq",
+              "$p.output.type",
+              "MainframeRow"
+            ]
+          ],
+          0
+        ]
+      },
+      {
+        "let": "menu",
+        "value": [
+          "at",
+          [
+            "filter",
+            "$current.projections",
+            "p",
+            [
+              "eq",
+              "$p.output.type",
+              "WebLink"
+            ]
+          ],
+          0
+        ]
+      },
+      {
+        "let": "input",
+        "value": "$page.output.tree"
+      },
+      {
+        "call": "html.serialize"
+      },
+      {
+        "port": "browser.content",
+        "args": {
+          "ref": "#reading",
+          "html": "$result"
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.write",
+        "args": {
+          "ref": "#row-title",
+          "name": "textContent",
+          "value": [
+            "at",
+            "$row.values",
+            "N.label"
+          ]
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.write",
+        "args": {
+          "ref": "#menu-title",
+          "name": "textContent",
+          "value": [
+            "at",
+            "$menu.values",
+            "N.label"
+          ]
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.write",
+        "args": {
+          "ref": "#revision",
+          "name": "textContent",
+          "value": [
+            "concat",
+            "Revision ",
+            "$current.revision"
+          ]
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.write",
+        "args": {
+          "ref": "#source-hash",
+          "name": "textContent",
+          "value": "$current.inputHash"
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.write",
+        "args": {
+          "ref": "#projection-hash",
+          "name": "textContent",
+          "value": "$current.projectionHash"
+        },
+        "into": "_"
+      },
+      {
+        "port": "json.stringify",
+        "args": {
+          "value": "$current.events",
+          "space": 2
+        },
+        "into": "eventText"
+      },
+      {
+        "port": "browser.write",
+        "args": {
+          "ref": "#events",
+          "name": "textContent",
+          "value": "$eventText"
+        },
+        "into": "_"
+      },
+      {
+        "port": "state.get",
+        "args": {
+          "key": "selection"
+        },
+        "into": "selection"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "uw.inspect",
+          "input": {
+            "state": "$current",
+            "selection": "$selection"
+          }
+        },
+        "into": "inspected"
+      },
+      {
+        "port": "browser.write",
+        "args": {
+          "ref": "#inspection-file",
+          "name": "textContent",
+          "value": "$inspected.file"
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.write",
+        "args": {
+          "ref": "#inspection-hash",
+          "name": "textContent",
+          "value": "$inspected.sha256"
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.write",
+        "args": {
+          "ref": "#inspection-source",
+          "name": "textContent",
+          "value": "$inspected.text"
+        },
+        "into": "_"
+      },
+      {
+        "port": "state.get",
+        "args": {
+          "key": "notice"
+        },
+        "into": "notice"
+      },
+      {
+        "port": "browser.write",
+        "args": {
+          "ref": "#notice",
+          "name": "textContent",
+          "value": "$notice"
+        },
+        "into": "_"
+      },
+      {
+        "let": "result",
+        "value": {
+          "revision": "$current.revision",
+          "inputHash": "$current.inputHash",
+          "projectionHash": "$current.projectionHash"
+        }
+      }
+    ],
+    "uw.words": [
+      {
+        "port": "browser.property",
+        "args": {
+          "ref": "#words",
+          "name": "value"
+        },
+        "into": "words"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "uw.parse",
+          "input": "$words"
+        },
+        "into": "request"
+      },
+      {
+        "port": "state.get",
+        "args": {
+          "key": "current"
+        },
+        "into": "current"
+      },
+      {
+        "when": [
+          "eq",
+          "$request.kind",
+          "recreate"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "uw.initial",
+              "input": {}
+            },
+            "into": "current"
+          },
+          {
+            "port": "state.set",
+            "args": {
+              "key": "current",
+              "value": "$current"
+            },
+            "into": "_"
+          },
+          {
+            "port": "state.set",
+            "args": {
+              "key": "notice",
+              "value": "Recreated the exact canonical encounter through ec.prepare and ec.run. Nothing is accepted yet."
+            },
+            "into": "_"
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            "$request.kind",
+            "recreate"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "uw.change",
+              "input": {
+                "state": "$current",
+                "request": {
+                  "kind": "$request.kind",
+                  "value": "$request.value",
+                  "baseRevision": "$current.revision"
+                }
+              }
+            },
+            "into": "changed"
+          },
+          {
+            "port": "state.set",
+            "args": {
+              "key": "current",
+              "value": "$changed"
+            },
+            "into": "_"
+          },
+          {
+            "port": "state.set",
+            "args": {
+              "key": "notice",
+              "value": [
+                "if",
+                [
+                  "eq",
+                  "$request.kind",
+                  "shared-title"
+                ],
+                "Shared title changed through its declared source edit route. The menu keeps its local label.",
+                "Only the menu label changed through its declared local edit route."
+              ]
+            },
+            "into": "_"
+          }
+        ]
+      },
+      {
+        "call": "uw.paint"
+      }
+    ],
+    "uw.action": [
+      {
+        "try": [
+          {
+            "call": "uw.words"
+          }
+        ],
+        "error": "fault",
+        "catch": [
+          {
+            "port": "state.set",
+            "args": {
+              "key": "notice",
+              "value": [
+                "concat",
+                "Refused: ",
+                "$fault.message"
+              ]
+            },
+            "into": "_"
+          },
+          {
+            "call": "uw.paint"
+          }
+        ]
+      }
+    ],
+    "uw.choose": [
+      {
+        "port": "state.set",
+        "args": {
+          "key": "selection",
+          "value": "$eventInput.selection"
+        },
+        "into": "_"
+      },
+      {
+        "call": "uw.paint"
+      }
+    ],
+    "uw.example": [
+      {
+        "port": "browser.write",
+        "args": {
+          "ref": "#words",
+          "name": "value",
+          "value": "$eventInput.words"
+        },
+        "into": "_"
+      }
+    ],
+    "uw.acceptUI": [
+      {
+        "try": [
+          {
+            "port": "state.get",
+            "args": {
+              "key": "current"
+            },
+            "into": "current"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "uw.accept",
+              "input": {
+                "state": "$current",
+                "expectedRevision": "$current.revision",
+                "expectedInputHash": "$current.inputHash"
+              }
+            },
+            "into": "receipt"
+          },
+          {
+            "port": "json.stringify",
+            "args": {
+              "value": "$receipt",
+              "space": 2
+            },
+            "into": "encoded"
+          },
+          {
+            "port": "storage.write",
+            "args": {
+              "key": "usewords.lightning.accepted.v1",
+              "value": "$encoded"
+            },
+            "into": "stored"
+          },
+          {
+            "assert": "$stored.ok",
+            "message": "UW-STORAGE: Acceptance replay passed, but browser storage failed. No durable acceptance was recorded."
+          },
+          {
+            "port": "state.set",
+            "args": {
+              "key": "accepted",
+              "value": "$receipt"
+            },
+            "into": "_"
+          },
+          {
+            "port": "browser.write",
+            "args": {
+              "ref": "#receipt-input",
+              "name": "value",
+              "value": "$encoded"
+            },
+            "into": "_"
+          },
+          {
+            "port": "state.set",
+            "args": {
+              "key": "notice",
+              "value": "Accepted after a fresh replay. Saved in this browser; export the receipt to reproduce it elsewhere."
+            },
+            "into": "_"
+          },
+          {
+            "call": "uw.paint"
+          }
+        ],
+        "error": "fault",
+        "catch": [
+          {
+            "port": "state.set",
+            "args": {
+              "key": "notice",
+              "value": [
+                "concat",
+                "Refused: ",
+                "$fault.message"
+              ]
+            },
+            "into": "_"
+          },
+          {
+            "call": "uw.paint"
+          }
+        ]
+      }
+    ],
+    "uw.importUI": [
+      {
+        "try": [
+          {
+            "port": "browser.property",
+            "args": {
+              "ref": "#receipt-input",
+              "name": "value"
+            },
+            "into": "encoded"
+          },
+          {
+            "port": "number.calculate",
+            "args": {
+              "operation": "lessEqual",
+              "values": [
+                "list",
+                [
+                  "count",
+                  "$encoded"
+                ],
+                131072
+              ]
+            },
+            "into": "bounded"
+          },
+          {
+            "assert": "$bounded",
+            "message": "UW-LIMIT: Receipt is too large."
+          },
+          {
+            "port": "json.parse",
+            "args": {
+              "text": "$encoded"
+            },
+            "into": "receipt"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "uw.reconstruct",
+              "input": "$receipt"
+            },
+            "into": "current"
+          },
+          {
+            "port": "state.set",
+            "args": {
+              "key": "current",
+              "value": "$current"
+            },
+            "into": "_"
+          },
+          {
+            "port": "state.set",
+            "args": {
+              "key": "notice",
+              "value": "Receipt replay passed. Reconstructed as a draft; choose Accept to save it in this browser."
+            },
+            "into": "_"
+          },
+          {
+            "call": "uw.paint"
+          }
+        ],
+        "error": "fault",
+        "catch": [
+          {
+            "port": "state.set",
+            "args": {
+              "key": "notice",
+              "value": [
+                "concat",
+                "Refused: ",
+                "$fault.message"
+              ]
+            },
+            "into": "_"
+          },
+          {
+            "call": "uw.paint"
+          }
+        ]
+      }
+    ],
+    "uw.exportUI": [
+      {
+        "try": [
+          {
+            "port": "state.get",
+            "args": {
+              "key": "accepted"
+            },
+            "into": "receipt"
+          },
+          {
+            "assert": "$receipt",
+            "message": "UW-EXPORT: Accept a revision before exporting."
+          },
+          {
+            "port": "json.stringify",
+            "args": {
+              "value": "$receipt",
+              "space": 2
+            },
+            "into": "encoded"
+          },
+          {
+            "port": "download.text",
+            "args": {
+              "name": "usewords-acceptance.json",
+              "text": "$encoded"
+            },
+            "into": "_"
+          },
+          {
+            "port": "state.set",
+            "args": {
+              "key": "notice",
+              "value": "Exported the last accepted revision. Unaccepted edits are excluded."
+            },
+            "into": "_"
+          },
+          {
+            "call": "uw.paint"
+          }
+        ],
+        "error": "fault",
+        "catch": [
+          {
+            "port": "state.set",
+            "args": {
+              "key": "notice",
+              "value": [
+                "concat",
+                "Refused: ",
+                "$fault.message"
+              ]
+            },
+            "into": "_"
+          },
+          {
+            "call": "uw.paint"
+          }
+        ]
+      }
+    ],
+    "uw.open": [
+      {
+        "port": "browser.focus",
+        "args": {
+          "ref": "#reading"
+        },
+        "into": "_"
+      },
+      {
+        "port": "state.set",
+        "args": {
+          "key": "notice",
+          "value": "Opened TheStory. Page, row and menu retain the same encounter identity."
+        },
+        "into": "_"
+      },
+      {
+        "call": "uw.paint"
+      }
+    ],
+    "uw.agent": [
+      {
+        "assert": [
+          "includes",
+          [
+            "list",
+            "command",
+            "accept",
+            "inspect"
+          ],
+          "$eventInput.operation"
+        ],
+        "message": "UW-AUTHORITY: Unknown agent operation."
+      },
+      {
+        "let": "request",
+        "value": "$eventInput"
+      },
+      {
+        "when": [
+          "eq",
+          "$request.operation",
+          "command"
+        ],
+        "then": [
+          {
+            "port": "state.get",
+            "args": {
+              "key": "current"
+            },
+            "into": "current"
+          },
+          {
+            "assert": [
+              "eq",
+              "$request.baseRevision",
+              "$current.revision"
+            ],
+            "message": "UW-STALE: Agent revision changed."
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "uw.parse",
+              "input": "$request.words"
+            },
+            "into": "parsed"
+          },
+          {
+            "assert": [
+              "not",
+              [
+                "eq",
+                "$parsed.kind",
+                "recreate"
+              ]
+            ],
+            "message": "UW-AUTHORITY: Recreate through the explicit UI action."
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "uw.change",
+              "input": {
+                "state": "$current",
+                "request": {
+                  "kind": "$parsed.kind",
+                  "value": "$parsed.value",
+                  "baseRevision": "$request.baseRevision"
+                }
+              }
+            },
+            "into": "changed"
+          },
+          {
+            "port": "state.set",
+            "args": {
+              "key": "current",
+              "value": "$changed"
+            },
+            "into": "_"
+          },
+          {
+            "port": "state.set",
+            "args": {
+              "key": "notice",
+              "value": "Agent proposal applied as a draft through the same edit process."
+            },
+            "into": "_"
+          },
+          {
+            "call": "uw.paint"
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$request.operation",
+          "inspect"
+        ],
+        "then": [
+          {
+            "port": "state.get",
+            "args": {
+              "key": "current"
+            },
+            "into": "current"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "uw.inspect",
+              "input": {
+                "state": "$current",
+                "selection": "$request.selection"
+              }
+            },
+            "into": "result"
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$request.operation",
+          "accept"
+        ],
+        "then": [
+          {
+            "port": "state.get",
+            "args": {
+              "key": "current"
+            },
+            "into": "current"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "uw.accept",
+              "input": {
+                "state": "$current",
+                "expectedRevision": "$request.baseRevision",
+                "expectedInputHash": "$request.inputHash"
+              }
+            },
+            "into": "result"
+          }
+        ]
+      }
+    ],
+    "uw.boot": [
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "uw.initial",
+          "input": {}
+        },
+        "into": "current"
+      },
+      {
+        "port": "state.set",
+        "args": {
+          "key": "current",
+          "value": "$current"
+        },
+        "into": "_"
+      },
+      {
+        "port": "state.set",
+        "args": {
+          "key": "selection",
+          "value": "meaning"
+        },
+        "into": "_"
+      },
+      {
+        "port": "state.set",
+        "args": {
+          "key": "accepted",
+          "value": null
+        },
+        "into": "_"
+      },
+      {
+        "port": "state.set",
+        "args": {
+          "key": "notice",
+          "value": "Canonical Encounter example loaded through the existing Temple compiler. Use words to recreate or change it."
+        },
+        "into": "_"
+      },
+      {
+        "try": [
+          {
+            "port": "storage.read",
+            "args": {
+              "key": "usewords.lightning.accepted.v1",
+              "maxLength": 131072
+            },
+            "into": "stored"
+          },
+          {
+            "when": [
+              "and",
+              "$stored.ok",
+              [
+                "not",
+                [
+                  "eq",
+                  "$stored.value",
+                  null
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "json.parse",
+                "args": {
+                  "text": "$stored.value"
+                },
+                "into": "receipt"
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "uw.reconstruct",
+                  "input": "$receipt"
+                },
+                "into": "restored"
+              },
+              {
+                "port": "state.set",
+                "args": {
+                  "key": "current",
+                  "value": "$restored"
+                },
+                "into": "_"
+              },
+              {
+                "port": "state.set",
+                "args": {
+                  "key": "accepted",
+                  "value": "$receipt"
+                },
+                "into": "_"
+              },
+              {
+                "port": "browser.write",
+                "args": {
+                  "ref": "#receipt-input",
+                  "name": "value",
+                  "value": "$stored.value"
+                },
+                "into": "_"
+              },
+              {
+                "port": "state.set",
+                "args": {
+                  "key": "notice",
+                  "value": "Restored the accepted encounter after checking its hashes and replaying every edit."
+                },
+                "into": "_"
+              }
+            ]
+          },
+          {
+            "when": [
+              "not",
+              "$stored.ok"
+            ],
+            "then": [
+              {
+                "port": "state.set",
+                "args": {
+                  "key": "notice",
+                  "value": "Browser storage is unavailable. Draft edits work; acceptance requires storage. Export/import is available after acceptance."
+                },
+                "into": "_"
+              }
+            ]
+          }
+        ],
+        "error": "fault",
+        "catch": [
+          {
+            "port": "state.set",
+            "args": {
+              "key": "notice",
+              "value": [
+                "concat",
+                "Saved acceptance refused; canonical draft retained. ",
+                "$fault.message"
+              ]
+            },
+            "into": "_"
+          }
+        ]
+      },
+      {
+        "port": "browser.on",
+        "args": {
+          "ref": "#words-form",
+          "event": "submit",
+          "query": "uw.action",
+          "input": {},
+          "preventDefault": true
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.on",
+        "args": {
+          "ref": "#accept",
+          "event": "click",
+          "query": "uw.acceptUI",
+          "input": {},
+          "preventDefault": false
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.on",
+        "args": {
+          "ref": "#export",
+          "event": "click",
+          "query": "uw.exportUI",
+          "input": {},
+          "preventDefault": false
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.on",
+        "args": {
+          "ref": "#import",
+          "event": "click",
+          "query": "uw.importUI",
+          "input": {},
+          "preventDefault": false
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.on",
+        "args": {
+          "ref": "#menu-open",
+          "event": "click",
+          "query": "uw.open",
+          "input": {},
+          "preventDefault": false
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.on",
+        "args": {
+          "ref": "#row-open",
+          "event": "click",
+          "query": "uw.open",
+          "input": {},
+          "preventDefault": false
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.on",
+        "args": {
+          "ref": "#inspect-meaning",
+          "event": "click",
+          "query": "uw.choose",
+          "input": {
+            "selection": "meaning"
+          },
+          "preventDefault": false
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.on",
+        "args": {
+          "ref": "#inspect-facts",
+          "event": "click",
+          "query": "uw.choose",
+          "input": {
+            "selection": "facts"
+          },
+          "preventDefault": false
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.on",
+        "args": {
+          "ref": "#inspect-contract",
+          "event": "click",
+          "query": "uw.choose",
+          "input": {
+            "selection": "contract"
+          },
+          "preventDefault": false
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.on",
+        "args": {
+          "ref": "#inspect-process",
+          "event": "click",
+          "query": "uw.choose",
+          "input": {
+            "selection": "process"
+          },
+          "preventDefault": false
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.on",
+        "args": {
+          "ref": "#inspect-receipt",
+          "event": "click",
+          "query": "uw.choose",
+          "input": {
+            "selection": "receipt"
+          },
+          "preventDefault": false
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.on",
+        "args": {
+          "ref": "#example-recreate",
+          "event": "click",
+          "query": "uw.example",
+          "input": {
+            "words": "Recreate the canonical encounter."
+          },
+          "preventDefault": false
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.on",
+        "args": {
+          "ref": "#example-shared",
+          "event": "click",
+          "query": "uw.example",
+          "input": {
+            "words": "Rename the encounter to \"How we arrived here\"."
+          },
+          "preventDefault": false
+        },
+        "into": "_"
+      },
+      {
+        "port": "browser.on",
+        "args": {
+          "ref": "#example-local",
+          "event": "click",
+          "query": "uw.example",
+          "input": {
+            "words": "Call it \"Our beginnings\" in the menu only."
+          },
+          "preventDefault": false
+        },
+        "into": "_"
+      },
+      {
+        "call": "uw.paint"
+      }
+    ],
+    "uw.styleRules": [
+      {
+        "fold": "$styleRules",
+        "as": "rule",
+        "accumulator": "css",
+        "initial": "",
+        "steps": [
+          {
+            "fold": "$rule.declarations",
+            "as": "declaration",
+            "accumulator": "body",
+            "initial": "",
+            "steps": [],
+            "yield": [
+              "concat",
+              "$body",
+              "$declaration.name",
+              ":",
+              "$declaration.value",
+              ";"
+            ],
+            "into": "body"
+          }
+        ],
+        "yield": [
+          "concat",
+          "$css",
+          "$rule.selector",
+          "{",
+          "$body",
+          "}\n"
+        ],
+        "into": "result"
+      }
+    ]
+  }
+}

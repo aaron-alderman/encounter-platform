@@ -1,0 +1,79 @@
+{
+  "protocol": "usewords/workspace/1",
+  "definitions": [
+    "construct Encounter\nfield title text shared required max 160\nfield body text shared required max 4000\nfield introduction text local optional max 600\nheading title\nparagraph introduction\nparagraph body"
+  ],
+  "objects": [],
+  "journeys": [],
+  "matter": {
+    "id": "matter_1",
+    "title": "A shared workshop space",
+    "description": "A community group wants to open a shared workshop. Some members prioritise low fees; others want enough paid staff to make opening hours reliable. We do not yet know likely usage or operating costs. We want to understand the different priorities and possibilities before making a decision.",
+    "status": "open",
+    "items": [
+      {
+        "item": {
+          "id": "access_and_staffing",
+          "kind": "issue",
+          "title": "How do we balance affordable access and reliable staffing?",
+          "body": "Costs and likely usage remain uncertain. Different priorities can be recorded without deciding whose priority should prevail.",
+          "issue": null,
+          "voice": null
+        },
+        "origin": {
+          "kind": "participant",
+          "label": "alice",
+          "briefHash": null,
+          "sourceHash": null
+        },
+        "standing": "open question"
+      }
+    ],
+    "management": {
+      "purpose": "Understand the priorities and unknowns around a shared workshop before making commitments.",
+      "scope": "Fees, staffing and evidence needs. No lease, budget or staffing commitment is being agreed here.",
+      "reason": "New cost estimates may now be available; resume the inquiry while preserving the earlier disagreement.",
+      "outcome": null,
+      "participants": [
+        {
+          "id": "alice",
+          "role": "coordinator",
+          "capacity": "Initial coordinator (simulated)"
+        },
+        {
+          "id": "bob",
+          "role": "coordinator",
+          "capacity": "Coordinates operating-cost evidence gathering (simulated)."
+        },
+        {
+          "id": "casey",
+          "role": "observer",
+          "capacity": "Observer (simulated)"
+        }
+      ],
+      "requests": [
+        {
+          "id": "cost_evidence",
+          "title": "What do we know about operating costs, and what is still missing?",
+          "assignee": "bob",
+          "status": "answered",
+          "response": "We have no verified total yet. We need rent, insurance, equipment maintenance and staffing estimates before comparing options."
+        },
+        {
+          "id": "updated_estimates",
+          "title": "Which new estimates can we bring back, and how reliable are they?",
+          "assignee": "bob",
+          "status": "open",
+          "response": ""
+        }
+      ],
+      "links": [
+        {
+          "matterId": "matter_2",
+          "relation": "depends-on",
+          "note": "We intend to consult the evidence-gathering matter before choosing workshop arrangements. This is a declared dependency, not a verified fact."
+        }
+      ]
+    }
+  }
+}

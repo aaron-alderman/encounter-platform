@@ -1,0 +1,1019 @@
+process-module "temple/surface-process-module/1"
+
+process fixture.matters.create:
+  let id = if(eq(at($eventInput, 0), at({}, "absent")), "workshop", at($eventInput, 0))
+  let description = if(eq(at($eventInput, 1), at({}, "absent")), "People want affordable access and reliable staffing. Costs and usage remain unknown.", at($eventInput, 1))
+  port test.invoke { entry = "mw.create"; input = { id = $id; title = "A shared workshop"; description = $description } } → observedRun1
+  let result = at($observedRun1, "value")
+
+process fixture.matters.propose:
+  let board = at($eventInput, 0)
+  let id = at($eventInput, 1)
+  let change = at($eventInput, 2)
+  port test.invoke { entry = "cw.apply"; input = { board = $board; request = { action = "propose"; actor = "alice"; expectedBoardRevision = at($board, "revision"); id = $id; title = "Explore a framing"; change = $change } } } → observedRun2
+  let result = at($observedRun2, "value")
+
+process fixture.matters.incorporate:
+  let board = at($eventInput, 0)
+  let id = at($eventInput, 1)
+  let change = at($eventInput, 2)
+  port kernel.invoke { query = "fixture.matters.propose"; input = list($board, $id, $change) } → observedResult3
+  let board = $observedResult3
+  let contentHash = at(at(at($board, "proposals"), add(count(at($board, "proposals")), -1)), "contentHash")
+  port test.invoke { entry = "cw.apply"; input = { board = $board; request = { action = "review"; actor = "bob"; id = $id; expectedBoardRevision = at($board, "revision"); contentHash = $contentHash; decision = "approve"; comment = "Incorporate this framing without endorsing its claim." } } } → observedRun4
+  let board = at($observedRun4, "value")
+  port test.invoke { entry = "cw.apply"; input = { board = $board; request = { action = "accept"; actor = "bob"; id = $id; expectedBoardRevision = at($board, "revision"); contentHash = $contentHash } } } → observedRun5
+  let result = at($observedRun5, "value")
+
+process fixture.matters.suggestion:
+  let board = at($eventInput, 0)
+  let id = at($eventInput, 1)
+  port test.invoke { entry = "mw.suggestionChange"; input = { state = at($board, "head"); package = $packageAI; id = $id } } → observedRun6
+  let result = at($observedRun6, "value")
+
+process fixture.matters.harness:
+  port test.open { fallback = ""; elements = list("#mw-root"); values = list(list("#cw-actor", "alice"), list("#ws-object-type", "Encounter"), list("#ws-edit-scope", "shared"), list("#ws-inspect-choice", "definitions"), list("#mw-title", "First matter"), list("#mw-description", "Explore a question, without requiring a conclusion.")); selectors = list("#mw-select", "#cw-selection", "#ws-object-type", "#ws-compose-object", "#ws-edit-object", "#ws-compose-journey", "#ws-edit-entry", "#ws-edit-field", "#mw-issue", "#mw-suggestion") } → observedHost7
+  let result = $observedHost7
+
+process fixture.matters.manage:
+  let board = at($eventInput, 0)
+  let operation = at($eventInput, 1)
+  let payload = at($eventInput, 2)
+  let result = { kind = "matter-manage"; matterId = at(at(at(at($board, "head"), "document"), "matter"), "id"); operation = $operation; payload = $payload; baseRevision = at(at($board, "head"), "revision") }
+
+process fixture.matters.acceptedManagement:
+  let board = at($eventInput, 0)
+  let id = at($eventInput, 1)
+  let operation = at($eventInput, 2)
+  let payload = at($eventInput, 3)
+  let author = if(eq(at($eventInput, 4), at({}, "absent")), "alice", at($eventInput, 4))
+  port kernel.invoke { query = "fixture.matters.manage"; input = list($board, $operation, $payload) } → observedResult8
+  let change = $observedResult8
+  let reviewer = if(eq($author, "alice"), "bob", "alice")
+  port test.invoke { entry = "cw.apply"; input = { board = $board; request = { action = "propose"; actor = $author; expectedBoardRevision = at($board, "revision"); id = $id; title = concat("Manage ", $operation); change = $change } } } → observedRun9
+  let board = at($observedRun9, "value")
+  let contentHash = at(at(at($board, "proposals"), add(count(at($board, "proposals")), -1)), "contentHash")
+  port test.invoke { entry = "cw.apply"; input = { board = $board; request = { action = "review"; actor = $reviewer; expectedBoardRevision = at($board, "revision"); id = $id; contentHash = $contentHash; decision = "approve"; comment = "Record this management change without endorsing substantive claims." } } } → observedRun10
+  let board = at($observedRun10, "value")
+  port test.invoke { entry = "cw.apply"; input = { board = $board; request = { action = "accept"; actor = $reviewer; expectedBoardRevision = at($board, "revision"); id = $id; contentHash = $contentHash } } } → observedRun11
+  let result = at($observedRun11, "value")
+
+process fixture.matters.setup:
+  port test.runtime {} → observedRuntime12
+  let runtime = $observedRuntime12
+  port kernel.invoke { query = "fixture.matters.create"; input = list() } → observedResult13
+  let initial = $observedResult13
+  port test.invoke { entry = "mw.brief"; input = at($initial, "head") } → observedRun14
+  let brief = at($observedRun14, "value")
+  let items = list({ id = "access"; kind = "issue"; title = "Affordability and reliability"; body = "Which trade-offs and unknowns need exploration?"; issue = null; voice = null }, { id = "low_fees"; kind = "position"; title = "Keep fees accessible"; body = "A possible perspective prioritises participation; its feasibility is uncertain."; issue = "access"; voice = "Possible affordability perspective" }, { id = "pilot"; kind = "option"; title = "Explore a limited pilot"; body = "A pilot could reveal costs and usage before a commitment. It is not a decision."; issue = "access"; voice = null })
+  let response = { protocol = "usewords/matter-suggestions/1"; briefHash = at($brief, "sha256"); matterId = "workshop"; provider = "Test agent (synthetic fixture)"; items = $items }
+  port test.invoke { entry = "mw.checkSuggestions"; input = { brief = $brief; response = $response } } → observedRun15
+  let packageAI = at($observedRun15, "value")
+
+# a matter preserves its original narrative and starts open, without imported example content
+process test.matters.a-matter-preserves-its-original-narrative-and-starts-open-without-imported-example-content:
+  call fixture.matters.setup
+  assert eq(at(at(at(at($initial, "head"), "document"), "matter"), "status"), "open")
+    otherwise "Expected equal(initial.head.document.matter.status,'open')"
+  assert eq(at(at(at(at($initial, "head"), "document"), "matter"), "description"), "People want affordable access and reliable staffing. Costs and usage remain unknown.")
+    otherwise "Expected equal(initial.head.document.matter.description,'People want affordable access and reliable staffing. Costs and usage remain unknown.')"
+  assert eq(at(at(at($initial, "head"), "document"), "objects"), list())
+    otherwise "Expected deepEqual(initial.head.document.objects,[])"
+  assert eq(at(at(at($initial, "head"), "document"), "journeys"), list())
+    otherwise "Expected deepEqual(initial.head.document.journeys,[])"
+  assert eq(at(at(at(at($initial, "head"), "document"), "matter"), "items"), list())
+    otherwise "Expected deepEqual(initial.head.document.matter.items,[])"
+  let invalid = at(at($initial, "head"), "document")
+  port test.put { value = at($invalid, "matter"); key = "status"; replacement = "resolved" } → observedUpdated16
+  port test.put { value = $invalid; key = "matter"; replacement = $observedUpdated16 } → observedUpdated17
+  let invalid = $observedUpdated17
+  let observedRefused18 = false
+  try:
+    port test.invoke { entry = "ws.initial"; input = { basis = $invalid } } → observedRun19
+  catch observedFault20:
+    port test.match { text = $observedFault20.message; pattern = "MW-OPEN|MM-STATE"; flags = "" } → observedDiagnostic21
+    let observedRefused18 = $observedDiagnostic21
+  assert $observedRefused18
+    otherwise "Expected rejects(run('ws.initial',{basis:invalid}),/MW-OPEN|MM-STATE/)"
+
+# the AI brief scopes only this matter and binds its source; checking suggestions incorporates nothing
+process test.matters.the-ai-brief-scopes-only-this-matter-and-binds-its-source-checking-suggestions-incorporates-nothing:
+  call fixture.matters.setup
+  assert eq(at(at(at($brief, "request"), "context"), "id"), "workshop")
+    otherwise "Expected equal(brief.request.context.id,'workshop')"
+  assert eq(at(at($brief, "request"), "sourceHash"), at(at($initial, "head"), "documentHash"))
+    otherwise "Expected equal(brief.request.sourceHash,initial.head.documentHash)"
+  port test.match { text = at(at($brief, "request"), "instruction"); pattern = "without deciding"; flags = "" } → observedMatch22
+  assert $observedMatch22
+    otherwise "Expected match(brief.request.instruction,/without deciding/)"
+  let source = at(at($initial, "head"), "document")
+  port test.put { value = $source; key = "extraPrivateNotes"; replacement = "DO NOT EXPORT" } → observedUpdated23
+  let source = $observedUpdated23
+  port test.invoke { entry = "ws.initial"; input = { basis = $source } } → observedRun24
+  let state = at($observedRun24, "value")
+  port test.invoke { entry = "mw.brief"; input = $state } → observedRun25
+  let scoped = at($observedRun25, "value")
+  port test.stringify { value = { request = at($scoped, "request"); sha256 = at($scoped, "sha256") } } → observedJson26
+  assert eq(includes($observedJson26, "DO NOT EXPORT"), false)
+    otherwise "Expected equal(JSON.stringify({request:scoped.request,sha256:scoped.sha256}).includes('DO NOT EXPORT'),false)"
+  assert eq(at(at(at(at($initial, "head"), "document"), "matter"), "items"), list())
+    otherwise "Expected deepEqual(initial.head.document.matter.items,[])"
+  assert eq(count(at(at($packageAI, "response"), "items")), 3)
+    otherwise "Expected equal(packageAI.response.items.length,3)"
+
+# AI suggestions require independent review and linked issues; incorporation preserves unconfirmed standing and open status
+process test.matters.ai-suggestions-require-independent-review-and-linked-issues-incorporation-preserves-unconfirmed-standing-and-open-status:
+  call fixture.matters.setup
+  let board = $initial
+  let observedRefused27 = false
+  port kernel.invoke { query = "fixture.matters.suggestion"; input = list($board, "low_fees") } → observedResult28
+  try:
+    port kernel.invoke { query = "fixture.matters.propose"; input = list($board, "too_early", $observedResult28) } → observedResult29
+  catch observedFault30:
+    port test.match { text = $observedFault30.message; pattern = "MW-REFERENCE"; flags = "" } → observedDiagnostic31
+    let observedRefused27 = $observedDiagnostic31
+  assert $observedRefused27
+    otherwise "Expected rejects(propose(board,'too_early',await suggestion(board,'low_fees')),/MW-REFERENCE/)"
+  port kernel.invoke { query = "fixture.matters.suggestion"; input = list($board, "access") } → observedResult32
+  port kernel.invoke { query = "fixture.matters.propose"; input = list($board, "issue", $observedResult32) } → observedResult33
+  let pending = $observedResult33
+  assert eq(at(at(at(at($pending, "head"), "document"), "matter"), "items"), list())
+    otherwise "Expected deepEqual(pending.head.document.matter.items,[])"
+  port kernel.invoke { query = "fixture.matters.suggestion"; input = list($board, "access") } → observedResult34
+  port kernel.invoke { query = "fixture.matters.incorporate"; input = list($board, "issue", $observedResult34) } → observedResult35
+  let board = $observedResult35
+  port kernel.invoke { query = "fixture.matters.suggestion"; input = list($board, "low_fees") } → observedResult36
+  port kernel.invoke { query = "fixture.matters.incorporate"; input = list($board, "position", $observedResult36) } → observedResult37
+  let board = $observedResult37
+  port kernel.invoke { query = "fixture.matters.suggestion"; input = list($board, "pilot") } → observedResult38
+  port kernel.invoke { query = "fixture.matters.incorporate"; input = list($board, "option", $observedResult38) } → observedResult39
+  let board = $observedResult39
+  assert eq(map(at(at(at(at($board, "head"), "document"), "matter"), "items"), "r", at($r, "standing")), list("open question", "unconfirmed position", "unaccepted approach"))
+    otherwise "Expected deepEqual(board.head.document.matter.items.map(r=>r.standing),['open question','unconfirmed position','unaccepted approach'])"
+  assert eq(at(at(at(at($board, "head"), "document"), "matter"), "status"), "open")
+    otherwise "Expected equal(board.head.document.matter.status,'open')"
+  assert eq(at(at(at(at(at(at(at($board, "head"), "document"), "matter"), "items"), 1), "origin"), "briefHash"), at($brief, "sha256"))
+    otherwise "Expected equal(board.head.document.matter.items[1].origin.briefHash,brief.sha256)"
+  port test.invoke { entry = "cw.receipt"; input = $board } → observedRun40
+  port test.invoke { entry = "cw.reconstruct"; input = at($observedRun40, "value") } → observedRun41
+  assert eq(at($observedRun41, "value"), $board)
+    otherwise "Expected deepEqual(await run('cw.reconstruct',await run('cw.receipt',board)),board)"
+
+# wrong matter, tampered brief, invented references, duplicate IDs and extra authority fields are refused
+process test.matters.wrong-matter-tampered-brief-invented-references-duplicate-ids-and-extra-authority-fields-are-refused:
+  call fixture.matters.setup
+  port test.merge { records = list($response, { matterId = "another" }) } → observedRecord42
+  port test.repeat { text = "0"; count = 64 } → observedRepeated43
+  port test.merge { records = list($response, { briefHash = $observedRepeated43 }) } → observedRecord44
+  port test.merge { records = list($response, { resolved = true }) } → observedRecord45
+  port test.merge { records = list($response, { items = list(at($items, 0), at($items, 0)) }) } → observedRecord46
+  port test.merge { records = list(at($items, 1), { issue = "invented" }) } → observedRecord47
+  port test.merge { records = list($response, { items = list($observedRecord47) }) } → observedRecord48
+  each list($observedRecord42, $observedRecord44, $observedRecord45, $observedRecord46, $observedRecord48) as bad:
+    let observedRefused50 = false
+    try:
+      port test.invoke { entry = "mw.checkSuggestions"; input = { brief = $brief; response = $bad } } → observedRun51
+    catch observedFault52:
+      port test.match { text = $observedFault52.message; pattern = "MW-AI|MW-SHAPE"; flags = "" } → observedDiagnostic53
+      let observedRefused50 = $observedDiagnostic53
+    assert $observedRefused50
+      otherwise "Expected rejects(run('mw.checkSuggestions',{brief,response:bad}),/MW-AI|MW-SHAPE/)"
+  port test.stringify { value = $brief } → observedJson54
+  port test.parse { text = $observedJson54 } → observedJson55
+  let changed = $observedJson55
+  port test.put { value = at(at($changed, "request"), "context"); key = "description"; replacement = "Unrecorded context" } → observedUpdated56
+  port test.put { value = at($changed, "request"); key = "context"; replacement = $observedUpdated56 } → observedUpdated57
+  port test.put { value = $changed; key = "request"; replacement = $observedUpdated57 } → observedUpdated58
+  let changed = $observedUpdated58
+  port test.stringify { value = at($changed, "request") } → observedJson59
+  port test.digest { text = $observedJson59 } → observedHash60
+  port test.put { value = $changed; key = "sha256"; replacement = $observedHash60 } → observedUpdated61
+  let changed = $observedUpdated61
+  let observedRefused62 = false
+  port test.merge { records = list($response, { briefHash = at($changed, "sha256") }) } → observedRecord63
+  try:
+    port test.invoke { entry = "mw.checkSuggestions"; input = { brief = $changed; response = $observedRecord63 } } → observedRun64
+  catch observedFault65:
+    port test.match { text = $observedFault65.message; pattern = "MW-AI"; flags = "" } → observedDiagnostic66
+    let observedRefused62 = $observedDiagnostic66
+  assert $observedRefused62
+    otherwise "Expected rejects(run('mw.checkSuggestions',{brief:changed,response:{...response,briefHash:changed.sha256}}),/MW-AI/)"
+  port kernel.invoke { query = "fixture.matters.create"; input = list("other") } → observedResult67
+  let other = $observedResult67
+  let observedRefused68 = false
+  try:
+    port test.invoke { entry = "mw.suggestionChange"; input = { state = at($other, "head"); package = $packageAI; id = "access" } } → observedRun69
+  catch observedFault70:
+    port test.match { text = $observedFault70.message; pattern = "MW-SCOPE"; flags = "" } → observedDiagnostic71
+    let observedRefused68 = $observedDiagnostic71
+  assert $observedRefused68
+    otherwise "Expected rejects(run('mw.suggestionChange',{state:other.head,package:packageAI,id:'access'}),/MW-SCOPE/)"
+
+# stale incoming AI output refuses before replacing the current suggestion draft
+process test.matters.stale-incoming-ai-output-refuses-before-replacing-the-current-suggestion-draft:
+  call fixture.matters.setup
+  port kernel.invoke { query = "fixture.matters.suggestion"; input = list($initial, "access") } → observedResult72
+  port kernel.invoke { query = "fixture.matters.incorporate"; input = list($initial, "issue", $observedResult72) } → observedResult73
+  let board = $observedResult73
+  port test.open { state = list(list("workspace", at($board, "head")), list("matterBrief", $brief), list("matterSuggestions", null)) } → observedHost74
+  let h = $observedHost74
+  let observedRefused75 = false
+  try:
+    port test.invoke { entry = "ws.agent"; input = { operation = "matter-suggestions"; response = $response }; host = $h } → observedRun76
+  catch observedFault77:
+    port test.match { text = $observedFault77.message; pattern = "MW-STALE"; flags = "" } → observedDiagnostic78
+    let observedRefused75 = $observedDiagnostic78
+  assert $observedRefused75
+    otherwise "Expected rejects(h.run('ws.agent',{operation:'matter-suggestions',response}),/MW-STALE/)"
+  port test.get { host = $h; store = "state"; key = "matterSuggestions" } → observedHostValue79
+  assert eq($observedHostValue79, null)
+    otherwise "Expected equal(h.state.get('matterSuggestions'),null)"
+
+# positions refuse null placeholders as their voice
+process test.matters.positions-refuse-null-placeholders-as-their-voice:
+  call fixture.matters.setup
+  each list("null", "  NULL  ") as voice:
+    port test.merge { records = list(at($items, 1), { voice = $voice }) } → observedRecord81
+    port test.merge { records = list($response, { items = list(at($items, 0), $observedRecord81) }) } → observedRecord82
+    let suggestions = $observedRecord82
+    let observedRefused83 = false
+    try:
+      port test.invoke { entry = "mw.checkSuggestions"; input = { brief = $brief; response = $suggestions } } → observedRun84
+    catch observedFault85:
+      port test.match { text = $observedFault85.message; pattern = "MW-VOICE"; flags = "" } → observedDiagnostic86
+      let observedRefused83 = $observedDiagnostic86
+    assert $observedRefused83
+      otherwise "Expected rejects(run('mw.checkSuggestions', {brief, response: suggestions}), /MW-VOICE/)"
+
+process fixture.matters.command1:
+  let action = at($eventInput, 0)
+  let fields = at($eventInput, 1)
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue186
+  port test.merge { records = list({ action = $action; actor = "bob"; id = at($proposal, "id"); contentHash = at($proposal, "contentHash"); expectedBoardRevision = at($observedHostValue186, "revision") }, $fields) } → observedRecord187
+  port test.invoke { entry = "ws.agent"; input = { operation = "collaboration-command"; request = $observedRecord187 }; host = $h } → observedRun188
+  let result = at($observedRun188, "value")
+
+# both local model bindings use the existing bridge, checker and receipt
+process test.matters.both-local-model-bindings-use-the-existing-bridge-checker-and-receipt:
+  call fixture.matters.setup
+  port kernel.invoke { query = "fixture.matters.harness"; input = list() } → observedResult87
+  let h = $observedResult87
+  port test.invoke { entry = "ws.boot"; input = null; host = $h } → observedRun88
+  port test.invoke { entry = "mw.createUI"; input = null; host = $h } → observedRun89
+  port test.invoke { entry = "ws.agent"; input = { operation = "matter-brief" }; host = $h } → observedRun90
+  let exported = at($observedRun90, "value")
+  port test.repeat { text = "a"; count = 64 } → observedRepeated91
+  port test.repeat { text = "b"; count = 64 } → observedRepeated92
+  let bindings = { fast = { model = "fast-fixture:local"; digest = $observedRepeated91 }; deep = { model = "deep-fixture:local"; digest = $observedRepeated92 } }
+  port test.entries { value = $bindings } → observedEntries93
+  port test.openModel { configuration = { tags = "http://127.0.0.1:11434/api/tags"; generate = "http://127.0.0.1:11434/api/generate"; models = map(map($observedEntries93, "recordEntry", at($recordEntry, 1)), "observedItem94", { name = at($observedItem94, "model"); digest = at($observedItem94, "digest") }); items = $items } } → observedModel95
+  let modelFixture = $observedModel95
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue96
+  port test.invoke { entry = "cw.receipt"; input = $observedHostValue96; host = $h } → observedRun97
+  let receipt = at($observedRun97, "value")
+  each list("fast", "deep") as slot:
+    port test.model { slot = $slot; bindings = $bindings; brief = $exported; host = $modelFixture } → observedModel99
+    let generated = $observedModel99
+    port test.modelRequests { host = $modelFixture } → observedRequests100
+    let requests = $observedRequests100
+    let latest = at($requests, add(count($requests), -1))
+    assert eq(at($latest, "url"), "http://127.0.0.1:11434/api/generate")
+      otherwise "Expected equal(latest.url,'http://127.0.0.1:11434/api/generate')"
+    port test.parse { text = at($latest, "body") } → observedJson101
+    let request = $observedJson101
+    port test.parse { text = at($request, "prompt") } → observedJson102
+    assert eq($observedJson102, at($exported, "request"))
+      otherwise "Expected deepEqual(JSON.parse(request.prompt),exported.request)"
+    let shapes = at(at(at(at(at($request, "format"), "properties"), "items"), "items"), "anyOf")
+    assert eq(map($shapes, "shape", at(at(at($shape, "properties"), "kind"), "const")), list("issue", "position", "option"))
+      otherwise "Expected deepEqual(shapes.map(shape=>shape.properties.kind.const),['issue','position','option'])"
+    assert eq(at(at(at($shapes, 0), "properties"), "voice"), { type = "null" })
+      otherwise "Expected deepEqual(shapes[0].properties.voice,{type:'null'})"
+    port test.match { text = "Prioritises reliable opening hours"; pattern = at(at(at(at($shapes, 1), "properties"), "voice"), "pattern") } → observedMatch103
+    assert $observedMatch103
+      otherwise "Expected ok(matchesPattern('Prioritises reliable opening hours',shapes[1].properties.voice.pattern))"
+    port test.match { text = "null"; pattern = at(at(at(at($shapes, 1), "properties"), "voice"), "pattern") } → observedMatch104
+    assert eq($observedMatch104, false)
+      otherwise "Expected equal(matchesPattern('null',shapes[1].properties.voice.pattern),false)"
+    port test.merge { records = list({ operation = "matter-suggestions" }, $generated) } → observedRecord105
+    port test.invoke { entry = "ws.agent"; input = $observedRecord105; host = $h } → observedRun106
+    assert eq(at($observedRun106, "value"), at($generated, "response"))
+      otherwise "Expected deepEqual(await h.run('ws.agent', {operation: 'matter-suggestions', ...generated}), generated.response)"
+    assert eq(at(at($generated, "run"), "modelDigest"), at(at($bindings, $slot), "digest"))
+      otherwise "Expected equal(generated.run.modelDigest, bindings[slot].digest)"
+    port test.get { host = $h; store = "state"; key = "matterModelRun" } → observedHostValue107
+    assert eq($observedHostValue107, at($generated, "run"))
+      otherwise "Expected deepEqual(h.state.get('matterModelRun'), generated.run)"
+    port test.keys { host = $h; store = "storage" } → observedHostValue108
+    let draftKey = at(filter($observedHostValue108, "key", and(eq(at($key, add(count($key), -3)), "."), eq(at($key, add(count($key), -2)), "a"), eq(at($key, add(count($key), -1)), "i"))), 0)
+    port test.get { host = $h; store = "storage"; key = $draftKey } → observedHostValue109
+    port test.parse { text = $observedHostValue109 } → observedJson110
+    assert eq(at($observedJson110, "run"), at($generated, "run"))
+      otherwise "Expected deepEqual(JSON.parse(h.storage.get(draftKey)).run, generated.run)"
+    let observedRefused111 = false
+    port test.repeat { text = "0"; count = 64 } → observedRepeated112
+    port test.merge { records = list(at($generated, "run"), { responseHash = $observedRepeated112 }) } → observedRecord113
+    port test.merge { records = list({ operation = "matter-suggestions" }, $generated, { run = $observedRecord113 }) } → observedRecord114
+    try:
+      port test.invoke { entry = "ws.agent"; input = $observedRecord114; host = $h } → observedRun115
+    catch observedFault116:
+      port test.match { text = $observedFault116.message; pattern = "MW-MODEL-RUN"; flags = "" } → observedDiagnostic117
+      let observedRefused111 = $observedDiagnostic117
+    assert $observedRefused111
+      otherwise "Expected rejects( h.run('ws.agent', {operation: 'matter-suggestions', ...generated, run: {...generated.run, responseHash: '0'.repeat(64)}}), /MW-MODEL-RUN/, )"
+    port test.get { host = $h; store = "storage"; key = $draftKey } → observedHostValue118
+    port test.parse { text = $observedHostValue118 } → observedJson119
+    assert eq(at($observedJson119, "run"), at($generated, "run"))
+      otherwise "Expected deepEqual(JSON.parse(h.storage.get(draftKey)).run, generated.run)"
+    port test.clear { host = $h; store = "state" } → observedHostValue120
+    port test.invoke { entry = "ws.boot"; input = null; host = $h } → observedRun121
+    port test.get { host = $h; store = "state"; key = "matterModelRun" } → observedHostValue122
+    assert eq($observedHostValue122, at($generated, "run"))
+      otherwise "Expected deepEqual(h.state.get('matterModelRun'), generated.run)"
+    port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue123
+    port test.invoke { entry = "cw.receipt"; input = $observedHostValue123; host = $h } → observedRun124
+    assert eq(at($observedRun124, "value"), $receipt)
+      otherwise "Expected deepEqual(await h.run('cw.receipt', h.state.get('collaboration')), receipt)"
+  port test.modelRequests { host = $modelFixture } → observedRequests125
+  let generatedRequests = filter($observedRequests125, "req", eq(at($req, "url"), "http://127.0.0.1:11434/api/generate"))
+  let generatedModels = list()
+  fold $generatedRequests as request; observedLoop126 starts { generatedModels = $generatedModels }:
+    let generatedModels = at($observedLoop126, "generatedModels")
+    port test.parse { text = at($request, "body") } → observedJson127
+    let generatedModels = append($generatedModels, list(at($observedJson127, "model")))
+    yield { generatedModels = $generatedModels } → observedLoop126
+  let generatedModels = at($observedLoop126, "generatedModels")
+  assert eq($generatedModels, list(at(at($bindings, "fast"), "model"), at(at($bindings, "deep"), "model")))
+    otherwise "Expected deepEqual(generatedModels,[bindings.fast.model,bindings.deep.model])"
+  let observedRefused128 = false
+  port test.repeat { text = "0"; count = 64 } → observedRepeated129
+  port test.merge { records = list(at($bindings, "fast"), { digest = $observedRepeated129 }) } → observedRecord130
+  port test.merge { records = list($bindings, { fast = $observedRecord130 }) } → observedRecord131
+  try:
+    port test.model { slot = "fast"; bindings = $observedRecord131; brief = $exported; host = $modelFixture } → observedModel132
+  catch observedFault133:
+    port test.match { text = $observedFault133.message; pattern = "pinned digest"; flags = "" } → observedDiagnostic134
+    let observedRefused128 = $observedDiagnostic134
+  assert $observedRefused128
+    otherwise "Expected rejects( generateMatterSuggestions('fast', {...bindings, fast: {...bindings.fast, digest: '0'.repeat(64)}}, exported, modelFixture), /pinned digest/, )"
+  port test.modelRequests { host = $modelFixture } → observedRequests135
+  let afterRefusal = filter($observedRequests135, "req", eq(at($req, "url"), "http://127.0.0.1:11434/api/generate"))
+  assert eq(count($afterRefusal), 2)
+    otherwise "Expected equal(afterRefusal.length,2)"
+  port test.get { host = $h; store = "state"; key = "matterSuggestions" } → observedHostValue136
+  let checked = $observedHostValue136
+  port test.get { host = $h; store = "state"; key = "matterModelRun" } → observedHostValue137
+  let modelRun = $observedHostValue137
+  port test.set { host = $h; store = "values"; key = "#mw-suggestion"; value = "access" } → observedHostValue138
+  port test.invoke { entry = "mw.suggestUI"; input = null; host = $h } → observedRun139
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue140
+  let proposal = at(at($observedHostValue140, "proposals"), add(count(at($observedHostValue140, "proposals")), -1))
+  let origin = at(at(at($proposal, "content"), "change"), "origin")
+  port test.stringify { value = $modelRun } → observedJson141
+  port test.digest { text = $observedJson141 } → observedHash142
+  assert eq(at($origin, "modelRunHash"), $observedHash142)
+    otherwise "Expected equal(origin.modelRunHash, digest(JSON.stringify(modelRun)))"
+  port test.get { host = $h; store = "content"; key = "#mw-model-run-panel" } → observedHostValue143
+  assert eq($observedHostValue143, false)
+    otherwise "Expected equal(h.content.get('#mw-model-run-panel'), false)"
+  port test.get { host = $h; store = "content"; key = "#mw-model-run-hash" } → observedHostValue144
+  assert eq($observedHostValue144, at($origin, "modelRunHash"))
+    otherwise "Expected equal(h.content.get('#mw-model-run-hash'), origin.modelRunHash)"
+  port test.get { host = $h; store = "content"; key = "#mw-model-run-status" } → observedHostValue145
+  port test.match { text = $observedHostValue145; pattern = "Verified.*local draft"; flags = "" } → observedMatch146
+  assert $observedMatch146
+    otherwise "Expected match(h.content.get('#mw-model-run-status'), /Verified.*local draft/)"
+  port test.entries { value = $modelRun } → observedEntries147
+  port test.reverse { value = $observedEntries147 } → observedReversed148
+  port test.fromEntries { entries = $observedReversed148 } → observedRecord149
+  let supplied = $observedRecord149
+  port test.invoke { entry = "mw.verifyModelRun"; input = { origin = $origin; run = $supplied } } → observedRun150
+  assert eq(at($observedRun150, "value"), { ok = true; modelRunHash = at($origin, "modelRunHash") })
+    otherwise "Expected deepEqual(await run('mw.verifyModelRun', {origin, run: supplied}), {ok: true, modelRunHash: origin.modelRunHash})"
+  let observedRefused151 = false
+  port test.repeat { text = "0"; count = 64 } → observedRepeated152
+  port test.merge { records = list($modelRun, { responseHash = $observedRepeated152 }) } → observedRecord153
+  try:
+    port test.invoke { entry = "mw.verifyModelRun"; input = { origin = $origin; run = $observedRecord153 } } → observedRun154
+  catch observedFault155:
+    port test.match { text = $observedFault155.message; pattern = "MW-MODEL-RUN"; flags = "" } → observedDiagnostic156
+    let observedRefused151 = $observedDiagnostic156
+  assert $observedRefused151
+    otherwise "Expected rejects(run('mw.verifyModelRun', {origin, run: {...modelRun, responseHash: '0'.repeat(64)}}), /MW-MODEL-RUN/)"
+  let observedRefused157 = false
+  try:
+    port test.invoke { entry = "mw.origin"; input = { kind = "participant"; label = "alice"; briefHash = null; sourceHash = null; modelRunHash = at($origin, "modelRunHash") } } → observedRun158
+  catch observedFault159:
+    port test.match { text = $observedFault159.message; pattern = "MW-ORIGIN"; flags = "" } → observedDiagnostic160
+    let observedRefused157 = $observedDiagnostic160
+  assert $observedRefused157
+    otherwise "Expected rejects(run('mw.origin', {kind: 'participant', label: 'alice', briefHash: null, sourceHash: null, modelRunHash: origin.modelRunHash}), /MW-ORIGIN/)"
+  port test.stringify { value = at($checked, "response") } → observedJson161
+  port test.set { host = $h; store = "values"; key = "#mw-ai-response"; value = $observedJson161 } → observedHostValue162
+  port test.invoke { entry = "mw.checkUI"; input = null; host = $h } → observedRun163
+  port test.get { host = $h; store = "state"; key = "matterSuggestions" } → observedHostValue164
+  assert eq($observedHostValue164, $checked)
+    otherwise "Expected deepEqual(h.state.get('matterSuggestions'), checked)"
+  port test.get { host = $h; store = "state"; key = "matterModelRun" } → observedHostValue165
+  assert eq($observedHostValue165, null)
+    otherwise "Expected equal(h.state.get('matterModelRun'), null)"
+  port test.get { host = $h; store = "content"; key = "#mw-model-run-status" } → observedHostValue166
+  port test.match { text = $observedHostValue166; pattern = "unavailable"; flags = "" } → observedMatch167
+  assert $observedMatch167
+    otherwise "Expected match(h.content.get('#mw-model-run-status'), /unavailable/)"
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue168
+  let beforeVerification = $observedHostValue168
+  port test.stringify { value = $supplied } → observedJson169
+  port test.set { host = $h; store = "values"; key = "#mw-model-run-json"; value = $observedJson169 } → observedHostValue170
+  port test.invoke { entry = "mw.verifyModelRunUI"; input = null; host = $h } → observedRun171
+  port test.get { host = $h; store = "content"; key = "#mw-model-run-status" } → observedHostValue172
+  port test.match { text = $observedHostValue172; pattern = "Verified.*supplied"; flags = "" } → observedMatch173
+  assert $observedMatch173
+    otherwise "Expected match(h.content.get('#mw-model-run-status'), /Verified.*supplied/)"
+  port test.invoke { entry = "mw.modelRunInputUI"; input = null; host = $h } → observedRun174
+  port test.get { host = $h; store = "content"; key = "#mw-model-run-status" } → observedHostValue175
+  port test.match { text = $observedHostValue175; pattern = "^Verified"; flags = "" } → observedMatch176
+  assert not($observedMatch176)
+    otherwise "Expected doesNotMatch(h.content.get('#mw-model-run-status'), /^Verified/)"
+  port test.repeat { text = "0"; count = 64 } → observedRepeated177
+  port test.merge { records = list($modelRun, { responseHash = $observedRepeated177 }) } → observedRecord178
+  port test.stringify { value = $observedRecord178 } → observedJson179
+  port test.set { host = $h; store = "values"; key = "#mw-model-run-json"; value = $observedJson179 } → observedHostValue180
+  port test.invoke { entry = "mw.verifyModelRunUI"; input = null; host = $h } → observedRun181
+  port test.get { host = $h; store = "content"; key = "#mw-model-run-status" } → observedHostValue182
+  port test.match { text = $observedHostValue182; pattern = "Verification refused"; flags = "" } → observedMatch183
+  assert $observedMatch183
+    otherwise "Expected match(h.content.get('#mw-model-run-status'), /Verification refused/)"
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue184
+  assert eq($observedHostValue184, $beforeVerification)
+    otherwise "Expected deepEqual(h.state.get('collaboration'), beforeVerification)"
+  port test.get { host = $h; store = "state"; key = "matterModelRun" } → observedHostValue185
+  assert eq($observedHostValue185, null)
+    otherwise "Expected equal(h.state.get('matterModelRun'), null)"
+  port kernel.invoke { query = "fixture.matters.command1"; input = list("review", { decision = "approve"; comment = "Include this open question. Literal text: </textarea><script>example()</script> & notes." }) } → observedResult189
+  port kernel.invoke { query = "fixture.matters.command1"; input = list("accept") } → observedResult190
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue191
+  let board = $observedHostValue191
+  port test.invoke { entry = "cw.receipt"; input = $board } → observedRun192
+  let linkedReceipt = at($observedRun192, "value")
+  assert eq(at(at(at(at(at(at(at($linkedReceipt, "body"), "events"), 0), "request"), "change"), "origin"), "modelRunHash"), at($origin, "modelRunHash"))
+    otherwise "Expected equal(linkedReceipt.body.events[0].request.change.origin.modelRunHash, origin.modelRunHash)"
+  port test.stringify { value = $linkedReceipt } → observedJson193
+  assert not(includes($observedJson193, at($modelRun, "responseHash")))
+    otherwise "Expected ok(!JSON.stringify(linkedReceipt).includes(modelRun.responseHash))"
+  port test.invoke { entry = "cw.reconstruct"; input = $linkedReceipt } → observedRun194
+  assert eq(at($observedRun194, "value"), $board)
+    otherwise "Expected deepEqual(await run('cw.reconstruct', linkedReceipt), board)"
+  assert eq(at(at(at(at(at(at($board, "head"), "document"), "matter"), "items"), 0), "origin"), $origin)
+    otherwise "Expected deepEqual(board.head.document.matter.items[0].origin, origin)"
+  port test.invoke { entry = "mw.exportVisualReceiptUI"; input = null; host = $h } → observedRun195
+  port test.effects { host = $h; field = "downloads" } → observedEffects196
+  let download = at($observedEffects196, add(count($observedEffects196), -1))
+  assert eq(at($download, "name"), concat(concat("usewords-", at($proposal, "id")), "-receipt.html"))
+    otherwise "Expected equal(download.name, 'usewords-' + proposal.id + '-receipt.html')"
+  each list("Accepted for inclusion", "Decision trail", "Reviewed · approve", at(at($items, 0), "title"), "Inspect proposal data", "Inspect event", "Open JSON viewer", "command=\"show-modal\"", "class=\"json-property\"", "data-json-pointer=\"/body/events/0/request/change\"", "data-json-pointer=\"/body/events/1/request/action\"", "data-json-pointer=\"/body/events/1/request/contentHash\"", "data-json-pointer=\"/body/events/0/request/change/origin/modelRunHash\"", "data-json-pointer=\"/sha256\"", at($linkedReceipt, "sha256"), at($proposal, "contentHash"), at($origin, "modelRunHash")) as text:
+    assert includes(at($download, "text"), $text)
+      otherwise "Expected ok(download.text.includes(text), text)"
+  port test.matches { text = at($download, "text"); pattern = "<textarea\\b[^>]*id=\"usewords-collaboration-json\"[^>]*>([\\s\\S]*?)<\\/textarea>"; flags = "" } → observedMatches198
+  let embedded = $observedMatches198
+  assert $embedded
+    otherwise "Expected ok(embedded)"
+  port test.decodeEntities { text = at($embedded, 1) } → observedText199
+  port test.stringify { value = $linkedReceipt } → observedJson200
+  assert eq($observedText199, $observedJson200)
+    otherwise "Expected equal(decodeEntities(embedded[1]),JSON.stringify(linkedReceipt))"
+  assert not(includes(at($download, "text"), "<script>"))
+    otherwise "Expected ok(!download.text.includes('<script>'))"
+  port test.matches { text = at($download, "text"); pattern = "<script\\b"; flags = "g" } → observedMatches201
+  assert eq(count(if(or(eq($observedMatches201, null), eq($observedMatches201, at({}, "absent"))), list(), $observedMatches201)), 1)
+    otherwise "Expected equal((download.text.match(/<script\\b/g)??[]).length,1)"
+  assert includes(at($download, "text"), "<script id=\"receipt-json-navigation\">")
+    otherwise "Expected ok(download.text.includes('<script id=\"receipt-json-navigation\">'))"
+  assert not(includes(at($download, "text"), at($modelRun, "responseHash")))
+    otherwise "Expected ok(!download.text.includes(modelRun.responseHash))"
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue202
+  assert eq($observedHostValue202, $board)
+    otherwise "Expected deepEqual(h.state.get('collaboration'), board)"
+  port kernel.invoke { query = "fixture.matters.harness"; input = list() } → observedResult203
+  let imported = $observedResult203
+  port test.invoke { entry = "ws.boot"; input = null; host = $imported } → observedRun204
+  port test.set { host = $imported; store = "values"; key = "#mw-title"; value = "Receiver's own matter" } → _
+  port test.invoke { entry = "mw.createUI"; input = null; host = $imported } → _
+  port test.get { host = $imported; store = "state"; key = "matterIndex" } → beforeImport
+  assert eq(count(at($beforeImport, "items")), 1)
+    otherwise "Expected the receiving browser to already have a local matter"
+  port test.set { host = $imported; store = "values"; key = "#mw-import-file"; value = "receipt.html" } → observedHostValue205
+  let fileText = concat(at($download, "text"), "<textarea id=\"usewords-collaboration-json\">{}</textarea>")
+  port test.set { host = $imported; store = "files"; key = "#mw-import-file"; value = $fileText } → observedFile206
+  port test.invoke { entry = "mw.importUI"; input = null; host = $imported } → observedRun207
+  port test.get { host = $imported; store = "content"; key = "#ws-notice" } → observedHostValue208
+  port test.match { text = $observedHostValue208; pattern = "exactly one collaboration JSON field"; flags = "" } → observedMatch209
+  assert $observedMatch209
+    otherwise "Expected match(imported.content.get('#ws-notice'), /exactly one collaboration JSON field/)"
+  port test.repeat { text = "0"; count = 64 } → observedRepeated210
+  port test.replace { text = at($embedded, 1); search = at($linkedReceipt, "sha256"); replacement = $observedRepeated210 } → observedText211
+  port test.replace { text = at($download, "text"); search = at($embedded, 1); replacement = $observedText211 } → observedText212
+  let fileText = $observedText212
+  port test.set { host = $imported; store = "files"; key = "#mw-import-file"; value = $fileText } → observedFile213
+  port test.invoke { entry = "mw.importUI"; input = null; host = $imported } → observedRun214
+  port test.get { host = $imported; store = "content"; key = "#ws-notice" } → observedHostValue215
+  port test.match { text = $observedHostValue215; pattern = "CW-REPLAY.*History hash mismatch"; flags = "" } → observedMatch216
+  assert $observedMatch216
+    otherwise "Expected match(imported.content.get('#ws-notice'), /CW-REPLAY.*History hash mismatch/)"
+  port test.get { host = $imported; store = "state"; key = "matterIndex" } → observedHostValue217
+  assert eq($observedHostValue217, $beforeImport)
+    otherwise "Expected the invalid receipt to leave the local index unchanged"
+  let fileText = at($download, "text")
+  port test.set { host = $imported; store = "files"; key = "#mw-import-file"; value = $fileText } → observedFile218
+  port test.invoke { entry = "mw.importUI"; input = null; host = $imported } → observedRun219
+  port test.get { host = $imported; store = "content"; key = "#ws-notice" } → observedHostValue220
+  port test.match { text = $observedHostValue220; pattern = "Imported this matter and its history after exact replay"; flags = "" } → observedMatch221
+  assert $observedMatch221
+    otherwise "Expected match(imported.content.get('#ws-notice'), /Imported this matter and its history after exact replay/)"
+  port test.get { host = $imported; store = "state"; key = "collaboration" } → observedHostValue222
+  port test.stringify { value = $observedHostValue222 } → observedJson223
+  port test.stringify { value = $board } → observedJson224
+  assert eq($observedJson223, $observedJson224)
+    otherwise "Expected equal(JSON.stringify(imported.state.get('collaboration')), JSON.stringify(board))"
+  port test.get { host = $imported; store = "state"; key = "matterIndex" } → afterImport
+  assert and(eq(count(at($afterImport, "items")), 2), eq(at(at($afterImport, "items"), 0), at(at($beforeImport, "items"), 0)))
+    otherwise "Expected exact replay to add the imported matter alongside the receiving browser's own matter"
+  port test.get { host = $imported; store = "state"; key = "matterModelRun" } → observedHostValue225
+  assert eq($observedHostValue225, null)
+    otherwise "Expected equal(imported.state.get('matterModelRun'), null)"
+  port test.effects { host = $imported; field = "fileReads" } → observedReads226
+  assert eq($observedReads226, list("#mw-import-file", "#mw-import-file", "#mw-import-file"))
+    otherwise "Expected deepEqual(fileReads(imported),['#mw-import-file','#mw-import-file','#mw-import-file'])"
+  port test.keys { host = $imported; store = "storage" } → observedHostValue227
+  assert not(some($observedHostValue227, "key", and(eq(at($key, add(count($key), -3)), "."), eq(at($key, add(count($key), -2)), "a"), eq(at($key, add(count($key), -1)), "i"))))
+    otherwise "Expected ok(!imported.storage.keys().some(key => key.endsWith('.ai')))"
+
+# two local matters keep separate boards and AI drafts, with selection restored by replay
+process test.matters.two-local-matters-keep-separate-boards-and-ai-drafts-with-selection-restored-by-replay:
+  call fixture.matters.setup
+  port kernel.invoke { query = "fixture.matters.harness"; input = list() } → observedResult228
+  let h = $observedResult228
+  port test.invoke { entry = "ws.boot"; input = null; host = $h } → observedRun229
+  port test.invoke { entry = "mw.createUI"; input = null; host = $h } → observedRun230
+  port test.get { host = $h; store = "state"; key = "workspace" } → observedHostValue231
+  let firstMatter = at(at(at($observedHostValue231, "document"), "matter"), "id")
+  port test.match { text = $firstMatter; pattern = "^matter_[0-9a-f]{25}$"; flags = "" } → validId
+  assert $validId
+    otherwise "Expected a matter identifier with a fresh nonce"
+  port test.invoke { entry = "mw.briefUI"; input = null; host = $h } → observedRun232
+  port test.get { host = $h; store = "state"; key = "matterBrief" } → observedHostValue233
+  let firstBrief = $observedHostValue233
+  port test.set { host = $h; store = "values"; key = "#mw-ai-response"; value = "PRIVATE UNCHECKED DRAFT" } → observedHostValue234
+  port test.set { host = $h; store = "values"; key = "#mw-item-body"; value = "PRIVATE FORM TEXT" } → observedHostValue235
+  port test.set { host = $h; store = "values"; key = "#cw-comment"; value = "PRIVATE REVIEW DRAFT" } → observedHostValue236
+  port test.set { host = $h; store = "values"; key = "#mw-title"; value = "Second matter" } → observedHostValue237
+  port test.set { host = $h; store = "values"; key = "#mw-description"; value = "A separate inquiry with its own context." } → observedHostValue238
+  port test.invoke { entry = "mw.createUI"; input = null; host = $h } → observedRun239
+  port test.get { host = $h; store = "state"; key = "workspace" } → observedHostValue240
+  let secondMatter = at(at(at($observedHostValue240, "document"), "matter"), "id")
+  port test.match { text = $secondMatter; pattern = "^matter_[0-9a-f]{25}$"; flags = "" } → validSecondId
+  assert and($validSecondId, not(eq($firstMatter, $secondMatter)))
+    otherwise "Expected a distinct matter identifier for the second matter"
+  port test.get { host = $h; store = "state"; key = "matterBrief" } → observedHostValue241
+  assert eq($observedHostValue241, null)
+    otherwise "Expected equal(h.state.get('matterBrief'),null)"
+  port test.get { host = $h; store = "values"; key = "#mw-ai-response" } → observedHostValue242
+  assert eq($observedHostValue242, "")
+    otherwise "Expected equal(h.values.get('#mw-ai-response'),'')"
+  port test.get { host = $h; store = "values"; key = "#mw-item-body" } → observedHostValue243
+  assert eq($observedHostValue243, "")
+    otherwise "Expected equal(h.values.get('#mw-item-body'),'')"
+  port test.get { host = $h; store = "values"; key = "#cw-comment" } → observedHostValue244
+  assert eq($observedHostValue244, "")
+    otherwise "Expected equal(h.values.get('#cw-comment'),'')"
+  port test.set { host = $h; store = "values"; key = "#mw-select"; value = $firstMatter } → observedHostValue245
+  port test.invoke { entry = "mw.selectUI"; input = null; host = $h } → observedRun246
+  port test.get { host = $h; store = "state"; key = "matterBrief" } → observedHostValue247
+  assert eq($observedHostValue247, $firstBrief)
+    otherwise "Expected deepEqual(h.state.get('matterBrief'),firstBrief)"
+  port test.get { host = $h; store = "state"; key = "workspace" } → observedHostValue248
+  assert eq(at(at(at($observedHostValue248, "document"), "matter"), "title"), "First matter")
+    otherwise "Expected equal(h.state.get('workspace').document.matter.title,'First matter')"
+  port test.clear { host = $h; store = "state" } → observedHostValue249
+  port test.invoke { entry = "ws.boot"; input = null; host = $h } → observedRun250
+  port test.get { host = $h; store = "state"; key = "workspace" } → observedHostValue251
+  assert eq(at(at(at($observedHostValue251, "document"), "matter"), "id"), $firstMatter)
+    otherwise "Expected the first matter to be restored after replay"
+  port test.get { host = $h; store = "state"; key = "matterBrief" } → observedHostValue252
+  assert eq($observedHostValue252, $firstBrief)
+    otherwise "Expected deepEqual(h.state.get('matterBrief'),firstBrief)"
+  port test.get { host = $h; store = "content"; key = "#mw-status" } → observedHostValue253
+  port test.match { text = $observedHostValue253; pattern = "Open matter"; flags = "" } → observedMatch254
+  assert $observedMatch254
+    otherwise "Expected match(h.content.get('#mw-status'),/Open matter/)"
+
+# AI text is rendered literally and a storage failure does not register a new matter
+process test.matters.ai-text-is-rendered-literally-and-a-storage-failure-does-not-register-a-new-matter:
+  call fixture.matters.setup
+  port kernel.invoke { query = "fixture.matters.harness"; input = list() } → observedResult255
+  let h = $observedResult255
+  port test.invoke { entry = "ws.boot"; input = null; host = $h } → observedRun256
+  port test.invoke { entry = "mw.createUI"; input = null; host = $h } → observedRun257
+  port test.invoke { entry = "mw.briefUI"; input = null; host = $h } → observedRun258
+  port test.get { host = $h; store = "state"; key = "matterBrief" } → observedHostValue259
+  let current = $observedHostValue259
+  port test.merge { records = list(at($items, 0), { title = "<script>execute()</script>" }) } → observedRecord260
+  let literal = { protocol = "usewords/matter-suggestions/1"; briefHash = at($current, "sha256"); matterId = at(at($current, "request"), "matterId"); provider = "Unverified fixture"; items = list($observedRecord260) }
+  port test.stringify { value = $literal } → observedJson261
+  port test.set { host = $h; store = "values"; key = "#mw-ai-response"; value = $observedJson261 } → observedHostValue262
+  port test.invoke { entry = "mw.checkUI"; input = null; host = $h } → observedRun263
+  port test.get { host = $h; store = "content"; key = "#mw-suggestion-cards" } → observedHostValue264
+  port test.match { text = $observedHostValue264; pattern = "&lt;script&gt;"; flags = "" } → observedMatch265
+  assert $observedMatch265
+    otherwise "Expected match(h.content.get('#mw-suggestion-cards'),/&lt;script&gt;/)"
+  port test.get { host = $h; store = "content"; key = "#mw-suggestion-cards" } → observedHostValue266
+  assert eq(includes($observedHostValue266, "<script>"), false)
+    otherwise "Expected equal(h.content.get('#mw-suggestion-cards').includes('<script>'),false)"
+  port test.get { host = $h; store = "state"; key = "workspace" } → observedHostValue267
+  let previous = $observedHostValue267
+  port test.failWrites { host = $h } → observedWrites268
+  port test.set { host = $h; store = "values"; key = "#mw-title"; value = "Unsaved matter" } → observedHostValue269
+  port test.invoke { entry = "mw.createUI"; input = null; host = $h } → observedRun270
+  port test.get { host = $h; store = "state"; key = "workspace" } → observedHostValue271
+  port test.sameReference { left = $observedHostValue271; right = $previous } → sameState271
+  assert $sameState271
+    otherwise "Expected the previous workspace object to remain in state"
+  port test.get { host = $h; store = "state"; key = "matterIndex" } → observedHostValue272
+  assert eq(count(at($observedHostValue272, "items")), 1)
+    otherwise "Expected equal(h.state.get('matterIndex').items.length,1)"
+  port test.get { host = $h; store = "content"; key = "#ws-notice" } → observedHostValue273
+  port test.match { text = $observedHostValue273; pattern = "Could not keep"; flags = "" } → observedMatch274
+  assert $observedMatch274
+    otherwise "Expected match(h.content.get('#ws-notice'),/Could not keep/)"
+  port test.get { host = $h; store = "state"; key = "matterSuggestions" } → observedHostValue275
+  let previousSuggestions = $observedHostValue275
+  port test.merge { records = list($literal, { provider = "Replacement draft" }) } → observedRecord276
+  port test.stringify { value = $observedRecord276 } → observedJson277
+  port test.set { host = $h; store = "values"; key = "#mw-ai-response"; value = $observedJson277 } → observedHostValue278
+  port test.invoke { entry = "mw.checkUI"; input = null; host = $h } → observedRun279
+  port test.get { host = $h; store = "state"; key = "matterSuggestions" } → observedHostValue280
+  port test.sameReference { left = $observedHostValue280; right = $previousSuggestions } → sameState280
+  assert $sameState280
+    otherwise "Expected the previous matterSuggestions object to remain in state"
+  port test.get { host = $h; store = "content"; key = "#ws-notice" } → observedHostValue281
+  port test.match { text = $observedHostValue281; pattern = "Previous draft is unchanged"; flags = "" } → observedMatch282
+  assert $observedMatch282
+    otherwise "Expected match(h.content.get('#ws-notice'),/Previous draft is unchanged/)"
+
+# matter history import replays before registering and refuses duplicate identifiers
+process test.matters.matter-history-import-replays-before-registering-and-refuses-duplicate-identifiers:
+  call fixture.matters.setup
+  port test.invoke { entry = "cw.receipt"; input = $initial } → observedRun283
+  let receipt = at($observedRun283, "value")
+  port kernel.invoke { query = "fixture.matters.harness"; input = list() } → observedResult284
+  let h = $observedResult284
+  port test.invoke { entry = "ws.boot"; input = null; host = $h } → observedRun285
+  port test.stringify { value = $receipt } → observedJson286
+  port test.set { host = $h; store = "values"; key = "#mw-import-text"; value = $observedJson286 } → observedHostValue287
+  port test.invoke { entry = "mw.importUI"; input = null; host = $h } → observedRun288
+  port test.get { host = $h; store = "state"; key = "workspace" } → observedHostValue289
+  assert eq(at(at(at($observedHostValue289, "document"), "matter"), "id"), "workshop")
+    otherwise "Expected equal(h.state.get('workspace').document.matter.id,'workshop')"
+  port test.get { host = $h; store = "state"; key = "matterIndex" } → observedHostValue290
+  assert eq(count(at($observedHostValue290, "items")), 1)
+    otherwise "Expected equal(h.state.get('matterIndex').items.length,1)"
+  port test.invoke { entry = "mw.importUI"; input = null; host = $h } → observedRun291
+  port test.get { host = $h; store = "state"; key = "matterIndex" } → observedHostValue292
+  assert eq(count(at($observedHostValue292, "items")), 1)
+    otherwise "Expected equal(h.state.get('matterIndex').items.length,1)"
+  port test.get { host = $h; store = "content"; key = "#ws-notice" } → observedHostValue293
+  port test.match { text = $observedHostValue293; pattern = "identifier already exists"; flags = "" } → observedMatch294
+  assert $observedMatch294
+    otherwise "Expected match(h.content.get('#ws-notice'),/identifier already exists/)"
+
+# management lifecycle concludes with disagreement, archives and reopens without settling issues
+process test.matters.management-lifecycle-concludes-with-disagreement-archives-and-reopens-without-settling-issues:
+  call fixture.matters.setup
+  port kernel.invoke { query = "fixture.matters.suggestion"; input = list($initial, "access") } → observedResult295
+  port kernel.invoke { query = "fixture.matters.incorporate"; input = list($initial, "issue", $observedResult295) } → observedResult296
+  let board = $observedResult296
+  let itemsBefore = at(at(at(at($board, "head"), "document"), "matter"), "items")
+  port kernel.invoke { query = "fixture.matters.acceptedManagement"; input = list($board, "wait", "transition", { status = "waiting"; reason = "Waiting for cost evidence."; outcome = null }) } → observedResult297
+  let board = $observedResult297
+  port kernel.invoke { query = "fixture.matters.acceptedManagement"; input = list($board, "pause", "transition", { status = "paused"; reason = "Participants need time."; outcome = null }) } → observedResult298
+  let board = $observedResult298
+  port kernel.invoke { query = "fixture.matters.acceptedManagement"; input = list($board, "conclude", "transition", { status = "concluded"; reason = "We have accurately recorded our different priorities."; outcome = "disagreement" }) } → observedResult299
+  let board = $observedResult299
+  let observedRefused300 = false
+  port kernel.invoke { query = "fixture.matters.suggestion"; input = list($board, "low_fees") } → observedResult301
+  try:
+    port kernel.invoke { query = "fixture.matters.propose"; input = list($board, "closed_item", $observedResult301) } → observedResult302
+  catch observedFault303:
+    port test.match { text = $observedFault303.message; pattern = "MM-CLOSED"; flags = "" } → observedDiagnostic304
+    let observedRefused300 = $observedDiagnostic304
+  assert $observedRefused300
+    otherwise "Expected rejects(propose(board,'closed_item',await suggestion(board,'low_fees')),/MM-CLOSED/)"
+  let observedRefused305 = false
+  port kernel.invoke { query = "fixture.matters.manage"; input = list($board, "orient", { purpose = "Changed"; scope = "Changed" }) } → observedResult306
+  try:
+    port kernel.invoke { query = "fixture.matters.propose"; input = list($board, "closed_orientation", $observedResult306) } → observedResult307
+  catch observedFault308:
+    port test.match { text = $observedFault308.message; pattern = "MM-CLOSED"; flags = "" } → observedDiagnostic309
+    let observedRefused305 = $observedDiagnostic309
+  assert $observedRefused305
+    otherwise "Expected rejects(propose(board,'closed_orientation',manage(board,'orient',{purpose:'Changed',scope:'Changed'})),/MM-CLOSED/)"
+  port kernel.invoke { query = "fixture.matters.acceptedManagement"; input = list($board, "archive", "transition", { status = "archived"; reason = "Retain this record for reference."; outcome = "disagreement" }) } → observedResult310
+  let board = $observedResult310
+  port kernel.invoke { query = "fixture.matters.acceptedManagement"; input = list($board, "reopen", "transition", { status = "open"; reason = "New information is available."; outcome = null }) } → observedResult311
+  let board = $observedResult311
+  assert eq(at(at(at(at($board, "head"), "document"), "matter"), "items"), $itemsBefore)
+    otherwise "Expected deepEqual(board.head.document.matter.items,itemsBefore)"
+  assert eq(at(at(at(at(at($board, "head"), "document"), "matter"), "management"), "outcome"), null)
+    otherwise "Expected equal(board.head.document.matter.management.outcome,null)"
+  port test.invoke { entry = "cw.receipt"; input = $board } → observedRun312
+  port test.invoke { entry = "cw.reconstruct"; input = at($observedRun312, "value") } → observedRun313
+  assert eq(at($observedRun313, "value"), $board)
+    otherwise "Expected deepEqual(await run('cw.reconstruct',await run('cw.receipt',board)),board)"
+
+# management authority, assignee authorship and independent review are enforced by algebra
+process test.matters.management-authority-assignee-authorship-and-independent-review-are-enforced-by-algebra:
+  call fixture.matters.setup
+  port kernel.invoke { query = "fixture.matters.acceptedManagement"; input = list($initial, "request", "request", { id = "costs"; title = "What costs remain unknown?"; assignee = "bob" }) } → observedResult314
+  let board = $observedResult314
+  port test.invoke { entry = "mm.overview"; input = { board = $board; actor = "bob" } } → observedRun315
+  let view = at($observedRun315, "value")
+  assert eq(at(at(at($view, "responseRequests"), 0), "id"), "costs")
+    otherwise "Expected equal(view.responseRequests[0].id,'costs')"
+  assert eq(count(at($view, "needsReview")), 0)
+    otherwise "Expected equal(view.needsReview.length,0)"
+  let observedRefused316 = false
+  port kernel.invoke { query = "fixture.matters.manage"; input = list($board, "respond", { id = "costs"; response = "Speaking for Bob." }) } → observedResult317
+  try:
+    port kernel.invoke { query = "fixture.matters.propose"; input = list($board, "wrong_author", $observedResult317) } → observedResult318
+  catch observedFault319:
+    port test.match { text = $observedFault319.message; pattern = "MM-AUTHORITY"; flags = "" } → observedDiagnostic320
+    let observedRefused316 = $observedDiagnostic320
+  assert $observedRefused316
+    otherwise "Expected rejects(propose(board,'wrong_author',manage(board,'respond',{id:'costs',response:'Speaking for Bob.'})),/MM-AUTHORITY/)"
+  let observedRefused321 = false
+  port kernel.invoke { query = "fixture.matters.manage"; input = list($board, "orient", { purpose = "A purpose"; scope = "A scope" }) } → observedResult322
+  try:
+    port test.invoke { entry = "cw.apply"; input = { board = $board; request = { action = "propose"; actor = "bob"; id = "not_coordinator"; expectedBoardRevision = at($board, "revision"); title = "Change scope"; change = $observedResult322 } } } → observedRun323
+  catch observedFault324:
+    port test.match { text = $observedFault324.message; pattern = "MM-AUTHORITY"; flags = "" } → observedDiagnostic325
+    let observedRefused321 = $observedDiagnostic325
+  assert $observedRefused321
+    otherwise "Expected rejects(run('cw.apply',{board,request:{action:'propose',actor:'bob',id:'not_coordinator',expectedBoardRevision:board.revision,title:'Change scope',change:manage(board,'orient',{pur"
+  port kernel.invoke { query = "fixture.matters.acceptedManagement"; input = list($board, "response", "respond", { id = "costs"; response = "The available figures are incomplete; I cannot confirm a total." }, "bob") } → observedResult326
+  let board = $observedResult326
+  port test.invoke { entry = "mm.overview"; input = { board = $board; actor = "bob" } } → observedRun327
+  let view = at($observedRun327, "value")
+  assert eq(count(at($view, "responseRequests")), 0)
+    otherwise "Expected equal(view.responseRequests.length,0)"
+  assert eq(at(at(at(at($view, "management"), "requests"), 0), "status"), "answered")
+    otherwise "Expected equal(view.management.requests[0].status,'answered')"
+  assert eq(at(at(at(at($board, "head"), "document"), "matter"), "status"), "open")
+    otherwise "Expected equal(board.head.document.matter.status,'open')"
+  let observedRefused328 = false
+  port kernel.invoke { query = "fixture.matters.manage"; input = list($board, "participant", { id = "casey"; role = "coordinator"; capacity = "Attempt to expand authority" }) } → observedResult329
+  try:
+    port kernel.invoke { query = "fixture.matters.propose"; input = list($board, "escalate", $observedResult329) } → observedResult330
+  catch observedFault331:
+    port test.match { text = $observedFault331.message; pattern = "MM-ROLE"; flags = "" } → observedDiagnostic332
+    let observedRefused328 = $observedDiagnostic332
+  assert $observedRefused328
+    otherwise "Expected rejects(propose(board,'escalate',manage(board,'participant',{id:'casey',role:'coordinator',capacity:'Attempt to expand authority'})),/MM-ROLE/)"
+  let observedRefused333 = false
+  port kernel.invoke { query = "fixture.matters.manage"; input = list($board, "participant", { id = "bob"; role = "observer"; capacity = "No independent reviewer" }) } → observedResult334
+  try:
+    port kernel.invoke { query = "fixture.matters.propose"; input = list($board, "no_review", $observedResult334) } → observedResult335
+  catch observedFault336:
+    port test.match { text = $observedFault336.message; pattern = "MM-REVIEW"; flags = "" } → observedDiagnostic337
+    let observedRefused333 = $observedDiagnostic337
+  assert $observedRefused333
+    otherwise "Expected rejects(propose(board,'no_review',manage(board,'participant',{id:'bob',role:'observer',capacity:'No independent reviewer'})),/MM-REVIEW/)"
+  port kernel.invoke { query = "fixture.matters.acceptedManagement"; input = list($board, "coordinate", "participant", { id = "bob"; role = "coordinator"; capacity = "Coordinating evidence gathering" }) } → observedResult338
+  let board = $observedResult338
+  assert eq(at(at(at(at(at(at(at($board, "head"), "document"), "matter"), "management"), "participants"), 1), "role"), "coordinator")
+    otherwise "Expected equal(board.head.document.matter.management.participants[1].role,'coordinator')"
+  port test.invoke { entry = "cw.receipt"; input = $board } → observedRun339
+  port test.invoke { entry = "cw.reconstruct"; input = at($observedRun339, "value") } → observedRun340
+  assert eq(at($observedRun340, "value"), $board)
+    otherwise "Expected deepEqual(await run('cw.reconstruct',await run('cw.receipt',board)),board)"
+
+# management rejects invalid transitions, lost conclusions, foreign scope and undeclared authority
+process test.matters.management-rejects-invalid-transitions-lost-conclusions-foreign-scope-and-undeclared-authority:
+  call fixture.matters.setup
+  let observedRefused341 = false
+  port kernel.invoke { query = "fixture.matters.manage"; input = list($initial, "transition", { status = "archived"; reason = "Too early"; outcome = "stopped" }) } → observedResult342
+  try:
+    port kernel.invoke { query = "fixture.matters.propose"; input = list($initial, "archive_early", $observedResult342) } → observedResult343
+  catch observedFault344:
+    port test.match { text = $observedFault344.message; pattern = "MM-TRANSITION"; flags = "" } → observedDiagnostic345
+    let observedRefused341 = $observedDiagnostic345
+  assert $observedRefused341
+    otherwise "Expected rejects(propose(initial,'archive_early',manage(initial,'transition',{status:'archived',reason:'Too early',outcome:'stopped'})),/MM-TRANSITION/)"
+  let observedRefused346 = false
+  port kernel.invoke { query = "fixture.matters.manage"; input = list($initial, "transition", { status = "paused"; reason = ""; outcome = null }) } → observedResult347
+  try:
+    port kernel.invoke { query = "fixture.matters.propose"; input = list($initial, "no_reason", $observedResult347) } → observedResult348
+  catch observedFault349:
+    port test.match { text = $observedFault349.message; pattern = "WS-REQUIRED"; flags = "" } → observedDiagnostic350
+    let observedRefused346 = $observedDiagnostic350
+  assert $observedRefused346
+    otherwise "Expected rejects(propose(initial,'no_reason',manage(initial,'transition',{status:'paused',reason:'',outcome:null})),/WS-REQUIRED/)"
+  let observedRefused351 = false
+  port kernel.invoke { query = "fixture.matters.manage"; input = list($initial, "orient", { purpose = "A purpose"; scope = "A scope"; consent = true }) } → observedResult352
+  try:
+    port kernel.invoke { query = "fixture.matters.propose"; input = list($initial, "extra", $observedResult352) } → observedResult353
+  catch observedFault354:
+    port test.match { text = $observedFault354.message; pattern = "MW-SHAPE"; flags = "" } → observedDiagnostic355
+    let observedRefused351 = $observedDiagnostic355
+  assert $observedRefused351
+    otherwise "Expected rejects(propose(initial,'extra',manage(initial,'orient',{purpose:'A purpose',scope:'A scope',consent:true})),/MW-SHAPE/)"
+  port kernel.invoke { query = "fixture.matters.manage"; input = list($initial, "orient", { purpose = "A purpose"; scope = "A scope" }) } → observedResult356
+  port test.merge { records = list($observedResult356, { matterId = "other" }) } → observedRecord357
+  let foreign = $observedRecord357
+  let observedRefused358 = false
+  try:
+    port kernel.invoke { query = "fixture.matters.propose"; input = list($initial, "foreign", $foreign) } → observedResult359
+  catch observedFault360:
+    port test.match { text = $observedFault360.message; pattern = "MM-SCOPE"; flags = "" } → observedDiagnostic361
+    let observedRefused358 = $observedDiagnostic361
+  assert $observedRefused358
+    otherwise "Expected rejects(propose(initial,'foreign',foreign),/MM-SCOPE/)"
+  port kernel.invoke { query = "fixture.matters.acceptedManagement"; input = list($initial, "done", "transition", { status = "concluded"; reason = "We stop with uncertainty."; outcome = "stopped" }) } → observedResult362
+  let board = $observedResult362
+  let observedRefused363 = false
+  port kernel.invoke { query = "fixture.matters.manage"; input = list($board, "transition", { status = "archived"; reason = "Archive"; outcome = "agreement" }) } → observedResult364
+  try:
+    port kernel.invoke { query = "fixture.matters.propose"; input = list($board, "rewrite", $observedResult364) } → observedResult365
+  catch observedFault366:
+    port test.match { text = $observedFault366.message; pattern = "MM-OUTCOME"; flags = "" } → observedDiagnostic367
+    let observedRefused363 = $observedDiagnostic367
+  assert $observedRefused363
+    otherwise "Expected rejects(propose(board,'rewrite',manage(board,'transition',{status:'archived',reason:'Archive',outcome:'agreement'})),/MM-OUTCOME/)"
+
+# related matters are declared references and do not mutate or grant access to their target
+process test.matters.related-matters-are-declared-references-and-do-not-mutate-or-grant-access-to-their-target:
+  call fixture.matters.setup
+  port kernel.invoke { query = "fixture.matters.create"; input = list("separate") } → observedResult368
+  let other = $observedResult368
+  let before = $other
+  port kernel.invoke { query = "fixture.matters.acceptedManagement"; input = list($initial, "relate", "link", { matterId = "separate"; relation = "depends-on"; note = "A declared dependency to inspect, not verified causation." }) } → observedResult369
+  let board = $observedResult369
+  assert eq($other, $before)
+    otherwise "Expected deepEqual(other,before)"
+  assert eq(at(at(at(at(at(at(at($board, "head"), "document"), "matter"), "management"), "links"), 0), "matterId"), "separate")
+    otherwise "Expected equal(board.head.document.matter.management.links[0].matterId,'separate')"
+  let observedRefused370 = false
+  port kernel.invoke { query = "fixture.matters.manage"; input = list($board, "link", { matterId = "separate"; relation = "related"; note = "Duplicate" }) } → observedResult371
+  try:
+    port kernel.invoke { query = "fixture.matters.propose"; input = list($board, "duplicate", $observedResult371) } → observedResult372
+  catch observedFault373:
+    port test.match { text = $observedFault373.message; pattern = "MM-LINK"; flags = "" } → observedDiagnostic374
+    let observedRefused370 = $observedDiagnostic374
+  assert $observedRefused370
+    otherwise "Expected rejects(propose(board,'duplicate',manage(board,'link',{matterId:'separate',relation:'related',note:'Duplicate'})),/MM-LINK/)"
+  let observedRefused375 = false
+  port kernel.invoke { query = "fixture.matters.manage"; input = list($board, "link", { matterId = "workshop"; relation = "part-of"; note = "Cycle to self" }) } → observedResult376
+  try:
+    port kernel.invoke { query = "fixture.matters.propose"; input = list($board, "self", $observedResult376) } → observedResult377
+  catch observedFault378:
+    port test.match { text = $observedFault378.message; pattern = "MM-LINK"; flags = "" } → observedDiagnostic379
+    let observedRefused375 = $observedDiagnostic379
+  assert $observedRefused375
+    otherwise "Expected rejects(propose(board,'self',manage(board,'link',{matterId:'workshop',relation:'part-of',note:'Cycle to self'})),/MM-LINK/)"
+  port kernel.invoke { query = "fixture.matters.acceptedManagement"; input = list($board, "unrelate", "unlink", { matterId = "separate" }) } → observedResult380
+  let unlinked = $observedResult380
+  assert eq(at(at(at(at(at($unlinked, "head"), "document"), "matter"), "management"), "links"), list())
+    otherwise "Expected deepEqual(unlinked.head.document.matter.management.links,[])"
+
+# a twelve-proposal management board replays inside the unchanged process budget
+process test.matters.a-twelve-proposal-management-board-replays-inside-the-unchanged-process-budget:
+  call fixture.matters.setup
+  let board = $initial
+  fold range(12) as observedIndex381; observedLoop382 starts { board = $board }:
+    let board = at($observedLoop382, "board")
+    let i = add($observedIndex381, -1)
+    port kernel.invoke { query = "fixture.matters.acceptedManagement"; input = list($board, concat("orientation_", $i), "orient", { purpose = concat("Explore the costs and priorities, revision ", $i, "."); scope = "No substantive decision is implied." }) } → observedResult383
+    let board = $observedResult383
+    yield { board = $board } → observedLoop382
+  let board = at($observedLoop382, "board")
+  port test.invoke { entry = "cw.receipt"; input = $board } → observedRun384
+  port test.invoke { entry = "cw.reconstruct"; input = at($observedRun384, "value") } → observedRun385
+  let replay = $observedRun385
+  assert eq(at($replay, "value"), $board)
+    otherwise "Expected deepEqual(replay.value,board)"
+  port test.compare { left = at(at($replay, "usage"), "steps"); right = 20000000; operation = "<=" } → observedComparison386
+  assert $observedComparison386
+    otherwise "Expected ok(replay.usage.steps<=20000000)"
+  let observedRefused387 = false
+  port kernel.invoke { query = "fixture.matters.manage"; input = list($board, "orient", { purpose = "Beyond bounded profile"; scope = "" }) } → observedResult388
+  try:
+    port kernel.invoke { query = "fixture.matters.propose"; input = list($board, "too_many", $observedResult388) } → observedResult389
+  catch observedFault390:
+    port test.match { text = $observedFault390.message; pattern = "CW-LIMIT"; flags = "" } → observedDiagnostic391
+    let observedRefused387 = $observedDiagnostic391
+  assert $observedRefused387
+    otherwise "Expected rejects(propose(board,'too_many',manage(board,'orient',{purpose:'Beyond bounded profile',scope:''})),/CW-LIMIT/)"
+  let forged = $board
+  port test.put { value = at(at(at(at($forged, "head"), "document"), "matter"), "management"); key = "purpose"; replacement = "Unrecorded purpose" } → observedUpdated392
+  port test.put { value = at(at(at($forged, "head"), "document"), "matter"); key = "management"; replacement = $observedUpdated392 } → observedUpdated393
+  port test.put { value = at(at($forged, "head"), "document"); key = "matter"; replacement = $observedUpdated393 } → observedUpdated394
+  port test.put { value = at($forged, "head"); key = "document"; replacement = $observedUpdated394 } → observedUpdated395
+  port test.put { value = $forged; key = "head"; replacement = $observedUpdated395 } → observedUpdated396
+  let forged = $observedUpdated396
+  let observedRefused397 = false
+  port test.invoke { entry = "cw.receipt"; input = $forged } → observedRun398
+  try:
+    port test.invoke { entry = "cw.reconstruct"; input = at($observedRun398, "value") } → observedRun399
+  catch observedFault400:
+    port test.match { text = $observedFault400.message; pattern = "CW-REPLAY"; flags = "" } → observedDiagnostic401
+    let observedRefused397 = $observedDiagnostic401
+  assert $observedRefused397
+    otherwise "Expected rejects(run('cw.reconstruct',await run('cw.receipt',forged)),/CW-REPLAY/)"
+
+process fixture.matters.command2:
+  let action = at($eventInput, 0)
+  let actor = at($eventInput, 1)
+  let extra = if(eq(at($eventInput, 2), at({}, "absent")), {}, at($eventInput, 2))
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue413
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue414
+  port test.merge { records = list({ action = $action; actor = $actor; id = "proposal_1"; expectedBoardRevision = at($observedHostValue413, "revision"); contentHash = at(at(at($observedHostValue414, "proposals"), 0), "contentHash") }, $extra) } → observedRecord415
+  port test.invoke { entry = "ws.agent"; input = { operation = "collaboration-command"; request = $observedRecord415 }; host = $h } → observedRun416
+  let result = at($observedRun416, "value")
+
+# matter register, attention and management forms follow scoped durable boards and refuse storage failure
+process test.matters.matter-register-attention-and-management-forms-follow-scoped-durable-boards-and-refuse-storage-failure:
+  call fixture.matters.setup
+  port kernel.invoke { query = "fixture.matters.harness"; input = list() } → observedResult402
+  let h = $observedResult402
+  port test.invoke { entry = "ws.boot"; input = null; host = $h } → observedRun403
+  port test.invoke { entry = "mw.createUI"; input = null; host = $h } → observedRun404
+  port test.get { host = $h; store = "state"; key = "workspace" } → firstWorkspace
+  let firstMatter = at(at(at($firstWorkspace, "document"), "matter"), "id")
+  port test.set { host = $h; store = "values"; key = "#mm-request-id"; value = "costs" } → observedHostValue405
+  port test.set { host = $h; store = "values"; key = "#mm-request-title"; value = "Which costs need evidence?" } → observedHostValue406
+  port test.set { host = $h; store = "values"; key = "#mm-assignee"; value = "bob" } → observedHostValue407
+  port test.invoke { entry = "mm.requestUI"; input = null; host = $h } → observedRun408
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue409
+  assert eq(count(at($observedHostValue409, "proposals")), 1)
+    otherwise "Expected equal(h.state.get('collaboration').proposals.length,1)"
+  port test.get { host = $h; store = "state"; key = "workspace" } → observedHostValue410
+  assert eq(count(at(at(at(at($observedHostValue410, "document"), "matter"), "management"), "requests")), 0)
+    otherwise "Expected equal(h.state.get('workspace').document.matter.management.requests.length,0)"
+  port test.get { host = $h; store = "content"; key = "#mm-register" } → observedHostValue411
+  port test.match { text = $observedHostValue411; pattern = "1 pending changes"; flags = "" } → observedMatch412
+  assert $observedMatch412
+    otherwise "Expected match(h.content.get('#mm-register'),/1 pending changes/)"
+  port kernel.invoke { query = "fixture.matters.command2"; input = list("review", "bob", { decision = "approve"; comment = "Record this request." }) } → observedResult417
+  port kernel.invoke { query = "fixture.matters.command2"; input = list("accept", "bob") } → observedResult418
+  port test.set { host = $h; store = "values"; key = "#cw-actor"; value = "bob" } → observedHostValue419
+  port test.invoke { entry = "mm.refreshUI"; input = null; host = $h } → observedRun420
+  port test.get { host = $h; store = "content"; key = "#mm-attention" } → observedHostValue421
+  port test.match { text = $observedHostValue421; pattern = "Response requested from you"; flags = "" } → observedMatch422
+  assert $observedMatch422
+    otherwise "Expected match(h.content.get('#mm-attention'),/Response requested from you/)"
+  port test.get { host = $h; store = "content"; key = "#mm-register" } → observedHostValue423
+  port test.match { text = $observedHostValue423; pattern = "1 response requests"; flags = "" } → observedMatch424
+  assert $observedMatch424
+    otherwise "Expected match(h.content.get('#mm-register'),/1 response requests/)"
+  port test.set { host = $h; store = "values"; key = "#mm-response-text"; value = "Private unsent response" } → observedHostValue425
+  port test.set { host = $h; store = "values"; key = "#mm-reason"; value = "Private lifecycle draft" } → observedHostValue426
+  port test.set { host = $h; store = "values"; key = "#mw-title"; value = "Separate" } → observedHostValue427
+  port test.set { host = $h; store = "values"; key = "#mw-description"; value = "A separate matter." } → observedHostValue428
+  port test.invoke { entry = "mw.createUI"; input = null; host = $h } → observedRun429
+  port test.get { host = $h; store = "values"; key = "#mm-response-text" } → observedHostValue430
+  assert eq($observedHostValue430, "")
+    otherwise "Expected equal(h.values.get('#mm-response-text'),'')"
+  port test.get { host = $h; store = "values"; key = "#mm-reason" } → observedHostValue431
+  assert eq($observedHostValue431, "")
+    otherwise "Expected equal(h.values.get('#mm-reason'),'')"
+  port test.get { host = $h; store = "content"; key = "#mm-attention" } → observedHostValue432
+  port test.match { text = $observedHostValue432; pattern = "Which costs"; flags = "" } → observedMatch433
+  assert not($observedMatch433)
+    otherwise "Expected doesNotMatch(h.content.get('#mm-attention'),/Which costs/)"
+  port test.set { host = $h; store = "values"; key = "#mw-select"; value = $firstMatter } → observedHostValue434
+  port test.invoke { entry = "mw.selectUI"; input = null; host = $h } → observedRun435
+  port test.get { host = $h; store = "content"; key = "#mm-attention" } → observedHostValue436
+  port test.match { text = $observedHostValue436; pattern = "Response requested from you"; flags = "" } → observedMatch437
+  assert $observedMatch437
+    otherwise "Expected match(h.content.get('#mm-attention'),/Response requested from you/)"
+  port test.invoke { entry = "cw.saveUI"; input = null; host = $h } → observedRun438
+  port test.has { host = $h; store = "storage"; key = concat("usewords.collaboration.v1.", at($runtime, "identity")) } → observedHostValue439
+  assert eq($observedHostValue439, false)
+    otherwise "Expected equal(h.storage.has(`usewords.collaboration.v1.${runtime.identity}`),false)"
+  port test.has { host = $h; store = "storage"; key = concat("usewords.matter-board.v1.", at($runtime, "identity"), ".", $firstMatter) } → observedHostValue440
+  assert $observedHostValue440
+    otherwise "Expected the first matter's board to remain in storage"
+  port test.set { host = $h; store = "values"; key = "#cw-actor"; value = "alice" } → observedHostValue441
+  port test.set { host = $h; store = "values"; key = "#mm-purpose-input"; value = "A new orientation" } → observedHostValue442
+  port test.set { host = $h; store = "values"; key = "#mm-scope-input"; value = "Bounded scope" } → observedHostValue443
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue444
+  let before = $observedHostValue444
+  port test.failWrites { host = $h } → observedWrites445
+  port test.invoke { entry = "mm.orientUI"; input = null; host = $h } → observedRun446
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue447
+  port test.sameReference { left = $observedHostValue447; right = $before } → sameState447
+  assert $sameState447
+    otherwise "Expected the previous collaboration object to remain in state"
+  port test.get { host = $h; store = "content"; key = "#ws-notice" } → observedHostValue448
+  port test.match { text = $observedHostValue448; pattern = "previous board remains active"; flags = "" } → observedMatch449
+  assert $observedMatch449
+    otherwise "Expected match(h.content.get('#ws-notice'),/previous board remains active/)"

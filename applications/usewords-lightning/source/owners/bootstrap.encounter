@@ -1,0 +1,55 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process owner.bootstrap:
+  let result = {
+    fragments = { matters = "page-matters"; workbench = "page-workbench" };
+    definitions = list(
+      { name = "runtime"; output = "source/runtime.json" },
+      { name = "page"; output = "source/page.json"; fragments = true },
+      { name = "style"; output = "source/style.json" },
+      { name = "words"; output = "source/words.json" }
+    );
+    libraries = {
+      "source/presentation/source-algebra.encounter" = "source-presentation/source-algebra.encounter";
+      "source/journeys.encounter" = "journeys/journeys.encounter";
+      "source/journeys.rel" = "journeys/journeys.rel";
+      "source/journeys-contracts.rel" = "journeys/journeys-contracts.rel";
+      "source/assurance/child-execution.encounter" = "assurance/child-execution.encounter";
+      "source/assurance/library-integrity.encounter" = "assurance/library-integrity.encounter";
+      "source/shared/workspace.encounter" = "workflows/workspace.encounter";
+      "source/shared/workspace-ui.encounter" = "workflows/workspace-ui.encounter";
+      "source/shared/party-work.encounter" = "workflows/party-work.encounter";
+      "source/shared/party-work-ui.encounter" = "workflows/party-work-ui.encounter";
+      "source/shared/matter-management.encounter" = "workflows/matter-management.encounter";
+      "source/shared/matter-management-ui.encounter" = "workflows/matter-management-ui.encounter";
+      "source/assurance/application-boundary.encounter" = "assurance/application-boundary.encounter"
+    };
+    publication = {
+      document = "uw.document";
+      styles = "uw.styles";
+      receiptProtocol = "usewords/build-receipt/1";
+      receipt = "build-receipt.json";
+      html = "index.html";
+      css = "style.css";
+      script = "app.js";
+      browserModules = {
+        seed = "vendor/worldwright/bootstrap/temple-seed.cjs";
+        value = "vendor/worldwright/bootstrap/ports/value.cjs";
+        effects = "vendor/worldwright/bootstrap/ports/browser-effects.cjs";
+        browser = "vendor/worldwright/bootstrap/ports/browser.cjs";
+        bridge = "vendor/worldwright/bootstrap/ports/kernel.cjs";
+        client = "bootstrap/client.cjs"
+      }
+    };
+    preview = {
+      port = 4197;
+      mime = { ".html" = "text/html; charset=utf-8"; ".css" = "text/css; charset=utf-8"; ".js" = "text/javascript; charset=utf-8"; ".json" = "application/json; charset=utf-8" };
+      fallback = "application/octet-stream";
+      headers = {
+        "Cache-Control" = "no-store";
+        "X-Content-Type-Options" = "nosniff";
+        "Content-Security-Policy" = "default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'"
+      }
+    }
+  }

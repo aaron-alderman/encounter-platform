@@ -1,0 +1,157 @@
+process-module "temple/surface-process-module/1"
+
+process fixture.languages.setup:
+  port test.runtime {} → observedRuntime1
+  let runtime = $observedRuntime1
+
+# Usewords has one authoritative Encounter owner and a generated JSON representation
+process test.languages.usewords-has-one-authoritative-encounter-owner-and-a-generated-json-representation:
+  call fixture.languages.setup
+  port test.path { segments = list(".", "algebra/usewords.process.json") } → observedPath2
+  port test.exists { file = $observedPath2 } → observedFile3
+  assert eq($observedFile3, false)
+    otherwise "Expected equal(fs.existsSync(path.join(root,'algebra/usewords.process.json')),false)"
+  let sourceModule = at(filter(at($runtime, "compiled"), "item", eq(at(at($item, "spec"), "file"), "source/usewords.encounter")), 0)
+  assert eq(at(at($runtime, "data"), "policySource"), at($sourceModule, "text"))
+    otherwise "Expected equal(runtime.data.policySource,module.text)"
+  port test.digest { text = at($sourceModule, "text") } → observedHash4
+  assert eq(at(at($sourceModule, "result"), "sourceHash"), $observedHash4)
+    otherwise "Expected equal(module.result.sourceHash,digest(module.text))"
+  assert eq(at(at($runtime, "data"), "policy"), at(at($sourceModule, "result"), "surface"))
+    otherwise "Expected deepEqual(runtime.data.policy,module.result.surface)"
+  assert not(eq(at(at(at(at($sourceModule, "result"), "surface"), "queries"), "uw.accept"), at({}, "absent")))
+    otherwise "Expected ok(Object.hasOwn(module.result.surface.queries,'uw.accept'))"
+  port test.compare { left = at(at($sourceModule, "result"), "steps"); right = at(at($runtime, "manifest"), "budget"); operation = "<" } → observedComparison5
+  assert $observedComparison5
+    otherwise "Expected ok(module.result.steps<runtime.manifest.budget)"
+  port test.json { file = "verification/encounter-migration.json" } → observedJson6
+  assert eq(at($observedJson6, "status"), "Exact ordered JSON correspondence passed before source-owner switch")
+    otherwise "Expected equal(read('verification/encounter-migration.json').status,'Exact ordered JSON correspondence passed before source-owner switch')"
+
+# compiler origins identify exact authored UTF-16 ranges, including every statement and process definition
+process test.languages.compiler-origins-identify-exact-authored-utf-16-ranges-including-every-statement-and-process-definition:
+  call fixture.languages.setup
+  let text = at(at(filter(at($runtime, "compiled"), "item", eq(at(at($item, "spec"), "file"), "source/usewords.encounter")), 0), "text")
+  let result = at(at(filter(at($runtime, "compiled"), "item", eq(at(at($item, "spec"), "file"), "source/usewords.encounter")), 0), "result")
+  port test.entries { value = at(at($result, "surface"), "queries") } → observedEntries7
+  assert eq(count(filter(at($result, "origins"), "origin", eq(at($origin, "kind"), "process-definition"))), count(map($observedEntries7, "recordEntry", at($recordEntry, 0))))
+    otherwise "Expected equal(result.origins.filter(origin=>origin.kind==='process-definition').length,Object.keys(result.surface.queries).length)"
+  assert some(at($result, "origins"), "origin", eq(at($origin, "kind"), "statement"))
+    otherwise "Expected ok(result.origins.some(origin=>origin.kind==='statement'))"
+  each at($result, "origins") as origin:
+    assert eq(at($origin, "file"), "source/usewords.encounter")
+      otherwise "Expected equal(origin.file,'source/usewords.encounter')"
+    port test.digest { text = $text } → observedHash9
+    assert eq(at($origin, "sourceHash"), $observedHash9)
+      otherwise "Expected equal(origin.sourceHash,digest(text))"
+    port text.slice { value = $text; start = at($origin, "start"); end = at($origin, "end") } → observedSlice10
+    port test.digest { text = $observedSlice10 } → observedHash11
+    assert eq($observedHash11, at($origin, "lexemeSha256"))
+      otherwise "Expected equal(digest(text.slice(origin.start,origin.end)),origin.lexemeSha256,origin.pointer)"
+
+# shared Worldwright presentation preserves exact source text, roles, line numbers and hash binding
+process test.languages.shared-worldwright-presentation-preserves-exact-source-text-roles-line-numbers-and-hash-binding:
+  call fixture.languages.setup
+  port test.invoke { entry = "uw.initial"; input = null } → observedRun12
+  let state = at($observedRun12, "value")
+  each list("meaning", "facts", "contract", "process", "generated", "map", "languages", "receipt") as selection:
+    port test.invoke { entry = "uw.inspect"; input = { state = $state; selection = $selection } } → observedRun14
+    let inspected = at($observedRun14, "value")
+    port test.invoke { entry = "uw.present"; input = $inspected } → observedRun15
+    let presented = at($observedRun15, "value")
+    port test.sourceText { tree = at($presented, "tree") } → observedText16
+    assert eq($observedText16, at($inspected, "text"))
+      otherwise "Expected equal(sourceText(presented.tree),inspected.text,selection)"
+    assert eq(at($presented, "sourceHash"), at($inspected, "sha256"))
+      otherwise "Expected equal(presented.sourceHash,inspected.sha256)"
+    assert eq(at(at(at($presented, "tree"), "attrs"), "data-numbered"), "true")
+      otherwise "Expected equal(presented.tree.attrs['data-numbered'],'true')"
+    assert some(at($presented, "segments"), "segment", not(eq(at($segment, "role"), "plain")))
+      otherwise "Expected ok(presented.segments.some(segment=>segment.role!=='plain'),selection)"
+  let raw = "// a comment\r\n(\"é\", \"isa\", \"Story\")\r\n\r\n"
+  port test.digest { text = $raw } → observedHash17
+  port test.invoke { entry = "uw.present"; input = { file = "test.rel"; text = $raw; sha256 = $observedHash17 } } → observedRun18
+  let displayed = at($observedRun18, "value")
+  port test.sourceText { tree = at($displayed, "tree") } → observedText19
+  assert eq($observedText19, $raw)
+    otherwise "Expected equal(sourceText(displayed.tree),raw)"
+  let observedRefused20 = false
+  port test.repeat { text = "0"; count = 64 } → observedRepeated21
+  try:
+    port test.invoke { entry = "uw.present"; input = { file = "test.rel"; text = $raw; sha256 = $observedRepeated21 } } → observedRun22
+  catch observedFault23:
+    port test.match { text = $observedFault23.message; pattern = "SP-BASIS"; flags = "" } → observedDiagnostic24
+    let observedRefused20 = $observedDiagnostic24
+  assert $observedRefused20
+    otherwise "Expected rejects(run('uw.present',{file:'test.rel',text:raw,sha256:'0'.repeat(64)}),/SP-BASIS/)"
+  let malicious = "<script>alert(\"x\")</script>\n"
+  port test.digest { text = $malicious } → observedHash25
+  port test.invoke { entry = "uw.present"; input = { file = "test.encounter"; text = $malicious; sha256 = $observedHash25 } } → observedRun26
+  let view = at($observedRun26, "value")
+  port test.sourceText { tree = at($view, "tree") } → observedText27
+  assert eq($observedText27, $malicious)
+    otherwise "Expected equal(sourceText(view.tree),malicious)"
+  port test.digest { text = $malicious } → observedHash28
+  port test.invoke { entry = "uw.sourceView"; input = { file = "test.encounter"; text = $malicious; sha256 = $observedHash28 } } → observedRun29
+  let serialized = at($observedRun29, "value")
+  port test.match { text = at($serialized, "html"); pattern = "<script>"; flags = "" } → observedMatch30
+  assert not($observedMatch30)
+    otherwise "Expected doesNotMatch(serialized.html,/<script>/)"
+  port test.match { text = at($serialized, "html"); pattern = "&lt;"; flags = "" } → observedMatch31
+  assert $observedMatch31
+    otherwise "Expected match(serialized.html,/&lt;/)"
+
+# unknown syntax, unsupported operators and unresolved process links refuse through the retained compiler
+process test.languages.unknown-syntax-unsupported-operators-and-unresolved-process-links-refuse-through-the-retained-compiler:
+  call fixture.languages.setup
+  let observedRefused32 = false
+  try:
+    port test.compile { file = "bad.encounter"; text = "process-module \"temple/surface-process-module/1\"\nprofile \"usewords/process/1\"\nprocess bad:\n  javascript \"alert(1)\"\n" } → observedCompiled33
+  catch observedFault34:
+    let observedRefused32 = true
+  assert $observedRefused32
+    otherwise "Expected rejects(compilerCompile('bad.encounter','process-module \"temple/surface-process-module/1\"\\nprofile \"usewords/process/1\"\\nprocess bad:\\n javascript \"alert(1)\"\\n'))"
+  let observedRefused35 = false
+  try:
+    port test.compile { file = "bad.encounter"; text = "process-module \"temple/surface-process-module/1\"\nprofile \"usewords/process/1\"\nprocess bad:\n  let result = eval(\"code\")\n" } → observedCompiled36
+  catch observedFault37:
+    let observedRefused35 = true
+  assert $observedRefused35
+    otherwise "Expected rejects(compilerCompile('bad.encounter','process-module \"temple/surface-process-module/1\"\\nprofile \"usewords/process/1\"\\nprocess bad:\\n let result = eval(\"code\")\\n'))"
+  port test.compile { file = "missing.encounter"; text = "process-module \"temple/surface-process-module/1\"\nprofile \"usewords/process/1\"\nprocess bad:\n  call missing.process\n" } → observedCompiled38
+  let candidate = $observedCompiled38
+  let observedRefused39 = false
+  try:
+    port test.link { surface = at($candidate, "surface") } → observedLinked40
+  catch observedFault41:
+    port test.match { text = $observedFault41.message; pattern = "."; flags = "" } → observedDiagnostic42
+    let observedRefused39 = $observedDiagnostic42
+  assert $observedRefused39
+    otherwise "Expected rejects(compilerLink(candidate.surface),/./)"
+
+# language catalogue declares distinct dialects without granting new execution authority
+process test.languages.language-catalogue-declares-distinct-dialects-without-granting-new-execution-authority:
+  call fixture.languages.setup
+  let catalogue = at(at($runtime, "data"), "languages")
+  assert eq(map(at($catalogue, "variants"), "item", at($item, "id")), list("usewords.words.v1", "encounter.views.v1", "encounter.process.v1", "rel.facts.v1", "usewords.constructs.v1", "usewords.matters.v1"))
+    otherwise "Expected deepEqual(catalogue.variants.map(item=>item.id),['usewords.words.v1','encounter.views.v1','encounter.process.v1','rel.facts.v1','usewords.constructs.v1','usewords.matters.v1'])"
+  port test.match { text = at($catalogue, "boundary"); pattern = "does not install a compiler"; flags = "" } → observedMatch43
+  assert $observedMatch43
+    otherwise "Expected match(catalogue.boundary,/does not install a compiler/)"
+  port text.join { values = at($catalogue, "extensionContract"); separator = " " } → observedJoined44
+  port test.match { text = $observedJoined44; pattern = "effects separately"; flags = "" } → observedMatch45
+  assert $observedMatch45
+    otherwise "Expected match(catalogue.extensionContract.join(' '),/effects separately/)"
+
+# child execution and shared libraries pass the Encounter boundary assurance
+process test.languages.child-execution-and-shared-libraries-pass-the-encounter-boundary-assurance:
+  call fixture.languages.setup
+  port test.invoke { entry = "assurance.childExecution"; input = null } → observedRun46
+  assert eq(at($observedRun46, "value"), 3)
+    otherwise "Expected equal(await run('assurance.childExecution'),3)"
+  port test.invoke { entry = "assurance.libraryIntegrity"; input = null } → observedRun47
+  assert eq(at($observedRun47, "value"), 7)
+    otherwise "Expected equal(await run('assurance.libraryIntegrity'),7)"
+  port test.invoke { entry = "assurance.applicationBoundary"; input = { application = "usewords-lightning" } } → observedRun48
+  assert eq(at($observedRun48, "value"), 9)
+    otherwise "Expected equal(await run('assurance.applicationBoundary',{application:'usewords-lightning'}),9)"

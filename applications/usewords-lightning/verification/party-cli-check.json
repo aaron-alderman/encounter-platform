@@ -1,0 +1,7 @@
+{
+  "ok": true,
+  "recordHash": "0c6cd80a862955f62e42ead2d75061e95ac0daca087a0f0e584d5ede25d9c0cc",
+  "packetHash": "537031e2f254403f5e2375df3789279165f6fce22ee06ccfbe627cf802e459c5",
+  "mutualRecordAcceptance": true,
+  "identities": "local personas; real identity requires an authenticated receiver"
+}

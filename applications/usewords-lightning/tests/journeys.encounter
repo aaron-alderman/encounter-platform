@@ -1,0 +1,270 @@
+process-module "temple/surface-process-module/1"
+
+process fixture.journeys.initial:
+  port test.invoke { entry = "uw.journeyInitial"; input = null } → observedRun1
+  let result = at($observedRun1, "value")
+
+process fixture.journeys.change:
+  let state = at($eventInput, 0)
+  let kind = at($eventInput, 1)
+  let value = at($eventInput, 2)
+  let target = if(eq(at($eventInput, 3), at({}, "absent")), null, at($eventInput, 3))
+  port test.invoke { entry = "uw.change"; input = { state = $state; request = { kind = $kind; value = $value; target = $target; baseRevision = at($state, "revision") } } } → observedRun2
+  let result = at($observedRun2, "value")
+
+process fixture.journeys.entries:
+  let state = at($eventInput, 0)
+  let result = filter(at($state, "projections"), "p", eq(at(at($p, "output"), "type"), "JourneyEntry"))
+
+process fixture.journeys.entry:
+  let state = at($eventInput, 0)
+  let id = at($eventInput, 1)
+  port kernel.invoke { query = "fixture.journeys.entries"; input = list($state) } → observedResult3
+  let result = at(filter($observedResult3, "p", eq(at(at($p, "contribution"), "id"), $id)), 0)
+
+process fixture.journeys.accept:
+  let state = at($eventInput, 0)
+  port test.invoke { entry = "uw.accept"; input = { state = $state; expectedRevision = at($state, "revision"); expectedInputHash = at($state, "inputHash") } } → observedRun4
+  let result = at($observedRun4, "value")
+
+process fixture.journeys.copy:
+  let result = at($eventInput, 0)
+
+process fixture.journeys.setup:
+  port test.runtime {} → observedRuntime5
+  let runtime = $observedRuntime5
+  let shared = "The horse asks us to listen."
+  let local = "Before offering a lesson, notice the question you are being asked."
+
+# one real encounter is source-bound once and appears in two journeys with different introductions
+process test.journeys.one-real-encounter-is-source-bound-once-and-appears-in-two-journeys-with-different-introductions:
+  call fixture.journeys.setup
+  port kernel.invoke { query = "fixture.journeys.initial"; input = list() } → observedResult6
+  let state = $observedResult6
+  port test.path { segments = list(".", "source/reference/water.rel") } → observedPath7
+  port test.read { file = $observedPath7 } → observedFile8
+  let source = $observedFile8
+  port test.digest { text = $source } → observedHash9
+  port test.json { file = "source/journeys.json" } → observedJson10
+  assert eq($observedHash9, at(at($observedJson10, "source"), "sha256"))
+    otherwise "Expected equal(digest(source),read('source/journeys.json').source.sha256)"
+  port test.facts { text = $source } → observedFacts11
+  let original = $observedFacts11
+  let title = at(at(filter($original, "x", eq(at($x, "p"), "title")), 0), "o")
+  let paragraphs = map(filter($original, "x", eq(at($x, "p"), "paragraph")), "x", at($x, "o"))
+  assert eq($title, "The horse has a few questions.")
+    otherwise "Expected equal(title,'The horse has a few questions.')"
+  port kernel.invoke { query = "fixture.journeys.entries"; input = list($state) } → observedResult12
+  assert eq(count($observedResult12), 2)
+    otherwise "Expected equal(entries(state).length,2)"
+  port kernel.invoke { query = "fixture.journeys.entries"; input = list($state) } → observedResult13
+  each $observedResult13 as p:
+    assert eq(at($p, "source"), "place.water")
+      otherwise "Expected equal(p.source,'place.water')"
+    assert eq(at(at($p, "values"), "J.subject"), "place.water")
+      otherwise "Expected equal(p.values['J.subject'],'place.water')"
+    assert eq(at(at($p, "values"), "J.title"), $title)
+      otherwise "Expected equal(p.values['J.title'],title)"
+    assert eq(at(at($p, "values"), "J.paragraphs"), $paragraphs)
+      otherwise "Expected deepEqual(p.values['J.paragraphs'],paragraphs)"
+  port kernel.invoke { query = "fixture.journeys.entries"; input = list($state) } → observedResult15
+  port kernel.invoke { query = "fixture.journeys.entries"; input = list($state) } → observedResult16
+  assert not(eq(at(at(at($observedResult15, 0), "values"), "J.introduction"), at(at(at($observedResult16, 1), "values"), "J.introduction")))
+    otherwise "Expected notEqual(entries(state)[0].values['J.introduction'],entries(state)[1].values['J.introduction'])"
+  port test.matches { text = at(at($state, "inputs"), "factText"); pattern = "\"isa\", \"Story\""; flags = "g" } → observedMatches17
+  assert eq(count(if(or(eq($observedMatches17, null), eq($observedMatches17, at({}, "absent"))), list(), $observedMatches17)), 1)
+    otherwise "Expected equal((state.inputs.factText.match(/\"isa\", \"Story\"/g)??[]).length,1)"
+  port test.matches { text = at(at($state, "inputs"), "factText"); pattern = "Nobody mentioned a committee"; flags = "g" } → observedMatches18
+  assert eq(count(if(or(eq($observedMatches18, null), eq($observedMatches18, at({}, "absent"))), list(), $observedMatches18)), 1)
+    otherwise "Expected equal((state.inputs.factText.match(/Nobody mentioned a committee/g)??[]).length,1)"
+
+# one shared edit propagates to both journeys while preserving both local introductions and paragraphs
+process test.journeys.one-shared-edit-propagates-to-both-journeys-while-preserving-both-local-introductions-and-paragraphs:
+  call fixture.journeys.setup
+  port kernel.invoke { query = "fixture.journeys.initial"; input = list() } → observedResult19
+  let base = $observedResult19
+  port kernel.invoke { query = "fixture.journeys.change"; input = list($base, "shared-title", $shared) } → observedResult20
+  let next = $observedResult20
+  port kernel.invoke { query = "fixture.journeys.entries"; input = list($next) } → observedResult21
+  each $observedResult21 as p:
+    port kernel.invoke { query = "fixture.journeys.entry"; input = list($base, at(at($p, "contribution"), "id")) } → observedResult23
+    let before = $observedResult23
+    assert eq(at(at($p, "values"), "J.title"), $shared)
+      otherwise "Expected equal(p.values['J.title'],shared)"
+    assert eq(at(at($p, "values"), "J.introduction"), at(at($before, "values"), "J.introduction"))
+      otherwise "Expected equal(p.values['J.introduction'],before.values['J.introduction'])"
+    assert eq(at(at($p, "values"), "J.paragraphs"), at(at($before, "values"), "J.paragraphs"))
+      otherwise "Expected deepEqual(p.values['J.paragraphs'],before.values['J.paragraphs'])"
+  assert eq(at(at($next, "inputs"), "codeText"), at(at($base, "inputs"), "codeText"))
+    otherwise "Expected equal(next.inputs.codeText,base.inputs.codeText)"
+  assert eq(at(at(at(at($next, "events"), 0), "destination"), "kind"), "source")
+    otherwise "Expected equal(next.events[0].destination.kind,'source')"
+  assert eq(at(at(at(at($next, "events"), 0), "destination"), "field"), "S.Title")
+    otherwise "Expected equal(next.events[0].destination.field,'S.Title')"
+  assert eq(count(at($next, "events")), 1)
+    otherwise "Expected equal(next.events.length,1)"
+  assert eq(at(at(at($next, "events"), 0), "target"), null)
+    otherwise "Expected equal(next.events[0].target,null)"
+
+# local edits in either journey change only that introduction, through its declared literal inverse
+process test.journeys.local-edits-in-either-journey-change-only-that-introduction-through-its-declared-literal-inverse:
+  call fixture.journeys.setup
+  port kernel.invoke { query = "fixture.journeys.initial"; input = list() } → observedResult24
+  port kernel.invoke { query = "fixture.journeys.change"; input = list($observedResult24, "shared-title", $shared) } → observedResult25
+  let sharedState = $observedResult25
+  each list("journey.Listening", "journey.Making") as target:
+    port kernel.invoke { query = "fixture.journeys.change"; input = list($sharedState, "journey-intro", $local, $target) } → observedResult27
+    let changed = $observedResult27
+    assert eq(at(at($changed, "inputs"), "factText"), at(at($sharedState, "inputs"), "factText"))
+      otherwise "Expected equal(changed.inputs.factText,sharedState.inputs.factText)"
+    port kernel.invoke { query = "fixture.journeys.entries"; input = list($changed) } → observedResult28
+    each $observedResult28 as p:
+      port kernel.invoke { query = "fixture.journeys.entry"; input = list($sharedState, at(at($p, "contribution"), "id")) } → observedResult30
+      let before = $observedResult30
+      assert eq(at(at($p, "values"), "J.title"), $shared)
+        otherwise "Expected equal(p.values['J.title'],shared)"
+      assert eq(at(at($p, "values"), "J.paragraphs"), at(at($before, "values"), "J.paragraphs"))
+        otherwise "Expected deepEqual(p.values['J.paragraphs'],before.values['J.paragraphs'])"
+      let observedCondition31 = eq(at(at($p, "contribution"), "id"), $target)
+      when $observedCondition31:
+        assert eq(at(at($p, "values"), "J.introduction"), $local)
+          otherwise "Expected equal(p.values['J.introduction'],local)"
+      when not($observedCondition31):
+        assert eq(at($p, "output"), at($before, "output"))
+          otherwise "Expected deepEqual(p.output,before.output)"
+    assert eq(at(at(at($changed, "events"), 1), "target"), $target)
+      otherwise "Expected equal(changed.events[1].target,target)"
+    assert eq(at(at(at(at($changed, "events"), 1), "destination"), "kind"), "literal")
+      otherwise "Expected equal(changed.events[1].destination.kind,'literal')"
+    port test.match { text = at(at(at(at(at($changed, "events"), 1), "destination"), "node"), "raw"); pattern = "J.introduction"; flags = "" } → observedMatch32
+    assert $observedMatch32
+      otherwise "Expected match(changed.events[1].destination.node.raw,/J.introduction/)"
+
+# shared and journey-local edits commute for final meaning, with different attributable histories
+process test.journeys.shared-and-journey-local-edits-commute-for-final-meaning-with-different-attributable-histories:
+  call fixture.journeys.setup
+  port kernel.invoke { query = "fixture.journeys.initial"; input = list() } → observedResult33
+  let base = $observedResult33
+  port kernel.invoke { query = "fixture.journeys.change"; input = list($base, "shared-title", $shared) } → observedResult34
+  port kernel.invoke { query = "fixture.journeys.change"; input = list($observedResult34, "journey-intro", $local, "journey.Listening") } → observedResult35
+  let a = $observedResult35
+  port kernel.invoke { query = "fixture.journeys.change"; input = list($base, "journey-intro", $local, "journey.Listening") } → observedResult36
+  port kernel.invoke { query = "fixture.journeys.change"; input = list($observedResult36, "shared-title", $shared) } → observedResult37
+  let b = $observedResult37
+  assert eq(at($a, "inputHash"), at($b, "inputHash"))
+    otherwise "Expected equal(a.inputHash,b.inputHash)"
+  assert eq(at($a, "projectionHash"), at($b, "projectionHash"))
+    otherwise "Expected equal(a.projectionHash,b.projectionHash)"
+  port test.sameStructure { left = $a.events; right = $b.events } → sameEvents
+  assert not($sameEvents)
+    otherwise "The two edit orders must produce different event histories"
+
+# words carry an explicit journey target; absent, unknown, stale and invalid local requests refuse
+process test.journeys.words-carry-an-explicit-journey-target-absent-unknown-stale-and-invalid-local-requests-refuse:
+  call fixture.journeys.setup
+  port test.invoke { entry = "uw.parse"; input = concat("Introduce it in Listening well as \"", $local, "\".") } → observedRun38
+  assert eq(at($observedRun38, "value"), { kind = "journey-intro"; value = $local; target = "journey.Listening" })
+    otherwise "Expected deepEqual(await run('uw.parse',`Introduce it in Listening well as \"${local}\".`),{kind:'journey-intro',value:local,target:'journey.Listening'})"
+  port test.invoke { entry = "uw.parse"; input = "Introduce it in Making with care as \"A different invitation\"." } → observedRun39
+  assert eq(at($observedRun39, "value"), { kind = "journey-intro"; value = "A different invitation"; target = "journey.Making" })
+    otherwise "Expected deepEqual(await run('uw.parse','Introduce it in Making with care as \"A different invitation\".'),{kind:'journey-intro',value:'A different invitation',target:'journey.Making'})"
+  let observedRefused40 = false
+  try:
+    port test.invoke { entry = "uw.parse"; input = "Introduce it in Another journey as \"X\"." } → observedRun41
+  catch observedFault42:
+    port test.match { text = $observedFault42.message; pattern = "UW-WORDS"; flags = "" } → observedDiagnostic43
+    let observedRefused40 = $observedDiagnostic43
+  assert $observedRefused40
+    otherwise "Expected rejects(run('uw.parse','Introduce it in Another journey as \"X\".'),/UW-WORDS/)"
+  port kernel.invoke { query = "fixture.journeys.initial"; input = list() } → observedResult44
+  let base = $observedResult44
+  each list(null, "unknown", "all") as target:
+    let observedRefused46 = false
+    try:
+      port kernel.invoke { query = "fixture.journeys.change"; input = list($base, "journey-intro", $local, $target) } → observedResult47
+    catch observedFault48:
+      port test.match { text = $observedFault48.message; pattern = "UW-JOURNEY"; flags = "" } → observedDiagnostic49
+      let observedRefused46 = $observedDiagnostic49
+    assert $observedRefused46
+      otherwise "Expected rejects(change(base,'journey-intro',local,target),/UW-JOURNEY/)"
+  let observedRefused50 = false
+  try:
+    port kernel.invoke { query = "fixture.journeys.change"; input = list($base, "journey-intro", "", "journey.Listening") } → observedResult51
+  catch observedFault52:
+    port test.match { text = $observedFault52.message; pattern = "EC-"; flags = "" } → observedDiagnostic53
+    let observedRefused50 = $observedDiagnostic53
+  assert $observedRefused50
+    otherwise "Expected rejects(change(base,'journey-intro','','journey.Listening'),/EC-/)"
+  let observedRefused54 = false
+  try:
+    port test.invoke { entry = "uw.change"; input = { state = $base; request = { kind = "journey-intro"; value = $local; target = "journey.Listening"; baseRevision = 99 } } } → observedRun55
+  catch observedFault56:
+    port test.match { text = $observedFault56.message; pattern = "UW-STALE"; flags = "" } → observedDiagnostic57
+    let observedRefused54 = $observedDiagnostic57
+  assert $observedRefused54
+    otherwise "Expected rejects(run('uw.change',{state:base,request:{kind:'journey-intro',value:local,target:'journey.Listening',baseRevision:99}}),/UW-STALE/)"
+  assert eq(count(at($base, "events")), 0)
+    otherwise "Expected equal(base.events.length,0)"
+
+# two-journey acceptance replays both destinations; tampering with the local target is detected
+process test.journeys.two-journey-acceptance-replays-both-destinations-tampering-with-the-local-target-is-detected:
+  call fixture.journeys.setup
+  port kernel.invoke { query = "fixture.journeys.initial"; input = list() } → observedResult58
+  port kernel.invoke { query = "fixture.journeys.change"; input = list($observedResult58, "shared-title", $shared) } → observedResult59
+  port kernel.invoke { query = "fixture.journeys.change"; input = list($observedResult59, "journey-intro", $local, "journey.Listening") } → observedResult60
+  let state = $observedResult60
+  port kernel.invoke { query = "fixture.journeys.accept"; input = list($state) } → observedResult61
+  let receipt = $observedResult61
+  assert eq(at(at($receipt, "body"), "profile"), "journeys.v1")
+    otherwise "Expected equal(receipt.body.profile,'journeys.v1')"
+  assert eq(at(at($receipt, "body"), "canonicalHash"), at(at($runtime, "data"), "journeyCanonicalHash"))
+    otherwise "Expected equal(receipt.body.canonicalHash,runtime.data.journeyCanonicalHash)"
+  port test.runtime {} → observedRuntime62
+  let fresh = $observedRuntime62
+  port test.invoke { entry = "uw.reconstruct"; input = $receipt; fresh = true } → observedRun63
+  let restored = at($observedRun63, "value")
+  assert eq(at($restored, "inputs"), at($state, "inputs"))
+    otherwise "Expected deepEqual(restored.inputs,state.inputs)"
+  assert eq(at($restored, "projections"), at($state, "projections"))
+    otherwise "Expected deepEqual(restored.projections,state.projections)"
+  port kernel.invoke { query = "fixture.journeys.accept"; input = list($state) } → observedResult64
+  assert eq($observedResult64, $receipt)
+    otherwise "Expected deepEqual(await accept(state),receipt)"
+  port kernel.invoke { query = "fixture.journeys.copy"; input = list($receipt) } → observedResult65
+  let tampered = $observedResult65
+  port test.put { value = at(at(at($tampered, "body"), "events"), 1); key = "target"; replacement = "journey.Making" } → observedUpdated66
+  port test.put { value = at(at($tampered, "body"), "events"); key = 1; replacement = $observedUpdated66 } → observedUpdated67
+  port test.put { value = at($tampered, "body"); key = "events"; replacement = $observedUpdated67 } → observedUpdated68
+  port test.put { value = $tampered; key = "body"; replacement = $observedUpdated68 } → observedUpdated69
+  let tampered = $observedUpdated69
+  port test.stringify { value = at($tampered, "body") } → observedJson70
+  port test.digest { text = $observedJson70 } → observedHash71
+  port test.put { value = $tampered; key = "sha256"; replacement = $observedHash71 } → observedUpdated72
+  let tampered = $observedUpdated72
+  let observedRefused73 = false
+  try:
+    port test.invoke { entry = "uw.replay"; input = $tampered } → observedRun74
+  catch observedFault75:
+    port test.match { text = $observedFault75.message; pattern = "destination differs"; flags = "" } → observedDiagnostic76
+    let observedRefused73 = $observedDiagnostic76
+  assert $observedRefused73
+    otherwise "Expected rejects(run('uw.replay',tampered),/destination differs/)"
+  port kernel.invoke { query = "fixture.journeys.copy"; input = list($state) } → observedResult77
+  let forged = $observedResult77
+  port kernel.invoke { query = "fixture.journeys.entry"; input = list($forged, "journey.Making") } → observedResult78
+  let changed = $observedResult78
+  port test.indexOf { value = at($forged, "projections"); item = $changed } → observedIndex79
+  let index = $observedIndex79
+  port test.put { value = at(at(at($forged, "projections"), $index), "values"); key = "J.introduction"; replacement = "Unrecorded" } → observedUpdated80
+  port test.put { value = at(at($forged, "projections"), $index); key = "values"; replacement = $observedUpdated80 } → observedUpdated81
+  port test.put { value = at($forged, "projections"); key = $index; replacement = $observedUpdated81 } → observedUpdated82
+  port test.put { value = $forged; key = "projections"; replacement = $observedUpdated82 } → observedUpdated83
+  let forged = $observedUpdated83
+  let observedRefused84 = false
+  try:
+    port kernel.invoke { query = "fixture.journeys.accept"; input = list($forged) } → observedResult85
+  catch observedFault86:
+    port test.match { text = $observedFault86.message; pattern = "does not reconstruct"; flags = "" } → observedDiagnostic87
+    let observedRefused84 = $observedDiagnostic87
+  assert $observedRefused84
+    otherwise "Expected rejects(accept(forged),/does not reconstruct/)"

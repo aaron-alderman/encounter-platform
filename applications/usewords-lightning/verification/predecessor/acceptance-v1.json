@@ -1,0 +1,53 @@
+{
+  "protocol": "usewords/acceptance/1",
+  "body": {
+    "programHash": "8b589ff8972e0b9bbc2c4a00144d9b9007cc4a0a09ecfa6ad419ec93bc80eb94",
+    "canonicalHash": "d0a9a7143f16548a9945630a865c185fbda7dc9c5cd750d852c86c26eb1cc684",
+    "revision": 2,
+    "events": [
+      {
+        "kind": "shared-title",
+        "value": "How we arrived here",
+        "beforeInputHash": "d0a9a7143f16548a9945630a865c185fbda7dc9c5cd750d852c86c26eb1cc684",
+        "afterInputHash": "4d24ba3e5895e3d268bb84eb3f0955f07526e19eac2b76ecf05fffff44efa453",
+        "afterProjectionHash": "ce73f3ad558428ace9feb8ff632d7a9965a34da5ffd6c8737ac78e17501ec774",
+        "destination": {
+          "kind": "source",
+          "field": "S.Title",
+          "node": {
+            "id": 6,
+            "line": 6,
+            "offset": 145,
+            "raw": "  P.title: source.S.Title",
+            "text": "P.title: source.S.Title",
+            "indent": 2,
+            "parent": 4
+          }
+        }
+      },
+      {
+        "kind": "menu-label",
+        "value": "Our beginnings",
+        "beforeInputHash": "4d24ba3e5895e3d268bb84eb3f0955f07526e19eac2b76ecf05fffff44efa453",
+        "afterInputHash": "b198d17ac837c96ac7256bb14b55ce52140b0d1b5b810e9d76f1f938f55f305e",
+        "afterProjectionHash": "0609896c03bf35d18e28c9433024a05ca47e52fa4dc28f78dd85d323c648fa67",
+        "destination": {
+          "kind": "literal",
+          "node": {
+            "id": 18,
+            "line": 18,
+            "offset": 470,
+            "raw": "    N.label: \"The story\"",
+            "text": "N.label: \"The story\"",
+            "indent": 4,
+            "parent": 17
+          },
+          "token": "\"The story\""
+        }
+      }
+    ],
+    "inputHash": "b198d17ac837c96ac7256bb14b55ce52140b0d1b5b810e9d76f1f938f55f305e",
+    "projectionHash": "0609896c03bf35d18e28c9433024a05ca47e52fa4dc28f78dd85d323c648fa67"
+  },
+  "sha256": "a9a8c1b1ee3b126e77eadada327a9b70e7e529d6230f1cfe7c7b6ceda64af4da"
+}

@@ -1,0 +1,34 @@
+{
+  "protocol": "usewords/platform-candidate-checks/1",
+  "evidenceFamily": "same-author-policy-and-connected-inspection",
+  "status": "live-connection-blocked",
+  "tests": {
+    "command": "node --test tests/*.test.mjs",
+    "passed": 33,
+    "failed": 0,
+    "durationMs": 115792.5039,
+    "logHash": "f14b34e458832e6a8a43234f7df097ad8165dc618152313eba432a15fc920b9b"
+  },
+  "build": {
+    "command": "node bootstrap/build.mjs",
+    "passed": true,
+    "existingBrowserProgramHash": "a372eaa837310fd67cc9cf9d68d275a1390f98c34aa06b26d75f16958878e798",
+    "browserReceiptStillSameProgram": true
+  },
+  "candidateSources": {
+    "platform/service.encounter": "3158e35db3848ce6fbcff088bcffb30b18f6dc836db7132d6b27095e8750a571",
+    "platform/receiver-contract.json": "28248e787c8d9eba5051cb74cf41fe587b9982c287baa7ef411a70ad03db4969",
+    "platform/live-observation.json": "8cb5f428fa309d506dc514901a97708c4aca883c167add64785e6dfa5a4ea641",
+    "tests/platform.test.mjs": "01abf9296d612716552f68f19634649433c7668e157e0b93db4ec4f08f20c23b"
+  },
+  "notVerified": [
+    "real persistence transaction",
+    "restart durability",
+    "browser-to-platform authentication",
+    "live publication",
+    "domain/TLS"
+  ],
+  "platformWritesPerformed": false,
+  "siteDeployed": false,
+  "domainAttached": false
+}

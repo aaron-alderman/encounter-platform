@@ -1,0 +1,40 @@
+{
+  "protocol": "usewords/verification/3",
+  "programHash": "0eb5534137cb04bf5dd591e02ba1d9e0779fa6a910dfd64a8c06084ce9671de9",
+  "automated": {
+    "command": "node --test tests/*.test.mjs",
+    "passed": 22,
+    "failed": 0
+  },
+  "browser": {
+    "url": "http://127.0.0.1:4197/",
+    "observed": [
+      "same place.water title and source paragraphs in two journeys",
+      "shared title reaches both while introductions stay unchanged",
+      "Listening introduction edit leaves Making introduction unchanged",
+      "actual shared source and local literal destinations visible in inspection",
+      "accepted revision 2 restored by replay after reload",
+      "375px layout has no horizontal overflow"
+    ]
+  },
+  "source": {
+    "repository": "aaron-alderman/aaronalderman-com",
+    "file": "source/expedition.rel",
+    "selectedPredicates": [
+      "title",
+      "paragraph"
+    ],
+    "originalTitle": "The horse has a few questions.",
+    "publicRoute": "https://aaronalderman.com/places/water.html",
+    "snapshot": "source/reference/water.rel",
+    "sha256": "695b4067e51ffdc265de7f72c9c5b653ab2f40b4762d896b325e2e5f3663fe86",
+    "scope": "Source-bounded reconstruction of the two short encounter paragraphs. The two journey compositions and introductions are new Usewords authored material.",
+    "upstreamGitBlob": "ae83e248c3e53e1ccfa46c9c9f2cf936dd810233",
+    "upstreamObservedLines": {
+      "start": 405,
+      "end": 430
+    }
+  },
+  "evidenceFamily": "same-author/same-implementation/usewords-two-journeys-20261106",
+  "scope": "Bounded engineering verification from one implementation family; not independent verification or a universal equivalence proof."
+}
