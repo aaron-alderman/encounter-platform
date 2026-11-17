@@ -1,0 +1,126 @@
+process-module "temple/surface-process-module/1"
+
+process launch.probes:
+  let homeMatrix = "verification/sourcery-home/launch-sweep.mjs"
+  let result = list(
+    { probe = "hosted"; runner = "node"; script = $homeMatrix; args = list("--summary", "--hosted");
+      scope = "hosted"; status = "hostedPassed"; recheck = false },
+    { probe = "startup"; runner = "node"; script = "verification/sourcery-home/hosted-startup.mjs"; args = list();
+      scope = "hosted-startup"; recheck = false },
+    { probe = "fixture"; runner = "node"; script = $homeMatrix; args = list("--summary"); appendRelease = true;
+      scope = "fixture"; status = "fixturePassed"; recheck = true },
+    { probe = "work"; runner = "work"; scope = "encounter-work-startup"; recheck = true },
+    { probe = "assurance"; runner = "workspace"; mode = "--assurance-bytes"; scope = "encounter-mobile-assurance-bytes"; recheck = true },
+    { probe = "badge"; runner = "workspace"; mode = "--badge-bytes"; scope = "encounter-performance-badge-bytes"; recheck = false },
+    { probe = "cold"; runner = "node"; script = "verification/workspace-routes/resource-performance.mjs"; args = list("home");
+      indexRuntime = true; scope = ""; recheck = false },
+    { probe = "idle"; runner = "workspace"; mode = "--idle-bridge"; scope = ""; recheck = false },
+    { probe = "index-memory"; runner = "index-memory"; recheck = true })
+
+process test.launchProbePlan:
+  call launch.probes
+  let probes = $result
+  let names = map($probes, "probe", $probe.probe)
+  let rechecks = map(filter($probes, "probe", $probe.recheck), "probe", $probe.probe)
+  let hosted = at($probes, 0)
+  let fixture = at($probes, 2)
+  let work = at($probes, 3)
+  let idle = at($probes, 7)
+  let result = and(eq($names, list("hosted", "startup", "fixture", "work", "assurance", "badge", "cold", "idle", "index-memory")),
+    eq($rechecks, list("fixture", "work", "assurance", "index-memory")),
+    eq($hosted.args, list("--summary", "--hosted")), eq($hosted.status, "hostedPassed"),
+    eq($fixture.args, list("--summary")), $fixture.appendRelease, eq($fixture.status, "fixturePassed"),
+    eq($work.scope, "encounter-work-startup"), eq($idle.mode, "--idle-bridge"))
+
+process launch.work:
+  let request = $eventInput
+  let result = { mode = "unavailable"; reason = "Could not resolve the running Work browser or gateway" }
+  when and($request.browser, $request.gateway):
+    when $request.bundled:
+      let matched = and(eq($request.browser, concat($request.release, "/work/encounter")),
+        eq($request.gateway, "/usr/local/libexec/sourcery-appdev-activate-system"))
+      let result = if($matched, { mode = "system" },
+        { mode = "unavailable"; reason = "Running Work services do not match the active Encounter system release" })
+    when not($request.bundled):
+      port text.matches { value = $request.browser; pattern = "\\A/srv/encounter-apps/.+/encounter\\z" } → browser
+      let gateway = eq($request.gateway, "/usr/local/libexec/sourcery-appdev-activate-system")
+      let result = if(and($browser, $gateway), { mode = "standalone" },
+        { mode = "unavailable"; reason = "Could not resolve the standalone Encounter Work release" })
+
+process launch.finish:
+  let request = $eventInput
+  let probes = $request.probes
+  call measurements.registry
+  let registry = $result.registry
+  let subjects = $result.subjects
+  let settings = at($registry, "registry")
+  port number.parse { value = $settings.confirmation } → confirmations
+  port number.parse { value = $settings.confirmationWindowSeconds } → seconds
+  port number.calculate { operation = "multiply"; values = list($seconds, 1000000) } → window
+  let scope = "encounter-resource-performance"
+  let release = false
+  let index = $probes.indexMemory
+  let first = at($index, 0)
+  let memory = list()
+  fold $index as sample; admissible starts list():
+    let bytes = $sample.bytes
+    port number.isNatural { value = at($bytes, 0) } → watcher
+    port number.isNatural { value = at($bytes, 1) } → reader
+    let valid = and(eq($sample.pids, $first.pids), eq(count($sample.pids), 2), eq(count($bytes), 2),
+      eq($sample.states, list("active", "active")), $watcher, $reader, at($bytes, 0), at($bytes, 1))
+    yield if($valid, append($admissible, list($sample)), $admissible) → admissible
+  when and(eq(count($index), 3), eq(count($admissible), 3)):
+    let memory = map($index, "sample", { check = "file-index-ram";
+      watcherBytes = at($sample.bytes, 0); readerBytes = at($sample.bytes, 1);
+      value = add(at($sample.bytes, 0), at($sample.bytes, 1)) })
+  let observed = append($probes.cold, $probes.idle)
+  fold $observed as sample; accepted starts list():
+    let id = at($sample, "check")
+    let value = at($sample, "value")
+    port number.isNatural { value = $value } → valid
+    let known = and(not(eq($id, "file-index-ram")), includes($subjects, concat($scope, "/", $id)))
+    yield if(and($valid, $known), append($accepted, list({ check = $id; value = $value })), $accepted) → accepted
+  let reportSamples = append($accepted, $memory)
+  call measurements.numericRows
+  fold $result as measurement; resource starts { summary = {}; measured = 0; regressions = 0; expected = 0 }:
+    let row = $measurement.row
+    port record.put { record = $resource.summary; key = $measurement.id; value = $row.value } → summary
+    yield { summary = $summary; measured = add($resource.measured, if(eq($row.status, "Unavailable"), 0, 1));
+      regressions = add($resource.regressions, if(eq($row.status, "Regression"), 1, 0));
+      expected = add($resource.expected, 1) } → resource
+  let values = $resource.summary
+  let resources = { scope = $scope; passed = and(eq($resource.measured, $resource.expected), eq($resource.regressions, 0));
+    samples = $reportSamples; summary = {
+      expectedChecks = $resource.expected; measuredChecks = $resource.measured; regressions = $resource.regressions;
+      homeColdMaxBytes = at($values, "home-cold-open"); workIdleFrames = at($values, "work-idle-bridge");
+      mobileIdleFrames = at($values, "mobile-idle-bridge"); fileIndexMedianBytes = at($values, "file-index-ram") } }
+  let work = or($probes.work, { scope = "encounter-work-startup"; passed = false;
+    failureSample = or($probes.workFailure, "Could not start or complete the signed-in Work fixture") })
+  let assurance = or($probes.assurance, { scope = "encounter-mobile-assurance-bytes"; passed = false; samples = list();
+    summary = { browserPassed = false; measuredSamples = 0 } })
+  let badge = or($probes.badge, { scope = "encounter-performance-badge-bytes"; passed = false; samples = list();
+    summary = { browserPassed = false; measuredSamples = 0 } })
+  let reports = { "hosted-startup" = $probes.startup; "encounter-work-startup" = $work;
+    "encounter-mobile-assurance-bytes" = $assurance; "encounter-performance-badge-bytes" = $badge;
+    "encounter-resource-performance" = $resources }
+  fold $request.history as item; history starts list():
+    let checks = list()
+    when and($item.release, not($item.confirmation)):
+      let request = { operation = "launch-observations"; reports = $item.reports }
+      call measurements.evaluate
+      let checks = $result
+    yield append($history, list({ release = $item.release; stamp = $item.stamp;
+      confirmation = $item.confirmation; checks = $checks })) → history
+  call sweep.replay
+  let state = $result
+  let run = { release = $request.release; stamp = $request.stamp }
+  let request = { operation = "launch-observations"; reports = $reports }
+  call measurements.evaluate
+  let checks = $result
+  call sweep.advance
+  let context = { scope = "encounter-sweep-context"; release = $run.release; confirmation = $result }
+  let reports = filter(list($probes.hosted, $probes.fixture, $probes.startup, $work, $assurance, $badge,
+    $resources, $context), "report", not(eq($report, null)))
+  let completed = and($probes.hostedPassed, $probes.fixturePassed,
+    every($checks, "check", not(eq($check.status, "Unavailable"))))
+  let result = { reports = $reports; completed = $completed }

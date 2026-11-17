@@ -1,0 +1,311 @@
+process-module "temple/surface-process-module/1"
+
+process mailbox.route:
+  let request = $eventInput
+  let result = "missing"
+  when not(eq($request.method, "GET")):
+    let result = "method"
+  when eq($request.method, "GET"):
+    when eq($request.path, "/"):
+      let result = "mailbox"
+    when eq($request.path, "/badge"):
+      let result = if($request.updates, "delta", "badge")
+
+process mailbox.journalHistory:
+  let request = $eventInput
+  let scopes = list("encounter-capacity-performance", "encounter-sweep-context", "hosted-startup", "encounter-work-startup",
+    "encounter-resource-performance", "encounter-mobile-assurance-bytes", "encounter-performance-badge-bytes")
+  let capacityScope = "encounter-capacity-performance"
+  let contextScope = "encounter-sweep-context"
+  let admitted = $scopes
+  when eq($request.channel, true):
+    let admitted = list($capacityScope, $contextScope)
+  when eq($request.channel, false):
+    let admitted = filter($scopes, "scope", not(eq($scope, $capacityScope)))
+  # Keep only indexes here so accumulating an invocation does not copy earlier report bodies.
+  fold $request.entries as entry; journal starts { order = list(); invocations = {} }:
+    let next = $journal
+    let scope = at($entry.report, "scope")
+    when includes($admitted, $scope):
+      let previous = at($journal.invocations, $entry.invocation)
+      let stamp = if($previous, $previous.stamp, $entry.stamp)
+      assert not(eq($stamp, null))
+        otherwise "Missing or invalid sweep journal timestamp"
+      let order = if($previous, $journal.order, append($journal.order, list($entry.invocation)))
+      port record.put { record = if($previous, $previous.indexes, {}); key = $scope; value = $entry.index } → indexes
+      port record.put { record = $journal.invocations; key = $entry.invocation; value = { stamp = $stamp; indexes = $indexes } } → invocations
+      let next = { order = $order; invocations = $invocations }
+    yield $next → journal
+  fold $journal.order as invocation; history starts list():
+    let run = at($journal.invocations, $invocation)
+    let contextIndex = at($run.indexes, "encounter-sweep-context")
+    let context = {}
+    port number.isNatural { value = $contextIndex } → hasContext
+    when $hasContext:
+      let entry = at($request.entries, $contextIndex)
+      let context = $entry.report
+    let capacity = eq($context.channel, "capacity")
+    let rows = list()
+    when or(eq($request.channel, null), eq($request.channel, $capacity)):
+      port value.type { value = $context.release } → releaseType
+      let release = if(eq($releaseType, "string"), $context.release, null)
+      port value.type { value = $context.confirmation } → confirmationType
+      let confirmation = if(eq($confirmationType, "undefined"), null, $context.confirmation)
+      let row = { stamp = $run.stamp; release = $release; confirmation = $confirmation }
+      when eq($request.channel, true):
+        let reportIndex = at($run.indexes, "encounter-capacity-performance")
+        let samples = list()
+        port number.isNatural { value = $reportIndex } → hasReport
+        when $hasReport:
+          let entry = at($request.entries, $reportIndex)
+          let observed = $entry.report.samples
+          let samples = if(isArray($observed), $observed, list())
+        let row = { stamp = $run.stamp; release = $release; confirmation = $confirmation; samples = $samples }
+      when not(eq($request.channel, true)):
+        fold $scopes as scope; reports starts {}:
+          let index = at($run.indexes, $scope)
+          let next = $reports
+          port number.isNatural { value = $index } → hasReport
+          when $hasReport:
+            let entry = at($request.entries, $index)
+            port record.put { record = $reports; key = $scope; value = $entry.report } → next
+          yield $next → reports
+        let row = if(eq($request.channel, null),
+          { stamp = $run.stamp; release = $release; confirmation = $confirmation; reports = $reports; capacity = $capacity },
+          { stamp = $run.stamp; release = $release; confirmation = $confirmation; reports = $reports })
+      let rows = list($row)
+    yield append($history, $rows) → result
+
+process mailbox.fixtureHistory:
+  let input = $eventInput
+  assert includes(list("initial", "warning", "recovery"), $input.phase)
+    otherwise "Unknown performance mailbox fixture phase."
+  assert includes(list("startup", "badge"), $input.scenario)
+    otherwise "Unknown performance mailbox fixture scenario."
+  let home = { samples = list({ bridgeDelayMs = 100; openMs = 1250; exchanges = 2 }) }
+  let work = { samples = list({ delayMs = 200; openMs = 800; exchanges = 2 }) }
+  let slow = { samples = list({ delayMs = 200; openMs = 1200; exchanges = 3 }) }
+  let recovered = { samples = list({ delayMs = 200; openMs = 850; exchanges = 2 }) }
+  let start = { "hosted-startup" = $home; "encounter-work-startup" = $work }
+  let warning = { "encounter-work-startup" = $slow }
+  let recovery = { "encounter-work-startup" = $recovered }
+  let reports = list($start, $start)
+  when includes(list("warning", "recovery"), $input.phase):
+    let reports = append($reports, list($warning, $warning))
+  when eq($input.phase, "recovery"):
+    let reports = append($reports, list($recovery))
+  when eq($input.scenario, "badge"):
+    let bad = { "encounter-mobile-assurance-bytes" = { samples = list({ check = "unchanged-refresh";
+      warningsBytes = 37; catalogueBytes = 0; historyBytes = 0 }) } }
+    let good = { "encounter-mobile-assurance-bytes" = { samples = list({ check = "unchanged-refresh";
+      warningsBytes = 0; catalogueBytes = 0; historyBytes = 0 }) } }
+    let reports = list()
+    when eq($input.phase, "warning"):
+      let reports = list($bad, $bad)
+    when eq($input.phase, "recovery"):
+      let reports = list($bad, $bad, $good)
+  fold $reports as report; runs starts list():
+    port number.calculate { operation = "multiply"; values = list(count($runs), 1800000000) } → offset
+    let run = { stamp = add(1794403200000000, $offset); release = "assurance-fixture"; reports = $report;
+      capacity = false; confirmation = null }
+    yield append($runs, list($run)) → result
+
+process mailbox.model:
+  let mailboxRequest = $eventInput
+  call measurements.registry
+  let settings = at($result.registry, "registry")
+  let startup = at($result.registry, "startup")
+  port number.parse { value = $settings.confirmation } → confirmations
+  port number.parse { value = $settings.confirmationWindowSeconds } → launchSeconds
+  port number.parse { value = $settings.capacityConfirmationWindowSeconds } → capacitySeconds
+  port number.parse { value = $startup.openLimit } → openLimit
+  port number.parse { value = $startup.exchangeLimit } → exchangeLimit
+  let empty = { active = list(); pending = list(); verdicts = list() }
+  fold $mailboxRequest.runs as item; replay starts { launch = $empty; capacity = $empty; runs = list() }:
+    let channel = if($item.capacity, "capacity", "launch")
+    let state = at($replay, $channel)
+    let window = if($item.capacity, $capacitySeconds, $launchSeconds)
+    port number.calculate { operation = "multiply"; values = list($window, 1000000) } → window
+    let request = { operation = if($item.capacity, "capacity-observations", "launch-observations"); reports = $item.reports }
+    call measurements.evaluate
+    let checks = $result
+    let next = { active = $state.active; pending = list(); verdicts = list() }
+    when $item.release:
+      when $item.confirmation:
+        let next = $item.confirmation
+        assert and(isArray($next.active), isArray($next.pending), isArray($next.verdicts))
+          otherwise "Malformed saved sweep confirmation"
+      when not($item.confirmation):
+        let run = $item
+        call sweep.advance
+        let next = $result
+    let verdicts = $next.verdicts
+    let measured = map($checks, "row", { entry = $row; status = if(eq($row.status, "Regression"),
+      or(at(at(filter($verdicts, "v", eq(list(at($v, 0), at($v, 1)), $row.key)), 0), 2), "Awaiting confirmation"), $row.status) })
+    let saved = { item = $item; measured = $measured }
+    yield { launch = if($item.capacity, $replay.launch, $next); capacity = if($item.capacity, $next, $replay.capacity);
+      runs = append(list($saved), $replay.runs) } → replay
+  let runs = $replay.runs
+  when $mailboxRequest.badge:
+    call mailbox.badgeModel
+  when not($mailboxRequest.badge):
+    call mailbox.pageModel
+
+process mailbox.formatMetric:
+  let unit = $metric.unit
+  let result = "—"
+  when not(eq($amount, null)):
+    port number.calculate { operation = "greaterEqual"; values = list($amount, 10485.76) } → large
+    let singular = at({ frames = "frame"; requests = "request"; refreshes = "refresh"; mismatches = "mismatch" }, $unit)
+    let label = if(eq($unit, "MiB"), "B", if(and(eq($amount, 1), $singular), $singular, $unit))
+    let result = concat($amount, " ", $label)
+    when and(eq($unit, "MiB"), $large):
+      port number.calculate { operation = "divide"; values = list($amount, 1048576) } → mib
+      port number.format { value = $mib; digits = 2 } → formatted
+      let result = concat($formatted, " MiB")
+
+process mailbox.displayMetric:
+  let metric = $entry.metric
+  let amount = $metric.value
+  call mailbox.formatMetric
+  let measured = $result
+  let amount = $metric.budget
+  call mailbox.formatMetric
+  let budget = $result
+  let overage = "—"
+  when $metric.overage:
+    let amount = $metric.overage
+    call mailbox.formatMetric
+    let overage = concat("+", $result)
+  let label = if(eq(at($entry.key, 0), "encounter-mobile-assurance-bytes"),
+    concat("Mobile Assurance · ", $metric.check), $metric.check)
+  let result = { check = $label; status = $status; measured = $measured; budget = $budget; overage = $overage }
+
+process mailbox.pageModel:
+  fold $runs as run; page starts { latest = null; capacity = null; messages = list() }:
+    let item = $run.item
+    fold $run.measured as observed; output starts { rows = list(); metricRows = list() }:
+      let entry = $observed.entry
+      let status = $observed.status
+      let startup = at($entry, "startup")
+      let rows = $output.rows
+      let metricRows = $output.metricRows
+      when $startup:
+        let row = { app = $startup.app; delay = $startup.delay; duration = $startup.duration; exchanges = $startup.exchanges; status = $status }
+        let rows = append($rows, list($row))
+      when not($startup):
+        call mailbox.displayMetric
+        let metricRows = append($metricRows, list($result))
+      yield { rows = $rows; metricRows = $metricRows } → output
+    let rows = $output.rows
+    let metrics = $output.metricRows
+    let all = append($rows, $metrics)
+    let available = count(filter($all, "row", not(eq($row.status, "Unavailable"))))
+    let active = count(filter($all, "row", includes(list("Regression", "Active regression"), $row.status)))
+    let pending = count(filter($all, "row", eq($row.status, "Awaiting confirmation")))
+    let summary = concat($available, "/", count($all), " measured · ", $active, " confirmed regressions",
+      if($pending, concat(" · ", $pending, " awaiting confirmation"), ""))
+    let latest = { when = $item.when; summary = $summary; rows = $rows; metricRows = $metrics }
+    let failedRows = filter($rows, "row", eq($row.status, "Regression"))
+    let failedMetrics = filter($metrics, "row", eq($row.status, "Regression"))
+    let failed = add(count($failedRows), count($failedMetrics))
+    let messages = $page.messages
+    when $failed:
+      let message = { cursor = $item.stamp; when = $item.when; summary = concat($failed, " performance measurements exceeded budget.");
+        rows = $failedRows; metricRows = $failedMetrics; first = eq(count($messages), 0); release = $item.release }
+      let messages = append($messages, list($message))
+    yield { latest = if($item.capacity, $page.latest, or($page.latest, $latest));
+      capacity = if($item.capacity, or($page.capacity, $latest), $page.capacity); messages = $messages } → page
+  let result = { latest = $page.latest; capacity = $page.capacity; messages = $page.messages;
+    openLimit = $openLimit; exchangeLimit = $exchangeLimit }
+
+process mailbox.elapsed:
+  let minutes = $item.elapsedMinutes
+  port number.calculate { operation = "divide"; values = list($minutes, 60) } → fractional
+  port number.calculate { operation = "floor"; values = list($fractional) } → hours
+  port number.calculate { operation = "remainder"; values = list($minutes, 60) } → remainder
+  let result = if($minutes, concat(
+    if($hours, concat($hours, if(eq($hours, 1), " hour", " hours")), ""),
+    if(and($hours, $remainder), " ", ""),
+    if($remainder, concat($remainder, if(eq($remainder, 1), " minute", " minutes")), ""), " ago"), "Just now")
+
+process mailbox.badgeModel:
+  let visible = list("Home", "Work", "encounter-mobile-assurance-bytes", "encounter-resource-performance",
+    "encounter-capacity-performance", "symmetry")
+  fold $runs as run; badge starts { latest = list(); warnings = list(); unread = 0 }:
+    let item = $run.item
+    let next = $badge
+    port number.calculate { operation = "greater"; values = list($item.stamp, $mailboxRequest.seen) } → unseen
+    when and($unseen, $item.release):
+      let relevant = filter($run.measured, "row", includes($visible, at($row.entry.key, 0)))
+      fold $relevant as observed; observedBadge starts $badge:
+        let entry = $observed.entry
+        let key = $entry.key
+        let status = $observed.status
+        let latest = $observedBadge.latest
+        let warnings = $observedBadge.warnings
+        when and(not(eq($status, "Unavailable")), not(some($latest, "row", eq($row.key, $key)))):
+          let latest = append($latest, list({ key = $key; status = $status }))
+        when and(eq($status, "Regression"), not(some($warnings, "row", eq($row.key, $key)))):
+          let current = at(filter($latest, "row", eq($row.key, $key)), 0)
+          let recovered = eq($current.status, "Passed")
+          call mailbox.elapsed
+          let elapsed = $result
+          let startup = at($entry, "startup")
+          let detail = null
+          when $startup:
+            let detail = { app = $startup.app; delay = $startup.delay; duration = $startup.duration;
+              exchanges = $startup.exchanges; status = $startup.status }
+          when eq(at($key, 0), "encounter-mobile-assurance-bytes"):
+            let detail = { app = "Mobile Assurance"; check = $entry.check; bytes = $entry.metric.value;
+              budget = $entry.metric.budget; overage = $entry.metric.overage; status = "Regression" }
+          when and(not($startup), not(eq(at($key, 0), "encounter-mobile-assurance-bytes"))):
+            call mailbox.displayMetric
+            port record.put { record = $result; key = "app"; value = "Resources" } → detail
+          port record.put { record = $detail; key = "recovered"; value = $recovered } → detail
+          port record.put { record = $detail; key = "recordedAt"; value = $item.recordedAt } → detail
+          port record.put { record = $detail; key = "recordedLabel"; value = $item.recordedLabel } → detail
+          port record.put { record = $detail; key = "elapsedLabel"; value = $elapsed } → detail
+          let warnings = append($warnings, list({ key = $key; check = $detail }))
+        yield { latest = $latest; warnings = $warnings; unread = $observedBadge.unread } → observedBadge
+      let unread = add($badge.unread, if(some($relevant, "row", eq($row.status, "Regression")), 1, 0))
+      let next = { latest = $observedBadge.latest; warnings = $observedBadge.warnings; unread = $unread }
+    yield $next → badge
+  let launch = at(filter($runs, "run", not($run.item.capacity)), 0)
+  let capacity = at(filter($runs, "run", $run.item.capacity), 0)
+  let ordered = append(or(at($launch, "measured"), list()), or(at($capacity, "measured"), list()))
+  let keys = map($ordered, "row", $row.entry.key)
+  let checks = map(filter($keys, "key", some($badge.warnings, "row", eq($row.key, $key))),
+    "key", at(at(filter($badge.warnings, "row", eq($row.key, $key)), 0), "check"))
+  let result = { badge = true; unread = $badge.unread; checks = $checks; openLimit = $openLimit; exchangeLimit = $exchangeLimit }
+
+process mailbox.delta:
+  let data = $eventInput.data
+  let known = $eventInput.known
+  port text.matches { value = $known; pattern = "\\A(?:[a-f0-9]{20}){0,4}\\z" } → valid
+  let knownKeys = list()
+  when $valid:
+    port number.calculate { operation = "divide"; values = list(count($known), 20) } → size
+    fold range($size) as i; knownKeys starts list():
+      port number.calculate { operation = "multiply"; values = list($i, 20) } → end
+      port text.slice { value = $known; start = add($end, -20); end = $end } → key
+      yield append($knownKeys, list($key)) → knownKeys
+  fold $data.checks as check; checks starts list():
+    port record.put { record = $check; key = "elapsedLabel"; value = "" } → row
+    yield append($checks, list($row)) → checks
+  let groups = map($checks, "check", list($check))
+  port number.calculate { operation = "greater"; values = list(count($groups), 4) } → many
+  when $many:
+    let apps = distinct(map($checks, "check", $check.app))
+    let groups = map($apps, "app", filter($checks, "check", eq($check.app, $app)))
+  fold $groups as group; keyed starts list():
+    let content = if(eq(count($group), 1), at($group, 0), $group)
+    port json.stringify { value = list(list($data.openLimit, $data.exchangeLimit), $content) } → wire
+    port digest.sha256 { text = $wire } → digest
+    port text.slice { value = $digest; start = 0; end = 20 } → key
+    yield append($keyed, list({ key = $key; group = $group })) → keyed
+  let order = map($keyed, "row", $row.key)
+  let changed = filter($keyed, "row", not(includes($knownKeys, $row.key)))
+  let unchanged = and(eq($order, $knownKeys), eq(concat("", $data.unread), $eventInput.unread))
+  let result = { unchanged = $unchanged; order = $order; changed = $changed; unread = $data.unread;
+    openLimit = $data.openLimit; exchangeLimit = $data.exchangeLimit }

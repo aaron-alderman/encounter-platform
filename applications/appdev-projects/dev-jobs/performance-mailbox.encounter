@@ -1,0 +1,280 @@
+process-module "temple/surface-process-module/1"
+
+process mailbox.table:
+  let result = { tag = "table"; children = list(
+    { tag = "thead"; children = list({ tag = "tr"; children =
+      map(list("App", "Added delay", "Opening time", "Exchanges", "Result"), "label",
+        { tag = "th"; attrs = { scope = "col" }; children = list($label) }) }) },
+    { tag = "tbody"; children = map($eventInput, "row", { tag = "tr"; children = list(
+      { tag = "th"; attrs = { scope = "row" }; children = list($row.app) },
+      { tag = "td"; children = list(concat($row.delay, " ms")) },
+      { tag = "td"; children = list(if(eq($row.duration, null), "—", concat($row.duration, " ms"))) },
+      { tag = "td"; children = list(if(eq($row.exchanges, null), "—", concat("", $row.exchanges))) },
+      { tag = "td"; attrs = { "data-result" = $row.status }; children = list($row.status) }
+    ) }) }
+  ) }
+
+process mailbox.metricTable:
+  let result = { tag = "table"; children = list(
+    { tag = "caption"; children = list("Transfer, idle bridge traffic and file-index memory") },
+    { tag = "thead"; children = list({ tag = "tr"; children =
+      map(list("Check", "Measured", "Budget", "Over budget", "Result"), "label",
+        { tag = "th"; attrs = { scope = "col" }; children = list($label) }) }) },
+    { tag = "tbody"; children = map($eventInput, "row", { tag = "tr"; children = list(
+      { tag = "th"; attrs = { scope = "row" }; children = list($row.check) },
+      { tag = "td"; children = list($row.measured) },
+      { tag = "td"; children = list($row.budget) },
+      { tag = "td"; children = list($row.overage) },
+      { tag = "td"; attrs = { "data-result" = $row.status }; children = list($row.status) }
+    ) }) }
+  ) }
+
+process mailbox.warning:
+  let message = $eventInput
+  port kernel.invoke { query = "mailbox.table"; input = $message.rows } → table
+  port kernel.invoke { query = "mailbox.metricTable"; input = $message.metricRows } → metricTable
+  let result = { tag = "details"; attrs = { open = $message.first }; children = list(
+    { tag = "summary"; children = list(concat("WARNING: Performance Regression · ", $message.when)) },
+    { tag = "p"; children = list("Dear: Platform Steward") },
+    { tag = "p"; children = list("Location: Sourcery OS - Temple sourcerytech.com.au") },
+    { tag = "p"; children = list($message.summary) },
+    if($message.release, { tag = "p"; children = list(concat("Release · ", $message.release)) }, ""),
+    if(count($message.rows), $table, ""),
+    if(count($message.metricRows), $metricTable, "")
+  ) }
+
+process cli.main:
+  let argument = at($eventInput, 0)
+  when eq($argument, "launcher"):
+    let input = { tag = "div"; children = list(
+      { tag = "a"; attrs = { href = "/workspace/platform/performance-mailbox" }; children = list(
+        { tag = "strong"; children = list("Performance Mailbox") },
+        { tag = "small"; children = list("Encounter performance regression warnings") }
+      ) },
+      { tag = "iframe"; attrs = { src = "/workspace/platform/performance-badge";
+        title = "Unread performance warnings"; width = "100%"; height = "480";
+        frameborder = "0" } }
+    ) }
+    call html.serialize
+  when not(eq($argument, "launcher")):
+    port json.parse { text = $argument } → data
+    when $data.badge:
+      port kernel.invoke { query = "mailbox.badge"; input = $data } → result
+    when not($data.badge):
+      port kernel.invoke { query = "mailbox.page"; input = $data } → result
+
+process mailbox.badgeCheck:
+  let check = $eventInput.check
+  let byteCheck = eq($check.app, "Mobile Assurance")
+  let resourceCheck = eq($check.app, "Resources")
+  let title = concat($check.app, " · ", if($byteCheck, $check.check, concat($check.delay, " ms added")))
+  let measurement = concat($check.bytes, " B · budget ", $check.budget, " B")
+  let overage = concat("+", $check.overage, " B")
+  when $resourceCheck:
+    let title = $check.check
+    let measurement = concat($check.measured, " · budget ", $check.budget)
+    let overage = $check.overage
+  when not(or($byteCheck, $resourceCheck)):
+    let exchanges = if(eq($check.exchanges, 1), " exchange", " exchanges")
+    let measurement = concat("Open ", $check.duration, " ms · ", $check.exchanges, $exchanges)
+    port number.calculate { operation = "subtract"; values = list($check.duration, $eventInput.openLimit) } → extraMs
+    port number.calculate { operation = "subtract"; values = list($check.exchanges, $eventInput.exchangeLimit) } → extraExchanges
+    port number.calculate { operation = "less"; values = list(0, $extraMs) } → overTime
+    port number.calculate { operation = "less"; values = list(0, $extraExchanges) } → overExchanges
+    let timeOverage = if($overTime, concat("+", $extraMs, " ms"),
+      if(eq($extraMs, 0), "At time limit", ""))
+    let exchangeOverage = if($overExchanges,
+      concat("+", $extraExchanges, if(eq($extraExchanges, 1), " exchange", " exchanges")), "")
+    let overage = concat($timeOverage, if(and($timeOverage, $exchangeOverage), " · ", ""), $exchangeOverage)
+  let result = list(
+    { tag = "strong"; children = list($title) },
+    { tag = "div"; children = list($measurement) },
+    { tag = "div"; children = list(
+      { tag = "strong"; attrs = { class = if($check.recovered, "recovered", "active-regression") };
+        children = list(if($check.recovered, "Recovered", "Active")) },
+      " · ", { tag = "b"; attrs = { class = "overage" }; children = list($overage) }
+    ) },
+    { tag = "div"; attrs = { class = "regression-time" }; children = list(
+      { tag = "time"; attrs = { datetime = $check.recordedAt }; children = list($check.recordedLabel) },
+      if($check.elapsedLabel, concat(" · ", $check.elapsedLabel), "")
+    ) }
+  )
+
+process mailbox.badgeRow:
+  let group = $eventInput.group
+  fold $group as check; children starts list():
+    port kernel.invoke { query = "mailbox.badgeCheck"; input = { check = $check;
+      openLimit = $eventInput.openLimit; exchangeLimit = $eventInput.exchangeLimit } } → detail
+    let item = { tag = "div"; children = $detail }
+    yield append($children, if(eq(count($group), 1), $detail, list($item))) → children
+  let result = { tag = "li"; children = $children }
+
+process mailbox.badge:
+  call mailbox.badgeStyles
+  let badgeCss = $result
+  let unread = $eventInput.unread
+  let rowsOnly = at($eventInput, "rowsOnly")
+  let groups = if($rowsOnly, $eventInput.groups, map($eventInput.checks, "check", list($check)))
+  fold $groups as group; rows starts list():
+    port kernel.invoke { query = "mailbox.badgeRow"; input = { group = $group;
+      openLimit = $eventInput.openLimit; exchangeLimit = $eventInput.exchangeLimit } } → row
+    yield append($rows, list($row)) → rows
+  let label = concat($unread, if(eq($unread, 1), " unread warning", " unread warnings"))
+  let input = { tag = "html"; attrs = { lang = "en" }; children = list(
+    { tag = "head"; children = list(
+      { tag = "meta"; attrs = { charset = "utf-8" } },
+      { tag = "meta"; attrs = { "http-equiv" = "refresh"; content = "30" } },
+      { tag = "title"; children = list("Unread performance warnings") },
+      { tag = "style"; children = list($badgeCss) }
+    ) },
+    { tag = "body"; children = list(
+      if($unread, { tag = "section"; attrs = { id = "encounter-performance-warnings"; "aria-label" = "Unread performance warnings" };
+        children = list(
+          { tag = "mark"; attrs = { "data-performance-unread" = true }; children = list($label) },
+          { tag = "p"; attrs = { class = "budget" }; children = list(
+            concat("Startup budget: under ", $eventInput.openLimit, " ms · up to ", $eventInput.exchangeLimit, " exchanges")) },
+          { tag = "ul"; attrs = { "aria-label" = "Latest unread measurement per regressed check" }; children = $rows }
+        )
+      }, "")
+    ) }
+  ) }
+  let input = if($rowsOnly, $rows, $input)
+  call html.serialize
+  let result = if($rowsOnly, $result, concat("<!doctype html>", $result))
+
+process mailbox.page:
+  let data = $eventInput
+  let latest = $data.latest
+  fold $data.messages as message; warnings starts list():
+    port kernel.invoke { query = "mailbox.warning"; input = $message } → warning
+    yield append($warnings, list($warning)) → warnings
+  let latestContent = { tag = "p"; children = list("No sweep samples in the last 24 hours.") }
+  when $latest:
+    port kernel.invoke { query = "mailbox.table"; input = $latest.rows } → table
+    port kernel.invoke { query = "mailbox.metricTable"; input = $latest.metricRows } → metricTable
+    let latestContent = { tag = "div"; children = list(
+      { tag = "p"; children = list(concat($latest.when, " · ", $latest.summary)) }, $table, $metricTable) }
+  let capacity = $data.capacity
+  let capacityContent = { tag = "p"; children = list("No capacity sweep samples in the last 24 hours.") }
+  when $capacity:
+    port kernel.invoke { query = "mailbox.metricTable"; input = $capacity.metricRows } → capacityTable
+    let capacityContent = { tag = "div"; children = list(
+      { tag = "p"; children = list(concat($capacity.when, " · ", $capacity.summary)) }, $capacityTable) }
+  call mailbox.styles
+  let style = $result
+  let input = { tag = "html"; attrs = { lang = "en" }; children = list(
+    { tag = "head"; children = list(
+      { tag = "meta"; attrs = { charset = "utf-8" } },
+      { tag = "meta"; attrs = { name = "viewport"; content = "width=device-width, initial-scale=1" } },
+      { tag = "meta"; attrs = { "http-equiv" = "refresh"; content = "60" } },
+      { tag = "title"; children = list("Performance Mailbox · Sourcery OS") },
+      { tag = "style"; children = list($style) }) },
+    { tag = "body"; children = list(
+      { tag = "nav"; children = list({ tag = "a"; attrs = { href = "/workspace/platform" }; children = list("Back to Platform") }) },
+      { tag = "main"; children = list(
+        { tag = "h1"; children = list("Performance Mailbox") },
+        { tag = "section"; children = list(
+          { tag = "h2"; children = list("Regression warnings") },
+          if(count($warnings), { tag = "div"; children = $warnings },
+            { tag = "p"; children = list("No regression warnings in the last 24 hours.") })
+        ) },
+        { tag = "section"; children = list(
+          { tag = "h2"; children = list("Latest half-hourly sweep") },
+          { tag = "p"; children = list(concat("Budget: under ", $data.openLimit, " ms and at most ", $data.exchangeLimit, " exchanges.")) },
+          $latestContent
+        ) },
+        { tag = "section"; children = list(
+          { tag = "h2"; children = list("Latest mixed-load capacity sweep") }, $capacityContent
+        ) }
+      ) }
+    ) }
+  ) }
+  call html.serialize
+  let result = concat("<!doctype html>", $result)
+
+process mailbox.styles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = "body"; declarations = list(
+      { property = "font"; value = "16px/1.5 system-ui,sans-serif" },
+      { property = "margin"; value = "2rem auto" },
+      { property = "max-width"; value = "52rem" },
+      { property = "padding"; value = "0 1rem" },
+      { property = "color"; value = "#172441" }
+    ) },
+    { selector = "section"; declarations = list(
+      { property = "margin"; value = "2rem 0" },
+      { property = "overflow"; value = "auto" }
+    ) },
+    { selector = "details"; declarations = list(
+      { property = "border-bottom"; value = "1px solid #cbc7bb" },
+      { property = "padding"; value = ".65rem 0" }
+    ) },
+    { selector = "summary"; declarations = list(
+      { property = "cursor"; value = "pointer" },
+      { property = "font-weight"; value = "650" }
+    ) },
+    { selector = "table"; declarations = list(
+      { property = "width"; value = "100%" },
+      { property = "border-collapse"; value = "collapse" },
+      { property = "text-align"; value = "left" }
+    ) },
+    { selector = "th,td"; declarations = list(
+      { property = "border-bottom"; value = "1px solid #cbc7bb" },
+      { property = "padding"; value = ".45rem .6rem" }
+    ) },
+    { selector = "[data-result=Regression]"; declarations = list(
+      { property = "color"; value = "#981e1e" },
+      { property = "font-weight"; value = "700" }
+    ) }
+  )
+  call css.renderCompactRules
+
+process mailbox.badgeStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = "body"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "3px 0" },
+      { property = "font"; value = "13px Tahoma,Verdana,sans-serif" }
+    ) },
+    { selector = "mark"; declarations = list(
+      { property = "display"; value = "inline-block" },
+      { property = "background"; value = "#ffdf80" },
+      { property = "color"; value = "#392e1c" },
+      { property = "border-radius"; value = "4px" },
+      { property = "padding"; value = "2px 7px" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = "ul"; declarations = list(
+      { property = "margin"; value = "3px 0 0" },
+      { property = "padding"; value = "0 7px" },
+      { property = "list-style"; value = "none" },
+      { property = "line-height"; value = "1.3" },
+      { property = "color"; value = "#172441" }
+    ) },
+    { selector = "li"; declarations = list(
+      { property = "margin"; value = "0 0 3px" }
+    ) },
+    { selector = "li span"; declarations = list(
+      { property = "display"; value = "block" }
+    ) },
+    { selector = ".regression-time"; declarations = list(
+      { property = "font-size"; value = "12px" }
+    ) },
+    { selector = ".regression-time time"; declarations = list(
+      { property = "white-space"; value = "nowrap" }
+    ) },
+    { selector = ".overage,.active-regression"; declarations = list(
+      { property = "color"; value = "#8d2616" }
+    ) },
+    { selector = ".recovered"; declarations = list(
+      { property = "color"; value = "#216138" }
+    ) },
+    { selector = ".budget"; declarations = list(
+      { property = "margin"; value = "3px 7px" },
+      { property = "color"; value = "#172441" },
+      { property = "font-size"; value = "12px" }
+    ) }
+  )
+  call css.renderCompactRules

@@ -1,0 +1,330 @@
+process-module "temple/surface-process-module/1"
+
+process cli.main:
+  port text.join { values = $eventInput; separator = "" } → wire
+  port json.parse { text = $wire } → request
+  let measurementCommand = at($request, "operation")
+  when eq($measurementCommand, "capacity-sweep"):
+    let eventInput = $request
+    call measurements.capacitySweep
+  when eq($measurementCommand, "launch-sweep"):
+    let eventInput = $request
+    call launch.finish
+  when eq($measurementCommand, "mailbox"):
+    let eventInput = $request
+    call mailbox.model
+  when eq($measurementCommand, "browser-byte-report"):
+    call measurements.browserByteReport
+  when not(includes(list("capacity-sweep", "launch-sweep", "mailbox", "browser-byte-report"), $measurementCommand)):
+    call measurements.evaluate
+  port json.stringify { value = $result } → result
+
+process measurements.probes:
+  let result = list("startup-idle", "assurance-bytes", "badge-bytes")
+
+process measurements.releaseEvidence:
+  let probes = $eventInput.probes
+  let startup = at($probes, "startup-idle")
+  let assurance = at($probes, "assurance-bytes")
+  let badge = at($probes, "badge-bytes")
+  assert and(eq(count($startup), 2), eq(count($assurance), 1), eq(count($badge), 1))
+    otherwise "Unexpected number of release performance observations"
+  let home = at($startup, 0)
+  let idle = at($startup, 1)
+  let assuranceReport = at($assurance, 0)
+  let badgeReport = at($badge, 0)
+  let work = $eventInput.work
+  assert and(eq(at($home, "scope"), "hosted-startup"), isArray($idle),
+    eq(at($assuranceReport, "scope"), "encounter-mobile-assurance-bytes"),
+    eq(at($badgeReport, "scope"), "encounter-performance-badge-bytes"),
+    eq(at($work, "scope"), "encounter-work-startup"))
+    otherwise "Release performance evidence does not match the requested probes"
+  let request = { operation = "release"; reports = {
+    "hosted-startup" = $home;
+    "encounter-resource-performance" = { samples = $idle };
+    "encounter-mobile-assurance-bytes" = $assuranceReport;
+    "encounter-performance-badge-bytes" = $badgeReport;
+    "encounter-work-startup" = $work } }
+  call measurements.evaluate
+
+process measurements.registry:
+  port application.data { name = "performance-registry" } → facts
+  fold $facts as fact; registry starts {}:
+    let row = or(at($registry, $fact.s), {})
+    port record.put { record = $row; key = $fact.p; value = $fact.o } → row
+    port record.put { record = $registry; key = $fact.s; value = $row } → registry
+    yield $registry → registry
+  let result = { registry = $registry; subjects = distinct(map($facts, "fact", $fact.s)) }
+
+process measurements.evaluate:
+  call measurements.registry
+  let registry = $result.registry
+  let subjects = $result.subjects
+  let release = eq(at($request, "operation"), "release")
+  let launch = eq(at($request, "operation"), "launch-observations")
+  let capacity = eq(at($request, "operation"), "capacity-observations")
+  let resourceScope = "encounter-resource-performance"
+  let capacityScope = "encounter-capacity-performance"
+  let scope = if(or($release, $launch), $resourceScope, if($capacity, $capacityScope, $request.scope))
+  when not(includes(list($resourceScope, $capacityScope), $scope)):
+    let result = raise("Unsupported numeric performance scope")
+  let reports = or(at($request, "reports"), {})
+  let reportSamples = if(or($release, $launch, $capacity), or(at(at($reports, $scope), "samples"), list()), $request.samples)
+  call measurements.numericRows
+  let numeric = $result
+  let rows = map($result, "measurement", $measurement.row)
+  when or($release, $launch):
+    let rows = map($result, "measurement", { key = list($scope, $measurement.id);
+      check = $measurement.row.check; status = $measurement.row.status; metric = $measurement.row })
+    call measurements.release
+    let rows = $result
+  let result = $rows
+  when $capacity:
+    let result = map($numeric, "measurement", { key = list($scope, $measurement.id);
+      check = $measurement.row.check; status = $measurement.row.status; metric = $measurement.row })
+  when $release:
+    let rows = map($rows, "row", { check = $row.check; status = $row.status })
+    let failures = filter($rows, "row", not(eq($row.status, "Passed")))
+    let result = { admitted = and(not(eq(count($rows), 0)), eq(count($failures), 0));
+      checks = $rows; failures = $failures }
+
+process measurements.numericRows:
+  fold $subjects as subject; rows starts list():
+    port text.split { value = $subject; pattern = "/" } → key
+    let next = $rows
+    let policy = at($registry, $subject)
+    when and(eq(count($key), 2), eq(at($key, 0), $scope),
+      or(not($release), eq(at($policy, "releaseGate"), "true"))):
+      let id = at($key, 1)
+      call measurements.numericRow
+      let next = append($rows, list({ id = $id; row = $result }))
+    yield $next → rows
+  let result = $rows
+
+process measurements.numericRow:
+  port number.parse { value = $policy.count } → expected
+  port number.parse { value = $policy.budget } → budget
+  let samples = filter($reportSamples, "sample", eq(at($sample, "check"), $id))
+  fold $samples as sample; values starts list():
+    let value = at($sample, "value")
+    port number.isNatural { value = $value } → valid
+    yield if($valid, append($values, list($value)), $values) → values
+  let complete = eq(count($values), $expected)
+  let value = null
+  when and(eq($policy.aggregate, "max"), count($values)):
+    port number.calculate { operation = "max"; values = $values } → value
+  when and($complete, includes(list("median", "p95"), $policy.aggregate)):
+    port value.sort { values = $values; mode = "numeric" } → sorted
+    when eq($policy.aggregate, "p95"):
+      port number.calculate { operation = "multiply"; values = list(0.95, $expected) } → percentile
+      port number.calculate { operation = "ceil"; values = list($percentile) } → rank
+      let value = at($sorted, add($rank, -1))
+    when eq($policy.aggregate, "median"):
+      port number.calculate { operation = "divide"; values = list($expected, 2) } → midpoint
+      port number.calculate { operation = "floor"; values = list($midpoint) } → middle
+      let value = at($sorted, $middle)
+      when eq($midpoint, $middle):
+        port number.calculate { operation = "divide"; values = list(add(at($sorted, add($middle, -1)), $value), 2) } → value
+  let status = "Unavailable"
+  let overage = 0
+  when $complete:
+    port number.calculate { operation = "greater"; values = list($value, $budget) } → overBudget
+    let status = if($overBudget, "Regression", "Passed")
+    when $overBudget:
+      port number.calculate { operation = "subtract"; values = list($value, $budget) } → overage
+  let result = { check = $policy.label; value = $value; unit = $policy.unit; budget = $budget; overage = $overage; status = $status }
+
+process measurements.release:
+  let resourceRows = $rows
+  let startup = at($registry, "startup")
+  port text.split { value = $startup.delays; pattern = "," } → delays
+  port number.parse { value = $startup.openLimit } → openLimit
+  port number.parse { value = $startup.exchangeLimit } → exchangeLimit
+  fold $subjects as subject; startupRows starts list():
+    let policy = at($registry, $subject)
+    let delayField = at($policy, "delayField")
+    let next = $startupRows
+    when $delayField:
+      let samples = or(at(at($reports, $subject), "samples"), list())
+      fold $delays as delayText; delayRows starts list():
+        port number.parse { value = $delayText } → delay
+        let matches = filter($samples, "sample", eq(at($sample, $delayField), $delay))
+        let sample = at($matches, 0)
+        let open = at($sample, "openMs")
+        let exchanges = at($sample, "exchanges")
+        port number.isNatural { value = $open } → validOpen
+        port number.isNatural { value = $exchanges } → validExchanges
+        let status = "Unavailable"
+        when and(eq(count($matches), 1), $validOpen, $validExchanges):
+          port number.calculate { operation = "greaterEqual"; values = list($open, $openLimit) } → slow
+          port number.calculate { operation = "greater"; values = list($exchanges, $exchangeLimit) } → busy
+          let status = if(or($slow, $busy), "Regression", "Passed")
+        let startup = { app = $policy.label; delay = $delay;
+          duration = if(eq($status, "Unavailable"), null, $open);
+          exchanges = if(eq($status, "Unavailable"), null, $exchanges); status = $status }
+        yield append($delayRows, list({ key = list($policy.label, $delay);
+          check = concat($policy.label, " at ", $delay, " ms"); status = $status; startup = $startup })) → delayRows
+      let next = append($startupRows, $delayRows)
+    yield $next → startupRows
+  let byteScopeFilter = ""
+  call measurements.byteRows
+  let byteRows = $result
+  fold $subjects as subject; symmetryRows starts list():
+    port text.split { value = $subject; pattern = "/" } → key
+    let next = $symmetryRows
+    when eq(at($key, 0), "symmetry"):
+      let policy = at($registry, $subject)
+      port text.split { value = $policy.left; pattern = "/" } → leftKey
+      port text.split { value = or(at($policy, "right"), $policy.left); pattern = "/" } → rightKey
+      let leftScope = at($leftKey, 0)
+      let rightScope = at($rightKey, 0)
+      when or(not($release), and(at(at($registry, $leftScope), "fields"), at(at($registry, $rightScope), "fields"))):
+        let byteScope = $leftScope
+        let byteId = at($leftKey, 1)
+        let field = or(at($policy, "field"), null)
+        call measurements.reference
+        let left = $result
+        let value = $left
+        when not(eq($policy.rule, "flag")):
+          let byteScope = $rightScope
+          let byteId = at($rightKey, 1)
+          let field = null
+          call measurements.reference
+          let right = $result
+          let value = null
+          when and(not(eq($left, null)), not(eq($right, null))):
+            port number.calculate { operation = "subtract"; values = list($left, $right) } → delta
+            let operation = if(eq($policy.rule, "difference"), "abs", "max")
+            port number.calculate { operation = $operation; values = list($delta, 0) } → value
+        call measurements.verdict
+        let next = append($symmetryRows, list({ key = list("symmetry", at($key, 1)); check = $result.check; status = $result.status; metric = $result }))
+    yield $next → symmetryRows
+  let result = append(append(append($startupRows, $byteRows), $resourceRows), $symmetryRows)
+
+process measurements.browserByteReport:
+  call measurements.registry
+  let registry = $result.registry
+  let subjects = $result.subjects
+  let byteScopeFilter = $request.scope
+  let samples = $request.samples
+  let browserPassed = eq($request.browserPassed, true)
+  assert and(at(at($registry, $byteScopeFilter), "fields"), isArray($samples))
+    otherwise "Expected a registered browser byte scope and browser samples"
+  port record.put { record = {}; key = $byteScopeFilter; value = { samples = $samples } } → reports
+  call measurements.byteRows
+  let expected = count($result)
+  let measured = count(filter($result, "row", not(eq($row.status, "Unavailable"))))
+  let regressions = count(filter($result, "row", eq($row.status, "Regression")))
+  let passed = and($browserPassed, not(eq($expected, 0)), eq($expected, $measured), eq($regressions, 0))
+  let result = { scope = $byteScopeFilter; passed = $passed; samples = $samples;
+    summary = { expectedSamples = $expected; measuredSamples = $measured;
+      regressions = $regressions; browserPassed = $browserPassed } }
+
+process measurements.byteRows:
+  fold $subjects as subject; byteRows starts list():
+    port text.split { value = $subject; pattern = "/" } → key
+    let byteScope = at($key, 0)
+    let policy = at($registry, $subject)
+    let next = $byteRows
+    when and(eq(count($key), 2), at(at($registry, $byteScope), "fields"),
+      or(eq($byteScopeFilter, ""), eq($byteScope, $byteScopeFilter))):
+      let byteId = at($key, 1)
+      let field = null
+      call measurements.bytes
+      let value = $result
+      call measurements.verdict
+      let next = append($byteRows, list({ key = list($byteScope, $byteId); check = $result.check; status = $result.status; metric = $result }))
+    yield $next → byteRows
+  let result = $byteRows
+
+process measurements.reference:
+  when at(at($registry, $byteScope), "fields"):
+    call measurements.bytes
+  when not(at(at($registry, $byteScope), "fields")):
+    let source = at($registry, concat($byteScope, "/", $byteId))
+    port number.parse { value = $source.count } → expected
+    let samples = or(at(at($reports, $byteScope), "samples"), list())
+    let matches = filter($samples, "sample", eq(at($sample, "check"), $byteId))
+    fold $matches as sample; valid starts list():
+      let value = at($sample, "value")
+      port number.isNatural { value = $value } → measured
+      yield if($measured, append($valid, list($value)), $valid) → valid
+    let result = null
+    when and(eq(count($matches), $expected), eq(count($valid), $expected)):
+      port number.calculate { operation = "max"; values = $valid } → result
+
+process measurements.bytes:
+  let samples = or(at(at($reports, $byteScope), "samples"), list())
+  let matches = filter($samples, "sample", eq(at($sample, "check"), $byteId))
+  let result = null
+  when eq(count($matches), 1):
+    port text.split { value = at(at($registry, $byteScope), "fields"); pattern = "," } → fields
+    when $field:
+      let fields = list($field)
+    let sample = at($matches, 0)
+    fold $fields as key; parts starts list():
+      let value = at($sample, $key)
+      port number.isNatural { value = $value } → valid
+      yield if($valid, append($parts, list($value)), $parts) → parts
+    when eq(count($parts), count($fields)):
+      port number.calculate { operation = "add"; values = $parts } → result
+
+process measurements.verdict:
+  let status = "Unavailable"
+  port number.parse { value = $policy.budget } → budget
+  let overage = 0
+  when not(eq($value, null)):
+    port number.calculate { operation = "greater"; values = list($value, $budget) } → over
+    let status = if($over, "Regression", "Passed")
+    when $over:
+      port number.calculate { operation = "subtract"; values = list($value, $budget) } → overage
+  let result = { check = $policy.label; status = $status; value = $value; budget = $budget;
+    overage = $overage; unit = or(at($policy, "unit"), "B") }
+
+process test.incompleteReleaseEvidence:
+  let request = { operation = "release"; reports = {} }
+  call measurements.evaluate
+  let result = and(eq($result.admitted, false), eq(count($result.failures), 38),
+    every($result.checks, "row", eq($row.status, "Unavailable")))
+
+process test.boundProbeEvidence:
+  let eventInput = { probes = {
+    "startup-idle" = list({ scope = "hosted-startup"; samples = list() }, list());
+    "assurance-bytes" = list({ scope = "encounter-mobile-assurance-bytes"; samples = list() });
+    "badge-bytes" = list({ scope = "encounter-performance-badge-bytes"; samples = list() }) };
+    work = { scope = "encounter-work-startup"; samples = list(
+      { delayMs = 100; openMs = 1000; exchanges = 2 }) } }
+  call measurements.releaseEvidence
+  let regressions = filter($result.failures, "row", eq($row.status, "Regression"))
+  let result = and(eq($result.admitted, false), eq(count($result.checks), 38),
+    eq($regressions, list({ check = "Work at 100 ms"; status = "Regression" })))
+
+process test.resourceRegressionAndMedian:
+  let request = { scope = "encounter-resource-performance"; samples = list(
+    { check = "work-idle-bridge"; value = 1 },
+    { check = "file-index-ram"; value = 33554433 },
+    { check = "file-index-ram"; value = 1 },
+    { check = "file-index-ram"; value = 33554432 }) }
+  call measurements.evaluate
+  let idle = at($result, 1)
+  let index = at($result, 3)
+  let result = and(eq($idle.status, "Regression"), eq($idle.overage, 1),
+    eq($index.value, 33554432), eq($index.status, "Passed"))
+
+process test.browserByteReport:
+  let sample = { check = "unchanged-refresh"; catalogueBytes = 0; warningsBytes = 1; historyBytes = 0 }
+  let request = { scope = "encounter-mobile-assurance-bytes"; browserPassed = true; samples = list($sample) }
+  call measurements.browserByteReport
+  let regression = and(not($result.passed), eq($result.summary.expectedSamples, 5),
+    eq($result.summary.measuredSamples, 1), eq($result.summary.regressions, 1))
+  let request = { scope = "encounter-mobile-assurance-bytes"; browserPassed = false; samples = list($sample, $sample) }
+  call measurements.browserByteReport
+  let duplicate = and(not($result.passed), not($result.summary.browserPassed), eq($result.summary.measuredSamples, 0))
+  let complete = map(list("first-open", "unchanged-refresh", "new-warning", "recovery", "new-decision"), "check",
+    { check = $check; catalogueBytes = 0; warningsBytes = 0; historyBytes = 0 })
+  let request = { scope = "encounter-mobile-assurance-bytes"; browserPassed = true; samples = $complete }
+  call measurements.browserByteReport
+  let passedWithAllSamples = and($result.passed, eq($result.summary.measuredSamples, 5))
+  let request = { scope = "encounter-mobile-assurance-bytes"; browserPassed = false; samples = $complete }
+  call measurements.browserByteReport
+  let result = and($regression, $duplicate, $passedWithAllSamples, not($result.passed), eq($result.summary.measuredSamples, 5))

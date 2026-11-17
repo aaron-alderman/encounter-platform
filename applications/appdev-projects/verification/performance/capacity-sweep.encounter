@@ -1,0 +1,122 @@
+process-module "temple/surface-process-module/1"
+
+process measurements.capacitySweep:
+  let request = $eventInput
+  call measurements.registry
+  let registry = $result.registry
+  let subjects = $result.subjects
+  let settings = at($registry, "registry")
+  port number.parse { value = $settings.confirmation } → confirmations
+  port number.parse { value = $settings.capacityConfirmationWindowSeconds } → seconds
+  port number.calculate { operation = "multiply"; values = list($seconds, 1000000) } → window
+  let scope = "encounter-capacity-performance"
+  let release = false
+  let samples = list()
+  when eq($request.probePassed, true):
+    port number.calculate { operation = "subtract"; values = list($request.cpuAfter, $request.cpuBefore) } → cpuMicros
+    port number.isNatural { value = $cpuMicros } → cpuValid
+    port number.isNatural { value = $request.memoryPeak } → memoryValid
+    assert and($cpuValid, $memoryValid)
+      otherwise "Capacity counters are invalid"
+    port number.calculate { operation = "divide"; values = list($cpuMicros, 1000) } → cpuMillis
+    port number.calculate { operation = "ceil"; values = list($cpuMillis) } → cpu
+    let observed = append($request.samples, list({ check = "mixed-cpu"; value = $cpu },
+      { check = "mixed-ram"; value = $request.memoryPeak }))
+    fold $observed as sample; admitted starts list():
+      let id = at($sample, "check")
+      let value = at($sample, "value")
+      port number.isNatural { value = $value } → valid
+      let known = includes($subjects, concat($scope, "/", $id))
+      yield if(and($known, $valid), append($admitted, list({ check = $id; value = $value })), $admitted) → admitted
+    let samples = $admitted
+  let reportSamples = $samples
+  call measurements.numericRows
+  let current = $result
+  fold $current as check; summary starts {}:
+    port record.put { record = $summary; key = $check.id; value = $check.row.value } → next
+    yield $next → summary
+  let completed = every($current, "check", not(eq($check.row.status, "Unavailable")))
+  let passed = every($current, "check", eq($check.row.status, "Passed"))
+  let report = { scope = $scope; passed = $passed; samples = $samples; summary = $summary }
+  fold $request.history as run; history starts list():
+    let checks = list()
+    when and($run.release, not($run.confirmation)):
+      let reportSamples = $run.samples
+      call measurements.numericRows
+      let checks = map($result, "check", { key = list($scope, $check.id); status = $check.row.status })
+    yield append($history, list({ release = $run.release; stamp = $run.stamp;
+      confirmation = $run.confirmation; checks = $checks })) → history
+  call sweep.replay
+  let state = $result
+  let run = { release = $request.release; stamp = $request.stamp }
+  let checks = map($current, "check", { key = list($scope, $check.id); status = $check.row.status })
+  call sweep.advance
+  let context = { scope = "encounter-sweep-context"; release = $request.release;
+    channel = "capacity"; confirmation = $result }
+  let result = { report = $report; context = $context; completed = $completed }
+
+process sweep.replay:
+  fold $history as run; state starts { active = list(); pending = list(); verdicts = list() }:
+    let next = { active = $state.active; pending = list(); verdicts = list() }
+    when $run.release:
+      when $run.confirmation:
+        let saved = $run.confirmation
+        assert and(isArray($saved.active), isArray($saved.pending), isArray($saved.verdicts))
+          otherwise "Malformed saved sweep confirmation"
+        let next = $saved
+      when not($run.confirmation):
+        let checks = $run.checks
+        call sweep.advance
+        let next = $result
+    yield $next → state
+  let result = $state
+
+process sweep.advance:
+  let initial = { active = $state.active; pending = $state.pending; verdicts = list() }
+  fold $checks as check; next starts $initial:
+    let key = $check.key
+    let status = $check.status
+    let active = $next.active
+    let pending = $next.pending
+    let verdicts = $next.verdicts
+    let without = filter($pending, "row", not(eq(list(at($row, 0), at($row, 1)), $key)))
+    when not(eq($status, "Regression")):
+      let pending = $without
+      when eq($status, "Passed"):
+        let active = filter($active, "row", not(eq($row, $key)))
+    when eq($status, "Regression"):
+      when includes($active, $key):
+        let verdicts = append($verdicts, list(append($key, list("Active regression"))))
+      when not(includes($active, $key)):
+        let previous = at(filter($pending, "row", eq(list(at($row, 0), at($row, 1)), $key)), 0)
+        let count = 1
+        when and($previous, eq(at($previous, 2), $run.release)):
+          port number.calculate { operation = "subtract"; values = list($run.stamp, at($previous, 3)) } → elapsed
+          port number.calculate { operation = "greater"; values = list($elapsed, 0) } → later
+          port number.calculate { operation = "lessEqual"; values = list($elapsed, $window) } → timely
+          when and($later, $timely):
+            let count = add(at($previous, 4), 1)
+        port number.calculate { operation = "greaterEqual"; values = list($count, $confirmations) } → confirmed
+        when $confirmed:
+          let active = append($active, list($key))
+          let pending = $without
+          let verdicts = append($verdicts, list(append($key, list("Regression"))))
+        when not($confirmed):
+          let item = append($key, list($run.release, $run.stamp, $count))
+          let pending = if($previous, map($pending, "row", if(eq(list(at($row, 0), at($row, 1)), $key), $item, $row)),
+            append($pending, list($item)))
+          let verdicts = append($verdicts, list(append($key, list("Awaiting confirmation"))))
+    yield { active = $active; pending = $pending; verdicts = $verdicts } → next
+  let active = filter(map($checks, "check", $check.key), "key", includes($next.active, $key))
+  let result = { active = $active; pending = $next.pending; verdicts = $next.verdicts }
+
+process test.capacityConfirmation:
+  let samples = map(range(21), "i", { check = "home-mixed-ready"; value = 2501 })
+  let eventInput = { release = "fixture"; stamp = 1800000000000001; probePassed = true;
+    cpuBefore = 200; cpuAfter = 1201; memoryPeak = 1; samples = $samples;
+    history = list({ release = "fixture"; stamp = 1800000000000000; samples = $samples; confirmation = null }) }
+  call measurements.capacitySweep
+  let confirmation = $result.context.confirmation
+  let result = and(eq($result.completed, false), eq(at($result.report.summary, "mixed-cpu"), 2),
+    eq($confirmation.active, list(list("encounter-capacity-performance", "home-mixed-ready"))),
+    eq($confirmation.verdicts, list(list("encounter-capacity-performance", "home-mixed-ready", "Regression"))))
