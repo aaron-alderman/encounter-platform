@@ -1,0 +1,40 @@
+# Grammar and compiler policy are Encounter-owned.
+process-module "temple/surface-process-module/1"
+
+process foundation.compile:
+  let lpBasis = $compilerBasis
+  let lpPolicy = {
+    name = null;
+    emitProfile = false;
+    allowEmptyCatch = true;
+    statementForms = list("let", "assert", "when", "each", "fold", "call", "port", "try");
+    referenceSigil = at(" $", 1);
+    forbidden = list("__proto__", "prototype", "constructor");
+    operators = list("fold", "let", "raise", "isArray", "append", "eq", "includes", "if", "count", "at", "concat", "add", "range", "distinct", "list", "record", "not", "has", "map", "filter", "some", "every", "one", "optional", "objects", "subjects", "and", "or");
+    maxDepth = 64;
+    maxCodeUnits = 160000;
+    maxTokens = 36000
+  }
+  call language.process.compile
+
+process source.lex:
+  let text = $eventInput.text
+  port text.slice { value = $text; start = 0; end = $lpPolicy.maxCodeUnits } → bounded
+  assert eq($bounded, $text)
+    otherwise "ENCOUNTER: Source bound exceeded."
+  port text.split {
+    value = $text;
+    pattern = "(\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"|\\$?[A-Za-z_][A-Za-z0-9_.-]*|-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|#[^\\r\\n]*|\\r\\n|\\n|\\r|[{}\\[\\](),;:=→]|[^\\S\\r\\n]+)"
+  } → parts
+  fold $parts as part; scan starts { offset = 0; tokens = list() }:
+    let end = add($scan.offset, count($part))
+    let tokens = $scan.tokens
+    when not(eq($part, "")):
+      let tokens = append($tokens, list({ text = $part; start = $scan.offset; end = $end }))
+    yield { offset = $end; tokens = $tokens } → scan
+  port number.calculate { operation = "lessEqual"; values = list(count($scan.tokens), $lpPolicy.maxTokens) } → withinLimit
+  let result = { withinLimit = $withinLimit; tokens = $scan.tokens }
+
+process s01.portable:
+  port value.describe { value = $eventInput.value } → shape
+  let result = $shape.dataOnly

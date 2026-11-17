@@ -1,0 +1,11 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process admit.model:
+  port record.entries { value = $target.queries } → queries
+  assert some($queries, "entry", eq(at($entry, 0), $target.entry))
+    otherwise "TEMPLE-S016: Missing entrypoint. Declare the selected root."
+  each $queries as query:
+    let programme = at($query, 1)
+    call admit.programme
+  let result = { ok = true; profile = "temple/kernel-profile/1" }
