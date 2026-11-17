@@ -1,0 +1,80 @@
+process-module "temple/surface-process-module/1"
+
+process claimipedia.steward.home:
+  let request = $eventInput
+  port kernel.invoke { query = "claimipedia.load"; input = $request.snapshot } → state
+  port application.data { name = "corpus-review" } → facts
+  let ids = map(filter($facts, "fact", and(eq($fact.p, "isa"), eq($fact.o, "CorpusReviewItem"))), "fact", $fact.s)
+  let frontier = at($state, "frontier")
+  let notes = filter(if($frontier, $frontier, list()), "row", eq(at($row, "kind"), "checkpoint-note"))
+  let noted = map($notes, "row", $row.checkpoint)
+  let pending = filter($ids, "id", not(includes($noted, $id)))
+  let relationships = map(filter($facts, "fact", eq($fact.p, "target")), "fact", $fact.s)
+  let groups = list(
+    { label = "Proposed relationships"; ids = filter($pending, "id", includes($relationships, $id)) },
+    { label = "Evidence gaps"; ids = filter($pending, "id", not(includes($relationships, $id))) }
+  )
+  fold $groups as group; queue starts list():
+    let next = at($group.ids, 0)
+    let action = null
+    when $next:
+      port kernel.invoke { query = "claimipedia.subject"; input = { subject = $next; facts = $facts } } → item
+      let action = { tag = "a"; attrs = { href = concat("/steward/corpus-view/", $next) }; children = list($item.title) }
+    let row = { tag = "li"; attrs = {}; children = list(
+      { tag = "strong"; attrs = {}; children = list($group.label) },
+      { tag = "small"; attrs = {}; children = list(concat(count($group.ids), " awaiting a review note")) },
+      $action
+    ) }
+    yield append($queue, list($row)) → queue
+  let review = { tag = "section"; attrs = { class = "cp-workspace-panel" }; children = list(
+    { tag = "h2"; attrs = {}; children = list("Review the corpus") },
+    { tag = "p"; attrs = {}; children = list("Check suggested relationships and evidence gaps against the released record.") },
+    { tag = "ul"; attrs = { class = "cp-workspace-links"; "aria-label" = "Review priorities" }; children = $queue },
+    { tag = "a"; attrs = { href = "/steward/corpus-view" }; children = list("Open the full review queue") }
+  ) }
+  let revisions = $state.revisions
+  let touched = distinct(map($revisions, "row", $row.claim))
+  let latest = map($touched, "id", at(filter($revisions, "row", eq($row.claim, $id)), 0))
+  let drafts = filter($latest, "row", includes(list(null, "draft"), at($row, "status")))
+  port kernel.invoke { query = "portfolio.recent"; input = { rows = $drafts; limit = 3 } } → recent
+  let search = { tag = "form"; attrs = { method = "get"; action = "/"; class = "cp-search-form"; "aria-label" = "Find a claim record" }; children = list(
+    { tag = "input"; attrs = { type = "hidden"; name = "collection"; value = "claims" }; children = list() },
+    { tag = "label"; attrs = {}; children = list("Claim ID or wording", { tag = "input"; attrs = { name = "q"; type = "search"; maxlength = 180 }; children = list() }) },
+    { tag = "button"; attrs = { type = "submit" }; children = list("Find claim") }
+  ) }
+  let claimWork = { tag = "section"; attrs = { class = "cp-workspace-panel" }; children = list(
+    { tag = "h2"; attrs = {}; children = list("Manage claim records") },
+    { tag = "p"; attrs = {}; children = list("Find a claim, inspect its released basis, or resume a local revision.") },
+    $search,
+    { tag = "p"; attrs = {}; children = list(concat(count($drafts), " pending claim drafts")) },
+    if(count($recent), { tag = "ul"; attrs = { class = "cp-workspace-links"; "aria-label" = "Recent pending drafts" }; children = map($recent, "draft", {
+      tag = "li"; attrs = {}; children = list(
+        { tag = "a"; attrs = { href = concat("/?claim=", $draft.claim) }; children = list($draft.claim) },
+        { tag = "small"; attrs = {}; children = list(concat("Draft version ", $draft.number)) }
+      )
+    }) }, null),
+    { tag = "a"; attrs = { href = "/?collection=claims" }; children = list("Browse claim records") }
+  ) }
+  call claimipedia.collectionEntries
+  let tools = $result
+  let groups = list(
+    { title = "Investigate and verify"; routes = list("/?collection=research-inbox", "/?collection=frontier", "/?collection=research", "/?collection=checkpoints") },
+    { title = "Sources and records"; routes = list("/?collection=evidence-library", "/?collection=evidence", "/?collection=application-records") }
+  )
+  fold $groups as group; resources starts list():
+    let entries = filter($tools, "tool", includes($group.routes, $tool.href))
+    port kernel.invoke { query = "claimipedia.surface.links"; input = { label = $group.title; entries = $entries } } → links
+    let panel = { tag = "section"; attrs = { class = "cp-workspace-panel" }; children = list({ tag = "h2"; attrs = {}; children = list($group.title) }, $links) }
+    yield append($resources, list($panel)) → resources
+  let home = { tag = "div"; attrs = { class = "cp-workspace-grid" }; children = append(list($review, $claimWork), $resources) }
+  let heading = { tag = "header"; attrs = { class = "cp-workspace-head" }; children = list(
+    { tag = "h1"; attrs = {}; children = list("Corpus workspace") },
+    { tag = "p"; attrs = {}; children = list("Review the network, revise claim records, and follow up on evidence.") },
+    { tag = "p"; attrs = {}; children = list(
+      { tag = "a"; attrs = { href = "/?collection=platform" }; children = list("Open product governance and assurance") }
+    ) }
+  ) }
+  port kernel.invoke { query = "claimipedia.collections"; input = { design = true; path = $request.path } } → nav
+  let page = { title = "Corpus workspace · Claimipedia"; nav = $nav; content = list($heading, $home) }
+  port kernel.invoke { query = "claimipedia.design.page"; input = { page = $page; notice = ""; error = false; urlPrefix = "/steward" } } → html
+  let result = { html = $html; session = $request.session }

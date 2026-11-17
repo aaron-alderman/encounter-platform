@@ -1,0 +1,182 @@
+process-module "temple/surface-process-module/1"
+
+process claimipedia.search:
+  let screen = $eventInput
+  let raw = at($screen.fields, "q")
+  port text.trim { value = if($raw, $raw, "") } → query
+  port text.slice { value = $query; start = 0; end = 180 } → query
+  port text.lowerCase { value = $query } → needle
+  let designed = at($screen, "design")
+  let scopes = {}
+  when $designed:
+    let scopeFacts = filter($screen.catalogue.facts, "fact", eq($fact.p, "scope"))
+    port record.fromEntries { entries = map($scopeFacts, "fact", list($fact.s, $fact.o)) } → scopes
+  fold $screen.catalogue.claims as claim; matches starts list():
+    let history = filter($screen.state.revisions, "row", eq($row.claim, $claim.id))
+    let latest = at($history, 0)
+    let draft = if(and($latest, includes(list(null, "draft"), at($latest, "status"))), $latest.statement, "")
+    let working = at(filter($history, "row", eq(at($row, "status"), "accepted")), 0)
+    let expression = if($working, $working.statement, $claim.expression)
+    port text.lowerCase { value = concat($claim.id, " ", $expression, " ", $claim.expression, " ", $draft) } → searchable
+    port text.indexOf { value = $searchable; search = $needle } → index
+    let scope = if($working, at($working, "scope"), at($scopes, $claim.version))
+    yield if(eq($index, -1), $matches, append($matches, list({ id = $claim.id; expression = $expression; scope = $scope; local = if($working, true, false) }))) → matches
+  port kernel.invoke { query = "portfolio.recent"; input = { rows = $matches; limit = 18 } } → visible
+  let results = list()
+  when not($designed):
+    let results = map($visible, "claim", { tag = "li"; attrs = {}; children = list(
+      { tag = "a"; attrs = { href = concat("/?claim=", $claim.id) }; children = list($claim.id) },
+      { tag = "p"; attrs = {}; children = list($claim.expression) }
+    ) })
+  when $designed:
+    let results = map($visible, "claim", { tag = "li"; attrs = { class = "cp-result" }; children = list(
+      { tag = "div"; attrs = {}; children = list(
+        { tag = "h2"; attrs = {}; children = list({ tag = "a"; attrs = { href = concat("/?claim=", $claim.id) }; children = list($claim.expression) }) },
+        { tag = "p"; attrs = {}; children = list($claim.scope) }
+      ) },
+      { tag = "div"; attrs = {}; children = list(
+        { tag = "span"; attrs = { class = "cp-badge"; "data-state" = if($claim.local, "local", "released") }; children = list(if($claim.local, "Local working wording", "Released claim")) },
+        { tag = "a"; attrs = { href = concat("/?claim=", $claim.id) }; children = list($claim.id) }
+      ) }
+    ) })
+  let formAttrs = if($designed, { method = "get"; action = "/"; class = "cp-search-form"; "aria-label" = "Claim search" }, { method = "get"; action = "/"; class = "entry" })
+  let form = { tag = "form"; attrs = $formAttrs; children = list(
+    if(at($screen, "steward"), { tag = "input"; attrs = { type = "hidden"; name = "collection"; value = "claims" }; children = list() }, null),
+    { tag = "label"; attrs = {}; children = list("Search claims", { tag = "input"; attrs = { name = "q"; type = "search"; value = $query; maxlength = 180 }; children = list() }) },
+    { tag = "button"; attrs = { type = "submit" }; children = list("Search") }
+  ) }
+  let summary = { tag = "p"; attrs = {}; children = list(concat(count($matches), " matches · showing ", count($visible))) }
+  let empty = if(and($designed, eq(count($visible), 0)), { tag = "p"; attrs = { class = "cp-notice" }; children = list("No claims match. Try a claim identifier or a shorter phrase.") }, null)
+  let listAttrs = if($designed, { "aria-label" = "Claim search results"; class = "cp-results" }, { "aria-label" = "Claim search results" })
+  let result = list($form, $summary, $empty, { tag = "ul"; attrs = $listAttrs; children = $results })
+
+process claimipedia.draftPanel:
+  let screen = $eventInput
+  let claim = $screen.selected
+  port kernel.invoke { query = "claimipedia.lineage"; input = { state = $screen.state; claim = $claim } } → lineage
+  let history = $lineage.history
+  let parent = $lineage.parent
+  let pending = $lineage.pending
+  port kernel.invoke { query = "claimipedia.subject"; input = { facts = $screen.catalogue.facts; subject = $claim.version } } → released
+  let previous = $lineage.previous
+  let inputs = list(
+    { name = "statement"; label = "Draft statement"; type = "textarea"; maxlength = 12000; required = true; value = if($parent, $parent.statement, $claim.expression) },
+    { name = "scope"; label = "Draft scope"; type = "textarea"; maxlength = 3000; required = true; value = if($parent, $parent.scope, at($released, "scope")) },
+    { name = "reason"; label = "Revision reason"; type = "text"; maxlength = 800; required = true }
+  )
+  let hidden = list(
+    { tag = "input"; attrs = { type = "hidden"; name = "target"; value = $claim.id }; children = list() },
+    { tag = "input"; attrs = { type = "hidden"; name = "previous"; value = $previous }; children = list() }
+  )
+  fold $inputs as field; fields starts $hidden:
+    port kernel.invoke { query = "portfolio.field"; input = { field = $field; labelId = concat("draft-", $field.name) } } → element
+    yield append($fields, list($element)) → fields
+  port kernel.invoke { query = "work.form"; input = { csrf = $screen.csrf; revision = $screen.revision; action = "revise"; fields = $fields; button = "Save draft revision"; style = "cp-form" } } → form
+  let review = list()
+  when $pending:
+    let predecessor = at(filter($history, "row", eq($row.id, $pending.previous)), 0)
+    let changes = list(
+      { label = "Statement"; before = if($predecessor, $predecessor.statement, $claim.expression); after = $pending.statement },
+      { label = "Scope"; before = if($predecessor, $predecessor.scope, at($released, "scope")); after = $pending.scope }
+    )
+    let comparison = map($changes, "change", { tag = "div"; attrs = { class = "cp-comparison" }; children = list(
+      { tag = "h4"; attrs = {}; children = list($change.label) },
+      { tag = "p"; attrs = {}; children = list(if(eq($change.before, $change.after), "Unchanged", concat("Before: ", $change.before))) },
+      if(eq($change.before, $change.after), null, { tag = "p"; attrs = {}; children = list(concat("After: ", $change.after)) })
+    ) })
+    port kernel.invoke { query = "work.form"; input = { csrf = $screen.csrf; revision = $screen.revision; action = "accept"; fields = $hidden; button = "Accept draft locally"; style = "cp-form" } } → accept
+    port kernel.invoke { query = "work.form"; input = { csrf = $screen.csrf; revision = $screen.revision; action = "discard"; fields = $hidden; button = "Discard draft"; style = "cp-form" } } → discard
+    let review = append(list({ tag = "h3"; attrs = {}; children = list("Compare with preceding version") }), append($comparison, list($accept, $discard)))
+  let working = $lineage.working
+  let current = if($working, { tag = "p"; attrs = {}; children = list(concat("Local working version ", $working.number, " · ", $working.statement)) }, null)
+  let drafts = map($history, "draft", { tag = "li"; attrs = {}; children = list(
+    { tag = "strong"; attrs = {}; children = list(concat("Draft version ", $draft.number)) },
+    { tag = "p"; attrs = {}; children = list(concat("Status: ", if(at($draft, "status"), at($draft, "status"), if(eq($draft, $pending), "draft", "superseded")))) },
+    { tag = "p"; attrs = {}; children = list($draft.statement) },
+    { tag = "p"; attrs = {}; children = list(concat("Scope: ", $draft.scope)) },
+    { tag = "p"; attrs = {}; children = list(concat("Reason: ", $draft.reason)) },
+    { tag = "p"; attrs = {}; children = list(concat("Revision ID: ", $draft.id)) },
+    { tag = "p"; attrs = {}; children = list(concat("Previous version: ", $draft.previous)) }
+  ) })
+  port kernel.invoke { query = "claimipedia.publicationView"; input = { screen = $screen; lineage = $lineage } } → publication
+  let result = append(list($current, $form), append($review, append($publication, list({ tag = "ul"; attrs = { "aria-label" = "Local draft revisions" }; children = $drafts }))))
+
+process claimipedia.detail:
+  let screen = $eventInput
+  let steward = at($screen, "steward")
+  let claim = $screen.selected
+  let input = { facts = $screen.catalogue.facts; identifiers = $screen.catalogue.identifiers; claim = $claim }
+  port kernel.invoke { query = "claimipedia.releasedHistory"; input = $input } → history
+  port kernel.invoke { query = "claimipedia.evidence"; input = $input } → evidence
+  port kernel.invoke { query = "claimipedia.connections"; input = $input } → connections
+  port kernel.invoke { query = "claimipedia.draftPanel"; input = $screen } → drafts
+  port kernel.invoke { query = "claimipedia.design.panel"; input = { compact = $steward; title = "Released revision history"; content = list($history) } } → historyPanel
+  port kernel.invoke { query = "claimipedia.design.panel"; input = { compact = $steward; title = "Evidence"; content = list($evidence) } } → evidencePanel
+  port kernel.invoke { query = "claimipedia.design.panel"; input = { compact = $steward; title = "Relationships and challenges"; content = list($connections) } } → connectionsPanel
+  let boundary = { tag = "p"; attrs = { class = "cp-notice" }; children = list("Drafts and accepted working wording are private to this workspace. The released record above retains its published wording and evidence.") }
+  port kernel.invoke { query = "claimipedia.design.panel"; input = { compact = $steward; title = "Local working corpus and drafts"; content = append(list($boundary), $drafts) } } → draftPanel
+  port kernel.invoke { query = "claimipedia.subject"; input = { facts = $input.facts; subject = $claim.version } } → version
+  let evidenceCount = if(eq($evidence.tag, "ul"), count($evidence.children), 0)
+  let connectionCount = if(eq($connections.tag, "ul"), count($connections.children), 0)
+  let facts = list(
+    list("Claim identifier", $claim.id),
+    list("Released version", $version.version),
+    list("Evidence", $evidenceCount),
+    list("Connections", $connectionCount)
+  )
+  let vitals = { tag = "dl"; attrs = { class = "cp-vitals"; "aria-label" = "Released record" }; children = map($facts, "fact", { tag = "div"; attrs = {}; children = list(
+    { tag = "dt"; attrs = {}; children = list(at($fact, 0)) },
+    { tag = "dd"; attrs = {}; children = list(at($fact, 1)) }
+  ) }) }
+  let hero = { tag = "header"; attrs = { class = if($steward, "cp-workspace-head", "cp-record-head") }; children = list(
+    { tag = "div"; attrs = {}; children = list(
+      { tag = "p"; attrs = if($steward, {}, { class = "cp-eyebrow" }); children = list(concat(if(at($version, "claimType"), $version.claimType, "Claim"), " · Released corpus record")) },
+      { tag = "h1"; attrs = {}; children = list($claim.expression) },
+      { tag = "p"; attrs = {}; children = list(at($version, "scope")) }
+    ) },
+    $vitals
+  ) }
+  let result = if($steward, list($hero, $draftPanel, $evidencePanel, $connectionsPanel, $historyPanel),
+    list($hero, $historyPanel, $evidencePanel, $connectionsPanel, $draftPanel))
+
+process claimipedia.readingPath:
+  let steps = list(
+    list("01", "Read the claim", "Keep the proposition distinct from the person presenting it."),
+    list("02", "Compare perspectives", "Support, challenge, qualification, and context stay visibly different."),
+    list("03", "Inspect reasons", "Follow evidence, provenance, boundaries, and admitted connections."),
+    list("04", "Correct the record", "Propose evidence or a correction without silently rewriting history.")
+  )
+  let result = { tag = "ol"; attrs = { class = "cp-reading-path"; "aria-label" = "How to read Claimipedia" }; children = map($steps, "step", { tag = "li"; attrs = {}; children = list(
+    { tag = "span"; attrs = {}; children = list(at($step, 0)) },
+    { tag = "strong"; attrs = {}; children = list(at($step, 1)) },
+    { tag = "small"; attrs = {}; children = list(at($step, 2)) }
+  ) }) }
+
+process claimipedia.view:
+  let screen = $eventInput
+  let claim = $screen.selected
+  let steward = at($screen, "steward")
+  let title = if($steward, "Claim records", "Claims under inquiry")
+  let content = list()
+  when $claim:
+    port kernel.invoke { query = "claimipedia.detail"; input = $screen } → content
+  when not($claim):
+    port kernel.invoke { query = "claimipedia.search"; input = { fields = $screen.fields; catalogue = $screen.catalogue; state = $screen.state; design = true; steward = $steward } } → search
+    let hero = { tag = "header"; attrs = { class = if($steward, "cp-workspace-head", "cp-page-head") }; children = list(
+      if($steward, null, { tag = "p"; attrs = { class = "cp-eyebrow" }; children = list("Many perspectives. Reasons made visible.") }),
+      { tag = "h1"; attrs = {}; children = list($title) },
+      { tag = "p"; attrs = {}; children = list(if($steward, "Search released and local wording, then open a record to review its working history.",
+        "Begin with the proposition. Then inspect its boundary, the reasons around it, the perspectives those reasons represent, and what remains missing.")) }
+    ) }
+    let lead = list($hero)
+    when not($steward):
+      call claimipedia.readingPath
+      let lead = append($lead, list($result))
+    let content = append($lead, $search)
+  port kernel.invoke { query = "claimipedia.collections"; input = { design = true; path = if($steward, "/steward/", "/"); current = if($steward, "/?collection=claims", "/") } } → nav
+  let breadcrumb = { tag = "nav"; attrs = { class = "cp-breadcrumb"; "aria-label" = "Breadcrumb" }; children = list(
+    { tag = "a"; attrs = { href = if(and($steward, $claim), "/?collection=claims", "/") }; children = list(if($claim, "Back to claim search", if($steward, "Workspace home", "Claimipedia"))) },
+    "/",
+    { tag = "strong"; attrs = {}; children = list(if($claim, "Claim record", if($steward, "Claim records", "Explore claims"))) }
+  ) }
+  let result = { title = concat(if($claim, $claim.id, $title), " · Claimipedia"); nav = $nav; content = append(list($breadcrumb), $content) }

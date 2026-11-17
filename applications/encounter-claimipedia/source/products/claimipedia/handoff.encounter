@@ -1,0 +1,193 @@
+process-module "temple/surface-process-module/1"
+
+process handoff.current:
+  let input = $eventInput
+  port kernel.invoke { query = "lease.current"; input = $input } → check
+  let receipt = if(eq(at($check.head, "event"), "receipt"), $check.head, null)
+  let rows = at($input.state, "frontier")
+  let history = filter(if($rows, $rows, list()), "row", and(eq(at($row, "kind"), "evidence-handoff"), eq(at($row, "opportunity"), $input.id)))
+  let head = at(filter($history, "row", eq($row.receipt, at($receipt, "id"))), 0)
+  let action = ""
+  let role = ""
+  when and($receipt, not($head)):
+    let action = "review-evidence-receipt"
+    let role = "verifier"
+  when and(eq(at($head, "event"), "review"), eq(at($head, "verdict"), "integrity-confirmed")):
+    let action = "propose-evidence-reconciliation"
+    let role = "reviewer"
+  when eq(at($head, "event"), "proposal"):
+    let action = "decide-evidence-reconciliation"
+    let role = "reconciler"
+  when and(eq(at($head, "event"), "disposition"), eq(at($head, "disposition"), "approved-for-manual-application")):
+    let action = "apply-evidence-reconciliation"
+    let role = "curator"
+  let previous = if($head, $head.id, at($receipt, "id"))
+  let result = { check = $check; receipt = $receipt; history = $history; head = $head; action = $action; role = $role; previous = $previous }
+
+process handoff.save:
+  let change = $eventInput
+  let request = $change.request
+  let fields = $request.fields
+  port kernel.invoke { query = "handoff.current"; input = { id = $change.id; state = $change.state; now = at($request, "now") } } → current
+  let operator = at($request, "operator")
+  let action = at($fields, "action")
+  assert and($change.selected, $current.action, eq($action, $current.action), $operator, eq(at($operator, "role"), $current.role))
+    otherwise "A verified operator with the current handoff role must record this action."
+  port scalar.read { text = $fields.base } → base
+  assert eq($base, $request.snapshot.revision)
+    otherwise "The local corpus changed. Reopen the opportunity and try again."
+  assert eq(at($fields, "previous"), $current.previous)
+    otherwise "Use the current receipt or handoff predecessor."
+  let packet = $current.check.packet
+  let receipt = $current.receipt
+  port digest.sha256 { text = $packet.text } → pin
+  assert and(eq($pin, $packet.sha256), eq($pin, $receipt.packetSha256))
+    otherwise "The worker receipt differs from the frozen packet pin."
+  port rel.decode { text = $packet.text; kind = "ClaimipediaResearchPacket" } → document
+  let evidence = $document.evidence
+  assert and(eq($receipt.evidenceId, $evidence.id), eq($receipt.evidenceSha256, $evidence.sha256))
+    otherwise "The worker receipt differs from the frozen evidence."
+  port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "rationale"); limit = 1600 } } → reason
+  let id = concat("evidence-handoff.", $request.nonce)
+  let row = { kind = "evidence-handoff"; id = $id; opportunity = $change.id; receipt = $receipt.id; previous = $current.previous; packet = $packet.id; packetSha256 = $pin; operator = $operator.id; reason = $reason; occurredAt = $request.now; upstreamWritesPerformed = false; scientificAdmission = false; publicationAuthorized = false }
+  let notice = ""
+  when eq($action, "review-evidence-receipt"):
+    assert and(not(eq($operator.id, $receipt.worker)), at($request, "attachments"))
+      otherwise "Independent review requires a different operator and the evidence mount."
+    let lease = at(filter($current.check.events, "entry", and(eq($entry.event, "lease"), eq($entry.id, $receipt.lease))), 0)
+    assert and($lease, eq($lease.packetSha256, $pin), eq($lease.worker, $receipt.worker), eq($receipt.previous, $lease.id))
+      otherwise "The receipt must match its worker lease."
+    port kernel.invoke { query = "lease.window"; input = { now = $receipt.checkedAt; issuedAt = $lease.issuedAt; expiresAt = $lease.expiresAt } } → inWindow
+    assert $inWindow
+      otherwise "The worker receipt falls outside its lease window."
+    port attachment.verify { path = $evidence.path; bytes = $evidence.bytes; sha256 = $evidence.sha256 } → verified
+    let verdict = if(and($receipt.verified, $verified), "integrity-confirmed", "integrity-hold")
+    port record.put { record = $row; key = "event"; value = "review" } → row
+    port record.put { record = $row; key = "verdict"; value = $verdict } → row
+    port record.put { record = $row; key = "mountedBytesVerified"; value = $verified } → row
+    let notice = "Independent integrity review recorded."
+  when eq($action, "propose-evidence-reconciliation"):
+    port kernel.invoke { query = "claimipedia.sourcePin"; input = $change.sourceFacts } → sourcePin
+    port kernel.invoke { query = "claimipedia.sourcePin"; input = $document.sourceFacts } → frozenSourcePin
+    assert eq($sourcePin, $frozenSourcePin)
+      otherwise "The imported opportunity has changed. Review a new packet."
+    let patch = { protocol = "claimipedia/evidence-reconciliation/1"; target = $change.id; sourceSha256 = $document.sourceSha256; packetSha256 = $pin; receipt = $receipt.id; review = $current.head.id; proposedFacts = list(list($change.id, "hasReviewedEvidenceIntegrity", $current.head.id), list($current.head.id, "reviewedEvidenceSha256", $evidence.sha256)); upstreamWritesPerformed = false; scientificAdmission = false; publicationAuthorized = false }
+    port rel.encode { value = $patch; kind = "ClaimipediaEvidenceReconciliation" } → text
+    port digest.sha256 { text = $text } → patchPin
+    port record.put { record = $row; key = "event"; value = "proposal" } → row
+    port record.put { record = $row; key = "patch"; value = $text } → row
+    port record.put { record = $row; key = "patchSha256"; value = $patchPin } → row
+    let notice = "Evidence reconciliation proposed."
+  when eq($action, "decide-evidence-reconciliation"):
+    let decision = at($fields, "disposition")
+    assert includes(list("approved-for-manual-application", "rejected", "deferred"), $decision)
+      otherwise "Choose a reconciliation disposition."
+    port digest.sha256 { text = $current.head.patch } → patchPin
+    assert eq($patchPin, $current.head.patchSha256)
+      otherwise "The reconciliation patch differs from its pin."
+    when eq($decision, "approved-for-manual-application"):
+      port kernel.invoke { query = "claimipedia.sourcePin"; input = $change.sourceFacts } → sourcePin
+      port kernel.invoke { query = "claimipedia.sourcePin"; input = $document.sourceFacts } → frozenSourcePin
+      assert eq($sourcePin, $frozenSourcePin)
+        otherwise "The imported opportunity has changed. Review a new packet."
+    port record.put { record = $row; key = "event"; value = "disposition" } → row
+    port record.put { record = $row; key = "disposition"; value = $decision } → row
+    port record.put { record = $row; key = "patchSha256"; value = $patchPin } → row
+    let notice = "Evidence reconciliation disposition recorded."
+  when eq($action, "apply-evidence-reconciliation"):
+    assert eq(at($fields, "confirm"), "apply")
+      otherwise "Explicitly confirm the local evidence application."
+    let proposal = at(filter($current.history, "entry", eq($entry.id, $current.head.previous)), 0)
+    assert and($proposal, eq(at($proposal, "event"), "proposal"), eq(at($proposal, "receipt"), $receipt.id), eq(at($proposal, "packetSha256"), $pin))
+      otherwise "The approval must link to the exact proposed patch."
+    port digest.sha256 { text = $proposal.patch } → patchPin
+    assert and(eq($patchPin, $proposal.patchSha256), eq($patchPin, $current.head.patchSha256))
+      otherwise "The approved patch bytes differ from their recorded pin."
+    port rel.decode { text = $proposal.patch; kind = "ClaimipediaEvidenceReconciliation" } → patch
+    let review = at(filter($current.history, "entry", eq($entry.id, at($patch, "review"))), 0)
+    assert and(eq(at($review, "event"), "review"), eq(at($review, "verdict"), "integrity-confirmed"), eq(at($review, "receipt"), $receipt.id), eq(at($review, "id"), $proposal.previous))
+      otherwise "The proposed patch must retain the confirmed integrity review."
+    port kernel.invoke { query = "claimipedia.sourcePin"; input = $change.sourceFacts } → sourcePin
+    port kernel.invoke { query = "claimipedia.sourcePin"; input = $document.sourceFacts } → frozenSourcePin
+    assert and(eq($sourcePin, $frozenSourcePin), eq(at($patch, "sourceSha256"), $document.sourceSha256))
+      otherwise "The imported opportunity has changed. Review a new packet."
+    let allowed = list(list($change.id, "hasReviewedEvidenceIntegrity", $review.id), list($review.id, "reviewedEvidenceSha256", $evidence.sha256))
+    assert and(eq(at($patch, "protocol"), "claimipedia/evidence-reconciliation/1"), eq(at($patch, "target"), $change.id), eq(at($patch, "packetSha256"), $pin), eq(at($patch, "receipt"), $receipt.id), eq(at($patch, "proposedFacts"), $allowed), eq(at($patch, "upstreamWritesPerformed"), false), eq(at($patch, "scientificAdmission"), false), eq(at($patch, "publicationAuthorized"), false))
+      otherwise "Only the approved integrity links can be applied to the working copy."
+    port record.put { record = $row; key = "event"; value = "application" } → row
+    port record.put { record = $row; key = "patchSha256"; value = $patchPin } → row
+    port record.put { record = $row; key = "sourceSha256"; value = $sourcePin } → row
+    port record.put { record = $row; key = "localFacts"; value = $allowed } → row
+    let notice = "Approved evidence links applied to the working copy."
+  let rows = at($change.state, "frontier")
+  port record.put { record = $change.state; key = "frontier"; value = append(list($row), if($rows, $rows, list())) } → state
+  port kernel.invoke { query = "claimipedia.commit"; input = { request = $request; state = $state; base = $base; reason = $reason; target = $change.id; notice = $notice } } → result
+
+process handoff.applied:
+  let screen = $eventInput
+  let rows = at($screen.state, "frontier")
+  let applied = filter(if($rows, $rows, list()), "row", and(eq(at($row, "kind"), "evidence-handoff"), eq(at($row, "event"), "application"), eq(at($row, "opportunity"), $screen.id)))
+  let result = list()
+  when count($applied):
+    port kernel.invoke { query = "claimipedia.sourcePin"; input = $screen.sourceFacts } → sourcePin
+    let current = filter($applied, "row", eq($row.sourceSha256, $sourcePin))
+    fold $current as row; items starts list():
+      let facts = map($row.localFacts, "fact", { tag = "li"; attrs = {}; children = list(concat(at($fact, 0), " · ", at($fact, 1), " · ", at($fact, 2))) })
+      yield append($items, $facts) → items
+    let result = list(
+      { tag = "h3"; attrs = {}; children = list("Working-copy evidence links") },
+      { tag = "ul"; attrs = { "aria-label" = "Applied local evidence facts" }; children = $items }
+    )
+    when not(eq(count($current), count($applied))):
+      let result = append($result, list({ tag = "p"; attrs = {}; children = list("Earlier applications with a different source pin remain in handoff history.") }))
+  
+process handoff.detail:
+  let screen = $eventInput
+  let request = $screen.request
+  port kernel.invoke { query = "handoff.current"; input = { id = $screen.id; state = $screen.state; now = at($request, "now") } } → current
+  let form = null
+  when and($current.action, eq(at(at($request, "operator"), "role"), $current.role)):
+    let fields = map(list(list("collection", "research-inbox"), list("checkpoint", $screen.id), list("previous", $current.previous)), "pair", {
+      tag = "input"; attrs = { type = "hidden"; name = at($pair, 0); value = at($pair, 1) }; children = list()
+    })
+    port kernel.invoke { query = "portfolio.field"; input = { field = { name = "rationale"; label = "Handoff rationale"; type = "textarea"; required = true; maxlength = 1600 }; labelId = "handoff-reason" } } → reason
+    let fields = append($fields, list($reason))
+    let button = if(eq($current.action, "review-evidence-receipt"), "Review evidence receipt", "Propose evidence reconciliation")
+    when eq($current.action, "decide-evidence-reconciliation"):
+      let choices = list({ value = ""; label = "Choose a disposition" }, { value = "approved-for-manual-application"; label = "Approve for manual application" }, { value = "rejected"; label = "Reject" }, { value = "deferred"; label = "Defer" })
+      port kernel.invoke { query = "portfolio.field"; input = { field = { name = "disposition"; label = "Reconciliation disposition"; type = "select"; required = true; options = $choices; value = "" }; labelId = "handoff-disposition" } } → disposition
+      let fields = append($fields, list($disposition))
+      let button = "Record reconciliation disposition"
+    when eq($current.action, "apply-evidence-reconciliation"):
+      let confirm = { tag = "label"; attrs = {}; children = list("Confirm local application of the approved patch", { tag = "input"; attrs = { type = "checkbox"; name = "confirm"; value = "apply"; required = true }; children = list() }) }
+      let fields = append($fields, list($confirm))
+      let button = "Apply approved evidence patch"
+    port kernel.invoke { query = "work.form"; input = { csrf = $request.csrf; revision = $request.snapshot.revision; action = $current.action; fields = $fields; button = $button; style = "cp-form" } } → form
+  fold $current.history as row; entries starts list():
+    let label = if(eq($row.event, "review"), concat("Independent review: ", at($row, "verdict")), if(eq($row.event, "proposal"), "Reconciliation proposal", concat("Reconciliation disposition: ", at($row, "disposition"))))
+    when eq($row.event, "application"):
+      let label = "Evidence patch applied to the working copy"
+    let body = list(
+      { tag = "p"; attrs = {}; children = list($label) },
+      { tag = "p"; attrs = {}; children = list(concat($row.operator, " · ", $row.reason)) },
+      { tag = "p"; attrs = {}; children = list(concat($row.id, " · Previous: ", $row.previous, " · Receipt: ", $row.receipt)) }
+    )
+    when eq($row.event, "proposal"):
+      let body = append($body, list(
+        { tag = "p"; attrs = {}; children = list(concat("Reconciliation SHA-256: ", $row.patchSha256)) },
+        { tag = "details"; attrs = {}; children = list(
+          { tag = "summary"; attrs = {}; children = list("View reconciliation REL") },
+          { tag = "textarea"; attrs = { "aria-label" = "Reconciliation REL"; readonly = true; rows = 8 }; children = list($row.patch) }
+        ) }
+      ))
+    when eq($row.event, "application"):
+      let body = append($body, list({ tag = "p"; attrs = {}; children = list(concat("Applied patch SHA-256: ", $row.patchSha256)) }))
+    yield append($entries, list({ tag = "li"; attrs = {}; children = $body })) → entries
+  let result = list()
+  when or($current.receipt, count($entries)):
+    let result = list(
+      { tag = "h3"; attrs = {}; children = list("Evidence review and reconciliation") },
+      { tag = "p"; attrs = {}; children = list("A curator can apply approved integrity links to this working copy. Upstream writes, scientific admission and publication are separate.") },
+      $form,
+      { tag = "ul"; attrs = { "aria-label" = "Evidence handoff history" }; children = $entries }
+    )

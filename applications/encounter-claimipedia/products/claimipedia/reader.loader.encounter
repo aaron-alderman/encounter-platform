@@ -1,0 +1,69 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    sections = list(
+      {
+        subject = "application";
+        stateProfile = "encounter/claimipedia-reader/1";
+        dataSource = "corpus/claimipedia-full-corpus-v1.0.0.rel";
+        dataFormat = "rel-facts";
+        dataSha256 = "449807f0e2b4b6378505d94810a60ca5665ec74b3b416291980f19b6af90518d";
+        module = list(
+          "source/products/shared/work-ui.encounter",
+          "source/products/claimipedia/release.encounter",
+          "source/products/claimipedia/corpus-search.encounter",
+          "source/products/claimipedia/design.encounter",
+          "source/products/claimipedia/ecology.encounter",
+          "source/products/claimipedia/aster.encounter",
+          "algebra/html/html.escape.encounter",
+          "algebra/html/html.cssText.encounter",
+          "algebra/html/html.serialize.encounter",
+          "source/products/claimipedia/atlas.encounter",
+          "source/products/claimipedia/atlas-map.encounter",
+          "source/products/claimipedia/reader.encounter"
+        );
+        entry = list(
+          "app.newSession",
+          "app.request",
+          "ui.styles"
+        );
+        grant = "digest.sha256";
+        dataset = list("style-approval", "knowledge-ecology")
+      },
+      {
+        subject = "data.knowledge-ecology";
+        source = "products/claimipedia/knowledge-ecology.rel";
+        format = "rel-facts";
+        sha256 = "865da0a2ae46915d518a4a5efc212eeb6a1a18798562712087ee3a63dc2a8752"
+      },
+      {
+        subject = "data.style-approval";
+        source = "products/claimipedia/style-approval.rel";
+        format = "rel-facts";
+        sha256 = "b259aa6d003ea327a2ba65082561f0e4f960a52fbcac063c555619471432c975"
+      },
+      {
+        subject = "application";
+        grant = list(
+          "application.data",
+          "kernel.invoke",
+          "text.matches",
+          "text.indexOf",
+          "text.join",
+          "text.replaceAll",
+          "text.trim",
+          "text.lowerCase",
+          "text.split",
+          "value.describe",
+          "value.string",
+          "value.type",
+          "record.entries",
+          "record.get",
+          "record.fromEntries",
+          "text.slice",
+          "number.calculate"
+        )
+      }
+    )
+  }

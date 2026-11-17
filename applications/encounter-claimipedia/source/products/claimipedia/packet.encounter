@@ -1,0 +1,82 @@
+process-module "temple/surface-process-module/1"
+
+process packet.history:
+  let input = $eventInput
+  let rows = at($input.state, "frontier")
+  let result = filter(if($rows, $rows, list()), "row", and(eq(at($row, "kind"), "research-packet"), eq(at($row, "opportunity"), $input.id)))
+
+process packet.freeze:
+  let input = $eventInput
+  let change = $input.change
+  let decision = at($input.history, 0)
+  let proposal = at($input.history, 1)
+  assert and(eq(at($decision, "event"), "decision"), eq(at($decision, "decision"), "approve-for-manual-follow-up"), eq(at($decision, "attribution"), "verified-operator"), eq(at($proposal, "event"), "proposal"), eq(at($decision, "proposal"), at($proposal, "id")))
+    otherwise "Freeze a packet only from the current verified approval."
+  port kernel.invoke { query = "packet.history"; input = { id = $change.id; state = $change.state } } → packets
+  assert not(some($packets, "row", eq($row.decision, $decision.id)))
+    otherwise "This decision already has a frozen packet."
+  let sourcePin = ""
+  when eq(at($proposal, "sourcePinKind"), "ordered-tuples/1"):
+    port kernel.invoke { query = "claimipedia.sourcePin"; input = $change.sourceFacts } → sourcePin
+  when not(at($proposal, "sourcePinKind")):
+    port rel.encode { value = $change.sourceFacts; kind = "ClaimipediaOpportunityFacts" } → source
+    port digest.sha256 { text = $source } → sourcePin
+  assert eq(at($proposal, "sourceSha256"), $sourcePin)
+    otherwise "The proposal has no matching frozen source pin. Record a new proposal and decision."
+  port application.data { name = "evidence-library" } → index
+  let evidence = at(filter($index, "row", eq($row.id, $proposal.evidenceId)), 0)
+  assert and($evidence, eq($evidence.path, $proposal.evidencePath), eq($evidence.sha256, $proposal.evidenceSha256))
+    otherwise "The approved evidence coordinate no longer matches its pin."
+  let id = concat("research-packet.", $change.request.nonce)
+  let document = {
+    protocol = "claimipedia/research-packet/1";
+    id = $id;
+    opportunity = $change.id;
+    sourceFacts = $change.sourceFacts;
+    sourceSha256 = $sourcePin;
+    proposal = $proposal;
+    decision = $decision;
+    evidence = $evidence;
+    frozenBy = $input.actor;
+    reason = $input.rationale;
+    purpose = "manual-follow-up";
+    executionAuthorized = false;
+    scientificAdmission = false;
+    publicationAuthorized = false
+  }
+  port rel.encode { value = $document; kind = "ClaimipediaResearchPacket" } → text
+  port digest.sha256 { text = $text } → pin
+  let result = { kind = "research-packet"; id = $id; opportunity = $change.id; previous = $decision.id; decision = $decision.id; sha256 = $pin; text = $text }
+
+process packet.detail:
+  let screen = $eventInput
+  let request = $screen.request
+  port kernel.invoke { query = "packet.history"; input = { id = $screen.id; state = $screen.state } } → packets
+  port kernel.invoke { query = "triage.history"; input = { id = $screen.id; state = $screen.state } } → history
+  let decision = at($history, 0)
+  let proposal = at($history, 1)
+  let approved = and(eq(at($decision, "decision"), "approve-for-manual-follow-up"), eq(at($decision, "attribution"), "verified-operator"), at($proposal, "sourceSha256"))
+  let frozen = some($packets, "row", eq($row.decision, at($decision, "id")))
+  let allowed = and($approved, not($frozen), eq(at(at($request, "operator"), "role"), "reviewer"))
+  let rows = map($packets, "packet", { tag = "li"; attrs = {}; children = list(
+    { tag = "p"; attrs = {}; children = list(concat("Packet: ", $packet.id)) },
+    { tag = "p"; attrs = {}; children = list(concat("Approved decision: ", $packet.decision)) },
+    { tag = "p"; attrs = {}; children = list(concat("Packet SHA-256: ", $packet.sha256)) },
+    { tag = "details"; attrs = {}; children = list(
+      { tag = "summary"; attrs = {}; children = list("View frozen packet REL") },
+      { tag = "textarea"; attrs = { "aria-label" = "Frozen packet REL"; readonly = true; rows = 8 }; children = list($packet.text) }
+    ) }
+  ) })
+  let form = null
+  when $allowed:
+    let hidden = map(list(list("collection", "research-inbox"), list("checkpoint", $screen.id), list("previous", $decision.id)), "pair", {
+      tag = "input"; attrs = { type = "hidden"; name = at($pair, 0); value = at($pair, 1) }; children = list()
+    })
+    port kernel.invoke { query = "portfolio.field"; input = { field = { name = "rationale"; label = "Packet freeze rationale"; type = "textarea"; required = true; maxlength = 1600 }; labelId = "packet-rationale" } } → reason
+    port kernel.invoke { query = "work.form"; input = { csrf = $request.csrf; revision = $request.snapshot.revision; action = "freeze-follow-up"; fields = append($hidden, list($reason)); button = "Freeze follow-up packet"; style = "cp-form" } } → form
+  let result = list(
+    { tag = "h3"; attrs = {}; children = list("Frozen follow-up packets") },
+    { tag = "p"; attrs = {}; children = list("A packet preserves a reviewed manual action and its evidence. Execution, scientific admission and publication require separate authority.") },
+    $form,
+    { tag = "ul"; attrs = { "aria-label" = "Frozen follow-up packets" }; children = $rows }
+  )

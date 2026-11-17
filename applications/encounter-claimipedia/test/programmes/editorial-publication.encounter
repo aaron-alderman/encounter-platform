@@ -1,0 +1,252 @@
+process-module "temple/surface-process-module/1"
+
+process editorial.fill:
+  port browser.act { page = $page; locator = list({ label = $label }); action = "fill"; value = $value } → _
+
+process editorial.submit:
+  port browser.act { page = $page; locator = list({ role = "button"; name = $button }); action = "click"; event = "navigation" } → response
+  assert eq($response.status, 200)
+    otherwise "The editorial action must use the normal claim form route."
+
+process editorial.expect:
+  port browser.observe { page = $page; locator = list({ role = $feedback }); property = "text" } → observed
+  port diagnostic.context { value = { expected = $message; observed = $observed } } → _
+  assert eq($observed, $message)
+    otherwise "Unexpected editorial decision."
+
+process editorial.draft:
+  let label = "Draft statement"
+  let value = $statement
+  call editorial.fill
+  let label = "Revision reason"
+  let value = "Exercise private editorial review."
+  call editorial.fill
+  let button = "Save draft revision"
+  call editorial.submit
+  let button = "Accept draft locally"
+  call editorial.submit
+
+process editorial.admissionDecisionBytes:
+  let names = list("protocol", "id", "authority", "decision", "claim", "revision", "candidate", "candidateSha256", "handoff", "handoffSha256")
+  let statement = map($names, "name", list($name, at($signingDecision, $name)))
+  port rel.write { value = $statement; kind = "ClaimipediaScientificAdmissionDecision" } → signedBytes
+
+process test.claimipedia.editorial-publication:
+  let claimRoute = "/?claim=clm_01_RIVER_NITRATE"
+  port file.text { file = "corpus/claimipedia-full-corpus-v1.0.0.rel" } → releasedBefore
+  let authority = "fixture-research-authority"
+  port browser.open { declaration = "products/claimipedia/application.rel"; width = 390; height = 844; operator = "reviewer"; admissionAuthority = $authority } → opened
+  let reviewer = $opened.page
+  port browser.act { page = $reviewer; action = "navigate"; value = $claimRoute } → _
+  let page = $reviewer
+  let statement = "First private wording for editorial review."
+  call editorial.draft
+  port browser.page { browser = $opened.browser; route = $claimRoute; operator = "curator" } → openedCurator
+  let page = $openedCurator.page
+  let stageForm = list({ css = "form"; has = list({ role = "button"; name = "Stage publication candidate" }) })
+  let baseField = append($stageForm, list({ css = "input[name=base]" }))
+  port browser.observe { page = $page; locator = $baseField; property = "value" } → before
+  let label = "Editorial decision reason"
+  let value = "Attempt to stage without editorial approval."
+  call editorial.fill
+  let button = "Stage publication candidate"
+  call editorial.submit
+  let feedback = "alert"
+  let message = "The exact revision needs independent editorial approval before staging."
+  call editorial.expect
+  port browser.observe { page = $page; locator = $baseField; property = "value" } → after
+  assert eq($before, $after)
+    otherwise "An unapproved candidate must leave the revision unchanged."
+
+  let page = $reviewer
+  let label = "Editorial decision reason"
+  let value = "Approve the first exact candidate for private staging."
+  call editorial.fill
+  let button = "Approve for private staging"
+  call editorial.submit
+  let feedback = "status"
+  let message = "Editorial approval recorded for this exact revision."
+  call editorial.expect
+  port browser.page { browser = $opened.browser; route = $claimRoute; operator = "curator" } → stale
+  let page = $reviewer
+  let statement = "Second private wording for editorial review."
+  call editorial.draft
+
+  let page = $stale.page
+  let label = "Editorial decision reason"
+  let value = "Attempt the approved predecessor after its replacement."
+  call editorial.fill
+  let button = "Stage publication candidate"
+  call editorial.submit
+  let feedback = "alert"
+  let message = "The draft store changed. Reopen the claim and try again."
+  call editorial.expect
+  port browser.observe { page = $page; locator = $baseField; property = "value" } → newBase
+  let label = "Editorial decision reason"
+  let value = "Try to inherit the prior approval."
+  call editorial.fill
+  let button = "Stage publication candidate"
+  call editorial.submit
+  let message = "The exact revision needs independent editorial approval before staging."
+  call editorial.expect
+  port browser.observe { page = $page; locator = $baseField; property = "value" } → unchanged
+  assert eq($newBase, $unchanged)
+    otherwise "An approval for the predecessor cannot write the successor."
+
+  let page = $reviewer
+  let label = "Editorial decision reason"
+  let value = "Approve the new exact revision."
+  call editorial.fill
+  let button = "Approve for private staging"
+  call editorial.submit
+  port browser.page { browser = $opened.browser; route = $claimRoute; operator = "curator" } → current
+  let page = $current.page
+  let label = "Editorial decision reason"
+  let value = "Retain a private candidate for the separate publication authority."
+  call editorial.fill
+  let button = "Stage publication candidate"
+  call editorial.submit
+  let feedback = "status"
+  let message = "Private publication candidate staged."
+  call editorial.expect
+  let handoffButton = "Record scientific admission handoff"
+  let handoffForm = list({ css = "form"; has = list({ role = "button"; name = $handoffButton }) })
+  port browser.observe { page = $page; locator = append($handoffForm, list({ css = "input[name=candidate]" })); property = "value" } → candidate
+  port browser.observe { page = $page; locator = append($handoffForm, list({ css = "input[name=revision]" })); property = "value" } → revision
+  port browser.observe { page = $page; locator = append($handoffForm, list({ css = "input[name=pin]" })); property = "value" } → pin
+  let draftForm = list({ css = "form"; has = list({ role = "button"; name = "Save draft revision" }) })
+  let publish = { action = "publish-candidate"; candidate = $candidate; revision = $revision; pin = $pin; scientificAdmission = "true"; publicationAuthorized = "true"; admission = "editorial-approval" }
+  port browser.response { page = $page; route = "/"; method = "POST"; formFrom = $draftForm; fields = $publish } → refused
+  assert and(eq($refused.status, 200), includes($refused.text, "Independent scientific admission is required before public publication."))
+    otherwise "An exact editorial candidate and forged admission fields must never authorize publication."
+  port browser.page { browser = $opened.browser; route = $claimRoute; operator = "reviewer" } → reviewerAfterStage
+  port browser.response { page = $reviewerAfterStage.page; route = "/"; method = "POST"; formFrom = $draftForm;
+    fields = { action = "record-scientific-handoff"; candidate = $candidate; revision = $revision; pin = $pin; reason = "Attempt the curator handoff as a reviewer." } } → unauthorized
+  assert and(eq($unauthorized.status, 200), includes($unauthorized.text, "A verified curator must record the scientific admission handoff."))
+    otherwise "Editorial reviewer authority must not record the curator handoff."
+  port browser.page { browser = $opened.browser; route = $claimRoute; operator = "curator" } → staleHandoff
+  let label = "Scientific handoff reason"
+  let value = "Send the exact candidate for independent assessment."
+  call editorial.fill
+  let button = $handoffButton
+  call editorial.submit
+  let message = "Scientific admission handoff recorded. Awaiting an independent decision."
+  call editorial.expect
+  let handoffPage = $page
+  let page = $staleHandoff.page
+  let label = "Scientific handoff reason"
+  let value = "Attempt a handoff against an obsolete workspace revision."
+  call editorial.fill
+  let button = $handoffButton
+  call editorial.submit
+  let feedback = "alert"
+  let message = "The draft store changed. Reopen the claim and try again."
+  call editorial.expect
+  let page = $handoffPage
+  let activeBase = append($draftForm, list({ css = "input[name=base]" }))
+  port browser.observe { page = $page; locator = $activeBase; property = "value" } → beforePublish
+  port browser.response { page = $page; route = "/"; method = "POST"; formFrom = $draftForm; fields = $publish } → refused
+  assert and(eq($refused.status, 200), includes($refused.text, "Independent scientific admission is required before public publication."))
+    otherwise "Recording a handoff must confer no publication authority."
+  port browser.act { page = $page; action = "navigate"; value = $claimRoute } → _
+  port browser.observe { page = $page; locator = $activeBase; property = "value" } → afterPublish
+  assert eq($beforePublish, $afterPublish)
+    otherwise "A publication refusal must leave the working revision unchanged."
+  port browser.reopen { browser = $opened.browser } → _
+  port browser.page { browser = $opened.browser; route = $claimRoute; operator = "curator" } → reopened
+  let page = $reopened.page
+  port browser.observe { page = $page; locator = list({ text = "Private candidate staged · draft."; exact = false }); property = "count" } → staged
+  port browser.observe { page = $page; locator = list({ text = "Released version 1 · claimVersion.riverNitrate.1" }); property = "count" } → published
+  port browser.observe { page = $page; locator = list({ text = "Staging records a private publication candidate. Scientific admission and public release require separate authority." }); property = "count" } → boundary
+  port browser.observe { page = $page; property = "overflow" } → overflow
+  assert and(eq($staged, 1), eq($published, 1), eq($boundary, 1), not($overflow))
+    otherwise "Cold reopening must retain the private decision and the pinned release as separate records."
+  port browser.act { page = $page; locator = list({ text = "View scientific admission handoff REL" }); action = "click" } → _
+  port browser.observe { page = $page; locator = list({ css = "pre.cp-evidence-source" }); property = "text" } → packetText
+  port rel.read { text = $packetText; kind = "ClaimipediaScientificAdmissionHandoff" } → packet
+  assert and(eq($packet.protocol, "claimipedia/scientific-admission-handoff/1"), eq($packet.candidate, $candidate), eq($packet.candidateSha256, $pin),
+    eq($packet.payload.revision, $revision), eq($packet.payload.releasedVersion, "claimVersion.riverNitrate.1"),
+    eq($packet.payload.statement, "Second private wording for editorial review."), count($packet.approval),
+    eq($packet.requestedBy, "fixture-curator"), eq($packet.scientificAdmission, false), eq($packet.publicationAuthorized, false),
+    eq($packet.payload.scientificAdmission, false), eq($packet.payload.publicationAuthorized, false))
+    otherwise "The cold handoff must identify the exact candidate and retain both authority boundaries."
+  port browser.observe { page = $page; property = "overflow" } → packetOverflow
+  assert not($packetOverflow)
+    otherwise "The handoff must be readable on a phone viewport."
+  port digest.sha256 { text = $packetText } → handoffPin
+  port browser.observe { page = $page; locator = list({ text = concat("Handoff SHA-256: ", $handoffPin) }); property = "count" } → exactHandoff
+  assert eq($exactHandoff, 1)
+    otherwise "The copyable handoff must match its displayed pin."
+  let decision = { protocol = "claimipedia/scientific-admission-decision/1"; id = "fixture-decision-1"; authority = $authority;
+    decision = "admitted"; claim = "clm_01_RIVER_NITRATE"; revision = $revision; candidate = $candidate; candidateSha256 = $pin;
+    handoff = $packet.id; handoffSha256 = $handoffPin }
+  let signingDecision = $decision
+  call editorial.admissionDecisionBytes
+  port browser.signAdmission { browser = $opened.browser; text = $signedBytes } → signature
+  port rel.write { value = { decision = $decision; signature = $signature }; kind = "ClaimipediaScientificAdmissionReceipt" } → validReceipt
+
+  port record.put { record = $decision; key = "candidateSha256"; value = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } → staleDecision
+  let signingDecision = $staleDecision
+  call editorial.admissionDecisionBytes
+  port browser.signAdmission { browser = $opened.browser; text = $signedBytes } → staleSignature
+  port rel.write { value = { decision = $staleDecision; signature = $staleSignature }; kind = "ClaimipediaScientificAdmissionReceipt" } → staleReceipt
+  port record.put { record = $decision; key = "authority"; value = "unconfigured-authority" } → unknownDecision
+  let signingDecision = $unknownDecision
+  call editorial.admissionDecisionBytes
+  port browser.signAdmission { browser = $opened.browser; text = $signedBytes } → unknownSignature
+  port rel.write { value = { decision = $unknownDecision; signature = $unknownSignature }; kind = "ClaimipediaScientificAdmissionReceipt" } → unknownReceipt
+  port record.put { record = $decision; key = "id"; value = "altered-after-signing" } → forgedDecision
+  port rel.write { value = { decision = $forgedDecision; signature = $signature }; kind = "ClaimipediaScientificAdmissionReceipt" } → forgedReceipt
+  port record.put { record = $decision; key = "authority"; value = concat($authority, ".weak") } → weakDecision
+  port rel.write { value = { decision = $weakDecision; signature = "01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" }; kind = "ClaimipediaScientificAdmissionReceipt" } → weakForgery
+  let label = "Signed scientific admission receipt REL"
+  let button = "Verify scientific admission receipt"
+  port browser.observe { page = $page; locator = $activeBase; property = "value" } → beforeIntake
+  each list(
+    list($staleReceipt, "The admission receipt does not match the exact current staged candidate and handoff."),
+    list($unknownReceipt, "The scientific admission authority is not trusted by this build."),
+    list($forgedReceipt, "The scientific admission signature did not verify."),
+    list($weakForgery, "The scientific admission signature did not verify.")
+  ) as attempt:
+    let value = at($attempt, 0)
+    call editorial.fill
+    call editorial.submit
+    let feedback = "alert"
+    let message = at($attempt, 1)
+    call editorial.expect
+    port browser.observe { page = $page; locator = $activeBase; property = "value" } → refusedHead
+    assert eq($refusedHead, $beforeIntake)
+      otherwise "A refused admission receipt must not advance the store."
+
+  port browser.page { browser = $opened.browser; route = $claimRoute; operator = "curator" } → staleIntake
+  let value = $validReceipt
+  call editorial.fill
+  call editorial.submit
+  let feedback = "status"
+  let message = "Independent scientific admission receipt verified and recorded."
+  call editorial.expect
+  let intakePage = $page
+  let page = $staleIntake.page
+  call editorial.fill
+  call editorial.submit
+  let feedback = "alert"
+  let message = "The draft store changed. Reopen the claim and try again."
+  call editorial.expect
+  let page = $intakePage
+  port browser.response { page = $page; route = "/"; method = "POST"; formFrom = $draftForm;
+    fields = { action = "intake-scientific-receipt"; candidate = $candidate; revision = $revision; pin = $pin; receipt = $validReceipt } } → duplicate
+  assert and(eq($duplicate.status, 200), includes($duplicate.text, "Scientific admission is already recorded for this exact handoff."))
+    otherwise "An exact receipt replay must not record a second decision."
+  port browser.response { page = $page; route = "/"; method = "POST"; formFrom = $draftForm; fields = $publish } → releaseRefusal
+  assert and(eq($releaseRefusal.status, 200), includes($releaseRefusal.text, "Public release requires separate publication authority."))
+    otherwise "A valid scientific receipt must confer no public release authority."
+  port browser.reopen { browser = $opened.browser } → _
+  port browser.page { browser = $opened.browser; route = $claimRoute; operator = "curator" } → admitted
+  let page = $admitted.page
+  port browser.observe { page = $page; locator = list({ text = "Verified scientific admission receipt: fixture-decision-1 · fixture-research-authority" }); property = "count" } → retainedAdmission
+  port browser.observe { page = $page; locator = list({ text = "Released version 1 · claimVersion.riverNitrate.1" }); property = "count" } → retainedRelease
+  assert and(eq($retainedAdmission, 1), eq($retainedRelease, 1))
+    otherwise "The verified receipt must survive reopening without changing the released revision."
+  port file.text { file = "corpus/claimipedia-full-corpus-v1.0.0.rel" } → releasedAfter
+  assert eq($releasedBefore, $releasedAfter)
+    otherwise "An editorial publication candidate must leave the released corpus unchanged."

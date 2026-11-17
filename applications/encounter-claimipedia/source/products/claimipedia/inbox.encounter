@@ -1,0 +1,110 @@
+process-module "temple/surface-process-module/1"
+
+process inbox.index:
+  let screen = $eventInput
+  let query = at($screen.fields, "q")
+  port text.trim { value = if($query, $query, "") } → query
+  port text.slice { value = $query; start = 0; end = 180 } → query
+  port text.lowerCase { value = $query } → needle
+  let reviewFilter = at($screen.fields, "review")
+  let filters = list(
+    { value = ""; label = "All local reviews" },
+    { value = "awaiting-review"; label = "Awaiting review" },
+    { value = "approve-for-manual-follow-up"; label = "Approved for manual follow-up" },
+    { value = "reject"; label = "Rejected" },
+    { value = "defer"; label = "Deferred" },
+    { value = "unreviewed"; label = "Unreviewed" }
+  )
+  let reviewFilter = if(includes(map($filters, "option", $option.value), $reviewFilter), $reviewFilter, "")
+  port kernel.invoke { query = "portfolio.field"; input = { field = { name = "review"; label = "Filter local review"; type = "select"; options = $filters; value = $reviewFilter }; labelId = "inbox-review-filter" } } → reviewControl
+  fold $screen.ids as id; matches starts list():
+    let facts = filter($screen.facts, "fact", eq($fact.s, $id))
+    port text.join { values = append(list($id), map($facts, "fact", $fact.o)); separator = " " } → searchable
+    port text.lowerCase { value = $searchable } → text
+    port text.indexOf { value = $text; search = $needle } → found
+    let title = at(at(filter($facts, "fact", eq($fact.p, "title")), 0), "o")
+    let status = at(at(filter($facts, "fact", eq($fact.p, "status")), 0), "o")
+    port kernel.invoke { query = "triage.history"; input = { id = $id; state = $screen.state } } → history
+    let head = at($history, 0)
+    let localStatus = if($head, if(eq($head.event, "proposal"), "awaiting-review", at($head, "decision")), "unreviewed")
+    let link = { tag = "li"; attrs = {}; children = list(
+      { tag = "a"; attrs = { href = concat("/?collection=research-inbox&checkpoint=", $id) }; children = list($title) },
+      { tag = "p"; attrs = {}; children = list(concat($id, " · ", $status)) },
+      { tag = "p"; attrs = {}; children = list(concat("Local review: ", $localStatus)) }
+    ) }
+    yield if(and(not(eq($found, -1)), or(eq($reviewFilter, ""), eq($reviewFilter, $localStatus))), append($matches, list($link)), $matches) → matches
+  let form = { tag = "form"; attrs = { method = "get"; action = "/"; class = "cp-search-form" }; children = list(
+    { tag = "input"; attrs = { type = "hidden"; name = "collection"; value = "research-inbox" }; children = list() },
+    { tag = "label"; attrs = {}; children = list("Search research opportunities", { tag = "input"; attrs = { name = "q"; type = "search"; value = $query; maxlength = 180 }; children = list() }) },
+    $reviewControl, { tag = "button"; attrs = { type = "submit" }; children = list("Search") }
+  ) }
+  let result = list($form,
+    { tag = "p"; attrs = {}; children = list(concat(count($matches), " of ", count($screen.ids), " opportunities")) },
+    { tag = "ul"; attrs = { "aria-label" = "Research opportunities" }; children = $matches }
+  )
+
+process inbox.facts:
+  let input = $eventInput
+  fold $input.rows as fact; rows starts list():
+    let target = $fact.o
+    let related = includes($input.subjects, $target)
+    let reference = if($related, { tag = "a"; attrs = { href = concat("/?collection=research-inbox&checkpoint=", $target) }; children = list($target) }, $target)
+    let item = { tag = "li"; attrs = {}; children = list(concat($fact.p, if(eq($fact.pol, "is"), "", concat(" [", $fact.pol, "]")), ": "), $reference) }
+    yield append($rows, list($item)) → rows
+  let result = { tag = "ul"; attrs = { "aria-label" = "Imported opportunity and result facts" }; children = $rows }
+
+process inbox.detail:
+  let screen = $eventInput
+  let rows = filter($screen.facts, "fact", eq($fact.s, $screen.id))
+  let title = at(at(filter($rows, "fact", eq($fact.p, "title")), 0), "o")
+  port kernel.invoke { query = "inbox.facts"; input = { rows = $rows; subjects = $screen.subjects } } → imported
+  let body = list(
+    { tag = "a"; attrs = { href = "/?collection=research-inbox" }; children = list("Back to research inbox") },
+    { tag = "h2"; attrs = {}; children = list(if($title, $title, $screen.id)) },
+    { tag = "p"; attrs = {}; children = list($screen.id) },
+    { tag = "p"; attrs = {}; children = list("Verified transfer · sourcery-applications/applications/claimipedia/research-inbox.rel") },
+    $imported
+  )
+  port kernel.invoke { query = "handoff.applied"; input = { id = $screen.id; state = $screen.state; sourceFacts = $rows } } → applied
+  let body = append($body, $applied)
+  port kernel.invoke { query = "library.evidenceLinks"; input = $screen.id } → links
+  let body = append($body, $links)
+  when includes($screen.ids, $screen.id):
+    port kernel.invoke { query = "checkpoint.detail"; input = $screen } → notes
+    let body = append($body, $notes)
+    port kernel.invoke { query = "triage.detail"; input = $screen } → triage
+    let body = append($body, $triage)
+    port kernel.invoke { query = "packet.detail"; input = $screen } → packets
+    let body = append($body, $packets)
+    port kernel.invoke { query = "lease.detail"; input = $screen } → leases
+    let body = append($body, $leases)
+    port kernel.invoke { query = "handoff.detail"; input = $screen } → handoff
+    let body = append($body, $handoff)
+  let result = $body
+
+process inbox.request:
+  let request = $eventInput
+  port application.data { name = "research-inbox" } → raw
+  let facts = $raw
+  let ids = map(filter($facts, "fact", and(eq($fact.pol, "is"), eq($fact.p, "isa"), eq($fact.o, "ResearchOpportunity"))), "fact", $fact.s)
+  let subjects = distinct(map($facts, "fact", $fact.s))
+  let id = at($request.fields, "checkpoint")
+  let selected = includes($subjects, $id)
+  let opportunity = includes($ids, $id)
+  let triage = includes(list("propose-follow-up", "decide-follow-up", "freeze-follow-up"), at($request.fields, "action"))
+  let lease = includes(list("issue-evidence-lease", "run-evidence-check"), at($request.fields, "action"))
+  let handoff = includes(list("review-evidence-receipt", "propose-evidence-reconciliation", "decide-evidence-reconciliation", "apply-evidence-reconciliation"), at($request.fields, "action"))
+  let sourceFacts = filter($facts, "fact", eq($fact.s, $id))
+  let status = at(at(filter($sourceFacts, "fact", and(eq($fact.p, "status"), eq($fact.pol, "is"))), 0), "o")
+  port kernel.invoke { query = "claimipedia.researchReview"; input = { request = $request; selected = $opportunity; id = $id; triage = $triage; lease = $lease; handoff = $handoff; sourceStatus = $status; sourceFacts = $sourceFacts } } → review
+  let request = $review.request
+  let state = $review.state
+  let body = list()
+  when $selected:
+    port kernel.invoke { query = "inbox.detail"; input = { request = $request; state = $state; id = $id; ids = $ids; subjects = $subjects; facts = $facts } } → body
+  when not($selected):
+    port kernel.invoke { query = "inbox.index"; input = { fields = $request.fields; facts = $facts; ids = $ids; state = $state } } → body
+  port kernel.invoke { query = "claimipedia.collections"; input = { design = true; path = $request.path; current = concat("/?collection=", $request.fields.collection) } } → nav
+  let view = { title = "Research inbox"; summary = "Imported research opportunities and result records. Local notes record follow-up separately."; nav = $nav; content = $body }
+  port kernel.invoke { query = "claimipedia.design.workspacePage"; input = { page = $view; notice = $review.notice; error = $review.error; urlPrefix = if(eq($request.path, "/steward/"), "/steward", "") } } → html
+  let result = { html = $html; session = $request.session }

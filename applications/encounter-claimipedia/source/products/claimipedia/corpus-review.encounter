@@ -1,0 +1,66 @@
+process-module "temple/surface-process-module/1"
+
+process claimipedia.corpusReview:
+  let request = $eventInput
+  port application.data { name = "corpus-review" } → facts
+  let ids = map(filter($facts, "fact", and(eq($fact.p, "isa"), eq($fact.o, "CorpusReviewItem"))), "fact", $fact.s)
+  let index = "/steward/corpus-view"
+  let legacy = includes(list("/", "/steward/"), $request.path)
+  let mounted = not(eq($request.path, "/"))
+  let id = if($legacy, at($request.fields, "checkpoint"), at(filter($ids, "id", eq($request.path, concat($index, "/", $id))), 0))
+  let selected = includes($ids, $id)
+  let missing = and(not($selected), if($legacy, $id, not(eq($request.path, $index))))
+  port kernel.invoke { query = "claimipedia.researchReview"; input = { request = $request; selected = $selected; id = $id } } → review
+  port kernel.invoke { query = "claimipedia.collections"; input = { design = true; path = if($mounted, "/steward/", "/"); current = $index } } → nav
+  let title = "Corpus review"
+  let summary = "Review proposed relationships and evidence gaps from the audit of 119 reader claims in release v1.0.0."
+  let body = list()
+  when not($selected):
+    fold $ids as itemId; items starts list():
+      port kernel.invoke { query = "claimipedia.subject"; input = { subject = $itemId; facts = $facts } } → item
+      port kernel.invoke { query = "checkpoint.notes"; input = { id = $itemId; state = $review.state } } → notes
+      let row = { tag = "li"; attrs = {}; children = list(
+        { tag = "h3"; attrs = {}; children = list({ tag = "a"; attrs = { href = concat($index, "/", $itemId) }; children = list($item.title) }) },
+        { tag = "p"; attrs = {}; children = list(concat(if(at($item, "target"), "Proposed relationship", "Evidence gap"), " · ", if(count($notes), "Review note recorded", "Awaiting review"))) }
+      ) }
+      yield append($items, list($row)) → items
+    let queue = { tag = "ul"; attrs = { "aria-label" = "Corpus review queue" }; children = $items }
+    let body = list({ tag = "section"; attrs = { class = "cp-workspace-panel" }; children = list(
+      { tag = "h2"; attrs = {}; children = list(concat(count($ids), " review items")) },
+      $queue
+    ) })
+  when $selected:
+    port kernel.invoke { query = "claimipedia.subject"; input = { subject = $id; facts = $facts } } → item
+    port kernel.invoke { query = "claimipedia.catalogue" } → catalogue
+    let subjects = if(at($item, "target"), list($item.source, $item.target), list($item.source))
+    let claims = map($subjects, "subject", at(filter($catalogue.claims, "claim", eq($claim.subject, $subject)), 0))
+    assert every($claims, "claim", $claim)
+      otherwise "A corpus review item refers to a claim outside the pinned release."
+    let endpoints = { tag = "ol"; attrs = { "aria-label" = "Released claims in review order" }; children = map($claims, "claim", {
+      tag = "li"; attrs = {}; children = list(
+        { tag = "a"; attrs = { href = concat("/?claim=", $claim.id) }; children = list($claim.expression) },
+        { tag = "small"; attrs = {}; children = list(concat(" · ", $claim.version)) }
+      )
+    }) }
+    let title = $item.title
+    let summary = if(at($item, "target"), concat("Proposed relationship from claim 1 to claim 2 · ", $item.kind), "Evidence gap")
+    port kernel.invoke { query = "checkpoint.detail"; input = { request = $review.request; state = $review.state; id = $id; design = true; formAction = concat($index, "/", $id) } } → notes
+    port kernel.invoke { query = "claimipedia.design.panel"; input = { compact = true; title = "Steward follow-up"; content = $notes } } → followup
+    let scope = { tag = "section"; attrs = { class = "cp-workspace-panel" }; children = list(
+      { tag = "h2"; attrs = {}; children = list("Scope and evidence") },
+      $endpoints,
+      { tag = "p"; attrs = {}; children = list($item.rationale) },
+      { tag = "p"; attrs = {}; children = list(concat("Review task · ", $item.check)) }
+    ) }
+    let body = list(
+      { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = $index }; children = list("Back to the corpus review queue") }) },
+      $scope,
+      $followup
+    )
+  let heading = { tag = "header"; attrs = { class = "cp-workspace-head" }; children = list(
+    { tag = "h1"; attrs = {}; children = list($title) },
+    { tag = "p"; attrs = {}; children = list($summary) }
+  ) }
+  let view = { title = concat($title, " · Claimipedia"); nav = $nav; content = append(list($heading), $body) }
+  port kernel.invoke { query = "claimipedia.design.page"; input = { page = $view; notice = if($missing, "No corpus review item has this address.", $review.notice); error = or($missing, $review.error); urlPrefix = if($mounted, "/steward", "") } } → html
+  let result = { html = $html; session = $request.session }

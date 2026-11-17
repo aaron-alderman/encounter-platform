@@ -1,0 +1,234 @@
+process-module "temple/surface-process-module/1"
+
+process claimipedia.collectionEntries:
+  let result = list(
+    { href = "/"; label = "Released claims"; summary = "Search the released corpus and open a claim dossier." },
+    { href = "/?collection=frontier"; label = "Frontier Claims"; summary = "Browse provisional assessments and their recorded warrants." },
+    { href = "/?collection=research"; label = "Research arms"; summary = "Explore programmes, work packs and their decision gates." },
+    { href = "/?collection=evidence"; label = "Frontier references"; summary = "Find source references for the Frontier programmes." },
+    { href = "/?collection=evidence-library"; label = "Evidence library"; summary = "Find transferred files by path, collection or hash." },
+    { href = "/?collection=checkpoints"; label = "Research checkpoints"; summary = "Inspect imported checkpoints and local follow-up notes." },
+    { href = "/?collection=research-inbox"; label = "Research inbox"; summary = "Review research opportunities and the decisions recorded against them." },
+    { href = "/steward/corpus-view"; label = "Corpus review"; summary = "Review proposed claim relationships and gaps in the released evidence." },
+    { href = "/?collection=application-records"; label = "Application records"; summary = "Inspect historical application and admission records." }
+  )
+
+process claimipedia.collections:
+  let designed = at($eventInput, "design")
+  let steward = eq(at($eventInput, "path"), "/steward/")
+  let current = if(at($eventInput, "current"), $eventInput.current, "/")
+  call claimipedia.collectionEntries
+  let collections = append($result, list({ href = "/?collection=surfaces"; label = "Surface index" }))
+  when $steward:
+    let collections = list(
+      { href = "/"; label = "Workspace home" },
+      { href = "/steward/corpus-view"; label = "Corpus review" },
+      { href = "/?collection=claims"; label = "Claim records" },
+      { href = "/?collection=platform"; label = "Manage Claimipedia" },
+      { href = "/?collection=surfaces"; label = "Surface index" }
+    )
+  fold $collections as collection; links starts list():
+    let link = { tag = "a"; attrs = { href = $collection.href; "aria-current" = if(and(or($designed, $steward), eq($collection.href, $current)), "page", null) }; children = list($collection.label) }
+    let separator = if(and(not(or($designed, $steward)), count($links)), " · ", null)
+    yield append($links, list($separator, $link)) → links
+  when not($steward):
+    port kernel.invoke { query = "claimipedia.ecology.links"; input = "" } → ecologyLinks
+    let links = append($links, $ecologyLinks)
+  let result = { tag = "nav"; attrs = { "aria-label" = if($steward, "Steward navigation", "Collections"); class = if($steward, "cp-workspace-nav", if($designed, "cp-nav", null)) }; children = $links }
+
+process research.detail:
+  let arm = $eventInput.record
+  let links = map($arm.sourceClaims, "id", { tag = "li"; attrs = {}; children = list(
+    { tag = "a"; attrs = { href = concat("/?collection=frontier&assessment=", $id) }; children = list($id) }
+  ) })
+  port record.entries { value = $arm.gates } → gates
+  let decisions = map($gates, "gate", { tag = "li"; attrs = {}; children = list(concat(at($gate, 0), " · ", at($gate, 1))) })
+  let packs = map($arm.workPacks, "pack", { tag = "li"; attrs = {}; children = list(
+    { tag = "h4"; attrs = {}; children = list(concat($pack.id, " · ", $pack.title)) },
+    { tag = "p"; attrs = {}; children = list(at($pack, "status")) },
+    { tag = "p"; attrs = {}; children = list($pack.method) },
+    { tag = "p"; attrs = {}; children = list(concat("Pass condition: ", $pack.pass)) },
+    { tag = "p"; attrs = {}; children = list(concat("Artifact: ", $pack.artifact)) },
+    { tag = "p"; attrs = {}; children = list(at($pack, "resultRoute")) }
+  ) })
+  let progress = at($arm, "progress")
+  let result = list(
+    { tag = "a"; attrs = { href = "/?collection=research" }; children = list("All research arms") },
+    { tag = "h2"; attrs = {}; children = list(concat($arm.id, " · ", or(at($eventInput.current, "title"), $arm.title))) },
+    { tag = "p"; attrs = {}; children = list(concat($arm.priority, " · ", $arm.readiness, " · ", $arm.confidence)) },
+    { tag = "h3"; attrs = {}; children = list("Imported research arm") },
+    { tag = "p"; attrs = {}; children = list($arm.title) },
+    { tag = "p"; attrs = {}; children = list($arm.strongestClaim) },
+    { tag = "h3"; attrs = {}; children = list("Recorded progress") },
+    { tag = "p"; attrs = {}; children = list(at($progress, "summary")) },
+    { tag = "p"; attrs = {}; children = list(concat("Next action: ", $arm.nextAction)) },
+    { tag = "h3"; attrs = {}; children = list("Related Frontier assessments") },
+    { tag = "ul"; attrs = {}; children = $links },
+    { tag = "h3"; attrs = {}; children = list("Research decision gates") },
+    { tag = "ul"; attrs = {}; children = $decisions },
+    { tag = "h3"; attrs = {}; children = list("Work packs") },
+    { tag = "ul"; attrs = {}; children = $packs },
+    $eventInput.editor
+  )
+
+process research.page:
+  let screen = $eventInput
+  let data = $screen.data
+  let arm = $screen.record
+  let content = list()
+  when $arm:
+    port kernel.invoke { query = "research.detail"; input = { record = $arm; editor = $screen.editor; current = at($screen.heads, $arm.id) } } → content
+  when not($arm):
+    let arms = map($data.arms, "row", {
+      tag = "li"; attrs = {}; children = list(
+        { tag = "a"; attrs = { href = concat("/?collection=research&arm=", $row.id) }; children = list(concat($row.id, " · ", or(at(at($screen.heads, $row.id), "title"), $row.title))) },
+        { tag = "p"; attrs = {}; children = list(concat($row.readiness, " · ", $row.confidence)) }
+      )
+    })
+    let content = list({ tag = "ul"; attrs = { "aria-label" = "Research arms" }; children = $arms })
+  let result = { title = "Frontier research arms"; summary = $data.authorityBoundary; content = $content }
+
+process evidence.page:
+  let screen = $eventInput
+  let raw = at($screen.fields, "q")
+  port text.trim { value = if($raw, $raw, "") } → query
+  port text.slice { value = $query; start = 0; end = 180 } → query
+  port text.lowerCase { value = $query } → needle
+  fold $screen.references as entry; matches starts list():
+    let ref = $entry.record
+    let current = or(at($screen.heads, $entry.target), $ref)
+    port text.lowerCase { value = concat($ref.id, " ", $ref.title, " ", $ref.role, " ", $ref.url, " ", $current.title, " ", $current.role, " ", $current.url) } → text
+    port text.indexOf { value = $text; search = $needle } → index
+    let link = { tag = "a"; attrs = { href = $current.url; rel = "noreferrer" }; children = list($current.title) }
+    let edit = { tag = "a"; attrs = { href = concat("/?collection=evidence&reference=", $entry.target) }; children = list(concat("Edit reference: ", $current.title)) }
+    let row = { tag = "li"; attrs = {}; children = list($link, { tag = "p"; attrs = {}; children = list(concat($ref.id, " · ", $current.role)) }, $edit) }
+    yield if(eq($index, -1), $matches, append($matches, list($row))) → matches
+  let form = { tag = "form"; attrs = { method = "get"; action = "/"; class = "cp-search-form" }; children = list(
+    { tag = "input"; attrs = { name = "collection"; type = "hidden"; value = "evidence" }; children = list() },
+    { tag = "label"; attrs = {}; children = list("Search references", { tag = "input"; attrs = { name = "q"; type = "search"; value = $query; maxlength = 180 }; children = list() }) },
+    { tag = "button"; attrs = { type = "submit" }; children = list("Search") }
+  ) }
+  let result = { title = "Frontier references"; summary = "Source and context references from the Frontier intake"; content = list(
+    $form, { tag = "p"; attrs = {}; children = list(concat(count($matches), " references")) },
+    { tag = "ul"; attrs = { "aria-label" = "Reference results" }; children = $matches }
+  ) }
+
+process evidence.detail:
+  let screen = $eventInput
+  let ref = $screen.record
+  let current = or(at($screen.heads, $screen.target), $ref)
+  let importedLink = { tag = "a"; attrs = { href = $ref.url; rel = "noreferrer" }; children = list($ref.url) }
+  let result = { title = "Frontier reference"; summary = "Local revisions and imported provenance"; content = list(
+    { tag = "a"; attrs = { href = "/?collection=evidence" }; children = list("All Frontier references") },
+    { tag = "h2"; attrs = {}; children = list($current.title) },
+    { tag = "h3"; attrs = {}; children = list("Imported reference") },
+    { tag = "p"; attrs = {}; children = list(concat($ref.id, " · ", $ref.role)) },
+    { tag = "p"; attrs = {}; children = list($ref.title) },
+    { tag = "p"; attrs = {}; children = list($importedLink) },
+    $screen.editor
+  ) }
+
+process research.save:
+  let edit = $eventInput
+  let request = $edit.request
+  let fields = $request.fields
+  assert and($edit.record, eq(at($fields, "action"), "edit-research-record"))
+    otherwise "Choose a research arm or reference to edit."
+  port scalar.read { text = $fields.base } → base
+  assert eq($base, $request.snapshot.revision)
+    otherwise "The local corpus changed. Reopen the record and try again."
+  let previous = or(at(at($edit.history, 0), "id"), $edit.target)
+  assert eq(at($fields, "previous"), $previous)
+    otherwise "This record changed. Reopen it before editing."
+  fold $edit.definitions as field; entries starts list():
+    port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, $field.name); limit = $field.limit } } → text
+    yield append($entries, list(list($field.name, $text))) → entries
+  port record.fromEntries { entries = $entries } → values
+  when eq($edit.collection, "evidence"):
+    port text.matches { value = $values.url; pattern = "^https?://[^\\s]+$" } → valid
+    assert $valid
+      otherwise "Enter an HTTP or HTTPS reference URL."
+  port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "reason"); limit = 800 } } → reason
+  let revision = { id = concat("research-edit.", $request.nonce); target = $edit.target; previous = $previous; values = $values; reason = $reason }
+  port record.put { record = $edit.state; key = "researchEdits"; value = append(list($revision), $edit.revisions) } → state
+  let notice = if(eq($edit.collection, "research"), "Local research arm revision saved.", "Local reference revision saved.")
+  port kernel.invoke { query = "claimipedia.commit"; input = { request = $request; state = $state; base = $base; reason = $reason; target = $edit.target; notice = $notice } } → result
+
+process research.editor:
+  let edit = $eventInput
+  let head = at($edit.history, 0)
+  let current = if($head, $head.values, $edit.record)
+  let previous = or(at($head, "id"), $edit.target)
+  let hidden = map(list(list("collection", $edit.collection), list($edit.parameter, $edit.target), list("previous", $previous)), "coordinate", { tag = "input"; attrs = { type = "hidden"; name = at($coordinate, 0); value = at($coordinate, 1) }; children = list() })
+  fold $edit.definitions as field; fields starts $hidden:
+    let spec = { name = $field.name; label = $field.label; type = $field.type; maxlength = $field.limit; required = true; value = at($current, $field.name) }
+    port kernel.invoke { query = "portfolio.field"; input = { field = $spec; labelId = concat("research-edit-", $field.name) } } → element
+    yield append($fields, list($element)) → fields
+  port kernel.invoke { query = "portfolio.field"; input = { field = { name = "reason"; label = "Revision reason"; type = "text"; maxlength = 800; required = true }; labelId = "research-edit-reason" } } → reason
+  let button = if(eq($edit.collection, "research"), "Save research arm revision", "Save reference revision")
+  port kernel.invoke { query = "work.form"; input = { csrf = $edit.request.csrf; revision = $edit.request.snapshot.revision; action = "edit-research-record"; fields = append($fields, list($reason)); button = $button; style = "cp-form" } } → form
+  let rows = map($edit.history, "revision", { tag = "li"; attrs = {}; children = append(list(
+    { tag = "p"; attrs = {}; children = list(concat($revision.id, " · Previous version: ", $revision.previous)) },
+    { tag = "p"; attrs = {}; children = list(concat("Reason: ", $revision.reason)) }
+  ), map($edit.definitions, "field", { tag = "p"; attrs = {}; children = list(concat($field.label, ": ", at($revision.values, $field.name))) })) })
+  let result = { tag = "section"; attrs = {}; children = list(
+    { tag = "h3"; attrs = {}; children = list("Local working revision") },
+    $form,
+    { tag = "h3"; attrs = {}; children = list("Revision history") },
+    { tag = "p"; attrs = {}; children = list(concat("Imported predecessor: ", $edit.target)) },
+    { tag = "ul"; attrs = { "aria-label" = "Local revisions" }; children = $rows }
+  ) }
+
+process claimipedia.referenceRequest:
+  let request = $eventInput
+  let collection = $request.fields.collection
+  let arm = eq($collection, "research")
+  let parameter = if($arm, "arm", "reference")
+  let target = at($request.fields, $parameter)
+  port application.data { name = if($arm, "frontier-research", "frontier") } → data
+  let references = list()
+  let record = null
+  let definitions = list({ name = "title"; label = "Reference title"; type = "text"; limit = 300 }, { name = "role"; label = "Reference role"; type = "text"; limit = 300 }, { name = "url"; label = "Reference URL"; type = "url"; limit = 2048 })
+  when $arm:
+    let record = at(filter($data.arms, "row", eq($row.id, $target)), 0)
+    let definitions = list({ name = "title"; label = "Research arm title"; type = "text"; limit = 300 }, { name = "strongestClaim"; label = "Working claim"; type = "textarea"; limit = 3000 }, { name = "nextAction"; label = "Next action"; type = "textarea"; limit = 3000 })
+  when not($arm):
+    fold $data.references as ref; references starts list():
+      port digest.sha256 { text = concat($ref.id, "\n", $ref.url) } → coordinate
+      yield append($references, list({ target = concat("reference.", $coordinate); record = $ref })) → references
+    let record = at(at(filter($references, "entry", eq($entry.target, $target)), 0), "record")
+  port kernel.invoke { query = "claimipedia.load"; input = $request.snapshot } → state
+  let revisions = or(at($state, "researchEdits"), list())
+  let history = filter($revisions, "row", eq($row.target, $target))
+  let notice = if(and($target, not($record)), "No imported record has that coordinate.", "")
+  let error = and($target, not($record))
+  when eq($request.method, "POST"):
+    try:
+      port kernel.invoke { query = "research.save"; input = { request = $request; state = $state; revisions = $revisions; history = $history; record = $record; target = $target; definitions = $definitions; collection = $collection } } → notice
+    catch fault:
+      let notice = $fault.message
+      let error = true
+    port storage.snapshot {} → snapshot
+    port record.put { record = $request; key = "snapshot"; value = $snapshot } → request
+    port kernel.invoke { query = "claimipedia.load"; input = $snapshot } → state
+    let revisions = or(at($state, "researchEdits"), list())
+    let history = filter($revisions, "row", eq($row.target, $target))
+  let editor = null
+  when $record:
+    port kernel.invoke { query = "research.editor"; input = { request = $request; history = $history; record = $record; target = $target; definitions = $definitions; collection = $collection; parameter = $parameter } } → editor
+  fold $revisions as edit; heads starts {}:
+    let values = or(at($heads, $edit.target), $edit.values)
+    port record.put { record = $heads; key = $edit.target; value = $values } → heads
+    yield $heads → heads
+  let screen = { data = $data; fields = $request.fields; record = $record; references = $references; target = $target; editor = $editor; heads = $heads }
+  let page = null
+  when $arm:
+    port kernel.invoke { query = "research.page"; input = $screen } → page
+  when and(not($arm), $record):
+    port kernel.invoke { query = "evidence.detail"; input = $screen } → page
+  when and(not($arm), not($record)):
+    port kernel.invoke { query = "evidence.page"; input = $screen } → page
+  port kernel.invoke { query = "claimipedia.collections"; input = { design = true; path = $request.path; current = concat("/?collection=", $request.fields.collection) } } → nav
+  let view = { title = $page.title; summary = $page.summary; nav = $nav; content = $page.content }
+  port kernel.invoke { query = "claimipedia.design.workspacePage"; input = { page = $view; notice = $notice; error = $error; urlPrefix = if(eq($request.path, "/steward/"), "/steward", "") } } → html
+  let result = { html = $html; session = $request.session }

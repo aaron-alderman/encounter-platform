@@ -1,0 +1,20 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lp.gap:
+  port text.slice {
+    value = $lpText;
+    start = at(at($eventInput, "left"), "end");
+    end = at(at($eventInput, "right"), "start")
+  } → gap
+  port text.matches { value = $gap; pattern = "^[ \\r\\n]+$" } → ok
+  when not($ok):
+    port kernel.invoke {
+      query = "lp.fail";
+      input = {
+        code = "PROC-TEXT-SYNTAX";
+        summary = "Expected separating whitespace.";
+        token = at($eventInput, "right")
+      }
+    } → unused
+  let result = true

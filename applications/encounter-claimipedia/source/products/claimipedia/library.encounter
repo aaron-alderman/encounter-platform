@@ -1,0 +1,96 @@
+process-module "temple/surface-process-module/1"
+
+process library.evidenceLinks:
+  let subject = $eventInput
+  port application.data { name = "evidence-links" } → links
+  let paths = map(filter($links, "row", and(eq($row.s, $subject), eq($row.p, "artifact"))), "row", $row.o)
+  let result = list()
+  when count($paths):
+    port application.data { name = "evidence-library" } → index
+    let rows = map(filter($index, "row", includes($paths, $row.path)), "row", {
+      tag = "li"; attrs = {}; children = list(
+        { tag = "a"; attrs = { href = concat("/?collection=evidence-library&checkpoint=", $row.id) }; children = list($row.title) }
+      )
+    })
+    let result = list(
+      { tag = "h3"; attrs = {}; children = list("Evidence from the verified transfer") },
+      { tag = "ul"; attrs = { "aria-label" = "Related transferred evidence" }; children = $rows }
+    )
+
+process library.index:
+  let screen = $eventInput
+  let q = at($screen.fields, "q")
+  port text.trim { value = if($q, $q, "") } → query
+  port text.slice { value = $query; start = 0; end = 180 } → query
+  port text.lowerCase { value = $query } → needle
+  fold $screen.index as row; matches starts { total = 0; visible = list() }:
+    port text.lowerCase { value = concat($row.path, " ", $row.collection, " ", $row.sha256) } → searchable
+    port text.indexOf { value = $searchable; search = $needle } → found
+    let hit = not(eq($found, -1))
+    let total = add($matches.total, if($hit, 1, 0))
+    let visible = if(and($hit, not(eq(count($matches.visible), 24))), append($matches.visible, list($row)), $matches.visible)
+    yield { total = $total; visible = $visible } → matches
+  let rows = map($matches.visible, "row", { tag = "li"; attrs = {}; children = list(
+    { tag = "a"; attrs = { href = concat("/?collection=evidence-library&checkpoint=", $row.id) }; children = list($row.title) },
+    { tag = "p"; attrs = {}; children = list(concat($row.collection, " · ", $row.path)) }
+  ) })
+  let form = { tag = "form"; attrs = { method = "get"; action = "/"; class = "cp-search-form" }; children = list(
+    { tag = "input"; attrs = { type = "hidden"; name = "collection"; value = "evidence-library" }; children = list() },
+    { tag = "label"; attrs = {}; children = list("Search transferred evidence", { tag = "input"; attrs = { name = "q"; type = "search"; value = $query; maxlength = 180 }; children = list() }) },
+    { tag = "button"; attrs = { type = "submit" }; children = list("Search") }
+  ) }
+  let result = list(
+    { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = "/?collection=formalpedia" }; children = list("Browse Formalpedia") }) },
+    $form,
+    { tag = "p"; attrs = {}; children = list(concat($matches.total, " matches of ", count($screen.index), " · showing ", count($matches.visible))) },
+    { tag = "ul"; attrs = { "aria-label" = "Transferred evidence results" }; children = $rows }
+  )
+
+process library.detail:
+  let screen = $eventInput
+  let row = $screen.row
+  port application.data { name = "evidence-texts" } → texts
+  let text = at($texts, $row.id)
+  let source = { tag = "p"; attrs = {}; children = list("The source file is available at this path in the verified transfer workspace.") }
+  when $text:
+    let source = { tag = "details"; attrs = {}; children = list(
+      { tag = "summary"; attrs = {}; children = list("Read verified source text") },
+      { tag = "pre"; attrs = { class = "cp-evidence-source"; "aria-label" = "Verified source text" }; children = list($text) }
+    ) }
+  let download = null
+  when at($screen.request, "attachments"):
+    let download = { tag = "p"; attrs = {}; children = list(
+      { tag = "a"; attrs = { href = concat("/attachments/", $row.id) }; children = list("Download verified original") }
+    ) }
+  port kernel.invoke { query = "checkpoint.detail"; input = $screen } → notes
+  let result = append(list(
+    { tag = "a"; attrs = { href = "/?collection=evidence-library" }; children = list("Back to evidence library") },
+    { tag = "h2"; attrs = {}; children = list($row.title) },
+    { tag = "p"; attrs = {}; children = list($row.collection) },
+    { tag = "p"; attrs = {}; children = list(concat("Transfer path: ", $row.path)) },
+    { tag = "p"; attrs = {}; children = list(concat("SHA-256: ", $row.sha256)) },
+    { tag = "p"; attrs = {}; children = list(concat("Original size: ", $row.bytes, " bytes")) },
+    $download, $source
+  ), $notes)
+
+process library.request:
+  let request = $eventInput
+  port application.data { name = "evidence-library" } → index
+  let id = at($request.fields, "checkpoint")
+  let row = at(filter($index, "entry", eq($entry.id, $id)), 0)
+  port kernel.invoke { query = "claimipedia.researchReview"; input = { request = $request; selected = $row; id = $id } } → review
+  let body = list()
+  when $row:
+    port kernel.invoke { query = "library.detail"; input = { request = $review.request; state = $review.state; row = $row; id = $id } } → body
+  when not($row):
+    port kernel.invoke { query = "library.index"; input = { fields = $request.fields; index = $index } } → body
+  port kernel.invoke { query = "claimipedia.collections"; input = { design = true; path = $request.path; current = concat("/?collection=", $request.fields.collection) } } → nav
+  let view = { title = "Evidence library"; summary = "Physics and evidence coordinates from the verified transfer. Follow-up notes retain their own revision history."; nav = $nav; content = $body }
+  port kernel.invoke { query = "claimipedia.design.workspacePage"; input = { page = $view; notice = $review.notice; error = $review.error; urlPrefix = if(eq($request.path, "/steward/"), "/steward", "") } } → html
+  let result = { html = $html; session = $request.session }
+
+process app.attachment:
+  let id = $eventInput
+  port application.data { name = "evidence-library" } → index
+  let row = at(filter($index, "entry", eq($entry.id, $id)), 0)
+  let result = if($row, { path = $row.path; sha256 = $row.sha256; bytes = $row.bytes }, null)

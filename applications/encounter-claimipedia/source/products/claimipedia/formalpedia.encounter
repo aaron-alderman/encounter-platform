@@ -1,0 +1,241 @@
+process-module "temple/surface-process-module/1"
+
+process formalpedia.index:
+  let screen = $eventInput
+  let q = at($screen.request.fields, "q")
+  port text.trim { value = if($q, $q, "") } → query
+  port text.slice { value = $query; start = 0; end = 180 } → query
+  let limit = 24
+  let matches = null
+  when at($screen.full, "indexed"):
+    port application.data { name = "formalpedia-full"; query = $query; offset = at($screen.request.fields, "offset"); limit = $limit } → page
+    let matches = { total = $page.total; visible = $page.rows; offset = $page.offset }
+  when not(at($screen.full, "indexed")):
+    port kernel.invoke { query = "formalpedia.pilotMatches"; input = { query = $query; records = $screen.records; limit = $limit } } → matches
+  let nextOffset = add($matches.offset, $limit)
+  port number.calculate { operation = "less"; values = list($nextOffset, $matches.total) } → hasNext
+  port number.calculate { operation = "less"; values = list(0, $matches.offset) } → hasPrevious
+  port number.calculate { operation = "subtract"; values = list($matches.offset, $limit) } → previousOffset
+  port number.calculate { operation = "less"; values = list(0, $previousOffset) } → positivePrevious
+  let rows = map($matches.visible, "row", { tag = "li"; attrs = {}; children = list(
+    { tag = "a"; attrs = { href = concat("/?collection=formalpedia&theorem=", $row.id) }; children = list($row.name) },
+    { tag = "p"; attrs = {}; children = list(concat($row.title, " · ", $row.status, " · ", $row.toolchain)) }
+  ) })
+  let previous = null
+  let next = null
+  when and(at($screen.full, "indexed"), $hasPrevious):
+    port kernel.invoke { query = "formalpedia.pageForm"; input = { query = $query; offset = if($positivePrevious, $previousOffset, 0); label = "Previous" } } → previous
+  when and(at($screen.full, "indexed"), $hasNext):
+    port kernel.invoke { query = "formalpedia.pageForm"; input = { query = $query; offset = $nextOffset; label = "Next" } } → next
+  let cases = null
+  when at($screen.full, "indexed"):
+    port application.data { name = "formalpedia-proof-paths" } → pilot
+    let links = map($pilot.cases, "case", { tag = "li"; attrs = {}; children = list(
+      { tag = "a"; attrs = { href = concat("/?collection=formalpedia&theorem=", $case.id) }; children = list($case.label) }
+    ) })
+    let cases = { tag = "nav"; attrs = { "aria-label" = "Proof path pilot" }; children = list(
+      { tag = "ul"; attrs = {}; children = $links }
+    ) }
+  let result = list(
+    { tag = "a"; attrs = { href = "/?collection=evidence-library" }; children = list("Evidence library") },
+    $cases,
+    if(and(at($screen.full, "indexed"), at($screen.full, "researchQueue")),
+      { tag = "p"; attrs = {}; children = list(
+        { tag = "a"; attrs = { href = "/?collection=formalpedia&view=research" }; children = list("Research queue") }
+      ) }, null),
+    { tag = "form"; attrs = { method = "get"; action = "/"; class = "cp-search-form" }; children = list(
+      { tag = "input"; attrs = { type = "hidden"; name = "collection"; value = "formalpedia" }; children = list() },
+      { tag = "label"; attrs = {}; children = list("Search Formalpedia", { tag = "input"; attrs = { name = "q"; type = "search"; value = $query; maxlength = 180 }; children = list() }) },
+      { tag = "button"; attrs = {}; children = list("Search") }
+    ) },
+    { tag = "p"; attrs = {}; children = list(concat($matches.total, " matches of ", if(at($screen.full, "indexed"), $screen.full.records, count($screen.records)), " · showing ", count($matches.visible))) },
+    { tag = "ul"; attrs = { "aria-label" = "Formalpedia results" }; children = $rows },
+    $previous, $next
+  )
+
+process formalpedia.pageForm:
+  let page = $eventInput
+  let result = { tag = "form"; attrs = { method = "get"; action = "/"; class = "cp-search-form" }; children = list(
+    { tag = "input"; attrs = { type = "hidden"; name = "collection"; value = "formalpedia" }; children = list() },
+    { tag = "input"; attrs = { type = "hidden"; name = "q"; value = $page.query }; children = list() },
+    { tag = "input"; attrs = { type = "hidden"; name = "offset"; value = concat("", $page.offset) }; children = list() },
+    { tag = "button"; attrs = { type = "submit" }; children = list($page.label) }
+  ) }
+
+process formalpedia.pilotMatches:
+  let screen = $eventInput
+  port text.lowerCase { value = $screen.query } → needle
+  fold $screen.records as row; matches starts { total = 0; visible = list(); offset = 0 }:
+    port text.lowerCase { value = concat($row.name, " ", $row.title, " ", $row.toolchain, " ", $row.status) } → searchable
+    port text.indexOf { value = $searchable; search = $needle } → found
+    let hit = not(eq($found, -1))
+    yield {
+      offset = 0; total = add($matches.total, if($hit, 1, 0));
+      visible = if(and($hit, not(eq(count($matches.visible), $screen.limit))), append($matches.visible, list($row)), $matches.visible)
+    } → matches
+  let result = $matches
+
+process formalpedia.proofImports:
+  let route = $eventInput.route
+  let open = filter($route.imports, "import", eq($import.status, "Open"))
+  let items = map($route.imports, "import", { tag = "li"; attrs = {}; children = list(
+    if($import.target,
+      { tag = "a"; attrs = { href = concat("/?collection=formalpedia&theorem=", $import.target) }; children = list($import.module) },
+      $import.module),
+    concat(" · ", if($import.status, $import.status, if(at($import, "unresolved"), "Missing from this export", "External module")))
+  ) })
+  let result = { tag = "details"; attrs = {}; children = list(
+    { tag = "summary"; attrs = {}; children = list(concat(
+      "Direct imports (", count($route.imports), ") · Open dependencies (", count($open), ")")) },
+    { tag = "p"; attrs = {}; children = list(concat("Import statuses in the ", $eventInput.date, " export.")) },
+    if(count($items),
+      { tag = "ul"; attrs = { "aria-label" = "Direct imports" }; children = $items },
+      { tag = "p"; attrs = {}; children = list("This solution has no direct imports.") })
+  ) }
+
+process formalpedia.detail:
+  let row = $eventInput.row
+  let base = concat("https://github.com/prove2me/formalpedia/blob/", $eventInput.commit, "/")
+  let audit = $eventInput.audit
+  port application.data { name = "formalpedia-proof-paths" } → pilot
+  fold $row.solutions as proof; solutions starts list():
+    let verification = null
+    when eq(at($proof, "checksumStatus"), "mismatch"):
+      let verification = " · Exported body checksum mismatch"
+      let receipt = at($audit.proofs, $proof.id)
+      when and($receipt, eq($audit.commit, $eventInput.commit)):
+        let verified = and(eq($receipt.path, $proof.path),
+          eq($receipt.publishedSha256, $proof.sha256),
+          eq($receipt.exportedBodySha256, $proof.bodySha256),
+          eq($receipt.exportedFileSha256, $proof.exportSha256))
+        let verification = if($verified, " · Checksum verified after import renaming", $verification)
+    let imports = null
+    let indexed = at($row, "solutionImports")
+    when $indexed:
+      port kernel.invoke { query = "formalpedia.proofImports"; input = { route = { imports = at($indexed, $proof.id) }; date = $eventInput.date } } → imports
+    when not($indexed):
+      let route = at($pilot.proofs, $proof.id)
+      when $route:
+        when and(eq($route.record, $row.id), eq($route.path, $proof.path), eq($route.exportedFileSha256, $proof.exportSha256)):
+          port kernel.invoke { query = "formalpedia.proofImports"; input = { route = $route; date = $pilot.date } } → imports
+    let item = { tag = "li"; attrs = { id = concat("formalpedia-proof-", $proof.id) }; children = list(
+      { tag = "a"; attrs = { href = concat($base, $proof.path) }; children = list(concat("Solution ", $proof.n)) },
+      concat(" · ", $proof.status, " · ", $proof.proof_type, " · ", $proof.author),
+      $verification,
+      $imports
+    ) }
+    yield append($solutions, list($item)) → solutions
+  let definitions = map($row.definitions, "definition", { tag = "li"; attrs = {}; children = list(
+    { tag = "a"; attrs = { href = concat($base, $definition.path) }; children = list($definition.path) }
+  ) })
+  let dependencies = map($row.dependencies, "edge", { tag = "li"; attrs = {}; children = list(
+    if($edge.target,
+      { tag = "a"; attrs = { href = concat("/?collection=formalpedia&theorem=", $edge.target) }; children = list($edge.child) },
+      $edge.child),
+    " · ", if(includes($edge.via, "statement"), "statement", null),
+    if(eq(count($edge.via), 2), " and ", null),
+    if(includes($edge.via, "solution"), "solution", null)
+  ) })
+  let result = list(
+    { tag = "a"; attrs = { href = "/?collection=formalpedia" }; children = list("All Formalpedia records") },
+    { tag = "h2"; attrs = {}; children = list($row.name) },
+    { tag = "p"; attrs = {}; children = list($row.title) },
+    { tag = "p"; attrs = {}; children = list(concat("Upstream status ", $row.status, " · ", $row.toolchain, " · Mathlib ", $row.mathlib, " · ", $row.author)) },
+    { tag = "p"; attrs = {}; children = list(
+      { tag = "a"; attrs = { href = concat($base, $row.statementPath) }; children = list(if(eq($row.status, "Definition"), "Lean definition", "Lean statement")) },
+      " · ", { tag = "a"; attrs = { href = $row.url }; children = list("Prove2Me record") }
+    ) },
+    { tag = "p"; attrs = {}; children = list($row.source) },
+    { tag = "h3"; attrs = {}; children = list("Solutions") },
+    if(count($solutions), { tag = "ul"; attrs = {}; children = $solutions }, { tag = "p"; attrs = {}; children = list("No solutions in this snapshot.") }),
+    { tag = "h3"; attrs = {}; children = list("Direct definition imports") },
+    if(count($definitions), { tag = "ul"; attrs = {}; children = $definitions }, { tag = "p"; attrs = {}; children = list("No exported definition imports.") }),
+    { tag = "h3"; attrs = {}; children = list("Dependency graph") },
+    if(count($dependencies), { tag = "ul"; attrs = {}; children = $dependencies }, { tag = "p"; attrs = {}; children = list("No dependency edges in this snapshot.") })
+  )
+
+process formalpedia.researchPageForm:
+  let page = $eventInput
+  let result = { tag = "form"; attrs = { method = "get"; action = "/"; class = "cp-search-form" }; children = list(
+    { tag = "input"; attrs = { type = "hidden"; name = "collection"; value = "formalpedia" }; children = list() },
+    { tag = "input"; attrs = { type = "hidden"; name = "view"; value = $page.view }; children = list() },
+    { tag = "input"; attrs = { type = "hidden"; name = "offset"; value = concat("", $page.offset) }; children = list() },
+    { tag = "button"; attrs = { type = "submit" }; children = list($page.label) }
+  ) }
+
+process formalpedia.research:
+  let screen = $eventInput
+  let queue = $screen.full.researchQueue
+  let changes = eq($screen.view, "research-changes")
+  let limit = 24
+  port application.data { name = "formalpedia-full"; view = $screen.view; offset = at($screen.fields, "offset"); limit = $limit } → page
+  let rows = map($page.rows, "row", { tag = "li"; attrs = {}; children = list(
+    if(eq(at($row, "status"), "Removed"), $row.name,
+      { tag = "a"; attrs = { href = concat("/?collection=formalpedia&theorem=", $row.id) }; children = list($row.name) }),
+    { tag = "p"; attrs = {}; children = list($row.toolchain, " · ",
+      if($changes, concat($row.previous, " → ", $row.current, " paths · ", $row.gained, " gained · ", $row.lost, " lost · ", $row.status),
+        concat($row.paths, " proof paths"))) }
+  ) })
+  let previous = null
+  let next = null
+  port number.calculate { operation = "less"; values = list(0, $page.offset) } → hasPrevious
+  let nextOffset = add($page.offset, $limit)
+  port number.calculate { operation = "less"; values = list($nextOffset, $page.total) } → hasNext
+  when $hasPrevious:
+    port number.calculate { operation = "subtract"; values = list($page.offset, $limit) } → previousOffset
+    port kernel.invoke { query = "formalpedia.researchPageForm"; input = { view = $screen.view; offset = $previousOffset; label = "Previous" } } → previous
+  when $hasNext:
+    port kernel.invoke { query = "formalpedia.researchPageForm"; input = { view = $screen.view; offset = $nextOffset; label = "Next" } } → next
+  let summary = concat($queue.lemmas, " open lemmas · ", $queue.paths, " proof paths")
+  when $changes:
+    let summary = if($queue.previousCommit,
+      concat($queue.changedLemmas, " changed lemmas · ", $queue.gainedPaths, " paths gained · ", $queue.lostPaths, " paths lost"),
+      "This snapshot is the baseline. Changes will appear after the next snapshot refresh.")
+  let comparison = null
+  when and($changes, $queue.previousCommit):
+    let comparison = { tag = "p"; attrs = {}; children = list(
+      { tag = "a"; attrs = { href = concat("https://github.com/prove2me/formalpedia/compare/", $queue.previousCommit, "...", $screen.full.commit) }; children = list("Compare export commits") }
+    ) }
+  let result = list(
+    { tag = "nav"; attrs = { "aria-label" = "Research queue views" }; children = list(
+      { tag = "a"; attrs = { href = "/?collection=formalpedia" }; children = list("Formalpedia") },
+      " · ", { tag = "a"; attrs = { href = "/?collection=formalpedia&view=research" }; children = list("Ranked lemmas") },
+      " · ", { tag = "a"; attrs = { href = "/?collection=formalpedia&view=research-changes" }; children = list("Latest refresh changes") }
+    ) },
+    { tag = "p"; attrs = {}; children = list(concat("Export ", $screen.full.generatedAt)) },
+    { tag = "p"; attrs = {}; children = list($summary) }, $comparison,
+    if(count($rows), { tag = "ul"; attrs = { "aria-label" = "Research lemmas" }; children = $rows }, null),
+    $previous, $next
+  )
+
+process formalpedia.request:
+  let request = $eventInput
+  port application.data { name = "formalpedia-full" } → full
+  let requestedView = at($request.fields, "view")
+  let researchView = and(at($full, "indexed"), at($full, "researchQueue"),
+    includes(list("research", "research-changes"), $requestedView))
+  let id = if($researchView, null, at($request.fields, "theorem"))
+  let commit = $full.commit
+  let records = list()
+  let row = null
+  when and(at($full, "indexed"), $id):
+    port application.data { name = "formalpedia-full"; key = $id } → row
+  when not(at($full, "indexed")):
+    port application.data { name = "formalpedia" } → pilot
+    let commit = $pilot.commit
+    let records = $pilot.records
+    let row = at(filter($records, "entry", eq($entry.id, $id)), 0)
+  let body = list()
+  when $row:
+    port application.data { name = "formalpedia-import-renames" } → audit
+    port kernel.invoke { query = "formalpedia.detail"; input = { row = $row; commit = $commit; audit = $audit; date = $full.generatedAt } } → body
+  when $researchView:
+    port kernel.invoke { query = "formalpedia.research"; input = { full = $full; fields = $request.fields; view = $requestedView } } → body
+  when and(not($row), not($researchView)):
+    port kernel.invoke { query = "formalpedia.index"; input = { request = $request; records = $records; full = $full } } → body
+  port kernel.invoke { query = "claimipedia.collections"; input = { design = true; path = $request.path } } → nav
+  let title = if($researchView, if(eq($requestedView, "research-changes"), "Latest refresh changes", "Formalpedia research queue"), "Formalpedia")
+  let summary = if($researchView, "Each proof path counts once for its sole open direct Formalpedia import.", "Lean statements and upstream proof records from the pinned Prove2Me export.")
+  let view = { title = $title; summary = $summary; nav = $nav; content = $body }
+  port kernel.invoke { query = "claimipedia.design.workspacePage"; input = { page = $view; notice = if(and($id, not($row)), "No Formalpedia record has that identifier.", ""); error = and($id, not($row)); urlPrefix = if(eq($request.path, "/steward/"), "/steward", "") } } → html
+  let result = { html = $html; session = $request.session }

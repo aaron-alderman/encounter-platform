@@ -1,0 +1,119 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lower.template:
+  port value.describe { value = $input } → kind
+  let result = { value = $input; context = $context }
+  when $kind.array:
+    fold $input as part; built starts { value = list(); context = $context }:
+      let context = $built.context
+      let input = $part
+      fold list(null) as callFrame; frameResult starts null:
+        call lower.template
+        yield $result → result
+      yield { value = append($built.value, list($result.value)); context = $result.context } → result
+  when if(
+    eq($kind.type, "object"),
+    if(
+      if($kind.array, false, true),
+      if(if(eq($input, null), false, true), true, false),
+      false
+    ),
+    false
+  ):
+    port record.entries { value = $input } → entries
+    let handled = false
+    when eq(count($entries), 1):
+      let marker = at(at($entries, 0), 0)
+      let key = at(at($entries, 0), 1)
+      when if(eq($marker, "arg"), eq($marker, "arg"), eq($marker, "refArg")):
+        port value.describe { value = $key } → placeholderKind
+        assert if(
+          eq($placeholderKind.type, "number"),
+          includes(range(count($arguments)), add($key, 1)),
+          false
+        )
+          otherwise "Invalid operator argument placeholder"
+        let value = at($arguments, $key)
+        when eq($marker, "refArg"):
+          port value.describe { value = $value } → binderKind
+          assert if(
+            eq($binderKind.type, "string"),
+            if(
+              if(includes(list("__proto__", "prototype", "constructor"), $value), false, true),
+              true,
+              false
+            ),
+            false
+          )
+            otherwise "Invalid operator binder"
+          let value = concat($definitions.referenceSigil, $value)
+        let result = { value = $value; context = $context }
+        let handled = true
+      when if(eq($marker, "bind"), eq($marker, "bind"), eq($marker, "ref")):
+        let local = at($context.locals, $key)
+        when if($local, false, true):
+          fold list(null) as invokeInput; invokeAcc starts null:
+            let input = $invokeInput
+            fold list(null) as callFrame; frameResult starts null:
+              call lower.fresh
+              yield $result → result
+            yield $result → fresh
+          let local = $fresh.value
+          port record.entries { value = $fresh.context.locals } → locals
+          port record.fromEntries { entries = append($locals, list(list($key, $local))) } → locals
+          let context = { used = $fresh.context.used; serial = $fresh.context.serial; locals = $locals }
+        let result = {
+          value = concat(if(eq($marker, "ref"), $definitions.referenceSigil, ""), $local);
+          context = $context
+        }
+        let handled = true
+      when if(eq($marker, "arguments"), if(eq($key, true), true, false), false):
+        let result = { value = append(list("list"), $arguments); context = $context }
+        let handled = true
+      when eq($marker, "term"):
+        let value = at($terms, $key)
+        port value.describe { value = $value } → termKind
+        assert if(eq($termKind.type, "undefined"), false, true)
+          otherwise "Unknown template term"
+        let result = { value = $value; context = $context }
+        let handled = true
+      when eq($marker, "foldArgs"):
+        let spec = $key
+        fold $arguments as part; reverse starts []:
+          yield append(list($part), $reverse) → reverse
+        fold list(at($spec, "initial")) as invokeInput; invokeAcc starts null:
+          let input = $invokeInput
+          fold list(null) as callFrame; frameResult starts null:
+            call lower.template
+            yield $result → result
+          yield $result → initial
+        fold $reverse as part; built starts $initial:
+          port record.entries { value = $terms } → termEntries
+          port record.fromEntries {
+            entries = append(
+              $termEntries,
+              list(list(at($spec, "item"), $part), list(at($spec, "accumulator"), $built.value))
+            )
+          } → newTerms
+          let context = $built.context
+          let input = at($spec, "body")
+          let terms = $newTerms
+          fold list(null) as callFrame; frameResult starts null:
+            call lower.template
+            yield $result → result
+          yield $result → result
+        let handled = true
+    when if($handled, false, true):
+      fold $entries as entry; built starts { value = list(); context = $context }:
+        let context = $built.context
+        let input = at($entry, 1)
+        fold list(null) as callFrame; frameResult starts null:
+          call lower.template
+          yield $result → result
+        yield {
+        value = append($built.value, list(list(at($entry, 0), $result.value)));
+        context = $result.context
+      } → built
+      port record.fromEntries { entries = $built.value } → value
+      let result = { value = $value; context = $built.context }

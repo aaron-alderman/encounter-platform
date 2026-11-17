@@ -1,0 +1,110 @@
+process-module "temple/surface-process-module/1"
+
+process triage.history:
+  let input = $eventInput
+  let rows = at($input.state, "frontier")
+  let result = filter(if($rows, $rows, list()), "row", and(eq(at($row, "kind"), "research-review"), eq(at($row, "opportunity"), $input.id)))
+
+process triage.save:
+  let input = $eventInput
+  let request = $input.request
+  let fields = $request.fields
+  let action = at($fields, "action")
+  assert and($input.selected, includes(list("propose-follow-up", "decide-follow-up", "freeze-follow-up"), $action))
+    otherwise "Choose an opportunity and a local review action."
+  port scalar.read { text = $fields.base } → base
+  assert eq($base, $request.snapshot.revision)
+    otherwise "The local corpus changed. Reopen the opportunity and try again."
+  port kernel.invoke { query = "triage.history"; input = { id = $input.id; state = $input.state } } → history
+  let head = at($history, 0)
+  let previous = if($head, $head.id, $input.id)
+  assert eq(at($fields, "previous"), $previous)
+    otherwise "This review changed. Reopen the opportunity before deciding."
+  let open = eq(at($head, "event"), "proposal")
+  let proposing = eq($action, "propose-follow-up")
+  let freezing = eq($action, "freeze-follow-up")
+  assert if($proposing, not($open), or($open, $freezing))
+    otherwise "A follow-up needs one open proposal and a separate decision."
+  let operator = at($request, "operator")
+  assert and($operator, eq(at($operator, "role"), if($proposing, "proposer", "reviewer")))
+    otherwise "A verified operator with the required review role must record this action."
+  let actor = $operator.id
+  port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "rationale"); limit = 1600 } } → rationale
+  let revisionId = concat("research-review.", $request.nonce)
+  let revision = null
+  let notice = ""
+  when $proposing:
+    port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "next"); limit = 1200 } } → next
+    port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "evidence"); limit = 1024 } } → coordinate
+    port application.data { name = "evidence-library" } → index
+    let evidence = at(filter($index, "row", or(eq($row.id, $coordinate), eq($row.path, $coordinate))), 0)
+    assert $evidence
+      otherwise "Choose an exact evidence path or coordinate from the verified library."
+    port kernel.invoke { query = "claimipedia.sourcePin"; input = $input.sourceFacts } → sourcePin
+    let revision = { kind = "research-review"; event = "proposal"; id = $revisionId; opportunity = $input.id; previous = $previous; actor = $actor; attribution = "verified-operator"; rationale = $rationale; next = $next; evidenceId = $evidence.id; evidenceTitle = $evidence.title; evidencePath = $evidence.path; evidenceSha256 = $evidence.sha256; sourceStatus = $input.sourceStatus; sourceSha256 = $sourcePin; sourcePinKind = "ordered-tuples/1" }
+    let notice = "Local follow-up proposed."
+  when and(not($proposing), not($freezing)):
+    let decision = at($fields, "decision")
+    assert includes(list("approve-for-manual-follow-up", "reject", "defer"), $decision)
+      otherwise "Choose a local follow-up disposition."
+    let revision = { kind = "research-review"; event = "decision"; id = $revisionId; opportunity = $input.id; previous = $previous; proposal = $head.id; actor = $actor; attribution = "verified-operator"; rationale = $rationale; decision = $decision }
+    let notice = "Local follow-up decision recorded."
+  when $freezing:
+    port kernel.invoke { query = "packet.freeze"; input = { change = $input; history = $history; actor = $actor; rationale = $rationale } } → revision
+    let notice = "Local follow-up packet frozen."
+  let rows = at($input.state, "frontier")
+  port record.put { record = $input.state; key = "frontier"; value = append(list($revision), if($rows, $rows, list())) } → state
+  port kernel.invoke { query = "claimipedia.commit"; input = { request = $request; state = $state; base = $base; reason = $rationale; target = $input.id; notice = $notice } } → result
+
+process triage.detail:
+  let screen = $eventInput
+  let request = $screen.request
+  port kernel.invoke { query = "triage.history"; input = { id = $screen.id; state = $screen.state } } → history
+  let head = at($history, 0)
+  let open = eq(at($head, "event"), "proposal")
+  let action = if($open, "decide-follow-up", "propose-follow-up")
+  let previous = if($head, $head.id, $screen.id)
+  let hidden = map(list(list("collection", "research-inbox"), list("checkpoint", $screen.id), list("previous", $previous)), "pair", {
+    tag = "input"; attrs = { type = "hidden"; name = at($pair, 0); value = at($pair, 1) }; children = list()
+  })
+  let choices = list(
+    { value = ""; label = "Choose a disposition" },
+    { value = "approve-for-manual-follow-up"; label = "Approve for manual follow-up" },
+    { value = "reject"; label = "Reject" },
+    { value = "defer"; label = "Defer" }
+  )
+  let proposalFields = list(
+    { name = "evidence"; label = "Evidence path or coordinate"; type = "text"; required = true; maxlength = 1024 },
+    { name = "next"; label = "Proposed next action"; type = "textarea"; required = true; maxlength = 1200 }
+  )
+  let decisionFields = list({ name = "decision"; label = "Local disposition"; type = "select"; required = true; options = $choices; value = "" })
+  let inputs = append(if($open, $decisionFields, $proposalFields), list(
+    { name = "rationale"; label = "Review rationale"; type = "textarea"; required = true; maxlength = 1600 }
+  ))
+  fold $inputs as field; controls starts $hidden:
+    port kernel.invoke { query = "portfolio.field"; input = { field = $field; labelId = concat("triage-", $field.name) } } → control
+    yield append($controls, list($control)) → controls
+  port kernel.invoke { query = "work.form"; input = { csrf = $request.csrf; revision = $request.snapshot.revision; action = $action; fields = $controls; button = if($open, "Record local decision", "Propose follow-up"); style = "cp-form" } } → form
+  fold $history as row; entries starts list():
+    let body = list(
+      { tag = "p"; attrs = {}; children = list(concat($row.id, " · Previous: ", $row.previous)) },
+      { tag = "p"; attrs = {}; children = list(concat($row.actor, if(eq(at($row, "attribution"), "verified-operator"), " · Verified operator · ", " · Local attribution · "), $row.rationale)) }
+    )
+    when eq($row.event, "proposal"):
+      let body = append($body, list(
+        { tag = "p"; attrs = {}; children = list(concat("Proposed next action: ", $row.next)) },
+        { tag = "p"; attrs = {}; children = list(concat("Imported status at proposal: ", $row.sourceStatus)) },
+        { tag = "a"; attrs = { href = concat("/?collection=evidence-library&checkpoint=", $row.evidenceId) }; children = list($row.evidenceTitle) },
+        { tag = "p"; attrs = {}; children = list(concat("Evidence SHA-256: ", $row.evidenceSha256)) }
+      ))
+    when eq($row.event, "decision"):
+      let body = append($body, list({ tag = "p"; attrs = {}; children = list(concat("Local decision: ", $row.decision)) }))
+    yield append($entries, list({ tag = "li"; attrs = {}; children = $body })) → entries
+  let operator = at($request, "operator")
+  let allowed = and($operator, eq(at($operator, "role"), if($open, "reviewer", "proposer")))
+  let result = list(
+    { tag = "h3"; attrs = {}; children = list("Local follow-up review") },
+    { tag = "p"; attrs = {}; children = list("A local decision records follow-up only. Scientific admission, execution and publication require separate authority.") },
+    if($allowed, $form, { tag = "p"; attrs = {}; children = list(if($open, "A verified reviewer can record the decision.", "A verified proposer can propose follow-up.")) }),
+    { tag = "ul"; attrs = { "aria-label" = "Local follow-up history" }; children = $entries }
+  )

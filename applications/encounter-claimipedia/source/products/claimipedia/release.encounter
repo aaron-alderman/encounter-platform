@@ -1,0 +1,121 @@
+process-module "temple/surface-process-module/1"
+
+process claimipedia.catalogue:
+  port application.data {} → raw
+  let facts = filter($raw, "fact", eq($fact.pol, "is"))
+  port record.fromEntries { entries = map(filter($facts, "fact", eq($fact.p, "identifier")), "fact", list($fact.s, $fact.o)) } → identifiers
+  port record.fromEntries { entries = map(filter($facts, "fact", eq($fact.p, "currentVersion")), "fact", list($fact.s, $fact.o)) } → current
+  port record.fromEntries { entries = map(filter($facts, "fact", eq($fact.p, "expression")), "fact", list($fact.s, $fact.o)) } → expressions
+  let subjects = map(filter($facts, "fact", and(eq($fact.p, "isa"), eq($fact.o, "Claim"))), "fact", $fact.s)
+  let claims = map($subjects, "subject", { subject = $subject; id = at($identifiers, $subject); version = at($current, $subject); expression = at($expressions, at($current, $subject)) })
+  assert and(eq(count($raw), 2839), eq(count($claims), 122), eq(count(distinct(map($claims, "claim", $claim.id))), count($claims)), every($claims, "claim", and($claim.id, $claim.version, $claim.expression)))
+    otherwise "The selected Claimipedia release has an inconsistent claim catalogue."
+  let result = { facts = $facts; claims = $claims; identifiers = $identifiers }
+
+# Retire the North River fixture from the reader projection. The published
+# release and the steward/test declaration retain their original corpus.
+process claimipedia.reader.catalogue:
+  port kernel.invoke { query = "claimipedia.catalogue" } → catalogue
+  let fixture = list("claim.riverNitrate", "claim.riverFlow", "claim.instrumentCalibration")
+  let claims = filter($catalogue.claims, "claim", not(includes($fixture, $claim.subject)))
+  let versions = map(filter($catalogue.claims, "claim", includes($fixture, $claim.subject)), "claim", $claim.version)
+  let coordinates = append($fixture, $versions)
+  let attached = filter($catalogue.facts, "fact", and(
+    includes(list("claim", "relevantClaim", "source", "target"), $fact.p),
+    includes($coordinates, $fact.o)
+  ))
+  let retired = distinct(append($coordinates, map($attached, "fact", $fact.s)))
+  let facts = filter($catalogue.facts, "fact", not(includes($retired, $fact.s)))
+  port record.fromEntries { entries = map(filter($facts, "fact", eq($fact.p, "identifier")), "fact", list($fact.s, $fact.o)) } → identifiers
+  let result = { facts = $facts; claims = $claims; identifiers = $identifiers }
+
+process claimipedia.subject:
+  let input = $eventInput
+  let rows = filter($input.facts, "fact", eq($fact.s, $input.subject))
+  port record.fromEntries { entries = map($rows, "fact", list($fact.p, $fact.o)) } → result
+
+process claimipedia.releasedHistory:
+  let input = $eventInput
+  let refs = map(filter($input.facts, "fact", and(eq($fact.p, "claim"), eq($fact.o, $input.claim.subject))), "fact", $fact.s)
+  fold $refs as ref; history starts list():
+    port kernel.invoke { query = "claimipedia.subject"; input = { facts = $input.facts; subject = $ref } } → version
+    let heading = concat("Released version ", $version.version, " · ", $ref)
+    let row = { tag = "li"; attrs = {}; children = list(
+      { tag = "strong"; attrs = {}; children = list($heading) },
+      { tag = "p"; attrs = {}; children = list($version.expression) },
+      { tag = "p"; attrs = {}; children = list(concat("Scope: ", at($version, "scope"))) },
+      { tag = "p"; attrs = {}; children = list(concat(at($version, "createdAt"), " · ", at($version, "changeKind"), " · ", at($version, "createdBy"))) }
+    ) }
+    yield append($history, list($row)) → history
+  let result = { tag = "ul"; attrs = { "aria-label" = "Released revisions" }; children = $history }
+
+process claimipedia.evidence:
+  let input = $eventInput
+  let refs = map(filter($input.facts, "fact", and(eq($fact.p, "relevantClaim"), eq($fact.o, $input.claim.subject))), "fact", $fact.s)
+  fold $refs as ref; evidence starts list():
+    port kernel.invoke { query = "claimipedia.subject"; input = { facts = $input.facts; subject = $ref } } → item
+    let reference = at($item, "contentReference")
+    let display = if($reference, $reference, $ref)
+    port text.matches { value = $display; pattern = "^https?://[^\\s]+$" } → web
+    let content = if($web, { tag = "a"; attrs = { href = $display; rel = "noreferrer" }; children = list($display) }, $display)
+    let row = { tag = "li"; attrs = { id = $ref }; children = list(
+      { tag = "strong"; attrs = {}; children = list(concat(at($item, "direction"), " · ", at($item, "evidenceType"))) },
+      { tag = "p"; attrs = {}; children = list($content) },
+      { tag = "p"; attrs = {}; children = list(at($item, "provenance")) }
+    ) }
+    yield append($evidence, list($row)) → evidence
+  let result = if(count($evidence), { tag = "ul"; attrs = { "aria-label" = "Released evidence" }; children = $evidence }, { tag = "p"; attrs = {}; children = list("This release links no evidence items to this claim.") })
+
+process claimipedia.relationship.context:
+  let relationship = $eventInput
+  let result = list(
+    { tag = "small"; attrs = {}; children = list(concat("Relationship record · ", $relationship.id)) },
+    { tag = "p"; attrs = {}; children = list(if($relationship.provenance, $relationship.provenance, "The release gives no reason for this relationship.")) }
+  )
+
+process claimipedia.directRelationships:
+  let facts = $eventInput
+  let direct = filter($facts, "fact", includes(list("dependsOn", "qualifies"), $fact.p))
+  let result = map($direct, "fact", {
+    source = $fact.s; target = $fact.o;
+    kind = if(eq($fact.p, "dependsOn"), "DependsOn", "Qualifies");
+    id = concat($fact.s, ".", $fact.p, ".", $fact.o);
+    provenance = if(eq($fact.p, "dependsOn"), "The release explicitly records that the source claim depends on the target.", "The release explicitly records that the source claim qualifies the target.")
+  })
+
+process claimipedia.connections:
+  let input = $eventInput
+  let prefix = if(at($input, "linkPrefix"), $input.linkPrefix, "/?claim=")
+  let notesProgram = at($input, "notesProgram")
+  let expressions = at($input, "expressions")
+  let factRows = filter($input.facts, "fact", and(includes(list("source", "target"), $fact.p), includes(list($input.claim.subject, $input.claim.version), $fact.o)))
+  let refs = distinct(map($factRows, "fact", $fact.s))
+  fold $refs as ref; rows starts list():
+    port kernel.invoke { query = "claimipedia.subject"; input = { facts = $input.facts; subject = $ref } } → edge
+    let row = null
+    when eq($edge.isa, "Relationship"):
+      let incoming = eq($edge.target, $input.claim.subject)
+      let other = if($incoming, $edge.source, $edge.target)
+      let id = at($input.identifiers, $other)
+      let recordId = if(at($edge, "identifier"), $edge.identifier, $ref)
+      port kernel.invoke { query = "claimipedia.relationship.context"; input = { id = $recordId; provenance = at($edge, "provenance") } } → context
+      let label = concat(if($incoming, "Incoming ", "Outgoing "), $edge.relationType, " · ")
+      let href = concat($prefix, $id, if(at($input, "linkSuffix"), $input.linkSuffix, ""))
+      let link = { tag = "a"; attrs = if($notesProgram, { href = $href; "data-notes-program" = $notesProgram }, { href = $href }); children = list(if(at($expressions, $id), at($expressions, $id), $id)) }
+      let row = { tag = "li"; attrs = {}; children = append(list({ tag = "p"; attrs = {}; children = list($label, $link) }), $context) }
+    when eq($edge.isa, "Challenge"):
+      let row = { tag = "li"; attrs = {}; children = list(concat("Challenge · ", at($edge, "status"), " · ", at($edge, "proposition"))) }
+    yield if($row, append($rows, list($row)), $rows) → rows
+  let incident = filter($input.facts, "fact", or(eq($fact.s, $input.claim.subject), eq($fact.o, $input.claim.subject)))
+  port kernel.invoke { query = "claimipedia.directRelationships"; input = $incident } → direct
+  fold $direct as edge; directRows starts list():
+    let incoming = eq($edge.target, $input.claim.subject)
+    let id = at($input.identifiers, if($incoming, $edge.source, $edge.target))
+    port kernel.invoke { query = "claimipedia.relationship.context"; input = $edge } → context
+    let label = concat(if($incoming, "Incoming ", "Outgoing "), $edge.kind, " · ")
+    let href = concat($prefix, $id, if(at($input, "linkSuffix"), $input.linkSuffix, ""))
+    let link = { tag = "a"; attrs = if($notesProgram, { href = $href; "data-notes-program" = $notesProgram }, { href = $href }); children = list(if(at($expressions, $id), at($expressions, $id), $id)) }
+    let row = { tag = "li"; attrs = {}; children = append(list({ tag = "p"; attrs = {}; children = list($label, $link) }), $context) }
+    yield if($id, append($directRows, list($row)), $directRows) → directRows
+  let rows = append($rows, $directRows)
+  let result = if(count($rows), { tag = "ul"; attrs = { "aria-label" = "Released connections" }; children = $rows }, { tag = "p"; attrs = {}; children = list("No released relationships or challenges.") })

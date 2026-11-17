@@ -1,0 +1,155 @@
+process-module "temple/surface-process-module/1"
+
+process test.formalpedia.evidence-to-lean-source:
+  port browser.open { width = 390; height = 844 } → opened
+  let page = $opened.page
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Evidence library" }); action = "click"; event = "navigation" } → _
+  port browser.act { page = $page; locator = list({ role = "link"; name = "Browse Formalpedia" }); action = "click"; event = "navigation" } → index
+  port file.text { file = "products/claimipedia/application.rel" } → declaration
+  port text.split { value = $declaration; pattern = "\"data\\.formalpedia-full\", \"source\", \""; flags = "u" } → receiptParts
+  port text.split { value = at($receiptParts, 1); pattern = "\""; flags = "u" } → receiptPath
+  port file.text { file = at($receiptPath, 0) } → receipt
+  port rel.read { text = $receipt; kind = "ApplicationData" } → snapshot
+  let baseline = eq($snapshot.commit, "b6f81971f69c98de86b02a8152c141128d82582b")
+  let fullCount = concat($snapshot.records, " matches of ", $snapshot.records, " · showing 24")
+  port browser.observe { page = $page; locator = list({ text = $fullCount }); property = "count" } → full
+  port browser.observe { page = $page; locator = list({ text = "1000 matches of 1000 · showing 24" }); property = "count" } → pilot
+  assert and(eq($index.status, 200), or(eq($full, 1), eq($pilot, 1)))
+    otherwise "The indexed host must expose the full catalogue and the static host must expose its pinned pilot."
+
+  when and($full, at($snapshot, "researchQueue")):
+    port browser.act { page = $page; locator = list({ role = "link"; name = "Research queue" }); action = "click"; event = "navigation" } → queued
+    let queue = $snapshot.researchQueue
+    let totals = concat($queue.lemmas, " open lemmas · ", $queue.paths, " proof paths")
+    port browser.observe { page = $page; locator = list({ text = $totals }); property = "count" } → totalsShown
+    assert and(eq($queued.status, 200), eq($totalsShown, 1))
+      otherwise "The research queue must show the active snapshot totals."
+    port number.calculate { operation = "less"; values = list(24, $queue.lemmas) } → moreLemmas
+    when $moreLemmas:
+      let top = list({ css = "ul[aria-label='Research lemmas'] li:first-child a" })
+      port browser.observe { page = $page; locator = $top; property = "attribute"; name = "href" } → firstLemma
+      port browser.act { page = $page; locator = list({ role = "button"; name = "Next" }); action = "click"; event = "navigation" } → queueNext
+      port browser.observe { page = $page; locator = $top; property = "attribute"; name = "href" } → nextLemma
+      assert and(eq($queueNext.status, 200), $firstLemma, $nextLemma, not(eq($firstLemma, $nextLemma)))
+        otherwise "Research pagination must advance to different lemma coordinates."
+    port browser.act { page = $page; locator = list({ role = "link"; name = "Latest refresh changes" }); action = "click"; event = "navigation" } → changes
+    let expected = if($queue.previousCommit,
+      concat($queue.changedLemmas, " changed lemmas · ", $queue.gainedPaths, " paths gained · ", $queue.lostPaths, " paths lost"),
+      "This snapshot is the baseline. Changes will appear after the next snapshot refresh.")
+    port browser.observe { page = $page; locator = list({ text = $expected }); property = "count" } → changeCount
+    assert and(eq($changes.status, 200), eq($changeCount, 1))
+      otherwise "The change view must show the active refresh comparison or the initial baseline."
+    port browser.act { page = $page; locator = list({ role = "link"; name = "Formalpedia" }); action = "click"; event = "navigation" } → _
+
+  when $full:
+    let firstLink = list({ css = "ul[aria-label='Formalpedia results'] li:first-child a" })
+    port browser.observe { page = $page; locator = $firstLink; property = "attribute"; name = "href" } → before
+    port browser.act { page = $page; locator = list({ role = "button"; name = "Next" }); action = "click"; event = "navigation" } → next
+    port browser.observe { page = $page; locator = $firstLink; property = "attribute"; name = "href" } → after
+    port browser.act { page = $page; locator = list({ role = "button"; name = "Previous" }); action = "click"; event = "navigation" } → previous
+    port browser.observe { page = $page; locator = $firstLink; property = "attribute"; name = "href" } → restored
+    assert and($before, $after, not(eq($before, $after)), eq($before, $restored), eq($next.status, 200), eq($previous.status, 200))
+      otherwise "The indexed catalogue must browse beyond the first page and back."
+    port browser.act { page = $page; locator = $firstLink; action = "click"; event = "navigation" } → record
+    port browser.observe { page = $page; locator = list({ css = concat("a[href^='https://github.com/prove2me/formalpedia/blob/", $snapshot.commit, "/envs/']") }); property = "count" } → pinned
+    assert and(eq($record.status, 200), $pinned)
+      otherwise "The indexed catalogue must open a record at the active commit."
+    port browser.act { page = $page; locator = list({ role = "link"; name = "All Formalpedia records" }); action = "click"; event = "navigation" } → _
+
+  when and($full, $baseline):
+    let first = list({ role = "link"; name = "A3X_Step026_data"; exact = true })
+    port browser.act { page = $page; locator = $first; action = "click"; event = "navigation" } → definition
+    port browser.observe { page = $page; locator = list({ role = "link"; name = "Lean definition" }); property = "attribute"; name = "href" } → source
+    assert and(eq($definition.status, 200),
+      eq($source, "https://github.com/prove2me/formalpedia/blob/b6f81971f69c98de86b02a8152c141128d82582b/envs/0df444a/Definitions/Def_A3X_Step026_data.lean"))
+      otherwise "Full intake must expose definition bundles omitted from the pilot."
+    port browser.act { page = $page; locator = list({ role = "link"; name = "All Formalpedia records" }); action = "click"; event = "navigation" } → _
+
+  when or($pilot, $baseline):
+    port browser.act { page = $page; locator = list({ label = "Search Formalpedia" }); action = "fill"; value = "ABC.sum_triples_finite_iff_bddAbove" } → _
+    port browser.act { page = $page; locator = list({ role = "button"; name = "Search" }); action = "click"; event = "navigation" } → _
+    port browser.act { page = $page; locator = list({ css = "a[href$='theorem=0df444a-5e056e65-4eda-485d-a74d-9fe066e15584']" }); action = "click"; event = "navigation" } → detail
+    port browser.observe { page = $page; locator = list({ role = "link"; name = "Solution 1" }); property = "attribute"; name = "href" } → solution
+    port browser.observe { page = $page; locator = list({ role = "link"; name = "Lean statement" }); property = "attribute"; name = "href" } → statement
+    assert and(eq($detail.status, 200),
+      eq($solution, "https://github.com/prove2me/formalpedia/blob/b6f81971f69c98de86b02a8152c141128d82582b/envs/0df444a/Solutions/Sol_ABC_sum_triples_finite_iff_bddAbove.lean"),
+      eq($statement, "https://github.com/prove2me/formalpedia/blob/b6f81971f69c98de86b02a8152c141128d82582b/envs/0df444a/Theorems/Thm_ABC_sum_triples_finite_iff_bddAbove.lean"))
+      otherwise "The detail page must link the statement and solution to the exact export commit."
+
+    when and($full, at($snapshot, "proofPaths")):
+      port browser.act { page = $page; locator = list({ css = "#formalpedia-proof-e56a4e1c-e27c-4899-b84a-7361a504dfee summary" }); action = "click" } → _
+      port browser.observe { page = $page; locator = list({ text = "Direct imports (1) · Open dependencies (0)" }); property = "count" } → fullImports
+      port browser.observe { page = $page; locator = list({ text = "Mathlib · External module" }); property = "count" } → external
+      assert and(eq($fullImports, 1), eq($external, 1))
+        otherwise "An indexed solution outside the proof-path pilot must show its own external import."
+
+  when and($full, $baseline):
+    port browser.act { page = $page; locator = list({ role = "link"; name = "All Formalpedia records" }); action = "click"; event = "navigation" } → _
+    port browser.act { page = $page; locator = list({ label = "Search Formalpedia" }); action = "fill"; value = "exists_schemeHomOver_forall_comp_eq_ptZ_comp_openImmersion_of_affineCharts_satisfying" } → _
+    port browser.act { page = $page; locator = list({ role = "button"; name = "Search" }); action = "click"; event = "navigation" } → _
+    port browser.act { page = $page; locator = list({ role = "link"; name = "CerednikDrinfeld.QM.exists_schemeHomOver_forall_comp_eq_ptZ_comp_openImmersion_of_affineCharts_satisfying" }); action = "click"; event = "navigation" } → _
+    port browser.observe { page = $page; locator = list({ text = "Checksum verified after import renaming"; exact = false }); property = "count" } → verified
+    port browser.observe { page = $page; locator = list({ text = "Exported body checksum mismatch"; exact = false }); property = "count" } → warning
+    port browser.observe { page = $page; locator = list({ role = "link"; name = "Solution 1" }); property = "attribute"; name = "href" } → exported
+    assert and(eq($verified, 1), eq($warning, 0),
+      eq($exported, "https://github.com/prove2me/formalpedia/blob/b6f81971f69c98de86b02a8152c141128d82582b/envs/0df444a/Solutions/Sol_CerednikDrinfeld_QM_exists_schemeHomOver_forall_comp_eq_ptZ_comp_openImmersion_of_affineCharts_satisfying.lean"))
+      otherwise "The rename audit must verify the checksum while retaining the exact exported solution link."
+
+  when and($full, $baseline):
+    port browser.act { page = $page; locator = list({ role = "link"; name = "All Formalpedia records" }); action = "click"; event = "navigation" } → _
+    port browser.act { page = $page; locator = list({ role = "link"; name = "Green–Tao · Lean 4.33.1" }); action = "click"; event = "navigation" } → _
+    let first = "#formalpedia-proof-09803535-bec3-4261-a0ac-e2a6cfe30a11"
+    let second = "#formalpedia-proof-92398f8d-fd02-45e9-81bd-8de0cf8c6029"
+    let third = "#formalpedia-proof-f3e7819c-4be1-4c1f-9b22-b3d26fd650e1"
+    port browser.act { page = $page; locator = list({ css = concat($first, " summary") }); action = "press"; value = "Enter" } → _
+    port browser.act { page = $page; locator = list({ css = concat($second, " summary") }); action = "click" } → _
+    port browser.observe { page = $page; locator = list({ css = concat($first, " details[open] summary") }); property = "text" } → firstCount
+    port browser.observe { page = $page; locator = list({ css = concat($first, " details[open] li"); contains = "Theorems.Thm_GreenTao_relative_szemeredi · Open" }); property = "count" } → relative
+    port browser.observe { page = $page; locator = list({ css = concat($first, " details[open] li"); contains = "Thm_GreenTao_bounded_model_for_progression_counts" }); property = "count" } → spill
+    port browser.observe { page = $page; locator = list({ css = concat($second, " details[open] li"); contains = "Theorems.Thm_GreenTao_bounded_model_for_progression_counts · Open" }); property = "count" } → modelImport
+    port browser.observe { page = $page; locator = list({ css = concat($third, " summary") }); property = "text" } → thirdCount
+    assert and(eq($firstCount, "Direct imports (9) · Open dependencies (2)"), eq($relative, 1), eq($spill, 0),
+      eq($modelImport, 1), eq($thirdCount, "Direct imports (2) · Open dependencies (0)"))
+      otherwise "The two sketches and accepted proof must show their own imports and open counts."
+
+    port browser.act { page = $page; locator = list({ role = "link"; name = "All Formalpedia records" }); action = "click"; event = "navigation" } → _
+    port browser.act { page = $page; locator = list({ role = "link"; name = "Green–Tao · Lean 4.30.0" }); action = "click"; event = "navigation" } → _
+    port browser.act { page = $page; locator = list({ css = "#formalpedia-proof-d3202793-de8d-4bf1-aeff-e9435b6742f5 summary" }); action = "click" } → _
+    port browser.observe { page = $page; locator = list({ role = "link"; name = "Theorems.Thm_green_tao_theorem__70969d" }); property = "attribute"; name = "href" } → openTarget
+    assert eq($openTarget, "/?collection=formalpedia&theorem=c5ea003-70969d21-edfb-4bee-a5b4-9b9387d459cc")
+      otherwise "The older sketch must link its open import within the same environment."
+
+    port browser.act { page = $page; locator = list({ role = "link"; name = "All Formalpedia records" }); action = "click"; event = "navigation" } → _
+    port browser.act { page = $page; locator = list({ role = "link"; name = "Erdős 1041 counterexample" }); action = "click"; event = "navigation" } → _
+    let rootProof = "#formalpedia-proof-d4266afc-7b84-4296-b524-457b00b5925f"
+    port browser.act { page = $page; locator = list({ css = concat($rootProof, " summary") }); action = "click" } → _
+    port browser.observe { page = $page; locator = list({ css = concat($rootProof, " details[open] summary") }); property = "text" } → rootCount
+    port browser.act { page = $page; locator = list({ role = "link"; name = "Theorems.Thm_Erdos1041_Counterexample_s7_barriers" }); action = "click"; event = "navigation" } → _
+    let barrier = "#formalpedia-proof-3ecd79bb-490c-4213-baad-08b5414d7c03"
+    port browser.act { page = $page; locator = list({ css = concat($barrier, " summary") }); action = "click" } → _
+    port browser.observe { page = $page; locator = list({ css = concat($barrier, " details[open] li"); contains = "Theorems.Thm_Erdos1041_Counterexample_S7Proof_continuous_g1__c55f85 · Proved" }); property = "count" } → aliasImport
+    port browser.observe { page = $page; property = "overflow" } → overflow
+    assert and(eq($rootCount, "Direct imports (35) · Open dependencies (0)"), eq($aliasImport, 1), not($overflow))
+      otherwise "The counterexample must link to the barrier route, preserving its exact exported module alias on mobile."
+
+process test.formalpedia.reviewed-frontier-links:
+  port browser.open { width = 390; height = 844 } → opened
+  let page = $opened.page
+  each list(
+    { id = "FC-OAB-01"; theorem = "Octonion.exists_not_assoc"; obligation = "Identify the assessment’s proposed state space"; stem = "Octonion_exists_not_assoc" },
+    { id = "FC-FUR6-01"; theorem = "BookProof.ChapterPauliLorentz.spinorMap_preserves_mink"; obligation = "Construct an intertwiner"; stem = "BookProof_ChapterPauliLorentz_spinorMap_preserves_mink" },
+    { id = "FC-FUR6-04"; theorem = "BookProof.Complexification.Cx.cxConj_involutive"; obligation = "Identify the underlying real carrier"; stem = "BookProof_Complexification_Cx_cxConj_involutive" }
+  ) as example:
+    port browser.act { page = $page; action = "navigate"; value = "/?collection=frontier" } → _
+    port browser.act { page = $page; locator = list({ label = "Search Frontier assessments" }); action = "fill"; value = $example.id } → _
+    port browser.act { page = $page; locator = list({ role = "button"; name = "Search" }); action = "click"; event = "navigation" } → _
+    port browser.act { page = $page; locator = list({ role = "link"; name = $example.id }); action = "click"; event = "navigation" } → dossier
+    port browser.observe { page = $page; locator = list({ role = "heading"; name = "Reviewed Lean link" }); property = "count" } → panel
+    port browser.observe { page = $page; locator = list({ text = $example.obligation; exact = false }); property = "count" } → remaining
+    port browser.act { page = $page; locator = list({ text = "Exact Lean declaration and sources" }); action = "click" } → _
+    port browser.observe { page = $page; locator = list({ css = "details[open] pre"; contains = $example.theorem }); property = "count" } → exactDeclaration
+    port browser.observe { page = $page; locator = list({ role = "link"; name = "Pinned accepted proof" }); property = "attribute"; name = "href" } → proofLink
+    let expected = concat("https://github.com/prove2me/formalpedia/blob/b6f81971f69c98de86b02a8152c141128d82582b/envs/0df444a/Solutions/Sol_", $example.stem, ".lean")
+    port browser.observe { page = $page; property = "overflow" } → overflow
+    assert and(eq($dossier.status, 200), eq($panel, 1), eq($remaining, 1), eq($exactDeclaration, 1), eq($proofLink, $expected), not($overflow))
+      otherwise "The dossier must show its scoped justification and exact pinned proof at phone width."

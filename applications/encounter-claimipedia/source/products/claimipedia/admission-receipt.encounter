@@ -1,0 +1,93 @@
+process-module "temple/surface-process-module/1"
+
+process claimipedia.admissionReceiptHead:
+  let input = $eventInput
+  let result = null
+  when $input.handoff:
+    let result = at(filter($input.publication.rows, "row", and(eq($row.kind, "scientific-admission-receipt"),
+      eq($row.handoff, $input.handoff.id), eq($row.sha256, $input.publication.pin))), 0)
+
+process claimipedia.admissionReceiptSave:
+  let input = $eventInput
+  let change = $input.change
+  let context = $input.publication
+  let handoff = $input.handoff
+  assert $handoff
+    otherwise "Record the exact scientific admission handoff before importing its receipt."
+  port kernel.invoke { query = "claimipedia.admissionReceiptHead"; input = $input } → existing
+  assert not($existing)
+    otherwise "Scientific admission is already recorded for this exact handoff."
+  port digest.sha256 { text = $handoff.packet } → handoffPin
+  assert eq($handoffPin, $handoff.packetSha256)
+    otherwise "The retained handoff differs from its pin."
+  port kernel.invoke { query = "portfolio.text"; input = { text = at($change.request.fields, "receipt"); limit = 12000 } } → text
+  port rel.decode { text = $text; kind = "ClaimipediaScientificAdmissionReceipt" } → envelope
+  port record.entries { value = $envelope } → fields
+  assert and(eq(count($fields), 2), at($envelope, "decision"), at($envelope, "signature"))
+    otherwise "Expected an admission decision and its detached signature."
+  let decision = $envelope.decision
+  let authority = at($decision, "authority")
+  let receiptId = at($decision, "id")
+  port text.matches { value = if($authority, $authority, ""); pattern = "^[A-Za-z][A-Za-z0-9_.-]{0,63}$" } → authorityId
+  port text.matches { value = if($receiptId, $receiptId, ""); pattern = "^[A-Za-z][A-Za-z0-9_.-]{0,63}$" } → decisionId
+  assert and($authorityId, $decisionId)
+    otherwise "The authority and receipt need valid identities."
+  let exact = {
+    protocol = "claimipedia/scientific-admission-decision/1"; id = $receiptId; authority = $authority; decision = "admitted";
+    claim = $change.claim.id; revision = $context.staged.revision; candidate = $context.staged.id;
+    candidateSha256 = $context.pin; handoff = $handoff.id; handoffSha256 = $handoffPin
+  }
+  let names = list("protocol", "id", "authority", "decision", "claim", "revision", "candidate", "candidateSha256", "handoff", "handoffSha256")
+  port record.entries { value = $decision } → decisionFields
+  assert and(eq(count($decisionFields), count($names)), every($names, "name", eq(at($decision, $name), at($exact, $name))))
+    otherwise "The admission receipt does not match the exact current staged candidate and handoff."
+  let statement = map($names, "name", list($name, at($exact, $name)))
+  port rel.encode { value = $statement; kind = "ClaimipediaScientificAdmissionDecision" } → bytes
+  port application.data { name = "scientific-admission-authorities" } → registry
+  assert eq(count(filter($registry, "row", and(eq($row.s, "scientific-admission-authorities"), eq($row.p, "version"), eq($row.o, "claimipedia/authority-registry/1"), eq($row.pol, "is")))), 1)
+    otherwise "The scientific authority registry is invalid."
+  let keys = filter($registry, "row", and(eq($row.s, $authority), eq($row.p, "ed25519PublicKey"), eq($row.pol, "is")))
+  assert eq(count($keys), 1)
+    otherwise "The scientific admission authority is not trusted by this build."
+  let key = at(at($keys, 0), "o")
+  port signature.ed25519.verify { text = $bytes; publicKey = $key; signature = $envelope.signature } → verified
+  assert $verified
+    otherwise "The scientific admission signature did not verify."
+  assert not(some($context.rows, "row", and(eq($row.kind, "scientific-admission-receipt"), eq($row.authority, $authority), eq($row.receiptId, $receiptId))))
+    otherwise "That scientific admission receipt identity has already been used."
+  port digest.sha256 { text = $key } → keyPin
+  let record = {
+    id = concat("scientific-admission-receipt.", $change.request.nonce); kind = "scientific-admission-receipt";
+    claim = $change.claim.id; revision = $context.staged.revision; candidate = $context.staged.id;
+    sha256 = $context.pin; handoff = $handoff.id; authority = $authority; receiptId = $receiptId;
+    authorityKeySha256 = $keyPin; signedDecision = $bytes; signature = $envelope.signature;
+    importedBy = $change.request.operator.id; scientificAdmission = true; publicationAuthorized = false
+  }
+  port record.put { record = $change.state; key = "publication"; value = append(list($record), $context.rows) } → state
+  let notice = "Independent scientific admission receipt verified and recorded."
+  port kernel.invoke { query = "claimipedia.commit"; input = { request = $change.request; state = $state; base = $input.base; reason = $notice; target = $context.staged.id; notice = $notice } } → result
+
+process claimipedia.admissionReceiptView:
+  let input = $eventInput
+  let screen = $input.screen
+  let context = $input.publication
+  let result = list()
+  when $input.admission:
+    let result = list({ tag = "p"; attrs = {}; children = list(concat("Verified scientific admission receipt: ", $input.admission.receiptId, " · ", $input.admission.authority)) })
+  when and(not($input.admission), eq(at($screen, "operatorRole"), "curator")):
+    port application.data { name = "scientific-admission-authorities" } → registry
+    let configured = some($registry, "row", and(eq($row.p, "ed25519PublicKey"), eq($row.pol, "is")))
+    when not($configured):
+      let result = list({ tag = "p"; attrs = {}; children = list("This build has no configured independent scientific admission authority.") })
+    when $configured:
+      let receipt = { name = "receipt"; label = "Signed scientific admission receipt REL"; type = "textarea"; maxlength = 12000; required = true }
+      port kernel.invoke { query = "portfolio.field"; input = { field = $receipt; labelId = "scientific-admission-receipt" } } → control
+      let fields = list(
+        { tag = "input"; attrs = { type = "hidden"; name = "target"; value = $screen.selected.id }; children = list() },
+        { tag = "input"; attrs = { type = "hidden"; name = "candidate"; value = $context.staged.id }; children = list() },
+        { tag = "input"; attrs = { type = "hidden"; name = "revision"; value = $context.staged.revision }; children = list() },
+        { tag = "input"; attrs = { type = "hidden"; name = "pin"; value = $context.pin }; children = list() },
+        $control
+      )
+      port kernel.invoke { query = "work.form"; input = { csrf = $screen.csrf; revision = $screen.revision; action = "intake-scientific-receipt"; fields = $fields; button = "Verify scientific admission receipt"; style = "cp-form" } } → form
+      let result = list($form)

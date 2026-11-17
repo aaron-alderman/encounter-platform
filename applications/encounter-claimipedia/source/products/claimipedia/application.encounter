@@ -1,0 +1,177 @@
+process-module "temple/surface-process-module/1"
+
+process claimipedia.load:
+  let snapshot = $eventInput
+  let result = { revisions = list(); frontier = list() }
+  when not(eq($snapshot.revision, 0)):
+    let entry = at($snapshot.documents, 0)
+    assert and(eq(count($snapshot.documents), 1), eq(at($entry, "path"), "draft-revisions.rel"))
+      otherwise "The draft store is missing its revision document."
+    port rel.decode { text = $entry.text; kind = "ClaimipediaDraftRevisions" } → result
+
+process claimipedia.lineage:
+  let input = $eventInput
+  let history = filter($input.state.revisions, "row", eq($row.claim, $input.claim.id))
+  let latest = at($history, 0)
+  let status = at($latest, "status")
+  let pending = if(and($latest, or(eq($status, at({}, "absent")), includes(list(null, "draft"), $status))), $latest, null)
+  let working = at(filter($history, "row", eq(at($row, "status"), "accepted")), 0)
+  let parent = if($pending, $pending, $working)
+  let result = { history = $history; latest = $latest; pending = $pending; working = $working; parent = $parent; previous = if($parent, $parent.id, $input.claim.version) }
+
+process claimipedia.save:
+  let draft = $eventInput
+  let claim = $draft.claim
+  let fields = $draft.request.fields
+  let action = at($fields, "action")
+  assert and($claim, includes(list("revise", "accept", "discard"), $action))
+    otherwise "Choose a claim and a draft action."
+  port scalar.read { text = $fields.base } → base
+  port kernel.invoke { query = "claimipedia.lineage"; input = $draft } → lineage
+  let previous = $lineage.previous
+  let pending = $lineage.pending
+  port kernel.invoke { query = "guarded.review"; input = { base = $base; head = $draft.snapshot.revision; reviewed = at($fields, "previous"); candidate = $previous; approved = or(eq($action, "revise"), not(eq($pending, null))) } } → guard
+  assert $guard.current
+    otherwise "The draft store changed. Reopen the claim and try again."
+  assert $guard.exact
+    otherwise "This claim changed. Reopen it before editing."
+  assert $guard.allowed
+    otherwise "There is no pending draft to review."
+  let status = if(eq($action, "accept"), "accepted", if(eq($action, "discard"), "discarded", "superseded"))
+  let revisions = map($draft.state.revisions, "row", if(and($pending, eq($row.id, at($pending, "id"))), { id = $row.id; claim = $row.claim; previous = $row.previous; number = $row.number; statement = $row.statement; scope = $row.scope; reason = $row.reason; status = $status }, $row))
+  let reason = concat("Review draft · ", $status)
+  let notice = if(eq($action, "accept"), "Draft accepted into the local working corpus.", "Draft discarded. Its history is retained.")
+  when eq($action, "revise"):
+    port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "statement"); limit = 12000 } } → statement
+    port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "scope"); limit = 3000 } } → scope
+    port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "reason"); limit = 800 } } → reason
+    port kernel.invoke { query = "claimipedia.subject"; input = { facts = $draft.catalogue.facts; subject = $claim.version } } → released
+    port scalar.read { text = $released.version } → releaseNumber
+    let latest = $lineage.latest
+    let number = add(if($latest, $latest.number, $releaseNumber), 1)
+    let revision = { id = concat("draft.", $draft.request.nonce); claim = $claim.id; previous = $previous; number = $number; statement = $statement; scope = $scope; reason = $reason; status = "draft" }
+    let revisions = append(list($revision), $revisions)
+    let notice = concat("Draft version ", $number, " saved.")
+  port record.put { record = $draft.state; key = "revisions"; value = $revisions } → state
+  port kernel.invoke { query = "claimipedia.commit"; input = { request = $draft.request; state = $state; base = $base; reason = $reason; target = $claim.id; notice = $notice } } → result
+
+process claimipedia.commit:
+  let update = $eventInput
+  let request = $update.request
+  port rel.encode { value = $update.state; kind = "ClaimipediaDraftRevisions" } → data
+  let receipt = null
+  try:
+    port storage.cas { base = $update.base; operationId = $request.nonce; profile = $request.profile; basis = $request.basis; documents = list({ path = "draft-revisions.rel"; text = $data }); reason = $update.reason; target = $update.target; goal = "Update local Claimipedia history"; source = "claimipedia-development"; description = $update.notice } → receipt
+  catch fault:
+    port storage.operation { operationId = $request.nonce } → receipt
+    assert $receipt
+      otherwise "The change was not saved. Reopen the record and try again."
+  let result = $update.notice
+
+process claimipedia.sourcePin:
+  let tuples = map($eventInput, "fact", list($fact.s, $fact.p, $fact.o, $fact.pol))
+  port rel.encode { value = $tuples; kind = "ClaimipediaOpportunityTuples" } → text
+  port digest.sha256 { text = $text } → result
+
+process claimipedia.researchReview:
+  let input = $eventInput
+  let request = $input.request
+  port kernel.invoke { query = "claimipedia.load"; input = $request.snapshot } → state
+  let notice = ""
+  let error = false
+  when eq($request.method, "POST"):
+    try:
+      let change = { request = $request; state = $state; selected = $input.selected; id = $input.id; sourceStatus = at($input, "sourceStatus"); sourceFacts = at($input, "sourceFacts") }
+      when at($input, "handoff"):
+        port kernel.invoke { query = "handoff.save"; input = $change } → notice
+      when at($input, "lease"):
+        port kernel.invoke { query = "lease.save"; input = $change } → notice
+      when at($input, "triage"):
+        port kernel.invoke { query = "triage.save"; input = $change } → notice
+      when not(or(at($input, "lease"), at($input, "triage"), at($input, "handoff"))):
+        port kernel.invoke { query = "checkpoint.save"; input = $change } → notice
+    catch fault:
+      let notice = $fault.message
+      let error = true
+    port storage.snapshot {} → snapshot
+    port kernel.invoke { query = "claimipedia.load"; input = $snapshot } → state
+    port record.put { record = $request; key = "snapshot"; value = $snapshot } → request
+  let result = { request = $request; state = $state; notice = $notice; error = $error }
+
+process app.newSession:
+  let result = {}
+
+process app.request:
+  let request = $eventInput
+  let ecology = includes(list("/ecology", "/aster"), $request.path)
+  let result = null
+  when $ecology:
+    port kernel.invoke { query = "claimipedia.ecology.request"; input = { request = $request; reader = false } } → result
+  when not($ecology):
+    port kernel.invoke { query = "claimipedia.workspaceRequest"; input = $request } → result
+
+process claimipedia.workspaceRequest:
+  let request = $eventInput
+  port text.slice { value = $request.path; start = 0; end = 21 } → prefix
+  let corpusPath = or(eq($request.path, "/steward/corpus-view"), eq($prefix, "/steward/corpus-view/"))
+  let collection = if($corpusPath, "corpus-review", at($request.fields, "collection"))
+  assert or($corpusPath, includes(list("/", "/steward/"), $request.path))
+    otherwise "Open Claimipedia at /."
+  assert not(and(eq(at(at($request, "operator"), "role"), "worker"), eq($request.method, "POST"), not(and(eq($collection, "research-inbox"), eq(at($request.fields, "action"), "run-evidence-check")))))
+    otherwise "Worker writes are limited to leased evidence checks."
+  let result = null
+  when and(eq($request.path, "/steward/"), eq($request.method, "GET"), not(or(at($request.fields, "collection"), at($request.fields, "claim"), at($request.fields, "q")))):
+    port kernel.invoke { query = "claimipedia.steward.home"; input = $request } → result
+  when and(eq($request.method, "GET"), eq($collection, "surfaces")):
+    port kernel.invoke { query = "claimipedia.surfaces"; input = $request } → result
+  when eq($collection, "frontier"):
+    port kernel.invoke { query = "frontier.request"; input = $request } → result
+  when includes(list("research", "evidence"), $collection):
+    port kernel.invoke { query = "claimipedia.referenceRequest"; input = $request } → result
+  when includes(list("checkpoints", "application-records"), $collection):
+    port kernel.invoke { query = "checkpoint.request"; input = $request } → result
+  when eq($collection, "research-inbox"):
+    port kernel.invoke { query = "inbox.request"; input = $request } → result
+  when eq($collection, "corpus-review"):
+    port kernel.invoke { query = "claimipedia.corpusReview"; input = $request } → result
+  when eq($collection, "platform"):
+    port kernel.invoke { query = "claimipedia.platform"; input = $request } → result
+  when eq($collection, "evidence-library"):
+    port kernel.invoke { query = "library.request"; input = $request } → result
+  when and(eq($request.method, "GET"), eq($collection, "formalpedia")):
+    port kernel.invoke { query = "formalpedia.request"; input = $request } → result
+  when not($result):
+    port kernel.invoke { query = "claimipedia.request"; input = $request } → result
+
+process claimipedia.request:
+  let request = $eventInput
+  port kernel.invoke { query = "claimipedia.catalogue" } → catalogue
+  let snapshot = $request.snapshot
+  port kernel.invoke { query = "claimipedia.load"; input = $snapshot } → state
+  let id = if(eq($request.method, "POST"), at($request.fields, "target"), at($request.fields, "claim"))
+  let selected = at(filter($catalogue.claims, "claim", eq($claim.id, $id)), 0)
+  let notice = ""
+  let error = false
+  when and($id, not($selected)):
+    let notice = "No released claim has that identifier."
+    let error = true
+  when eq($request.method, "POST"):
+    try:
+      let change = { request = $request; snapshot = $snapshot; catalogue = $catalogue; state = $state; claim = $selected }
+      let action = at($request.fields, "action")
+      let editorial = includes(list("approve-publication", "stage-publication"), $action)
+      let handoff = includes(list("record-scientific-handoff", "intake-scientific-receipt", "publish-candidate"), $action)
+      when $editorial:
+        port kernel.invoke { query = "claimipedia.publicationSave"; input = $change } → notice
+      when $handoff:
+        port kernel.invoke { query = "claimipedia.admissionHandoff"; input = $change } → notice
+      when not(or($editorial, $handoff)):
+        port kernel.invoke { query = "claimipedia.save"; input = $change } → notice
+    catch fault:
+      let notice = $fault.message
+      let error = true
+    port storage.snapshot {} → snapshot
+    port kernel.invoke { query = "claimipedia.load"; input = $snapshot } → state
+  port kernel.invoke { query = "claimipedia.view"; input = { catalogue = $catalogue; state = $state; csrf = $request.csrf; revision = $snapshot.revision; fields = $request.fields; selected = $selected; operatorRole = if(at($request, "operator"), at(at($request, "operator"), "role"), ""); steward = eq($request.path, "/steward/") } } → page
+  port kernel.invoke { query = "claimipedia.design.page"; input = { page = $page; notice = $notice; error = $error; urlPrefix = if(eq($request.path, "/steward/"), "/steward", "") } } → html
+  let result = { html = $html; session = $request.session }

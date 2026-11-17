@@ -1,0 +1,204 @@
+process-module "temple/surface-process-module/1"
+
+# Release-only declaration. There is no application entry for private collections
+# or local revisions and no storage, attachment or operator grant.
+process app.newSession:
+  let result = {}
+
+process claimipedia.reader.claims:
+  let catalogue = $eventInput
+  let types = filter($catalogue.facts, "fact", eq($fact.p, "claimType"))
+  port record.fromEntries { entries = map($types, "fact", list($fact.s, $fact.o)) } → byVersion
+  let scopes = filter($catalogue.facts, "fact", eq($fact.p, "scope"))
+  port record.fromEntries { entries = map($scopes, "fact", list($fact.s, $fact.o)) } → byScope
+  port kernel.invoke { query = "claimipedia.atlas.regions" } → regions
+  let names = map($regions, "region", $region.type)
+  let result = map($catalogue.claims, "claim", {
+    id = $claim.id; subject = $claim.subject; version = $claim.version; expression = $claim.expression;
+    type = if(includes($names, at($byVersion, $claim.version)), at($byVersion, $claim.version), "Other");
+    scope = at($byScope, $claim.version)
+  })
+
+process claimipedia.reader.queryValue:
+  # Encode query delimiters before embedding a search in a link. The browser
+  # applies the UTF-8 URL serialization for the remaining ordinary characters.
+  let replacements = list(list("%", "%25"), list("&", "%26"), list("#", "%23"), list("+", "%2B"),
+    list("=", "%3D"), list("?", "%3F"), list(" ", "%20"), list("\t", "%09"), list("\r", "%0D"), list("\n", "%0A"))
+  fold $replacements as item; text starts $eventInput:
+    port text.replaceAll { value = $text; search = at($item, 0); replacement = at($item, 1) } → encoded
+    yield $encoded → text
+  let result = $text
+
+process claimipedia.reader.context:
+  let spec = $eventInput
+  let fields = $spec.fields
+  let atlas = eq(at($fields, "view"), "atlas")
+  let rawMap = at($fields, "map")
+  port kernel.invoke { query = "claimipedia.atlas.modes" } → modes
+  let requested = at(filter($modes, "mode", eq($mode.id, $rawMap)), 0)
+  let mode = if(and($atlas, $requested), $requested, at($modes, 0))
+  let mapSuffix = if(eq($mode.id, "regions"), "", concat("&map=", $mode.id))
+  let rawRegion = at($fields, "region")
+  port kernel.invoke { query = "claimipedia.atlas.regions" } → regions
+  let region = if(and($atlas, some($regions, "region", eq($region.type, $rawRegion))), $rawRegion, "")
+  let raw = at($fields, "q")
+  port text.trim { value = if(and(not($atlas), $raw), $raw, "") } → query
+  port text.slice { value = $query; start = 0; end = 180 } → query
+  port kernel.invoke { query = "claimipedia.reader.queryValue"; input = $query } → encoded
+  let filters = if($atlas, concat("view=atlas", if($region, concat("&region=", $region), ""), $mapSuffix), if($query, concat("q=", $encoded), ""))
+  let from = at($fields, "from")
+  let anchor = at(filter($spec.claims, "claim", eq($claim.id, $from)), 0)
+  let focusId = if($atlas, at($fields, "focus"), null)
+  let focus = at(filter($spec.claims, "claim", eq($claim.id, $focusId)), 0)
+  let result = { claims = $spec.claims; facts = $spec.facts; atlas = $atlas; mode = $mode; region = $region; query = $query; filters = $filters; anchor = $anchor; focus = $focus }
+
+process claimipedia.reader.results:
+  let context = $eventInput
+  let rows = list()
+  when $context.atlas:
+    let rows = filter($context.claims, "claim", eq($claim.type, $context.region))
+  when not($context.atlas):
+    port text.lowerCase { value = $context.query } → needle
+    fold $context.claims as claim; found starts list():
+      port text.lowerCase { value = concat($claim.id, " ", $claim.expression) } → text
+      port text.indexOf { value = $text; search = $needle } → index
+      yield if(eq($index, -1), $found, append($found, list($claim))) → found
+    let rows = $found
+  let filterSuffix = if($context.filters, concat("&", $context.filters), "")
+  let items = map($rows, "claim", { tag = "li"; attrs = { class = "cp-result"; id = concat("claim-", $claim.id) }; children = list(
+    { tag = "div"; attrs = {}; children = list(
+      { tag = "h2"; attrs = {}; children = list({ tag = "a"; attrs = { href = concat("/?claim=", $claim.id, "&from=", $claim.id, $filterSuffix) }; children = list($claim.expression) }) },
+      { tag = "p"; attrs = {}; children = list($claim.scope) }
+    ) },
+    { tag = "div"; attrs = {}; children = list(
+      { tag = "span"; attrs = { class = "cp-badge" }; children = list($claim.type) },
+      { tag = "small"; attrs = {}; children = list($claim.id) }
+    ) }
+  ) })
+  let summary = if(count($rows), concat(count($rows), " released claims"), "No released claims match. Try a claim identifier or a shorter phrase.")
+  let result = list(
+    { tag = "p"; attrs = {}; children = list($summary) },
+    { tag = "ul"; attrs = { class = "cp-results"; "aria-label" = "Released claims" }; children = $items }
+  )
+
+process claimipedia.reader.search:
+  let context = $eventInput
+  let form = { tag = "form"; attrs = { method = "get"; action = "/"; class = "cp-search-form"; "aria-label" = "Claim search" }; children = list(
+    { tag = "label"; attrs = {}; children = list("Search claims", { tag = "input"; attrs = { type = "search"; name = "q"; value = $context.query; maxlength = 180 }; children = list() }) },
+    { tag = "button"; attrs = { type = "submit" }; children = list("Search") }
+  ) }
+  port kernel.invoke { query = "claimipedia.reader.results"; input = $context } → results
+  let result = append(list($form), $results)
+
+process claimipedia.reader.detail:
+  let spec = $eventInput
+  let context = $spec.context
+  let claim = $spec.claim
+  let from = if($context.anchor, $context.anchor.id, "")
+  let focus = if($context.focus, concat("&focus=", $context.focus.id), "")
+  let suffix = concat(if($context.filters, concat("&", $context.filters), ""), concat($focus, if($from, concat("&from=", $from), "")))
+  let returnHref = concat("/", if($context.filters, concat("?", $context.filters), ""), if($focus, concat($focus, "#atlas-map"), if($from, concat("#claim-", $from), "")))
+  let back = { tag = "nav"; attrs = { class = "cp-breadcrumb"; "aria-label" = "Exploration position" }; children = list(
+    { tag = "a"; attrs = { href = $returnHref }; children = list(if($context.atlas, "Back to the atlas", "Back to claim search")) },
+    if($context.region, concat(" / ", $context.region), null)
+  ) }
+  let hero = { tag = "header"; attrs = { class = "cp-record-head" }; children = list(
+    { tag = "div"; attrs = {}; children = list(
+      { tag = "p"; attrs = { class = "cp-eyebrow" }; children = list(concat($claim.type, " · Released claim")) },
+      { tag = "h1"; attrs = {}; children = list($claim.expression) },
+      { tag = "p"; attrs = {}; children = list($claim.scope) }
+    ) },
+    { tag = "dl"; attrs = { class = "cp-vitals"; "aria-label" = "Released record" }; children = list(
+      { tag = "div"; attrs = {}; children = list({ tag = "dt"; attrs = {}; children = list("Claim identifier") }, { tag = "dd"; attrs = {}; children = list($claim.id) }) },
+      { tag = "div"; attrs = {}; children = list({ tag = "dt"; attrs = {}; children = list("Corpus release") }, { tag = "dd"; attrs = {}; children = list("v1.0.0") }) }
+    ) }
+  ) }
+  let input = { facts = $spec.catalogue.facts; identifiers = $spec.catalogue.identifiers; claim = $claim; linkSuffix = $suffix }
+  port kernel.invoke { query = "claimipedia.evidence"; input = $input } → evidence
+  port kernel.invoke { query = "claimipedia.connections"; input = $input } → connections
+  port kernel.invoke { query = "claimipedia.releasedHistory"; input = $input } → history
+  port kernel.invoke { query = "claimipedia.design.panel"; input = { title = "Evidence"; content = list($evidence) } } → evidencePanel
+  port kernel.invoke { query = "claimipedia.design.panel"; input = { title = "Related claims and challenges"; content = list($connections) } } → connectionPanel
+  port kernel.invoke { query = "claimipedia.design.panel"; input = { title = "Released revision history"; content = list($history) } } → historyPanel
+  let correction = { tag = "p"; attrs = { class = "cp-notice" }; children = list("Have a correction? ", { tag = "a"; attrs = { href = concat("/steward?claim=", $claim.id) }; children = list("Open the steward entry") }) }
+  let result = list($back, $hero, $evidencePanel, $connectionPanel, $historyPanel, $correction)
+
+process claimipedia.reader.gate:
+  let id = at($eventInput.fields, "claim")
+  let selected = null
+  when $id:
+    port kernel.invoke { query = "claimipedia.reader.catalogue" } → catalogue
+    let selected = at(filter($catalogue.claims, "claim", eq($claim.id, $id)), 0)
+  let corpusReview = eq(at($eventInput.fields, "collection"), "corpus-review")
+  let queueEntry = "/steward/enter?collection=corpus-review"
+  let checkpoint = at($eventInput.fields, "checkpoint")
+  when and($corpusReview, $checkpoint):
+    port text.matches { value = $checkpoint; pattern = "^[A-Za-z][A-Za-z0-9_.-]{0,63}$" } → valid
+    when $valid:
+      let queueEntry = concat($queueEntry, "&checkpoint=", $checkpoint)
+  let enter = concat("/steward/enter", if($selected, concat("?claim=", $selected.id), ""))
+  let result = list(
+    { tag = "p"; attrs = { class = "cp-notice" }; children = list("This is the private preview workspace for drafts, Frontier assessments, evidence operations and review. Opening it takes you out of the released reader.") },
+    { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = if($corpusReview, $queueEntry, $enter) }; children = list("Enter the steward workspace") }) },
+    if($corpusReview, null, { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = $queueEntry }; children = list("Enter the corpus review queue") }) }),
+    { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = "/" }; children = list("Return to the released reader") }) }
+  )
+
+process app.request:
+  let request = $eventInput
+  let ecology = includes(list("/ecology", "/aster"), $request.path)
+  let result = null
+  when $ecology:
+    port kernel.invoke { query = "claimipedia.ecology.request"; input = { request = $request; reader = true } } → result
+  when not($ecology):
+    port kernel.invoke { query = "claimipedia.reader.request"; input = $request } → result
+
+process claimipedia.reader.request:
+  let request = $eventInput
+  assert and(eq($request.method, "GET"), includes(list("/", "/steward"), $request.path))
+    otherwise "The released reader accepts read-only requests."
+  let gate = eq($request.path, "/steward")
+  let atlas = eq(at($request.fields, "view"), "atlas")
+  let notice = ""
+  let title = "Steward entry"
+  let body = list()
+  let selected = null
+  when $gate:
+    port kernel.invoke { query = "claimipedia.reader.gate"; input = $request } → body
+  when not($gate):
+    port kernel.invoke { query = "claimipedia.reader.catalogue" } → catalogue
+    port kernel.invoke { query = "claimipedia.reader.claims"; input = $catalogue } → claims
+    port kernel.invoke { query = "claimipedia.reader.context"; input = { fields = $request.fields; claims = $claims; facts = $catalogue.facts } } → context
+    let id = at($request.fields, "claim")
+    let selected = at(filter($claims, "claim", eq($claim.id, $id)), 0)
+    when $selected:
+      let title = $selected.id
+      port kernel.invoke { query = "claimipedia.reader.detail"; input = { catalogue = $catalogue; claim = $selected; context = $context } } → body
+    when not($selected):
+      let title = if($context.atlas, "Claim atlas", "Explore released claims")
+      when $id:
+        let notice = "No claim in this reader has that identifier."
+      when at($request.fields, "collection"):
+        let notice = "Workspace collections open through the steward entry."
+      when $context.atlas:
+        port kernel.invoke { query = "claimipedia.atlas.view"; input = $context } → body
+        when $context.region:
+          port kernel.invoke { query = "claimipedia.reader.results"; input = $context } → results
+          let heading = { tag = "h2"; attrs = {}; children = list(concat($context.region, " claims")) }
+          let body = append($body, append(list($heading), $results))
+      when not($context.atlas):
+        port kernel.invoke { query = "claimipedia.reader.search"; input = $context } → body
+  let hero = if($selected, null, { tag = "header"; attrs = { class = "cp-page-head" }; children = list(
+    { tag = "p"; attrs = { class = "cp-eyebrow" }; children = list(if($gate, "Claimipedia · Working records", "Claimipedia · Corpus v1.0.0")) },
+    { tag = "h1"; attrs = {}; children = list($title) },
+    { tag = "p"; attrs = {}; children = list(if($gate, "Choose whether to enter the working side of this preview.", "Follow a released claim from its proposition to the evidence and reasons around it.")) }
+  ) })
+  port kernel.invoke { query = "claimipedia.ecology.links"; input = "" } → ecologyLinks
+  let nav = { tag = "nav"; attrs = { class = "cp-nav"; "aria-label" = "Reader navigation" }; children = append(list(
+    { tag = "a"; attrs = { href = "/"; "aria-current" = if(and(not($gate), not($atlas), not($selected)), "page", null) }; children = list("Search claims") },
+    { tag = "a"; attrs = { href = "/?view=atlas"; "aria-current" = if(and(not($gate), $atlas), "page", null) }; children = list("Claim atlas") },
+    { tag = "a"; attrs = { href = "/steward"; "aria-current" = if($gate, "page", null) }; children = list("Steward entry") }
+  ), $ecologyLinks) }
+  let page = { reader = true; title = concat($title, " · Claimipedia"); nav = $nav; content = append(list($hero), $body) }
+  port kernel.invoke { query = "claimipedia.design.page"; input = { page = $page; notice = $notice; error = if($notice, true, false) } } → html
+  let result = { html = $html; session = $request.session }

@@ -1,0 +1,300 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    sections = list(
+      {
+        subject = "application";
+        module = "source/products/claimipedia/formalpedia.encounter";
+        dataset = "formalpedia"
+      },
+      {
+        subject = "application";
+        dataset = "formalpedia-full"
+      },
+      {
+        subject = "application";
+        dataset = "formalpedia-import-renames"
+      },
+      {
+        subject = "data.formalpedia-import-renames";
+        source = "products/claimipedia/formalpedia/import-renames-d2016173f14e0d37b2023e4d58083d99017855eb-fe3e304e6421.rel";
+        format = "typed-rel";
+        sha256 = "fe3e304e64218522460b4038ee116251547791d06c58d3bc54ecc5efc6a3779d"
+      },
+      {
+        subject = "application";
+        dataset = "formalpedia-proof-paths"
+      },
+      {
+        subject = "data.formalpedia-proof-paths";
+        source = "products/claimipedia/formalpedia/proof-paths.rel";
+        format = "typed-rel";
+        sha256 = "a31b61f039706da4f97b7abd38dfd7553ec02d923357e22339606399cb0970b2"
+      },
+      {
+        subject = "application";
+        dataset = "reviewed-lean-links"
+      },
+      {
+        subject = "data.reviewed-lean-links";
+        source = "products/claimipedia/reviewed-lean-links.rel";
+        format = "typed-rel";
+        sha256 = "f98943dca1ee66fae763b391c22ffdeb1b09af624b9bc36dd5ce3a305650026c"
+      },
+      {
+        subject = "data.formalpedia-full";
+        source = "products/claimipedia/formalpedia/full-d2016173f14e0d37b2023e4d58083d99017855eb-35ac84ffd400.rel";
+        format = "typed-rel";
+        sha256 = "35ac84ffd4006fd1b6ea9e18e2ab2ec9cfd4d6e55aeb9d8a3adf958bb7245fd8"
+      },
+      {
+        subject = "data.formalpedia";
+        source = "products/claimipedia/formalpedia/pilot.rel";
+        format = "typed-rel";
+        sha256 = "c15e583d7b6257925d899cd5fd440286168dda60d3522d97ffa1dba58526b269"
+      },
+      {
+        subject = "application";
+        stateProfile = "encounter/claimipedia-dev/1";
+        dataSource = "corpus/claimipedia-full-corpus-v1.0.0.rel";
+        dataFormat = "rel-facts";
+        dataSha256 = "449807f0e2b4b6378505d94810a60ca5665ec74b3b416291980f19b6af90518d";
+        module = list(
+          "source/products/shared/work-ui.encounter",
+          "source/products/shared/portfolio-ui.encounter",
+          "source/products/claimipedia/application.encounter",
+          "source/review-guard.encounter",
+          "source/products/claimipedia/publication.encounter",
+          "source/products/claimipedia/admission-handoff.encounter",
+          "source/products/claimipedia/admission-receipt.encounter",
+          "source/products/claimipedia/release.encounter",
+          "source/products/claimipedia/corpus-search.encounter",
+          "source/products/claimipedia/view.encounter",
+          "source/products/claimipedia/design.encounter",
+          "source/products/claimipedia/ecology.encounter",
+          "source/products/claimipedia/aster.encounter",
+          "algebra/html/html.escape.encounter",
+          "algebra/html/html.cssText.encounter",
+          "algebra/html/html.serialize.encounter"
+        );
+        entry = list(
+          "app.newSession",
+          "app.request",
+          "ui.styles"
+        );
+        dataset = list("style-approval", "knowledge-ecology")
+      },
+      {
+        subject = "data.knowledge-ecology";
+        source = "products/claimipedia/knowledge-ecology.rel";
+        format = "rel-facts";
+        sha256 = "865da0a2ae46915d518a4a5efc212eeb6a1a18798562712087ee3a63dc2a8752"
+      },
+      {
+        subject = "data.style-approval";
+        source = "products/claimipedia/style-approval.rel";
+        format = "rel-facts";
+        sha256 = "b259aa6d003ea327a2ba65082561f0e4f960a52fbcac063c555619471432c975"
+      },
+      {
+        subject = "application";
+        grant = list(
+          "application.data",
+          "kernel.invoke",
+          "rel.encode",
+          "rel.decode",
+          "scalar.read",
+          "storage.cas",
+          "storage.operation",
+          "storage.snapshot",
+          "text.matches",
+          "text.indexOf",
+          "text.join",
+          "text.replaceAll",
+          "text.trim",
+          "text.lowerCase",
+          "text.split",
+          "value.describe",
+          "value.string",
+          "value.type",
+          "record.entries",
+          "record.get",
+          "record.fromEntries",
+          "number.calculate",
+          "text.slice"
+        );
+        dataset = "frontier"
+      },
+      {
+        subject = "data.frontier";
+        source = "products/claimipedia/frontier-claims.rel";
+        format = "typed-rel";
+        sha256 = "d1bef1d09350881ffc555378c400d08214d7560f22bc341ba90d155db2684f88"
+      },
+      {
+        subject = "application";
+        module = "source/products/claimipedia/frontier.encounter";
+        dataset = "frontier-research"
+      },
+      {
+        subject = "data.frontier-research";
+        source = "products/claimipedia/frontier-research-arms.rel";
+        format = "typed-rel";
+        sha256 = "17fde9560ba9156f4faff1e936d49fa0c54a1b763cf3c1c4e2b9826bfa7cf4ab"
+      },
+      {
+        subject = "application";
+        module = "source/products/claimipedia/research.encounter";
+        dataset = "spin23-checkpoint"
+      },
+      {
+        subject = "data.spin23-checkpoint";
+        source = "products/claimipedia/spin23-checkpoint.rel";
+        format = "rel-facts";
+        sha256 = "17ccf56ce4e01fccc4efd05214dc1815e6eed7b4ed3ac25c4fda97264590808e"
+      },
+      {
+        subject = "application";
+        module = "source/products/claimipedia/checkpoint.encounter";
+        grant = "record.put";
+        dataset = "spin23-pathway"
+      },
+      {
+        subject = "data.spin23-pathway";
+        source = "products/claimipedia/spin23-pathway.rel";
+        format = "rel-facts";
+        sha256 = "bc56a9bcca779f17331d6d13c5a345111633492fc72bceb283a60ab1231617c2"
+      },
+      {
+        subject = "application";
+        dataset = "legacy-app-admission"
+      },
+      {
+        subject = "data.legacy-app-admission";
+        source = "products/claimipedia/legacy-app-admission.rel";
+        format = "rel-facts";
+        sha256 = "6760cb40ec44f37ea288bc4f599185330347e23d8991d9fbfe7d1d7cd06b235d"
+      },
+      {
+        subject = "application";
+        dataset = "transfer-records"
+      },
+      {
+        subject = "data.transfer-records";
+        source = "products/claimipedia/transfer-records.rel";
+        format = "rel-facts";
+        sha256 = "27b5905e6d870bc5278c6453b79afee3d069bcd928475caea983d61ec294afee"
+      },
+      {
+        subject = "application";
+        dataset = "research-inbox"
+      },
+      {
+        subject = "data.research-inbox";
+        source = "products/claimipedia/research-inbox.rel";
+        format = "typed-rel";
+        sha256 = "255dfbff7cde3fc45bc2fc09fa12928b980ce23036dbfd32ab54724de2d64e07"
+      },
+      {
+        subject = "application";
+        module = "source/products/claimipedia/inbox.encounter";
+        dataset = "evidence-library"
+      },
+      {
+        subject = "data.evidence-library";
+        source = "products/claimipedia/evidence-library.rel";
+        format = "typed-rel";
+        sha256 = "2c1338df9f08280792650c593060aae4272a466aeba7755722d24efab166637a"
+      },
+      {
+        subject = "application";
+        dataset = "evidence-texts"
+      },
+      {
+        subject = "data.evidence-texts";
+        source = "products/claimipedia/evidence-texts.rel";
+        format = "typed-rel";
+        sha256 = "4268035856ee8def7c2c8917a8c8b7217498e461ae396523d652bd152e3a9f1b"
+      },
+      {
+        subject = "application";
+        dataset = "evidence-links"
+      },
+      {
+        subject = "data.evidence-links";
+        source = "products/claimipedia/evidence-links.rel";
+        format = "rel-facts";
+        sha256 = "bbabd7d2748b95f6be251f8fb28712602958e479ed7c61e2fb93771a040e8125"
+      },
+      {
+        subject = "application";
+        module = "source/products/claimipedia/library.encounter";
+        entry = "app.attachment"
+      },
+      {
+        subject = "application";
+        module = "source/products/claimipedia/triage.encounter";
+        grant = "digest.sha256"
+      },
+      {
+        subject = "application";
+        module = "source/products/claimipedia/packet.encounter";
+        grant = "attachment.verify"
+      },
+      {
+        subject = "application";
+        module = list(
+          "source/products/claimipedia/lease.encounter",
+          "source/products/claimipedia/handoff.encounter",
+          "source/products/claimipedia/surfaces.encounter"
+        );
+        dataset = "surface-register"
+      },
+      {
+        subject = "data.surface-register";
+        source = "products/claimipedia/surface-register.rel";
+        format = "rel-facts";
+        sha256 = "eb64a4fd4378bea10230968ade458bffe7e5f74c5d919a5687614aa8b9b63025"
+      },
+      {
+        subject = "application";
+        module = list(
+          "source/products/claimipedia/corpus-review.encounter",
+          "source/products/claimipedia/steward.encounter"
+        );
+        dataset = "corpus-review"
+      },
+      {
+        subject = "data.corpus-review";
+        source = "products/claimipedia/corpus-review.rel";
+        format = "rel-facts";
+        sha256 = "f6599d5d98cd93b5344540ad6c5dbaeb346cbf31244e56c0f00166f14ea5c760"
+      },
+      {
+        subject = "application";
+        module = list(
+          "source/products/claimipedia/platform.encounter",
+          "source/products/claimipedia/style-catalogue.encounter"
+        );
+        dataset = "platform-review"
+      },
+      {
+        subject = "data.platform-review";
+        source = "products/claimipedia/platform-review.rel";
+        format = "rel-facts";
+        sha256 = "1dc24ee6e802fc04c926abc8fb76b9a335791a80fc37d51d4dff47f9d0a11062"
+      },
+      {
+        subject = "application";
+        grant = "signature.ed25519.verify";
+        dataset = "scientific-admission-authorities"
+      },
+      {
+        subject = "data.scientific-admission-authorities";
+        source = "products/claimipedia/scientific-admission-authorities.rel";
+        format = "rel-facts";
+        sha256 = "552407dd708ee4e8fcbd299d1882b50a61093a1b8830de34bf47ea72fe6a15d3"
+      }
+    )
+  }

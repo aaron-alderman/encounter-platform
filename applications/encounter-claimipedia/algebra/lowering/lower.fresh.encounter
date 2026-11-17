@@ -1,0 +1,24 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lower.fresh:
+  let candidate = concat("__templeDerived", $context.serial)
+  let occupied = includes($context.used, $candidate)
+  when $occupied:
+    fold list(null) as invokeInput; invokeAcc starts null:
+      let input = $invokeInput
+      let context = { used = $context.used; serial = add($context.serial, 1); locals = $context.locals }
+      fold list(null) as callFrame; frameResult starts null:
+        call lower.fresh
+        yield $result → result
+      yield $result → fresh
+    let result = $fresh
+  when if($occupied, false, true):
+    let result = {
+      value = $candidate;
+      context = {
+        used = append($context.used, list($candidate));
+        serial = add($context.serial, 1);
+        locals = $context.locals
+      }
+    }

@@ -1,0 +1,61 @@
+process-module "temple/surface-process-module/1"
+
+process claimipedia.search.words:
+  port text.lowerCase { value = $eventInput } → lower
+  port text.split { value = $lower; pattern = "[^\\p{L}\\p{N}]+"; flags = "u" } → words
+  let result = distinct(filter($words, "word", $word))
+
+process claimipedia.search.records:
+  let catalogue = $eventInput
+  let predicates = list("scope", "claimType", "isa", "identifier", "direction", "evidenceType", "contentReference", "provenance")
+  let indexed = filter($catalogue.facts, "fact", includes($predicates, $fact.p))
+  port record.fromEntries { entries = map($indexed, "fact", list(concat($fact.p, ":", $fact.s), $fact.o)) } → fields
+  let links = filter($catalogue.facts, "fact", and(eq($fact.p, "relevantClaim"), eq(at($fields, concat("isa:", $fact.s)), "EvidenceItem")))
+  let evidence = map($links, "link", {
+    subject = $link.s; claim = $link.o; id = or(at($fields, concat("identifier:", $link.s)), $link.s);
+    direction = at($fields, concat("direction:", $link.s)); kind = at($fields, concat("evidenceType:", $link.s));
+    reference = at($fields, concat("contentReference:", $link.s)); provenance = at($fields, concat("provenance:", $link.s))
+  })
+  let result = map($catalogue.claims, "claim", {
+    id = $claim.id; subject = $claim.subject; version = $claim.version; expression = $claim.expression;
+    scope = at($fields, concat("scope:", $claim.version)); type = at($fields, concat("claimType:", $claim.version));
+    evidence = filter($evidence, "item", eq($item.claim, $claim.subject))
+  })
+
+process claimipedia.search.corpus:
+  let spec = $eventInput
+  port text.slice { value = $spec.query; start = 0; end = 240 } → query
+  port kernel.invoke { query = "claimipedia.search.words"; input = $query } → words
+  let common = list("a", "an", "and", "are", "as", "at", "be", "by", "can", "could", "do", "does", "for", "from", "has", "how", "i", "in", "is", "it", "me", "of", "on", "or", "our", "please", "show", "tell", "that", "the", "there", "this", "to", "was", "we", "were", "what", "when", "where", "which", "who", "why", "will", "with", "would", "you", "about", "claim", "claims", "evidence")
+  fold filter($words, "word", not(includes($common, $word))) as word; terms starts list():
+    port number.calculate { operation = "less"; values = list(count($terms), 12) } → room
+    yield if($room, append($terms, list($word)), $terms) → terms
+  let state = { matches = 0; ranked = list() }
+  when count($terms):
+    fold $spec.records as record; state starts $state:
+      port kernel.invoke { query = "claimipedia.search.words"; input = concat($record.id, " ", $record.expression) } → main
+      port kernel.invoke { query = "claimipedia.search.words"; input = if($record.scope, $record.scope, "") } → scope
+      let mainTerms = filter($terms, "term", includes($main, $term))
+      let scopeTerms = filter($terms, "term", includes($scope, $term))
+      fold $record.evidence as item; evidenceTerms starts list():
+        port kernel.invoke { query = "claimipedia.search.words"; input = concat($item.id, " ", $item.reference, " ", $item.provenance) } → evidence
+        yield distinct(append($evidenceTerms, filter($terms, "term", includes($evidence, $term)))) → evidenceTerms
+      let matched = distinct(append(append($mainTerms, $scopeTerms), $evidenceTerms))
+      let next = $state
+      when count($matched):
+        # Reward coverage first, then weight the released wording above its scope and evidence metadata.
+        port number.calculate { operation = "multiply"; values = list(count($matched), 5) } → coverage
+        port number.calculate { operation = "multiply"; values = list(count($mainTerms), 3) } → wording
+        let score = add(add($coverage, $wording), add(count($scopeTerms), count($evidenceTerms)))
+        let row = { claim = $record; matched = $matched; score = $score }
+        fold $state.ranked as prior; partition starts { before = list(); after = list() }:
+          port number.calculate { operation = "greaterEqual"; values = list($prior.score, $row.score) } → before
+          yield { before = if($before, append($partition.before, list($prior)), $partition.before);
+            after = if($before, $partition.after, append($partition.after, list($prior))) } → partition
+        let ordered = append(append($partition.before, list($row)), $partition.after)
+        fold $ordered as item; first starts list():
+          port number.calculate { operation = "less"; values = list(count($first), 12) } → room
+          yield if($room, append($first, list($item)), $first) → first
+        let next = { matches = add($state.matches, 1); ranked = $first }
+      yield $next → state
+  let result = $state
