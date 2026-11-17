@@ -1,0 +1,231 @@
+# Native DOM/XML/URL code observes only. These Encounter programmes decide
+# which source, attributes, documents and script identities may cross a surface.
+process-module "temple/surface-process-module/1"
+
+process surface.local:
+  port text.lowerCase { value = $eventInput.value } → name
+  port text.split { value = $name; pattern = ":" } → parts
+  let result = at($parts, add(count($parts), -1))
+
+process surface.source:
+  let text = $eventInput.text
+  port text.slice { value = $text; start = 0; end = 32000000 } → bounded
+  assert eq($bounded, $text)
+    otherwise "SURFACE: Markup bound exceeded."
+  port text.matches { value = $text; pattern = "<\\?xml-stylesheet\\b|<!ENTITY\\b|<!DOCTYPE(?!\\s+html\\s*>)"; flags = "i" } → unsafe
+  assert not($unsafe)
+    otherwise "SURFACE: Executable XML transformation refused."
+  let result = true
+
+process surface.refresh:
+  let text = $eventInput.content
+  port text.indexOf { value = $text; search = ";" } → separator
+  assert not(eq($separator, -1))
+    otherwise "SURFACE: Unqualified document refresh."
+  port text.slice { value = $text; start = 0; end = $separator } → delay
+  port text.trim { value = $delay } → delay
+  port text.matches { value = $delay; pattern = "^[0-9]+(?:\\.[0-9]+)?$" } → numeric
+  assert $numeric
+    otherwise "SURFACE: Unqualified document refresh."
+  port text.slice { value = $text; start = add($separator, 1) } → destination
+  port text.indexOf { value = $destination; search = "=" } → equals
+  assert not(eq($equals, -1))
+    otherwise "SURFACE: Unqualified document refresh."
+  port text.slice { value = $destination; start = 0; end = $equals } → name
+  port text.trim { value = $name } → name
+  port text.lowerCase { value = $name } → name
+  assert eq($name, "url")
+    otherwise "SURFACE: Unqualified document refresh."
+  port text.slice { value = $destination; start = add($equals, 1) } → href
+  port text.trim { value = $href } → href
+  port text.matches { value = $href; pattern = "[\\r\\n\\u2028\\u2029]" } → multiline
+  assert not($multiline)
+    otherwise "SURFACE: Unqualified document refresh."
+  let first = at($href, 0)
+  when and(not(eq(count($href), 1)), includes(list("'", "\""), $first), eq($first, at($href, add(count($href), -1)))):
+    port text.slice { value = $href; start = 1; end = add(count($href), -1) } → href
+  let result = $href
+
+process surface.url:
+  let value = $eventInput.value
+  let tag = $eventInput.tag
+  let name = $eventInput.name
+  port text.replace { value = $value; pattern = "[\\u0000-\\u0020\\u007f]"; flags = "g"; replacement = "" } → compact
+  port text.lowerCase { value = $compact } → compact
+  port text.matches { value = $compact; pattern = "^(?:javascript|vbscript):" } → executable
+  assert not($executable)
+    otherwise "SURFACE: Script URL refused."
+  let done = eq($compact, "data:,")
+  port text.matches { value = $compact; pattern = "^data:" } → dataURL
+  when and($dataURL, not($done)):
+    port text.matches { value = $compact; pattern = "^data:image/(?:png|jpe?g|gif|webp|avif)(?:;|,)" } → raster
+    assert and(includes(list("img", "image", "source"), $tag), $raster)
+      otherwise "SURFACE: Executable data URL refused."
+    let done = true
+  port text.matches { value = $compact; pattern = "^blob:" } → blob
+  when and($blob, not($done)):
+    assert includes(list("img", "image", "video", "audio", "source"), $tag)
+      otherwise "SURFACE: Blob execution context refused."
+    let done = true
+  when and(eq($compact, "about:blank"), eq($tag, "iframe")):
+    let done = true
+  when not($done):
+    port url.observe { value = $value; base = $eventInput.base } → target
+    assert includes(list("http:", "https:", "mailto:", "tel:"), $target.protocol)
+      otherwise "SURFACE: URL scheme refused."
+    when includes(list("mailto:", "tel:"), $target.protocol):
+      assert eq($name, "href")
+        otherwise "SURFACE: Non-navigation URL refused."
+    when eq($tag, "use"):
+      port text.trim { value = $value } → trimmed
+      port text.slice { value = $trimmed; start = 0; end = 1 } → first
+      assert eq($first, "#")
+        otherwise "SURFACE: External SVG instance refused."
+  let result = true
+
+process surface.attribute:
+  port kernel.invoke { query = "surface.local"; input = { value = $eventInput.tag } } → tag
+  port kernel.invoke { query = "surface.local"; input = { value = $eventInput.name } } → name
+  let value = $eventInput.value
+  port text.slice { value = $name; start = 0; end = 2 } → prefix
+  assert not(eq($prefix, "on"))
+    otherwise "SURFACE: Event handlers refused."
+  when $eventInput.mutation:
+    assert not(includes(list("script", "object", "embed", "applet", "base"), $tag))
+      otherwise "SURFACE: Executable element mutation refused."
+    assert not(eq($name, "srcdoc"))
+      otherwise "SURFACE: Use the script-free frame mechanism."
+    assert not(and(eq($tag, "meta"), includes(list("http-equiv", "content"), $name)))
+      otherwise "SURFACE: Meta refresh mutation refused."
+  when eq($name, "sandbox"):
+    assert not(eq($value, null))
+      otherwise "SURFACE: Removing frame sandbox refused."
+    port text.trim { value = $value } → trimmed
+    port text.split { value = $trimmed; pattern = "\\s+" } → tokens
+    assert every($tokens, "token", includes(list("", "allow-same-origin"), $token))
+      otherwise "SURFACE: Frame scripting permission refused."
+  when not(eq($value, null)):
+    when includes(list("href", "src", "action", "formaction", "poster", "data", "background"), $name):
+      port kernel.invoke { query = "surface.url"; input = { value = $value; tag = $tag; name = $name; base = $eventInput.base } } → _
+    when includes(list("srcset", "imagesrcset"), $name):
+      port text.replace { value = $value; pattern = "[\\u0000-\\u0020\\u007f]"; flags = "g"; replacement = "" } → compact
+      port text.matches { value = $compact; pattern = "(?:javascript|vbscript):"; flags = "i" } → executable
+      assert not($executable)
+        otherwise "SURFACE: Script image source refused."
+    when and($eventInput.mutation, eq($tag, "iframe"), eq($name, "src")):
+      let sandbox = at($eventInput.attributes, "sandbox")
+      port value.describe { value = $sandbox } → kind
+      assert eq($kind.type, "string")
+        otherwise "SURFACE: Frame must remain script-free."
+      port kernel.invoke { query = "surface.attribute"; input = { tag = "iframe"; name = "sandbox"; value = $sandbox; base = $eventInput.base; mutation = false; attributes = {} } } → _
+  let result = true
+
+process surface.write:
+  when $eventInput.property:
+    assert includes(list("value", "checked", "disabled", "hidden", "readOnly", "tabIndex", "textContent", "className", "open", "max", "min", "title"), $eventInput.name)
+      otherwise "SURFACE: Undeclared DOM property effect."
+  port kernel.invoke { query = "surface.local"; input = { value = $eventInput.tag } } → tag
+  assert not(includes(list("script", "object", "embed", "applet", "base"), $tag))
+    otherwise "SURFACE: Executable element property mutation refused."
+  let result = true
+
+process surface.tree:
+  let base = $eventInput.base
+  let baseHref = at($eventInput.root, "baseHref")
+  port value.describe { value = $baseHref } → baseKind
+  when eq($baseKind.type, "string"):
+    port url.observe { value = $baseHref; base = $base } → target
+    port url.observe { value = $base; base = $base } → original
+    assert eq($target.origin, $original.origin)
+      otherwise "SURFACE: External document base refused."
+    let base = $target.href
+  let context = { base = $base; frame = $eventInput.frame; xml = $eventInput.xml; mode = $eventInput.mode; artifacts = $eventInput.artifacts }
+  port kernel.invoke { query = "surface.node"; input = { node = $eventInput.root; context = $context; depth = 0; count = 0 } } → count
+  let result = true
+
+process surface.node:
+  let context = $eventInput.context
+  let node = $eventInput.node
+  let depth = $eventInput.depth
+  let count = add($eventInput.count, 1)
+  port number.calculate { operation = "lessEqual"; values = list($depth, 256) } → shallow
+  port number.calculate { operation = "lessEqual"; values = list($count, 200000) } → bounded
+  assert and($shallow, $bounded)
+    otherwise "SURFACE: Observation bound exceeded."
+  port kernel.invoke { query = "surface.local"; input = { value = $node.tag } } → tag
+  assert not(includes(list("object", "embed", "applet", "frame", "frameset", "foreignobject", "animate", "animatemotion", "animatetransform", "set"), $tag))
+    otherwise "SURFACE: Native execution element refused."
+  port record.fromEntries { entries = map($node.attrs, "attribute", list($attribute.name, $attribute.value)) } → attributes
+  each $node.attrs as attribute:
+    port kernel.invoke { query = "surface.attribute"; input = { tag = $tag; name = $attribute.name; value = $attribute.value; base = $context.base; mutation = false; attributes = $attributes } } → _
+  when eq($tag, "script"):
+    assert not($context.xml)
+      otherwise "SURFACE: Standalone XML script refused."
+    assert includes(list("", "http://www.w3.org/1999/xhtml"), $node.namespace)
+      otherwise "SURFACE: Foreign namespace script refused."
+    port text.trim { value = if(at($attributes, "type"), at($attributes, "type"), "") } → type
+    port text.lowerCase { value = $type } → type
+    when includes(list("application/rel", "application/x-rel", "application/json", "application/ld+json", "text/plain"), $type):
+      assert not(at($attributes, "src"))
+        otherwise "SURFACE: Data scripts cannot import sources."
+    when not(includes(list("application/rel", "application/x-rel", "application/json", "application/ld+json", "text/plain"), $type)):
+      assert and(not($context.frame), not(eq($context.mode, "dom")), at($attributes, "src"))
+        otherwise "SURFACE: Only issued runtime scripts are allowed."
+      port text.trim { value = $node.text } → content
+      assert eq($content, "")
+        otherwise "SURFACE: Inline script refused."
+      port url.observe { value = $attributes.src; base = $context.base } → target
+      port url.observe { value = $context.base; base = $context.base } → original
+      assert eq($target.origin, $original.origin)
+        otherwise "SURFACE: External runtime refused."
+      when eq($context.mode, "final"):
+        let artifact = at($context.artifacts, $target.path)
+        assert and($artifact.issuedRuntime, eq(at($attributes, "integrity"), $artifact.integrity))
+          otherwise "SURFACE: Issued runtime identity required."
+  when eq($tag, "base"):
+    when at($attributes, "href"):
+      port url.observe { value = $attributes.href; base = $context.base } → target
+      port url.observe { value = $context.base; base = $context.base } → original
+      assert eq($target.origin, $original.origin)
+        otherwise "SURFACE: External base refused."
+  when eq($tag, "link"):
+    port text.lowerCase { value = if(at($attributes, "rel"), at($attributes, "rel"), "") } → relation
+    port text.split { value = $relation; pattern = "\\s+" } → relations
+    assert not(includes($relations, "import"))
+      otherwise "SURFACE: Native HTML import refused."
+  port text.lowerCase { value = if(at($attributes, "http-equiv"), at($attributes, "http-equiv"), "") } → httpEquiv
+  when and(eq($tag, "meta"), eq($httpEquiv, "refresh")):
+    port kernel.invoke { query = "surface.refresh"; input = { content = if(at($attributes, "content"), at($attributes, "content"), "") } } → href
+    port url.observe { value = $href; base = $context.base } → target
+    port url.observe { value = $context.base; base = $context.base } → original
+    assert eq($target.origin, $original.origin)
+      otherwise "SURFACE: External document refresh refused."
+  when eq($tag, "iframe"):
+    when eq(at($attributes, "sandbox"), null):
+      assert false
+        otherwise "SURFACE: Null sandbox refused."
+    port value.describe { value = at($attributes, "sandbox") } → sandboxKind
+    when eq($sandboxKind.type, "undefined"):
+      assert and(not($context.frame), not($context.xml), not(eq($context.mode, "dom")), not(at($attributes, "srcdoc")), at($attributes, "src"))
+        otherwise "SURFACE: Unsandboxed frame refused."
+      port url.observe { value = $attributes.src; base = $context.base } → target
+      port url.observe { value = $context.base; base = $context.base } → original
+      assert eq($target.origin, $original.origin)
+        otherwise "SURFACE: External active frame refused."
+      port text.matches { value = $target.path; pattern = "\\.html$" } → html
+      assert $html
+        otherwise "SURFACE: Active frame must target an admitted HTML document."
+      when eq($context.mode, "final"):
+        assert at($context.artifacts, $target.path)
+          otherwise "SURFACE: Admitted frame document required."
+    when at($attributes, "srcdoc"):
+      port markup.parse { text = $attributes.srcdoc } → child
+      let childContext = { base = $context.base; frame = true; xml = false; mode = $context.mode; artifacts = $context.artifacts }
+      port kernel.invoke { query = "surface.node"; input = { node = $child; context = $childContext; depth = add($depth, 1); count = $count } } → count
+  fold $node.children as child; count starts $count:
+    port kernel.invoke { query = "surface.node"; input = { node = $child; context = $context; depth = add($depth, 1); count = $count } } → count
+    yield $count → count
+  when at($node, "content"):
+    port kernel.invoke { query = "surface.node"; input = { node = $node.content; context = $context; depth = add($depth, 1); count = $count } } → count
+  let result = $count
+
