@@ -370,14 +370,6 @@ process sp.present:
   when not($clip):
     let clip = { start = 0; end = count($text) }
   port kernel.invoke { query = "sp.clip"; input = { text = $text; clip = $clip; segments = $segments } } → clipped
-  let sourceFirstLine = at($eventInput, "sourceFirstLine")
-  let firstLine = at($clipped, "firstLine")
-  when not(eq($sourceFirstLine, at({}, "absent"))):
-    port value.describe { value = $sourceFirstLine } → firstLineKind
-    port text.matches { value = concat($sourceFirstLine); pattern = "^[1-9][0-9]{0,7}$" } → validFirstLine
-    assert and(eq($firstLineKind.type, "number"), $validFirstLine)
-      otherwise "SP-LINE: Source coordinates require a positive integer."
-    let firstLine = add($firstLine, add($sourceFirstLine, -1))
   port kernel.invoke {
     query = "sp.render";
     input = {
@@ -385,7 +377,7 @@ process sp.present:
       theme = $theme;
       lineNumbers = at($eventInput, "lineNumbers");
       selectedLine = at($eventInput, "selectedLine");
-      firstLine = $firstLine
+      firstLine = at($clipped, "firstLine")
     }
   } → tree
   let result = {
