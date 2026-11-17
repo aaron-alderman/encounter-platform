@@ -1,0 +1,58 @@
+process-module "temple/surface-process-module/1"
+
+process windowShell.types:
+  let title = { id = "title"; label = "Title and window controls" }
+  let menu = { id = "menu"; label = "Command menu" }
+  let banner = { id = "banner"; label = "Banner" }
+  let content = { id = "content"; label = "Content" }
+  let status = { id = "status"; label = "Status"; optional = true }
+  let actions = { id = "actions"; label = "Actions"; optional = true }
+  let result = list(
+    { id = "document"; title = "Document window"; slots = list($title, $menu, $banner, $content, $status, $actions) },
+    { id = "compact"; title = "Compact window"; slots = list($title, $content, $actions) }
+  )
+
+process windowShell.controlDefinitions:
+  let result = list(
+    { id = "maximize"; label = "Maximize / Restore"; verb = "Maximize or restore"; glyph = "□"; description = "Toggle between maximized and normal size." },
+    { id = "minimize"; label = "Minimize"; verb = "Minimize"; glyph = "−"; description = "Hide the window and keep its taskbar entry." },
+    { id = "close"; label = "Close"; verb = "Close"; glyph = "×"; description = "Close the app window." }
+  )
+
+process windowShell.titleControls:
+  call windowShell.controlDefinitions
+  let controls = filter($result, "control", at($controlBindings, $control.id))
+  fold $controls as control; nodes starts list():
+    let binding = at($controlBindings, $control.id)
+    let label = concat($control.verb, " ", $controlTarget)
+    port record.put { record = $binding.attrs; key = "aria-label"; value = $label } → attrs
+    port record.put { record = $attrs; key = "title"; value = $label } → attrs
+    port record.put { record = $attrs; key = "data-window-control"; value = $control.id } → attrs
+    yield append($nodes, list({ tag = $binding.tag; attrs = $attrs; children = list($control.glyph) })) → nodes
+  let result = if(count($nodes), { tag = "div"; attrs = { class = "window-controls" }; children = $nodes }, null)
+
+process windowShell.typeById:
+  call windowShell.types
+  let result = at(filter($result, "kind", eq($kind.id, $windowTypeId)), 0)
+
+process windowShell.frame:
+  assert $windowType
+    otherwise "Window type must resolve to a known window contract."
+  let windowName = or(at($frame.attrs, "id"), at($frame.attrs, "aria-label"), $windowType.id)
+  let slotIds = map($windowType.slots, "slot", $slot.id)
+  port record.entries { value = $slots } → suppliedSlots
+  each $suppliedSlots as entry:
+    let slotId = at($entry, 0)
+    when and(not(eq(at($entry, 1), null)), not(includes($slotIds, $slotId))):
+      let fault = raise(concat("Window ", $windowName, " > slots > ", $slotId, ": not allowed for ", $windowType.id, "."))
+  fold $windowType.slots as slot; children starts list():
+    let node = at($slots, $slot.id)
+    when not(or($node, at($slot, "optional"))):
+      let fault = raise(concat("Window ", $windowName, " > slots > ", $slot.id, ": required for ", $windowType.id, "."))
+    let next = $children
+    when $node:
+      port record.put { record = $node.attrs; key = "data-window-slot"; value = $slot.id } → attrs
+      let next = append($children, list({ tag = $node.tag; attrs = $attrs; children = at($node, "children") }))
+    yield $next → children
+  port record.put { record = $frame.attrs; key = "data-window-type"; value = $windowType.id } → attrs
+  let result = { tag = $frame.tag; attrs = $attrs; children = $children }

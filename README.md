@@ -64,7 +64,8 @@ original layout. The [Sourcery Platform seed](variants/sourcery-platform-seed/RE
 records the initial package boundaries. Media application source is under
 `applications/` with production notes under `media/`.
 
-The Authoring package has two declarations. `bootstrap/application.rel` is
-the standard Authoring entry. `bootstrap/application-appdev.rel` selects the
-AppDev inspection modules, their datasets, and their reviewed grants. Pass
-the selected declaration explicitly to the native Encounter host.
+The standard Authoring package is `applications/encounter`. Its native source
+copies match the shared Authoring selectors used by the Node host. The
+`applications/encounter-appdev-authoring` package keeps the AppDev inspection
+modules and grants in their own source tree. Both select
+`bootstrap/application.rel` inside their respective package roots.

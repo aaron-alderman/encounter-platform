@@ -14,15 +14,11 @@ process types.schema:
   let projection = { kind = "record"; fields = { id = $text; thing = $text; alias = $text; field = $text; kind = $text; action = $text } }
   let overlay = { kind = "record"; fields = { projection = $text; value = $text } }
   let job = { kind = "record"; fields = { id = $text; status = $text; basis = $integer; output = $text; digest = $text } }
-  let transition = { kind = "record"; optional = list("secondReference"); fields = { id = $text; label = $text; type = $text; field = $text; from = $text; to = $text; reference = $text; secondReference = $text; blockerField = $text; ready = $text } }
-  let event = { kind = "record"; fields = { id = $text; thing = $text; kind = $text; appointment = $text; reason = $text } }
-  let occurrence = { kind = "record"; fields = { id = $text; type = $text; phase = $text; appointment = $text; events = { kind = "list"; item = $event } } }
   let result = {
-    State = { kind = "record"; fields = { intent = $text; definitions = { kind = "list"; item = $definition }; things = { kind = "list"; item = $thing }; actions = { kind = "list"; item = $action }; projections = { kind = "list"; item = $projection }; overlays = { kind = "list"; item = $overlay }; jobs = { kind = "list"; item = $job }; transitions = { kind = "list"; item = $transition }; occurrences = { kind = "list"; item = $occurrence } } };
+    State = { kind = "record"; fields = { intent = $text; definitions = { kind = "list"; item = $definition }; things = { kind = "list"; item = $thing }; actions = { kind = "list"; item = $action }; projections = { kind = "list"; item = $projection }; overlays = { kind = "list"; item = $overlay }; jobs = { kind = "list"; item = $job } } };
     Command = { kind = "record"; fields = { operation = $text; base = $integer; operationId = $text; profile = $text; basis = $text; source = $text; reason = $text; target = $text; goal = $text; values = { kind = "map"; item = $text } } };
     Document = { kind = "record"; fields = { path = $text; text = $text } };
     Snapshot = { kind = "record"; fields = { revision = $integer; documents = { kind = "list"; item = { kind = "record"; fields = { path = $text; text = $text } } } } };
-    ActionCandidate = { kind = "record"; fields = { base = $integer; basis = $text; sourceSetSha256 = $text; reason = $text; target = $text; goal = $text; id = $text; label = $text; input = $text; output = $text; code = $text } };
     Prepared = { kind = "record"; fields = { command = { kind = "named"; name = "Command" }; documents = { kind = "list"; item = { kind = "named"; name = "Document" } }; description = $text } };
     Session = { kind = "record"; fields = { view = $text; selected = $text; alias = $text; notice = $text; draft = { kind = "map"; item = $text }; prepared = { kind = "choice"; cases = { none = { kind = "unit" }; some = { kind = "named"; name = "Prepared" } } } } };
     Receipt = { kind = "record"; fields = { revision = $integer; base = $integer; operationId = $text; sourceHash = $text; profile = $text; basis = $text; reason = $text; target = $text; goal = $text; source = $text; description = $text } };
@@ -89,20 +85,12 @@ process types.check:
     port record.entries { value = $value } → entries
     when eq($type.kind, "record"):
       port record.entries { value = $type.fields } → fields
-      let optional = at($type, "optional")
-      let optional = if($optional, $optional, list())
-      assert or(count($optional), eq(count($fields), count($entries)))
+      assert eq(count($fields), count($entries))
         otherwise "TYPE: The closed record has missing or extra fields."
-      when count($optional):
-        assert every($entries, "entry", some($fields, "field", eq(at($entry, 0), at($field, 0))))
-          otherwise "TYPE: The closed record has an extra field."
       each $fields as field:
-        let key = at($field, 0)
-        let present = some($entries, "entry", eq(at($entry, 0), $key))
-        assert or($present, includes($optional, $key))
+        assert some($entries, "entry", eq(at($entry, 0), at($field, 0)))
           otherwise "TYPE: A required field is missing."
-        when $present:
-          port kernel.invoke { query = "types.check"; input = { type = at($field, 1); value = at($value, $key); depth = $depth } } → _
+        port kernel.invoke { query = "types.check"; input = { type = at($field, 1); value = at($value, at($field, 0)); depth = $depth } } → _
     when eq($type.kind, "map"):
       each $entries as entry:
         port kernel.invoke { query = "types.check"; input = { type = $type.item; value = at($entry, 1); depth = $depth } } → _
@@ -137,19 +125,12 @@ process domain.scalar:
   let result = true
 
 process domain.empty:
-  let result = { intent = ""; definitions = list(); things = list(); actions = list(); projections = list(); overlays = list(); jobs = list(); transitions = list(); occurrences = list() }
-
-process domain.state:
-  let result = $eventInput
-  when eq(at($eventInput, "transitions"), at({}, "absent")):
-    port record.put { record = $eventInput; key = "transitions"; value = list() } → result
-  when eq(at($eventInput, "occurrences"), at({}, "absent")):
-    port record.put { record = $result; key = "occurrences"; value = list() } → result
+  let result = { intent = ""; definitions = list(); things = list(); actions = list(); projections = list(); overlays = list(); jobs = list() }
 
 process domain.check:
-  port kernel.invoke { query = "domain.state"; input = $eventInput } → state
+  let state = $eventInput
   port kernel.invoke { query = "types.named"; input = { name = "State"; value = $state } } → _
-  each list("definitions", "things", "actions", "projections", "jobs", "transitions", "occurrences") as collection:
+  each list("definitions", "things", "actions", "projections", "jobs") as collection:
     let ids = map(at($state, $collection), "item", $item.id)
     assert eq(count($ids), count(distinct($ids)))
       otherwise "IDENTITY: Duplicate canonical identity."
@@ -169,26 +150,6 @@ process domain.check:
       when not(eq($field.kind, "Reference")):
         assert eq($field.expects, "")
           otherwise "TYPE: Only a Reference declares its target."
-  each $state.transitions as transition:
-    let target = at(filter($state.definitions, "type", eq($type.id, $transition.type)), 0)
-    assert $target
-      otherwise "TRANSITION: Choose an existing target type."
-    assert some($target.fields, "field", and(eq($field.id, $transition.field), eq($field.kind, "Text")))
-      otherwise "TRANSITION: Choose a Text status field on the target type."
-    let references = filter(list($transition.reference, at($transition, "secondReference")), "id", not(eq($id, at({}, "absent"))))
-    assert eq(count($references), count(distinct($references)))
-      otherwise "TRANSITION: Choose different reference fields for the two blockers."
-    each $references as id:
-      let reference = at(filter($target.fields, "field", and(eq($field.id, $id), eq($field.kind, "Reference"))), 0)
-      assert $reference
-        otherwise "TRANSITION: Choose a Reference field on the target type."
-      let blockerType = at(filter($state.definitions, "type", eq($type.id, $reference.expects)), 0)
-      assert some($blockerType.fields, "field", and(eq($field.id, $transition.blockerField), eq($field.kind, "Text")))
-        otherwise "TRANSITION: Choose a Text status field on the referenced type."
-    assert and(count($transition.label), count($transition.from), count($transition.to), count($transition.ready), not(eq($transition.from, $transition.to)))
-      otherwise "TRANSITION: Give the command a name and explicit, distinct start and end statuses, and a blocker ready status."
-    assert eq(count(filter($state.transitions, "other", and(eq($other.type, $transition.type), eq($other.field, $transition.field)))), 1)
-      otherwise "TRANSITION: A status field can have only one guarded command in this profile."
   each $state.things as thing:
     assert count($thing.roles)
       otherwise "TYPE: A thing requires a declared role."
@@ -212,8 +173,6 @@ process domain.check:
         assert some($cells, "cell", eq(at($cell, 0), $field.id))
           otherwise "TYPE: A required field is missing."
         port kernel.invoke { query = "domain.scalar"; input = { field = $field; value = at($role.values, $field.id) } } → _
-  each $state.occurrences as binding:
-    port kernel.invoke { query = "occurrence.check"; input = $binding } → _
   each $state.projections as projection:
     assert includes(list("web", "row"), $projection.kind)
       otherwise "PROJECTION: Choose a supported representation."

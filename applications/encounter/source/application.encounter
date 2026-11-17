@@ -13,8 +13,7 @@ process app.load:
   when not(eq(count($entries), 0)):
     assert eq(count($entries), 1)
       otherwise "STORE: Competing source documents."
-    port rel.decode { text = at(at($entries, 0), "text"); kind = "Application" } → retained
-    port kernel.invoke { query = "domain.state"; input = $retained } → state
+    port rel.decode { text = at(at($entries, 0), "text"); kind = "Application" } → state
   port kernel.invoke { query = "domain.check"; input = $state } → _
   each $state.actions as action:
     port kernel.invoke { query = "action.check"; input = $action } → _
@@ -39,28 +38,6 @@ process app.newSession:
 
 process app.request:
   let request = $eventInput
-  let operator = at($request, "operator")
-  let role = at($operator, "role")
-  let local = eq($operator, at({}, "absent"))
-  let authoring = eq($request.path, "/authoring")
-  let allowed = or($local, eq($role, "author"), and($authoring, eq($role, "proposer")))
-  when not($allowed):
-    port rel.encode { kind = "EncounterAuthoringRefusal"; value = { status = "refused"; diagnostic = "AUTHORITY: This operator cannot use this surface." } } → text
-    let result = { text = $text; session = $request.session }
-  when and($allowed, $authoring):
-    call authoring.request
-  when and($allowed, not($authoring)):
-    port kernel.invoke { query = "app.browser"; input = $request } → result
-
-process app.browser:
-  let request = $eventInput
-  when not(eq(at($request, "operator"), at({}, "absent"))):
-    port record.entries { value = $request } → parts
-    fold $parts as part; browserRequest starts {}:
-      when not(includes(list("operator", "now"), at($part, 0))):
-        port record.put { record = $browserRequest; key = at($part, 0); value = at($part, 1) } → browserRequest
-      yield $browserRequest → browserRequest
-    let request = $browserRequest
   port kernel.invoke { query = "types.named"; input = { name = "Request"; value = $request } } → _
   let snapshot = $request.snapshot
   let documents = $snapshot.documents
@@ -77,7 +54,7 @@ process app.browser:
     let artifact = true
   when eq($request.method, "GET"):
     when not(eq(at($form, "view"), at({}, "absent"))):
-      assert includes(list("work", "type", "thing", "projections", "actions", "jobs", "history", "sources", "inspect", "guide", "guide-source"), $form.view)
+      assert includes(list("work", "type", "thing", "projections", "actions", "jobs", "history", "sources"), $form.view)
         otherwise "VIEW: Choose a known workspace view."
       port record.put { record = $session; key = "view"; value = $form.view } → session
       port record.put { record = $session; key = "selected"; value = if(eq(at($form, "id"), at({}, "absent")), "", at($form, "id")) } → session
@@ -86,17 +63,25 @@ process app.browser:
     when eq($commandName, "cancel"):
       port record.put { record = $session; key = "prepared"; value = { case = "none"; value = null } } → session
       port record.put { record = $session; key = "notice"; value = "Cancelled. Accepted work is unchanged; your draft is retained." } → session
-    when includes(list("prepare", "import-action"), $commandName):
+    when eq($commandName, "prepare"):
       port record.put { record = $session; key = "draft"; value = $form } → session
       port record.put { record = $session; key = "prepared"; value = { case = "none"; value = null } } → session
       try:
-        let prepared = null
-        when eq($commandName, "prepare"):
-          call app.prepare
-          let prepared = $result
-        when eq($commandName, "import-action"):
-          port rel.decode { text = $form.candidate; kind = "EncounterActionCandidate" } → candidate
-          port kernel.invoke { query = "authoring.check"; input = $candidate } → prepared
+        assert and(count($form.reason), count($form.target), count($form.goal))
+          otherwise "INTENT: Give the reason, exact target and goal of this one change."
+        port scalar.read { text = $form.base } → base
+        assert eq($base, $snapshot.revision)
+          otherwise "STALE: This view is out of date. Reopen current work before preparing a change."
+        port record.entries { value = $form } → fields
+        fold $fields as field; values starts {}:
+          when not(includes(list("command", "operation", "origin", "base", "reason", "target", "goal"), at($field, 0))):
+            port record.put { record = $values; key = at($field, 0); value = at($field, 1) } → values
+          yield $values → values
+        let command = { operation = $form.operation; base = $base; operationId = $request.nonce; profile = $request.profile; basis = $request.basis; source = if(eq($form.operation, "intent"), "user/intent", "application/intent"); reason = $form.reason; target = $form.target; goal = $form.goal; values = $values }
+        port kernel.invoke { query = "types.named"; input = { name = "Command"; value = $command } } → _
+        port kernel.invoke { query = "command.apply"; input = $command } → proposal
+        let prepared = { command = $command; documents = $proposal.documents; description = $proposal.description }
+        port kernel.invoke { query = "types.named"; input = { name = "Prepared"; value = $prepared } } → _
         port record.put { record = $session; key = "prepared"; value = { case = "some"; value = $prepared } } → session
         port record.put { record = $session; key = "notice"; value = "Review this exact change before accepting it." } → session
       catch fault:
@@ -142,12 +127,12 @@ process app.browser:
         port storage.snapshot {} → snapshot
         let documents = $snapshot.documents
         port kernel.invoke { query = "app.load"; input = $snapshot } → state
-    assert includes(list("prepare", "import-action", "accept", "cancel"), $commandName)
+    assert includes(list("prepare", "accept", "cancel"), $commandName)
       otherwise "COMMAND: Use an offered workspace control."
   port kernel.invoke { query = "types.named"; input = { name = "Session"; value = $session } } → _
   let html = ""
   when not($artifact):
-    let context = { state = $state; snapshot = $snapshot; session = $session; csrf = $request.csrf; inspectApp = if(eq($request.method, "GET"), at($form, "app"), null) }
+    let context = { state = $state; snapshot = $snapshot; session = $session; csrf = $request.csrf }
     port kernel.invoke { query = "ui.page"; input = $context } → html
   when $artifact:
     port text.slice { value = $request.path; start = 10 } → id
@@ -161,29 +146,3 @@ process app.browser:
       otherwise "RESULT: The retained artifact does not match its digest."
   let result = { session = $session; html = $html }
   port kernel.invoke { query = "types.named"; input = { name = "Response"; value = $result } } → _
-
-process app.prepare:
-  assert and(count($form.reason), count($form.target), count($form.goal))
-    otherwise "INTENT: Give the reason, exact target and goal of this one change."
-  port scalar.read { text = $form.base } → base
-  assert eq($base, $snapshot.revision)
-    otherwise "STALE: This view is out of date. Reopen current work before preparing a change."
-  port record.entries { value = $form } → fields
-  fold $fields as field; values starts {}:
-    when not(includes(list("command", "operation", "origin", "base", "reason", "target", "goal"), at($field, 0))):
-      port record.put { record = $values; key = at($field, 0); value = at($field, 1) } → values
-    yield $values → values
-  let source = if(eq($form.operation, "intent"), "user/intent", "application/intent")
-  when includes(list("run-transition", "add-transition-blocker"), $form.operation):
-    let id = at($values, "transition")
-    port text.indexOf { value = $id; search = "occurrences/"; from = 0 } → occurrence
-    let source = concat("application.rel#", if(eq($occurrence, 0), "", "transitions/"), $id)
-  let command = { operation = $form.operation; base = $base; operationId = $request.nonce; profile = $request.profile; basis = $request.basis; source = $source; reason = $form.reason; target = $form.target; goal = $form.goal; values = $values }
-  port kernel.invoke { query = "app.review"; input = $command } → result
-
-process app.review:
-  let command = $eventInput
-  port kernel.invoke { query = "types.named"; input = { name = "Command"; value = $command } } → _
-  port kernel.invoke { query = "command.apply"; input = $command } → proposal
-  let result = { command = $command; documents = $proposal.documents; description = $proposal.description }
-  port kernel.invoke { query = "types.named"; input = { name = "Prepared"; value = $result } } → _

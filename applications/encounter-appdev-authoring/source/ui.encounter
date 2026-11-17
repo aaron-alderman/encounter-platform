@@ -1,0 +1,531 @@
+process-module "temple/surface-process-module/1"
+
+process ui.field:
+  let field = $eventInput
+  let value = $field.value
+  when and(eq(at($session.draft, "origin"), $formOrigin), not(eq(at($session.draft, $field.id), at({}, "absent")))):
+    let value = at($session.draft, $field.id)
+  let control = { tag = "input"; attrs = { name = $field.id; value = $value }; children = list() }
+  when eq($field.kind, "identity"):
+    let control = { tag = "input"; attrs = { name = $field.id; value = $value; readonly = true }; children = list() }
+  when eq($field.kind, "textarea"):
+    let control = { tag = "textarea"; attrs = { name = $field.id; rows = if(eq($field.id, "code"), 7, 3); spellcheck = "false" }; children = list($value) }
+  when eq($field.kind, "check"):
+    let control = { tag = "input"; attrs = { type = "checkbox"; name = $field.id; value = "yes"; checked = eq($value, "yes") }; children = list() }
+  when eq($field.kind, "select"):
+    let options = map($field.options, "option", { tag = "option"; attrs = { value = $option; selected = eq($option, $value) }; children = list(if(eq($option, ""), "None / unaliased", $option)) })
+    let control = { tag = "select"; attrs = { name = $field.id }; children = $options }
+  port rel.encode { value = list($formOperation, $formIdentity, $formTarget, $formTitle, $formHelp, $field.id); kind = "ControlCoordinates" } → coordinates
+  port digest.sha256 { text = $coordinates } → identity
+  let id = concat("control-", $identity)
+  port record.put { record = $control.attrs; key = "id"; value = $id } → attributes
+  port record.put { record = $control; key = "attrs"; value = $attributes } → control
+  let result = { tag = "div"; attrs = { class = "field" }; children = list({ tag = "label"; attrs = { for = $id }; children = list($field.label) }, $control) }
+
+process ui.form:
+  let formOperation = $eventInput.operation
+  let formIdentity = $eventInput.identity
+  let form = $eventInput
+  let formTarget = $form.target
+  let formTitle = $form.title
+  let formHelp = $form.help
+  port rel.encode { value = list($formOperation, $formIdentity, $formTarget, $formTitle, $formHelp); kind = "FormCoordinates" } → coordinates
+  port digest.sha256 { text = $coordinates } → formOrigin
+  fold $form.fields as field; controls starts list():
+    port kernel.invoke { query = "ui.field"; input = $field } → control
+    yield append($controls, list($control)) → controls
+  let metadata = list(
+    { id = "reason"; label = "Why this change?"; value = if($form.reason, $form.reason, ""); kind = "text"; options = list() },
+    { id = "target"; label = "What exactly changes?"; value = $form.target; kind = "text"; options = list() },
+    { id = "goal"; label = "What should it help achieve?"; value = $state.intent; kind = "text"; options = list() }
+  )
+  fold $metadata as field; purpose starts list():
+    port kernel.invoke { query = "ui.field"; input = $field } → control
+    yield append($purpose, list($control)) → purpose
+  let purposeFields = { tag = "fieldset"; attrs = { class = "purpose" }; children = append(list({ tag = "legend"; attrs = {}; children = list("Purpose of this one change") }), $purpose) }
+  when $form.compactPurpose:
+    let purposeFields = { tag = "details"; attrs = {}; children = list(
+      { tag = "summary"; attrs = {}; children = list("Decision details") }, $purposeFields) }
+  let result = { tag = "form"; attrs = { method = "post"; action = "/"; "data-operation" = $formOperation }; children = append(list(
+    { tag = "h3"; attrs = {}; children = list($form.title) },
+    { tag = "p"; attrs = { class = "hint" }; children = list($form.help) },
+    { tag = "input"; attrs = { type = "hidden"; name = "_csrf"; value = $csrf }; children = list() },
+    { tag = "input"; attrs = { type = "hidden"; name = "command"; value = "prepare" }; children = list() },
+    { tag = "input"; attrs = { type = "hidden"; name = "operation"; value = $formOperation }; children = list() },
+    { tag = "input"; attrs = { type = "hidden"; name = "origin"; value = $formOrigin }; children = list() },
+    { tag = "input"; attrs = { type = "hidden"; name = "base"; value = $snapshot.revision }; children = list() }
+  ), append($controls, list($purposeFields, { tag = "button"; attrs = { type = "submit" }; children = list(if($form.submitLabel, $form.submitLabel, "Review one change")) }))) }
+
+process ui.work:
+  let content = list({ tag = "h2"; attrs = {}; children = list("Your work") })
+  when eq($state.intent, ""):
+    port kernel.invoke { query = "ui.form"; input = { operation = "intent"; identity = ""; title = "What would you like to make?"; help = "Start with your purpose. No application types or objects have been supplied."; target = "Original intent"; fields = list({ id = "intent"; label = "I want to… because…"; value = ""; kind = "textarea"; options = list() }) } } → form
+    let content = append($content, list($form))
+  when not(eq($state.intent, "")):
+    let content = append($content, list({ tag = "blockquote"; attrs = {}; children = list($state.intent) }))
+    port kernel.invoke { query = "ui.form"; input = { operation = "type"; identity = ""; title = "Define a kind of thing"; help = "Choose your own name. Add fields when you need them, one at a time."; target = "A new type"; fields = list({ id = "id"; label = "Type identity"; value = ""; kind = "text"; options = list() }, { id = "label"; label = "Type name"; value = ""; kind = "text"; options = list() }) } } → form
+    let content = append($content, list($form))
+  let types = map($state.definitions, "type", { tag = "li"; attrs = {}; children = list({ tag = "a"; attrs = { href = concat("/?view=type&id=", $type.id) }; children = list($type.label) }, { tag = "small"; attrs = {}; children = list(concat(" — ", $type.id)) }) })
+  let things = map($state.things, "thing", { tag = "li"; attrs = {}; children = list({ tag = "a"; attrs = { href = concat("/?view=thing&id=", $thing.id) }; children = list($thing.label) }, { tag = "small"; attrs = {}; children = list(concat(" — ", $thing.id)) }) })
+  let content = append($content, list({ tag = "section"; attrs = {}; children = list({ tag = "h3"; attrs = {}; children = list("Types") }, { tag = "ul"; attrs = {}; children = $types }, { tag = "h3"; attrs = {}; children = list("Things") }, { tag = "ul"; attrs = {}; children = $things }) }))
+  let result = $content
+
+process ui.defineTransition:
+  let definition = $eventInput
+  let textFields = map(filter($definition.fields, "field", eq($field.kind, "Text")), "field", $field.id)
+  let references = filter($definition.fields, "field", eq($field.kind, "Reference"))
+  let references = filter($references, "reference", some($state.definitions, "type", and(eq($type.id, $reference.expects), some($type.fields, "field", eq($field.kind, "Text")))))
+  let result = list()
+  when and(count($textFields), count($references)):
+    let fields = list(
+      { id = "type"; label = "Target type"; value = $definition.id; kind = "identity"; options = list() },
+      { id = "id"; label = "Command identity"; value = ""; kind = "text"; options = list() },
+      { id = "label"; label = "Command name"; value = ""; kind = "text"; options = list() },
+      { id = "field"; label = "Target status field"; value = at($textFields, 0); kind = "select"; options = $textFields },
+      { id = "from"; label = "Required target status"; value = ""; kind = "text"; options = list() },
+      { id = "to"; label = "New target status"; value = ""; kind = "text"; options = list() },
+      { id = "reference"; label = "Blocker reference field"; value = at(at($references, 0), "id"); kind = "select"; options = map($references, "reference", $reference.id) },
+      { id = "blockerField"; label = "Blocker status field identity"; value = ""; kind = "text"; options = list() },
+      { id = "ready"; label = "Required blocker status"; value = ""; kind = "text"; options = list() }
+    )
+    port kernel.invoke { query = "ui.form"; input = { operation = "define-transition"; identity = $definition.id; title = "Define a guarded command"; help = "A row can enter the new status only through this command. Choose one typed blocker and its required status."; target = $definition.id; fields = $fields } } → form
+    let result = list($form)
+
+  let commands = filter($state.transitions, "item", and(eq($item.type, $definition.id), eq(at($item, "secondReference"), at({}, "absent"))))
+  fold $commands as transition; forms starts $result:
+    let available = filter($references, "reference", and(not(eq($reference.id, $transition.reference)),
+      some($state.definitions, "type", and(eq($type.id, $reference.expects),
+        some($type.fields, "field", and(eq($field.id, $transition.blockerField), eq($field.kind, "Text")))))))
+    when count($available):
+      let inputs = list(
+        { id = "transition"; label = "Command identity"; value = $transition.id; kind = "identity"; options = list() },
+        { id = "reference"; label = "Second blocker reference field"; value = at(at($available, 0), "id"); kind = "select"; options = map($available, "reference", $reference.id) }
+      )
+      let help = concat("Keep ", $transition.reference, " as the first blocker. Both references must have ", $transition.blockerField, " set to ", $transition.ready, ".")
+      port kernel.invoke { query = "ui.form"; input = { operation = "add-transition-blocker"; identity = $transition.id; title = concat("Add second blocker — ", $transition.label); help = $help; target = $transition.id; fields = $inputs } } → form
+      let forms = append($forms, list($form))
+    yield $forms → forms
+  let result = $forms
+
+process ui.defineOccurrence:
+  let definition = $eventInput
+  let fields = map(filter($definition.fields, "field", eq($field.kind, "Text")), "field", $field.id)
+  let result = list()
+  when and(not(eq(at($fields, 1), at({}, "absent"))), not(some($state.occurrences, "binding", eq($binding.type, $definition.id)))):
+    let inputs = list(
+      { id = "type"; label = "Target type"; value = $definition.id; kind = "identity"; options = list() },
+      { id = "id"; label = "Lifecycle identity"; value = ""; kind = "text"; options = list() },
+      { id = "phase"; label = "Phase field"; value = at($fields, 0); kind = "select"; options = $fields },
+      { id = "appointment"; label = "Appointment field"; value = at($fields, 1); kind = "select"; options = $fields }
+    )
+    port kernel.invoke { query = "ui.form"; input = { operation = "define-occurrence"; identity = $definition.id; title = "Define scheduling and cancellation"; help = "New records start unscheduled with an empty appointment. Schedule records an appointment. Cancellation keeps any appointment and ends the lifecycle."; target = $definition.id; fields = $inputs } } → form
+    let result = list($form)
+
+process ui.type:
+  let definition = at(filter($state.definitions, "type", eq($type.id, $session.selected)), 0)
+  assert $definition
+    otherwise "VIEW: This type does not exist."
+  let content = list({ tag = "h2"; attrs = {}; children = list($definition.label) }, { tag = "p"; attrs = { class = "hint" }; children = list(concat("Type / ", $definition.id, ". Every object must resolve all its fields.")) })
+  let fields = map($definition.fields, "field", { tag = "li"; attrs = {}; children = list(concat($field.label, " · ", $field.kind, if(eq($field.kind, "Reference"), concat(" → ", $field.expects), ""))) })
+  let content = append($content, list({ tag = "ul"; attrs = {}; children = $fields }))
+  let inputs = list({ id = "type"; label = "Type identity"; value = $definition.id; kind = "select"; options = list($definition.id) }, { id = "id"; label = "Field identity"; value = ""; kind = "text"; options = list() }, { id = "label"; label = "Field name"; value = ""; kind = "text"; options = list() }, { id = "kind"; label = "Value type"; value = "Text"; kind = "select"; options = list("Text", "Number", "Boolean", "Reference") }, { id = "expects"; label = "Reference target type (Reference only)"; value = ""; kind = "select"; options = append(list(""), map($state.definitions, "type", $type.id)) })
+  fold $state.things as thing; inputs starts $inputs:
+    fold $thing.roles as role; inputs starts $inputs:
+      when eq($role.type, $definition.id):
+        let inputs = append($inputs, list({ id = concat("resolve.", $thing.id, ".", $role.alias); label = concat("Resolve ", $thing.label, " / ", if(eq($role.alias, ""), "unaliased", $role.alias)); value = ""; kind = "text"; options = list() }, { id = concat("confirmed.", $thing.id, ".", $role.alias); label = concat("Confirm this resolution for ", $thing.label); value = ""; kind = "check"; options = list() }))
+      yield $inputs → inputs
+    yield $inputs → inputs
+  port kernel.invoke { query = "ui.form"; input = { operation = "field"; identity = ""; title = "Add one field"; help = "Resolve each existing role explicitly. For Number or Boolean use a scalar literal; Text and Reference use plain words or identity."; target = $definition.id; fields = $inputs } } → form
+  let content = append($content, list($form))
+  let occurrence = at(filter($state.occurrences, "binding", eq($binding.type, $definition.id)), 0)
+  fold $definition.fields as field; defaults starts {}:
+    let initial = if(eq($field.kind, "Number"), 0, if(eq($field.kind, "Boolean"), false, ""))
+    when and($occurrence, eq(at($occurrence, "phase"), $field.id)):
+      let initial = "unscheduled"
+    port record.put { record = $defaults; key = $field.id; value = $initial } → defaults
+    yield $defaults → defaults
+  port kernel.invoke { query = "document.print"; input = $defaults } → document
+  port kernel.invoke { query = "ui.form"; input = { operation = "thing"; identity = ""; title = "Create a thing"; help = "The document is a visible starting draft, not a default policy. Choose every initial value and review it."; target = $definition.id; fields = list({ id = "id"; label = "Thing identity"; value = ""; kind = "text"; options = list() }, { id = "label"; label = "Thing name"; value = ""; kind = "text"; options = list() }, { id = "type"; label = "Type"; value = $definition.id; kind = "select"; options = list($definition.id) }, { id = "alias"; label = "Role alias (blank for unaliased)"; value = ""; kind = "text"; options = list() }, { id = "document"; label = "Initial values document"; value = $document; kind = "textarea"; options = list() }) } } → form
+  port kernel.invoke { query = "ui.defineTransition"; input = $definition } → transitions
+  port kernel.invoke { query = "ui.defineOccurrence"; input = $definition } → lifecycle
+  let result = append(append($content, list($form)), append($transitions, $lifecycle))
+
+process ui.thing:
+  let thing = at(filter($state.things, "thing", eq($thing.id, $session.selected)), 0)
+  assert $thing
+    otherwise "VIEW: This thing does not exist."
+  let content = list({ tag = "h2"; attrs = {}; children = list($thing.label) }, { tag = "p"; attrs = { class = "hint" }; children = list(concat("Canonical thing / ", $thing.id)) })
+  fold $thing.roles as role; content starts $content:
+    let definition = at(filter($state.definitions, "type", eq($type.id, $role.type)), 0)
+    let content = append($content, list({ tag = "h3"; attrs = {}; children = list(concat($definition.label, " as ", if(eq($role.alias, ""), "unaliased", $role.alias))) }))
+    fold $definition.fields as field; content starts $content:
+      let value = at($role.values, $field.id)
+      port value.string { value = $value } → text
+      port kernel.invoke { query = "ui.form"; input = { operation = "value"; identity = ""; title = concat("Edit ", $field.label); help = concat($field.kind, " · source ", $thing.id, " / ", $role.type, " / ", $field.id); target = concat($thing.id, "/", $field.id); fields = list({ id = "thing"; label = "Thing"; value = $thing.id; kind = "select"; options = list($thing.id) }, { id = "alias"; label = "Exact role"; value = $role.alias; kind = "select"; options = list($role.alias) }, { id = "field"; label = "Field"; value = $field.id; kind = "select"; options = list($field.id) }, { id = "value"; label = $field.label; value = $text; kind = "textarea"; options = list() }) } } → form
+      let content = append($content, list({ tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list(concat($field.label, " — ", $text)) }, $form) }))
+      yield $content → content
+    port kernel.invoke { query = "document.print"; input = $role.values } → document
+    port kernel.invoke { query = "ui.form"; input = { operation = "document"; identity = ""; title = "Edit the text document"; help = "Change one value. Preserve all other fields. Quoted words and scalar literals are data, never executable references."; target = concat($thing.id, "/", $role.type); fields = list({ id = "thing"; label = "Thing"; value = $thing.id; kind = "select"; options = list($thing.id) }, { id = "alias"; label = "Exact role"; value = $role.alias; kind = "select"; options = list($role.alias) }, { id = "field"; label = "GUI field (unused for document edits)"; value = ""; kind = "select"; options = list("") }, { id = "document"; label = "Values document"; value = $document; kind = "textarea"; options = list() }) } } → form
+    let content = append($content, list($form))
+    yield $content → content
+  let unused = filter($state.definitions, "definition", not(some($thing.roles, "role", eq($role.type, $definition.id))))
+  fold $unused as definition; content starts $content:
+    fold $definition.fields as field; cells starts {}:
+      port record.put { record = $cells; key = $field.id; value = if(eq($field.kind, "Number"), 0, if(eq($field.kind, "Boolean"), false, "")) } → cells
+      yield $cells → cells
+    port kernel.invoke { query = "document.print"; input = $cells } → document
+    port kernel.invoke { query = "ui.form"; input = { operation = "role"; identity = $thing.id; title = concat("Add role — ", $definition.label); help = "One canonical thing, another explicit type and alias. No first-role winner or duplicate object is created."; target = $thing.id; fields = list({ id = "id"; label = "Thing identity"; value = $thing.id; kind = "identity"; options = list() }, { id = "type"; label = "Role type"; value = $definition.id; kind = "select"; options = list($definition.id) }, { id = "alias"; label = "New role alias"; value = ""; kind = "text"; options = list() }, { id = "document"; label = "Role values document"; value = $document; kind = "textarea"; options = list() }) } } → form
+    let content = append($content, list({ tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list(concat("Add role — ", $definition.label)) }, $form) }))
+    yield $content → content
+  let result = $content
+
+process ui.rowCommands:
+  let projection = $eventInput
+  let thing = at(filter($state.things, "thing", eq($thing.id, $projection.thing)), 0)
+  let role = at(filter($thing.roles, "role", eq($role.alias, $projection.alias)), 0)
+  let occurrence = at(filter($state.occurrences, "binding", eq($binding.type, $role.type)), 0)
+  let controls = list()
+  when $occurrence:
+    let appointment = at($role.values, $occurrence.appointment)
+    let summary = { tag = "p"; attrs = {}; children = list(concat("Appointment: ", if(count($appointment), $appointment, "None"))) }
+    let events = filter($occurrence.events, "event", eq($event.thing, $thing.id))
+    let history = map($events, "event", { tag = "li"; attrs = {}; children = list(if(eq($event.kind, "schedule"), concat("Scheduled: ", $event.appointment), concat("Cancelled: ", $event.reason))) })
+    let controls = list($summary, { tag = "ol"; attrs = { "aria-label" = "Occurrence events" }; children = $history })
+  port kernel.invoke { query = "transition.commands"; input = $role.type } → commands
+  fold $commands as transition; controls starts $controls:
+    port kernel.invoke { query = "transition.availability"; input = { transition = $transition; thing = $thing; role = $role } } → availability
+    let status = concat($transition.field, ": ", $availability.status, ".")
+    let help = if(eq($availability.message, ""), concat($status, " Ready to review."), concat($status, " ", $availability.message))
+    let inputs = list(
+      { id = "projection"; label = "Row identity"; value = $projection.id; kind = "identity"; options = list() },
+      { id = "transition"; label = "Command identity"; value = $transition.id; kind = "identity"; options = list() }
+    )
+    when eq(at($transition, "kind"), "schedule"):
+      let inputs = append($inputs, list({ id = "appointment"; label = "Appointment"; value = ""; kind = "text"; options = list() }))
+    port kernel.invoke { query = "ui.form"; input = { operation = "run-transition"; identity = $projection.id; title = $transition.label; help = $help; target = concat($thing.id, "/", $transition.field); fields = $inputs; compactPurpose = eq($session.view, "guide");
+      reason = if(eq($session.view, "guide"), "Publish only after the linked safety review is complete.", "");
+      submitLabel = if(eq($session.view, "guide"), if(eq($availability.message, ""), "Review publication", "Check publication"), null) } } → form
+    yield append($controls, list($form)) → controls
+  let result = $controls
+
+process ui.projections:
+  let content = list({ tag = "h2"; attrs = {}; children = list("Views and their sources") }, { tag = "p"; attrs = {}; children = list("One thing can appear in several contexts. Follow a view to its input, rule or explicit overlay.") })
+  fold $state.projections as projection; content starts $content:
+    port kernel.invoke { query = "projection.value"; input = $projection } → mapping
+    let rendered = { tag = "a"; attrs = { href = concat("/?view=thing&id=", $projection.thing) }; children = list($mapping.value) }
+    when eq($projection.kind, "row"):
+      let rendered = { tag = "table"; attrs = { class = "sourcery-data-table"; "data-table-layout" = "grid" }; children = list({ tag = "caption"; attrs = {}; children = list($projection.id) }, { tag = "tbody"; attrs = {}; children = list({ tag = "tr"; attrs = {}; children = list({ tag = "th"; attrs = { scope = "row" }; children = list($projection.thing) }, { tag = "td"; attrs = {}; children = list($mapping.value) }) }) }) }
+    let commands = list()
+    when eq($projection.kind, "row"):
+      port kernel.invoke { query = "ui.rowCommands"; input = $projection } → commands
+    let content = append($content, list({ tag = "section"; attrs = { "data-projection" = $projection.id }; children = append(list({ tag = "h3"; attrs = {}; children = list(concat($projection.id, " · ", $projection.kind)) }, $rendered, { tag = "p"; attrs = { class = "hint"; "data-mapping" = $projection.id }; children = list(concat("Edit goes to ", $mapping.source, ". Inverse: ", $mapping.inverse, ".")) }, { tag = "p"; attrs = { class = "links" }; children = list({ tag = "a"; attrs = { href = concat("/?view=thing&id=", $projection.thing) }; children = list("Open the input") }, { tag = "a"; attrs = { href = "/?view=sources" }; children = list("Inspect the source and rule") }) }), $commands) }))
+    when not(eq($mapping.inverse, "none")):
+      port kernel.invoke { query = "ui.form"; input = { operation = "projection-value"; identity = $projection.id; title = concat("Edit visible value — ", $projection.id); help = concat("Checked route: ", $mapping.source, if(eq($mapping.inverse, "suffix"), concat(". Preserve the suffix “", $mapping.suffix, "”."), "")); target = $mapping.source; fields = list({ id = "id"; label = "Projection"; value = $projection.id; kind = "select"; options = list($projection.id) }, { id = "value"; label = "Visible value"; value = $mapping.value; kind = "textarea"; options = list() }) } } → form
+      let content = append($content, list({ tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list(concat("Edit visible value — ", $projection.id)) }, $form) }))
+    when eq($projection.kind, "web"):
+      port kernel.invoke { query = "ui.form"; input = { operation = "overlay"; identity = $projection.id; title = concat("Web label overlay — ", $projection.id); help = "An explicit local label. It does not overwrite the source title or other views."; target = concat("overlay/", $projection.id); fields = list({ id = "id"; label = "Projection"; value = $projection.id; kind = "select"; options = list($projection.id) }, { id = "value"; label = "Context label"; value = $mapping.value; kind = "textarea"; options = list() }) } } → form
+      let content = append($content, list({ tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list(concat("Web label overlay — ", $projection.id)) }, $form) }))
+    port kernel.invoke { query = "ui.form"; input = { operation = "projection-action"; identity = $projection.id; title = concat("Choose action — ", $projection.id); help = "The action's input and output must satisfy the source field and representation."; target = $projection.id; fields = list({ id = "id"; label = "Projection"; value = $projection.id; kind = "select"; options = list($projection.id) }, { id = "action"; label = "Action"; value = $projection.action; kind = "select"; options = append(list(""), map($state.actions, "action", $action.id)) }) } } → form
+    let content = append($content, list({ tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list(concat("Choose action — ", $projection.id)) }, $form) }))
+    yield $content → content
+  when count($state.things):
+    fold $state.definitions as definition; fieldIds starts list():
+      yield append($fieldIds, map(filter($definition.fields, "field", eq($field.kind, "Text")), "field", $field.id)) → fieldIds
+    port kernel.invoke { query = "ui.form"; input = { operation = "projection"; identity = ""; title = "Create a projection"; help = "Choose the exact thing, role alias and Text field. The supplied web-link and row representations contain no application-specific template."; target = "A new projection"; fields = list({ id = "id"; label = "Projection identity"; value = ""; kind = "text"; options = list() }, { id = "thing"; label = "Source thing"; value = at(at($state.things, 0), "id"); kind = "select"; options = map($state.things, "thing", $thing.id) }, { id = "alias"; label = "Exact role alias (blank selects unaliased)"; value = ""; kind = "text"; options = list() }, { id = "field"; label = "Source field identity"; value = ""; kind = "text"; options = list() }, { id = "kind"; label = "Representation"; value = "web"; kind = "select"; options = list("web", "row") }, { id = "action"; label = "Optional action"; value = ""; kind = "select"; options = append(list(""), map($state.actions, "action", $action.id)) }) } } → form
+    let content = append($content, list({ tag = "details"; attrs = { open = or(eq(count($state.projections), 0), eq(at($session.draft, "operation"), "projection")) }; children = list({ tag = "summary"; attrs = {}; children = list("Create a projection") }, $form) }))
+  let result = $content
+
+process ui.actionEditor:
+  let action = $eventInput
+  let code = "process-module \"temple/surface-process-module/1\"\nprocess run:\n  let result = $eventInput\n"
+  when not(eq($action.source, "")):
+    port kernel.invoke { query = "source.get"; input = $action.source } → code
+  port kernel.invoke { query = "ui.form"; input = { operation = "action"; identity = $action.id; title = if(eq($action.id, ""), "Create an action", concat("Edit action — ", $action.label)); help = "Source compiles and hydrates through the newer Encounter foundation. Declared and inferred types must agree before review."; target = if(eq($action.id, ""), "A new action", $action.id); fields = list({ id = "id"; label = "Action identity"; value = $action.id; kind = "text"; options = list() }, { id = "label"; label = "Action name"; value = $action.label; kind = "text"; options = list() }, { id = "input"; label = "Input type"; value = $action.input; kind = "select"; options = list("Text", "Number", "Boolean") }, { id = "output"; label = "Output type"; value = $action.output; kind = "select"; options = list("Text", "Number", "Boolean") }, { id = "code"; label = "Encounter source"; value = $code; kind = "textarea"; options = list() }) } } → result
+
+process ui.actions:
+  let content = list({ tag = "h2"; attrs = {}; children = list("Reusable actions") }, { tag = "p"; attrs = {}; children = list("Write an action once and use it in a view. Its input and result types are checked before it can be used.") })
+  let actions = append($state.actions, list({ id = ""; label = ""; input = "Text"; output = "Text"; source = "" }))
+  fold $actions as action; content starts $content:
+    port kernel.invoke { query = "ui.actionEditor"; input = $action } → form
+    let content = append($content, list($form))
+    let operator = "identity"
+    let suffix = ""
+    when not(eq($action.id, "")):
+      port kernel.invoke { query = "action.check"; input = $action } → mapping
+      when eq($mapping.inverse, "suffix"):
+        let operator = "append"
+        let suffix = $mapping.suffix
+    port kernel.invoke { query = "ui.form"; input = { operation = "action-builder"; identity = $action.id; title = if(eq($action.id, ""), "Build an action with fields", concat("Build action — ", $action.label)); help = "The field builder writes real Encounter source through the same checked owner. Identity returns the input; append adds the exact Text suffix."; target = if(eq($action.id, ""), "A new action", $action.id); fields = list({ id = "id"; label = "Action identity"; value = $action.id; kind = if(eq($action.id, ""), "text", "identity"); options = list() }, { id = "label"; label = "Action name"; value = $action.label; kind = "text"; options = list() }, { id = "input"; label = "Input type"; value = $action.input; kind = "select"; options = list("Text", "Number", "Boolean") }, { id = "output"; label = "Output type"; value = $action.output; kind = "select"; options = list("Text", "Number", "Boolean") }, { id = "operator"; label = "Operation"; value = $operator; kind = "select"; options = list("identity", "append") }, { id = "suffix"; label = "Text to append"; value = $suffix; kind = "text"; options = list() }) } } → builder
+    let content = append($content, list({ tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list(if(eq($action.id, ""), "Build an action with fields", concat("Build action — ", $action.label))) }, $builder) }))
+    yield $content → content
+  let import = { tag = "form"; attrs = { method = "post"; action = "/" }; children = list(
+    { tag = "h3"; attrs = {}; children = list("Review a server proposal") },
+    { tag = "p"; attrs = {}; children = list("Paste the candidate REL from the authoring endpoint. Encounter will check it against this workspace before showing a review.") },
+    { tag = "input"; attrs = { type = "hidden"; name = "_csrf"; value = $csrf }; children = list() },
+    { tag = "input"; attrs = { type = "hidden"; name = "command"; value = "import-action" }; children = list() },
+    { tag = "label"; attrs = {}; children = list("Action candidate REL", { tag = "textarea"; attrs = { name = "candidate"; rows = 7; spellcheck = "false" }; children = list(if(eq(at($session.draft, "command"), "import-action"), $session.draft.candidate, "")) }) },
+    { tag = "button"; attrs = { type = "submit" }; children = list("Review proposal") }
+  ) }
+  let result = append($content, list($import))
+
+process ui.jobs:
+  let content = list({ tag = "h2"; attrs = {}; children = list("Work and results") }, { tag = "p"; attrs = {}; children = list("Local exports use current accepted views. They can be queued, cancelled, resumed and completed once. No mail, network or deployment capability is granted.") })
+  port kernel.invoke { query = "ui.form"; input = { operation = "queue"; identity = ""; title = "Queue an export"; help = "The result will be a retained local HTML document."; target = "Local export job"; fields = list({ id = "id"; label = "Job identity"; value = ""; kind = "text"; options = list() }) } } → form
+  let content = append($content, list($form))
+  fold $state.jobs as job; content starts $content:
+    let content = append($content, list({ tag = "section"; attrs = { "data-job" = $job.id }; children = list({ tag = "h3"; attrs = {}; children = list($job.id) }, { tag = "p"; attrs = {}; children = list(concat("Status: ", $job.status, " · source revision ", $job.basis)) }) }))
+    when eq($job.status, "completed"):
+      let content = append($content, list({ tag = "p"; attrs = { class = "hint" }; children = list(concat("Result digest: ", $job.digest)) }, { tag = "a"; attrs = { href = concat("/artifact/", $job.id); target = "_blank"; rel = "noopener" }; children = list(concat("Open result — ", $job.id)) }))
+    when not(eq($job.status, "completed")):
+      let operations = if(eq($job.status, "queued"), list("run", "cancel-job"), list("resume-job"))
+      fold $operations as operation; content starts $content:
+        port kernel.invoke { query = "ui.form"; input = { operation = $operation; identity = $job.id; title = concat($operation, " — ", $job.id); help = "Review this one job transition. A completed job cannot be rerun."; target = $job.id; fields = list({ id = "id"; label = "Job"; value = $job.id; kind = "select"; options = list($job.id) }) } } → form
+        let content = append($content, list($form))
+        yield $content → content
+    yield $content → content
+  let result = $content
+
+process ui.history:
+  port storage.history {} → history
+  port kernel.invoke { query = "types.named"; input = { name = "History"; value = $history } } → _
+  let content = list({ tag = "h2"; attrs = {}; children = list("History and recovery") }, { tag = "p"; attrs = {}; children = list("Restore an earlier source set as a new checked revision. Existing revisions and their reasons remain intact.") })
+  fold $history as revision; content starts $content:
+    let receipt = { tag = "details"; attrs = {}; children = list(
+      { tag = "summary"; attrs = {}; children = list("Decision receipt") },
+      { tag = "pre"; attrs = {}; children = list(concat("Operation: ", $revision.operationId, "\nBase revision: ", $revision.parent, "\nProfile: ", $revision.profile, "\nRuntime basis: ", $revision.basis, "\nSource: ", $revision.source, "\nSource hash: ", $revision.sourceHash)) }
+    ) }
+    let content = append($content, list({ tag = "section"; attrs = {}; children = list({ tag = "h3"; attrs = {}; children = list(concat("Revision ", $revision.revision)) }, { tag = "p"; attrs = {}; children = list($revision.description) }, { tag = "p"; attrs = { class = "hint" }; children = list(concat("Because: ", $revision.reason, " · Target: ", $revision.target, " · Goal: ", $revision.goal)) }, $receipt) }))
+    when not(eq($revision.revision, $snapshot.revision)):
+      port value.string { value = $revision.revision } → id
+      port kernel.invoke { query = "ui.form"; input = { operation = "restore"; identity = ""; title = concat("Restore revision ", $id); help = "Rechecks all types, references, action sources and projection dependencies."; target = concat("revision/", $id); fields = list({ id = "revision"; label = "Revision"; value = $id; kind = "select"; options = list($id) }) } } → form
+      let content = append($content, list({ tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list(concat("Restore revision ", $id)) }, $form) }))
+    yield $content → content
+  let result = $content
+
+process ui.sources:
+  let content = list({ tag = "h2"; attrs = {}; children = list("Source and ownership") }, { tag = "p"; attrs = {}; children = list("Application facts are REL; action programs are separate Encounter documents. Outputs and inspection data grant no execution authority.") })
+  fold $documents as document; content starts $content:
+    let content = append($content, list({ tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list($document.path) }, { tag = "pre"; attrs = {}; children = list($document.text) }) }))
+    yield $content → content
+  port source.catalogue {} → basis
+  port kernel.invoke { query = "types.named"; input = { name = "Documents"; value = $basis } } → _
+  let content = append($content, list({ tag = "h3"; attrs = {}; children = list("Supplied environment — inspectable source") }))
+  fold $basis as document; content starts $content:
+    let content = append($content, list({ tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list($document.path) }, { tag = "pre"; attrs = {}; children = list($document.text) }) }))
+    yield $content → content
+  let result = $content
+
+process ui.flatten:
+  let value = $eventInput.value
+  let path = $eventInput.path
+  port value.describe { value = $value } → shape
+  let cells = list()
+  when or($shape.plain, $shape.array):
+    port record.entries { value = $value } → entries
+    fold $entries as entry; cells starts $cells:
+      let key = at($entry, 0)
+      let item = at($entry, 1)
+      port value.describe { value = $item } → childShape
+      when and($shape.array, $childShape.plain):
+        when not(eq(at($item, "id"), at({}, "absent"))):
+          let key = $item.id
+        when and(not(eq(at($item, "type"), at({}, "absent"))), not(eq(at($item, "alias"), at({}, "absent")))):
+          let key = concat($item.type, " as ", if(eq($item.alias, ""), "unaliased", $item.alias))
+      port kernel.invoke { query = "ui.flatten"; input = { value = $item; path = concat($path, "/", $key) } } → children
+      let cells = append($cells, $children)
+      yield $cells → cells
+  when not(or($shape.plain, $shape.array)):
+    port scalar.quoteValue { value = $value } → text
+    let cells = list({ path = $path; value = $text })
+  let result = $cells
+
+process ui.review:
+  let prepared = $session.prepared.value
+  let before = $state
+  port kernel.invoke { query = "app.load"; input = { revision = add($snapshot.revision, 1); documents = $prepared.documents } } → after
+  port kernel.invoke { query = "ui.flatten"; input = { value = $before; path = "application" } } → oldCells
+  port kernel.invoke { query = "ui.flatten"; input = { value = $after; path = "application" } } → newCells
+  let paths = distinct(append(map($oldCells, "cell", $cell.path), map($newCells, "cell", $cell.path)))
+  fold $paths as path; rows starts list():
+    let old = filter($oldCells, "cell", eq($cell.path, $path))
+    let new = filter($newCells, "cell", eq($cell.path, $path))
+    let beforeText = if(count($old), at(at($old, 0), "value"), "not present")
+    let afterText = if(count($new), at(at($new, 0), "value"), "not present")
+    when not(eq($beforeText, $afterText)):
+      let rows = append($rows, list({ tag = "tr"; attrs = {}; children = list({ tag = "th"; attrs = { scope = "row" }; children = list($path) }, { tag = "td"; attrs = {}; children = list($beforeText) }, { tag = "td"; attrs = {}; children = list($afterText) }) }))
+    yield $rows → rows
+  let headings = { tag = "tr"; attrs = {}; children = list({ tag = "th"; attrs = {}; children = list("Value") }, { tag = "th"; attrs = {}; children = list("Before") }, { tag = "th"; attrs = {}; children = list("After") }) }
+  let table = { tag = "table"; attrs = { class = "sourcery-data-table"; "data-table-layout" = "grid" }; children = list({ tag = "caption"; attrs = {}; children = list("Exact semantic changes") }, { tag = "thead"; attrs = {}; children = list($headings) }, { tag = "tbody"; attrs = {}; children = $rows }) }
+  let content = list({ tag = "h2"; attrs = {}; children = list("Review one change") }, { tag = "p"; attrs = {}; children = list($prepared.description) }, { tag = "p"; attrs = { class = "hint" }; children = list(concat("Reason: ", $prepared.command.reason, " · Target: ", $prepared.command.target, " · Goal: ", $prepared.command.goal, " · Base revision: ", $prepared.command.base)) }, $table)
+  let content = append($content, list({ tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list("Decision and source basis") }, { tag = "pre"; attrs = {}; children = list(concat("Operation: ", $prepared.command.operationId, "\nProfile: ", $prepared.command.profile, "\nRuntime basis: ", $prepared.command.basis, "\nIntent source: ", $prepared.command.source)) }) }))
+  fold $prepared.documents as document; content starts $content:
+    let old = filter($documents, "item", eq($item.path, $document.path))
+    when or(eq(count($old), 0), not(eq(at(at($old, 0), "text"), $document.text))):
+      when not(eq($document.path, "application.rel")):
+        let content = append($content, list({ tag = "details"; attrs = { open = true }; children = list({ tag = "summary"; attrs = {}; children = list(concat("Exact source: ", $document.path)) }, { tag = "pre"; attrs = {}; children = list($document.text) }) }))
+    yield $content → content
+  let form = { tag = "form"; attrs = { method = "post"; action = "/" }; children = list({ tag = "input"; attrs = { type = "hidden"; name = "_csrf"; value = $csrf }; children = list() }, { tag = "input"; attrs = { type = "hidden"; name = "review"; value = $prepared.command.operationId }; children = list() }, { tag = "button"; attrs = { name = "command"; value = "accept" }; children = list("Accept this change") }, { tag = "button"; attrs = { name = "command"; value = "cancel"; class = "secondary" }; children = list("Cancel") }) }
+  let result = append($content, list($form))
+
+process export.document:
+  fold $state.projections as projection; views starts list():
+    port kernel.invoke { query = "projection.value"; input = $projection } → mapping
+    yield append($views, list({ tag = "section"; attrs = {}; children = list({ tag = "h2"; attrs = {}; children = list($projection.id) }, { tag = "p"; attrs = {}; children = list($mapping.value) }, { tag = "small"; attrs = {}; children = list(concat("Source: ", $mapping.source)) }) })) → views
+  let input = { tag = "html"; attrs = { lang = "en" }; children = list({ tag = "head"; attrs = {}; children = list({ tag = "meta"; attrs = { charset = "utf-8" }; children = list() }, { tag = "title"; attrs = {}; children = list("Encounter export") }) }, { tag = "body"; attrs = {}; children = list({ tag = "main"; attrs = {}; children = append(list({ tag = "h1"; attrs = {}; children = list($state.intent) }), $views) }) }) }
+  call html.serialize
+  let result = concat("<!doctype html>", $result)
+
+process guide.coordinates:
+  let item = at(filter($state.things, "item", eq($item.id, "guide")), 0)
+  let role = at(filter(if($item, $item.roles, list()), "role", and(eq($role.type, "Guide"), eq($role.alias, ""))), 0)
+  let rule = at(filter($state.transitions, "rule", and(eq($rule.id, "publish"), eq($rule.type, "Guide"))), 0)
+  let review = at(filter($state.things, "item", eq($item.id, at($role.values, $rule.reference))), 0)
+  let reviewRole = at(filter(if($review, $review.roles, list()), "role", and(eq($role.type, "Review"), eq($role.alias, ""))), 0)
+  let row = at(filter($state.projections, "projection", and(eq($projection.id, "publishRow"), eq($projection.thing, "guide"), eq($projection.alias, ""), eq($projection.kind, "row"), eq($projection.field, $rule.field))), 0)
+  let title = at(filter($state.projections, "projection", and(eq($projection.id, "publicTitle"), eq($projection.thing, "guide"), eq($projection.alias, ""), eq($projection.kind, "web"))), 0)
+  let result = { ready = and($item, $role, $rule, $reviewRole, $row); item = $item; role = $role; rule = $rule; review = $review; reviewRole = $reviewRole; row = $row; title = $title }
+
+process guide.metric:
+  let item = $eventInput
+  let result = { tag = "div"; attrs = { class = "guide-metric"; "data-tone" = $item.tone }; children = list(
+    { tag = "span"; attrs = { class = "guide-kicker" }; children = list($item.label) },
+    { tag = "strong"; attrs = {}; children = list($item.value) }) }
+
+process guide.workspace:
+  let guide = $eventInput
+  port kernel.invoke { query = "transition.availability"; input = { transition = $guide.rule; thing = $guide.item; role = $guide.role } } → availability
+  let published = eq($availability.status, $availability.to)
+  let reviewStatus = at($guide.reviewRole.values, $guide.rule.blockerField)
+  let reviewDone = eq($reviewStatus, $guide.rule.ready)
+  let title = at($guide.role.values, "title")
+  let boundary = "Title projection pending"
+  when $guide.title:
+    port kernel.invoke { query = "projection.value"; input = $guide.title } → projection
+    let title = $projection.value
+    let boundary = if(eq($projection.inverse, "none"), "Read-only projection", "Checked edit route available")
+  port kernel.invoke { query = "guide.metric"; input = { label = "Guide status"; value = $availability.status; tone = if($published, "good", "neutral") } } → stage
+  port kernel.invoke { query = "guide.metric"; input = { label = "Safety review"; value = $reviewStatus; tone = if($reviewDone, "good", "wait") } } → safety
+  port kernel.invoke { query = "guide.metric"; input = { label = "Publish gate"; value = if($published, "Complete", if(eq($availability.message, ""), "Ready", "Blocked")); tone = if(or($published, eq($availability.message, "")), "good", "wait") } } → gate
+  port kernel.invoke { query = "ui.rowCommands"; input = $guide.row } → commands
+  let reviewInputs = list(
+    { id = "thing"; label = "Thing"; value = $guide.review.id; kind = "identity"; options = list() },
+    { id = "alias"; label = "Exact role"; value = $guide.reviewRole.alias; kind = "identity"; options = list() },
+    { id = "field"; label = "Field"; value = $guide.rule.blockerField; kind = "identity"; options = list() },
+    { id = "value"; label = "Review status"; value = $reviewStatus; kind = "textarea"; options = list() })
+  port kernel.invoke { query = "ui.form"; input = { operation = "value"; identity = $guide.review.id; title = "Record safety review"; help = "Record the review outcome on the linked review record."; target = concat($guide.review.id, "/", $guide.rule.blockerField); fields = $reviewInputs } } → reviewForm
+  let headline = { tag = "div"; attrs = { class = "guide-intro" }; children = list(
+    { tag = "p"; attrs = { class = "guide-kicker" }; children = list("Editorial workspace") },
+    { tag = "h1"; attrs = {}; children = list($guide.item.label) },
+    { tag = "p"; attrs = {}; children = list($state.intent) }) }
+  let publication = { tag = "section"; attrs = { class = "guide-card guide-publish"; "aria-label" = "Publication decision" }; children = list(
+    { tag = "p"; attrs = { class = "guide-kicker" }; children = list("01 / Release") },
+    { tag = "h2"; attrs = {}; children = list(if($published, "Guide published", "Publication decision")) },
+    { tag = "p"; attrs = { class = "guide-gate"; "data-tone" = if(or($published, eq($availability.message, "")), "good", "wait") }; children = list(
+      if($published, "The guide passed the publication gate.", if(eq($availability.message, ""), "Safety review is complete. The guide is ready to publish.", $availability.message))) },
+    if($published, null, at($commands, 0)),
+    { tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list("Record safety review") }, $reviewForm) }) }
+  let publicView = { tag = "section"; attrs = { class = "guide-card guide-preview"; "aria-label" = "Public title preview" }; children = list(
+    { tag = "p"; attrs = { class = "guide-kicker" }; children = list("02 / Public title") },
+    { tag = "h2"; attrs = { "data-guide-title" = true }; children = list($title) },
+    { tag = "p"; attrs = {}; children = list($boundary) },
+    { tag = "a"; attrs = { class = "guide-link"; href = "/?view=guide-source" }; children = list("Inspect title formatter") },
+    { tag = "a"; attrs = { class = "guide-link"; href = "/?view=history" }; children = list("View decision history") }) }
+  let result = list($headline, { tag = "div"; attrs = { class = "guide-metrics" }; children = list($stage, $safety, $gate) },
+    { tag = "div"; attrs = { class = "guide-columns" }; children = list($publication, $publicView) })
+
+process guide.source:
+  let guide = $eventInput
+  let formatter = at(filter($state.actions, "action", eq($action.id, $guide.title.action)), 0)
+  let result = list({ tag = "p"; attrs = { class = "guide-kicker" }; children = list("Source / Public title") },
+    { tag = "h1"; attrs = {}; children = list("Title formatter") },
+    { tag = "p"; attrs = {}; children = list("This Encounter action reads the guide title and produces the public label.") })
+  when $formatter:
+    port kernel.invoke { query = "ui.actionEditor"; input = $formatter } → editor
+    let result = append($result, list($editor))
+  when not($formatter):
+    let result = append($result, list({ tag = "p"; attrs = {}; children = list("Attach a reusable action to the public title projection to edit it here.") }))
+
+process ui.page:
+  let state = $eventInput.state
+  let snapshot = $eventInput.snapshot
+  let session = $eventInput.session
+  let csrf = $eventInput.csrf
+  let documents = $snapshot.documents
+  let guideScreen = includes(list("guide", "guide-source"), $session.view)
+  let guide = null
+  when $guideScreen:
+    port kernel.invoke { query = "guide.coordinates"; input = null } → guide
+  let content = list()
+  when eq($session.prepared.case, "some"):
+    port kernel.invoke { query = "ui.review"; input = null } → content
+  when eq($session.prepared.case, "none"):
+    let view = $session.view
+    when and($guideScreen, not($guide.ready)):
+      let content = list({ tag = "h1"; attrs = {}; children = list("Harbour field guide") }, { tag = "p"; attrs = {}; children = list("This workspace has no harbour guide publishing workflow.") })
+    when and(eq($view, "guide"), $guide.ready):
+      port kernel.invoke { query = "guide.workspace"; input = $guide } → content
+    when and(eq($view, "guide-source"), $guide.ready):
+      port kernel.invoke { query = "guide.source"; input = $guide } → content
+    when eq($view, "work"):
+      port kernel.invoke { query = "ui.work"; input = null } → content
+    when eq($view, "type"):
+      port kernel.invoke { query = "ui.type"; input = null } → content
+    when eq($view, "thing"):
+      port kernel.invoke { query = "ui.thing"; input = null } → content
+    when eq($view, "projections"):
+      port kernel.invoke { query = "ui.projections"; input = null } → content
+    when eq($view, "actions"):
+      port kernel.invoke { query = "ui.actions"; input = null } → content
+    when eq($view, "jobs"):
+      port kernel.invoke { query = "ui.jobs"; input = null } → content
+    when eq($view, "history"):
+      port kernel.invoke { query = "ui.history"; input = null } → content
+    when eq($view, "sources"):
+      port kernel.invoke { query = "ui.sources"; input = null } → content
+    when eq($view, "inspect"):
+      port kernel.invoke { query = "inspector.page"; input = { id = $session.selected; mode = $session.alias; app = at($eventInput, "inspectApp") } } → content
+  let navigation = map(list({ view = "work"; label = "Your work" }, { view = "projections"; label = "Projections" }, { view = "actions"; label = "Actions" }, { view = "jobs"; label = "Jobs" }, { view = "history"; label = "History" }, { view = "sources"; label = "Source" }, { view = "inspect"; label = "App inspector" }), "item", { tag = "a"; attrs = { href = concat("/?view=", $item.view); "aria-current" = if(eq($session.view, $item.view), "page", null) }; children = list($item.label) })
+  when $guideScreen:
+    let navigation = list(
+      { tag = "a"; attrs = { href = "/?view=guide"; "aria-current" = if(eq($session.view, "guide"), "page", null) }; children = list("Publication") },
+      { tag = "a"; attrs = { href = "/?view=guide-source"; "aria-current" = if(eq($session.view, "guide-source"), "page", null) }; children = list("Title formatter") },
+      { tag = "a"; attrs = { href = "/?view=work" }; children = list("Authoring workspace") })
+  let noticeClass = "notice"
+  when $guideScreen:
+    port text.indexOf { value = $session.notice; search = "TRANSITION:"; from = 0 } → rejected
+    when eq($rejected, 0):
+      let noticeClass = "notice guide-notice-warning"
+  let title = if($guideScreen, "Harbour field guide", "Encounter Authoring")
+  let head = { tag = "head"; attrs = {}; children = list(
+    { tag = "meta"; attrs = { charset = "utf-8" }; children = list() },
+    { tag = "meta"; attrs = { name = "viewport"; content = "width=device-width, initial-scale=1" }; children = list() },
+    { tag = "title"; attrs = {}; children = list($title) },
+    { tag = "link"; attrs = { rel = "stylesheet"; href = "/styles.css" }; children = list() }
+  ) }
+  let navigation = { tag = "nav"; attrs = { class = "workspace-toolbar"; "aria-label" = "Workspace" }; children = $navigation }
+  let revision = { tag = "p"; attrs = { class = "revision" }; children = list(concat("Accepted revision ", $snapshot.revision, " · Local workspace")) }
+  let notice = { tag = "p"; attrs = { class = concat($noticeClass, if($guideScreen, "", " sourcery-feedback")); role = "status" }; children = list($session.notice) }
+  let showNotice = not(and(eq($session.view, "inspect"), eq($session.prepared.case, "none"), eq($session.notice, "Start with what you want to make.")))
+  let main = { tag = "main"; attrs = { id = "main"; tabindex = "-1" }; children = append(list(if($showNotice, $notice, null)), $content) }
+  let workspace = list(
+    { tag = "header"; attrs = { class = "workspace-titlebar" }; children = list({ tag = "strong"; attrs = { class = "brand" }; children = list($title) }) },
+    $navigation,
+    $main,
+    { tag = "footer"; attrs = { class = "workspace-statusbar" }; children = list($revision) }
+  )
+  when $guideScreen:
+    let workspace = list(
+      { tag = "header"; attrs = {}; children = list(
+        { tag = "div"; attrs = { class = "brand" }; children = list($title) },
+        { tag = "p"; attrs = {}; children = list("ENCOUNTER  /  EDITORIAL DESK") },
+        $navigation
+      ) },
+      { tag = "main"; attrs = { id = "main"; tabindex = "-1" }; children = append(list($notice, $revision), $content) },
+      { tag = "footer"; attrs = {}; children = list("Your intent, your source, one checked change at a time.") }
+    )
+  let skip = { tag = "a"; attrs = { href = "#main"; class = "skip" }; children = list("Skip to your work") }
+  let inspectionScreen = and(eq($session.view, "inspect"), eq($session.prepared.case, "none"))
+  let body = { tag = "body"; attrs = { class = if($guideScreen, "harbour-guide", if($inspectionScreen, "authoring authoring-inspector", "authoring")) }; children = append(list($skip), $workspace) }
+  let input = { tag = "html"; attrs = { lang = "en" }; children = list($head, $body) }
+  call html.serialize
+  let result = concat("<!doctype html>", $result)

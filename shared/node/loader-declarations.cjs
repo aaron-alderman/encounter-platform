@@ -25,7 +25,7 @@ function platformDeclarations() {
     .filter(name => /(?:\.rel|\.loader\.encounter)$/.test(name))
     .map(name => path.join(runtime, 'profiles', name.replace(/\.loader\.encounter$/, '.rel'))));
   const frontGate = ['directory.rel', 'pilot.rel'].map(name => path.join(applications, 'front-gate', name));
-  const appDev = path.join(applications, 'encounter/bootstrap/application-appdev.rel');
+  const appDev = path.join(applications, 'encounter-appdev-authoring/bootstrap/application.rel');
   return [...defaults, appDev, ...products, ...profiles, ...frontGate, path.join(runtime, 'release-applications-platform.rel')].sort();
 }
 

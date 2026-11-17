@@ -114,9 +114,6 @@ process command.apply:
     assert $definition
       otherwise "THING: Choose an existing type."
     port kernel.invoke { query = "document.decode"; input = $values.document } → cells
-    each $state.transitions as transition:
-      when eq($transition.type, $definition.id):
-        port kernel.invoke { query = "transition.checkWrite"; input = { type = $definition.id; field = $transition.field; value = at($cells, $transition.field) } } → _
     let role = { type = $definition.id; alias = $values.alias; values = $cells }
     when eq($operation, "thing"):
       port kernel.invoke { query = "domain.identifier"; input = $values.id } → _
@@ -156,7 +153,6 @@ process command.apply:
         otherwise "DOCUMENT: Change exactly one value at a time. Other values remain untouched."
       let fieldId = at(at($changed, 0), 0)
       let value = at(at($changed, 0), 1)
-    port kernel.invoke { query = "transition.checkWrite"; input = { type = $role.type; field = $fieldId; value = $value } } → _
     port kernel.invoke { query = "thing.replaceValue"; input = { thing = $thing.id; alias = $role.alias; field = $fieldId; value = $value } } → state
     let description = concat("Change ", $thing.label, " / ", $fieldId, " through ", $operation, ".")
     let handled = true
@@ -202,9 +198,6 @@ process command.apply:
         assert eq($suffix, $mapping.suffix)
           otherwise "INVERSE: The requested value is outside this inverse domain."
         port text.slice { value = $value; start = 0; end = $end } → value
-      let thing = at(filter($state.things, "thing", eq($thing.id, $projection.thing)), 0)
-      let role = at(filter($thing.roles, "role", eq($role.alias, $projection.alias)), 0)
-      port kernel.invoke { query = "transition.checkWrite"; input = { type = $role.type; field = $projection.field; value = $value } } → _
       port kernel.invoke { query = "thing.replaceValue"; input = { thing = $projection.thing; alias = $projection.alias; field = $projection.field; value = $value } } → state
       port kernel.invoke { query = "projection.value"; input = $projection } → reproduced
       assert eq($reproduced.value, $values.value)
@@ -235,48 +228,6 @@ process command.apply:
       let actions = append($actions, list($action))
     port record.put { record = $state; key = "actions"; value = $actions } → state
     let description = concat("Publish checked action ", $action.label, " from actual Encounter source.")
-    let handled = true
-  when eq($operation, "define-transition"):
-    let transition = { id = $values.id; label = $values.label; type = $values.type; field = $values.field; from = $values.from; to = $values.to; reference = $values.reference; blockerField = $values.blockerField; ready = $values.ready }
-    assert not(some($state.things, "thing", some($thing.roles, "role", and(eq($role.type, $transition.type), eq(at($role.values, $transition.field), $transition.to)))))
-      otherwise "TRANSITION: Resolve existing end statuses before defining this command."
-    port record.put { record = $state; key = "transitions"; value = append($state.transitions, list($transition)) } → state
-    let description = concat("Define guarded command ", $transition.label, ".")
-    let handled = true
-  when eq($operation, "add-transition-blocker"):
-    let transition = at(filter($state.transitions, "item", eq($item.id, $values.transition)), 0)
-    assert $transition
-      otherwise "TRANSITION: Choose an existing guarded command."
-    assert eq(at($transition, "secondReference"), at({}, "absent"))
-      otherwise "TRANSITION: This command already has a second blocker."
-    port record.put { record = $transition; key = "secondReference"; value = $values.reference } → updated
-    let transitions = map($state.transitions, "item", if(eq($item.id, $updated.id), $updated, $item))
-    port record.put { record = $state; key = "transitions"; value = $transitions } → state
-    let description = concat("Add a second blocker to ", $transition.label, ".")
-    let handled = true
-  when eq($operation, "define-occurrence"):
-    let binding = { id = $values.id; type = $values.type; phase = $values.phase; appointment = $values.appointment; events = list() }
-    port record.put { record = $state; key = "occurrences"; value = append($state.occurrences, list($binding)) } → state
-    let description = concat("Define scheduling and cancellation for ", $binding.type, ".")
-    let handled = true
-  when eq($operation, "run-transition"):
-    let projection = at(filter($state.projections, "projection", eq($projection.id, $values.projection)), 0)
-    assert and($projection, eq($projection.kind, "row"))
-      otherwise "TRANSITION: Choose a guarded command on an existing row."
-    let thing = at(filter($state.things, "thing", eq($thing.id, $projection.thing)), 0)
-    let role = at(filter($thing.roles, "role", eq($role.alias, $projection.alias)), 0)
-    port kernel.invoke { query = "transition.commands"; input = $role.type } → commands
-    let transition = at(filter($commands, "transition", eq($transition.id, $values.transition)), 0)
-    assert $transition
-      otherwise "TRANSITION: This command does not apply to the row's role."
-    port kernel.invoke { query = "transition.availability"; input = { transition = $transition; thing = $thing; role = $role } } → availability
-    assert eq($availability.message, "")
-      otherwise "TRANSITION: The command is unavailable. See the row for the reason."
-    let binding = at($transition, "binding")
-    when not(eq($binding, at({}, "absent"))):
-      port kernel.invoke { query = "occurrence.record"; input = { binding = $binding; kind = $transition.kind; thing = $thing.id; alias = $role.alias; values = $values; reason = $command.reason; operationId = $command.operationId } } → state
-    port kernel.invoke { query = "thing.replaceValue"; input = { thing = $thing.id; alias = $role.alias; field = $transition.field; value = $availability.to } } → state
-    let description = concat($transition.label, " · ", $thing.label, " (", $thing.id, ") · ", $transition.field, ": ", $availability.status, " → ", $availability.to, ".")
     let handled = true
   when eq($operation, "queue"):
     port kernel.invoke { query = "domain.identifier"; input = $values.id } → _
@@ -311,11 +262,7 @@ process command.apply:
     let source = at(filter($documents, "document", eq($document.path, "application.rel")), 0)
     assert $source
       otherwise "HISTORY: This revision has no application source."
-    port rel.decode { text = $source.text; kind = "Application" } → retained
-    port kernel.invoke { query = "domain.state"; input = $retained } → restored
-    assert every($state.occurrences, "binding", or(not(count($binding.events)), some($restored.occurrences, "other", eq($other, $binding))))
-      otherwise "OCCURRENCE: Restore cannot discard or change accepted lifecycle events."
-    let state = $restored
+    port rel.decode { text = $source.text; kind = "Application" } → state
     let description = concat("Restore revision ", $values.revision, " as a new checked revision. History is retained.")
     let handled = true
   assert $handled
@@ -323,12 +270,7 @@ process command.apply:
   port kernel.invoke { query = "domain.check"; input = $state } → _
   each $state.actions as action:
     port kernel.invoke { query = "action.check"; input = $action } → _
-  let authored = { intent = $state.intent; definitions = $state.definitions; things = $state.things; actions = $state.actions; projections = $state.projections; overlays = $state.overlays; jobs = $state.jobs }
-  when count($state.transitions):
-    port record.put { record = $authored; key = "transitions"; value = $state.transitions } → authored
-  when count($state.occurrences):
-    port record.put { record = $authored; key = "occurrences"; value = $state.occurrences } → authored
-  port rel.encode { value = $authored; kind = "Application" } → application
+  port rel.encode { value = $state; kind = "Application" } → application
   let documents = append(filter($documents, "document", not(eq($document.path, "application.rel"))), list({ path = "application.rel"; text = $application }))
   each $documents as document:
     port kernel.invoke { query = "types.named"; input = { name = "Document"; value = $document } } → _

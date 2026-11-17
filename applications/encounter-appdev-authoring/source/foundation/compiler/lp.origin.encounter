@@ -1,0 +1,18 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lp.origin:
+  port text.slice { value = $lpText; start = at($eventInput, "start"); end = at($eventInput, "end") } → raw
+  port digest.sha256 { text = $raw } → sha
+  let result = {
+    pointer = at($eventInput, "pointer");
+    kind = at($eventInput, "kind");
+    file = $lpFile;
+    sourceHash = $lpHash;
+    start = at($eventInput, "start");
+    end = at($eventInput, "end");
+    line = at(at($eventInput, "token"), "line");
+    column = at(at($eventInput, "token"), "column");
+    lexemeSha256 = $sha;
+    synthetic = false
+  }
