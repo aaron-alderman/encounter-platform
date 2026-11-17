@@ -1,0 +1,58 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:16.000
+Software development is changing. Today, you can ask an AI to build almost anything. A website. A business application. An entire platform. And in minutes, something appears.
+
+2
+00:00:16.000 --> 00:00:38.000
+But there's a problem. As software grows, so does its complexity. Assumptions get buried. Decisions get forgotten. Documentation drifts away from reality. And eventually, even the AI that helped build your software struggles to understand it. What if we could build software differently?
+
+3
+00:00:38.000 --> 00:00:54.000
+What if, instead of just generating code, we could capture what you actually mean? Your intentions. Your requirements. Your decisions. And the reasons behind them. That's what we're building. We call it authoring.
+
+4
+00:00:54.000 --> 00:01:10.000
+You describe what you want to create. Sorcery decomposes your request into meaningful, reusable building blocks. It shows you what it understands, what it's assuming, and where important decisions need to be made.
+
+5
+00:01:10.000 --> 00:01:19.000
+You can explore alternatives, change your mind, and see the consequences before committing.
+
+6
+00:01:19.000 --> 00:01:42.000
+Underneath it all is Temple. A new kind of relational database and execution engine, where your software, its meaning, and the rules that govern it live together. Everything is connected. Every important decision can have a reason. Every change can have provenance. And every action can be subject to explicit constraints. We call these admissibility gates.
+
+7
+00:01:42.000 --> 00:01:57.000
+Instead of giving AI unrestricted access and hoping it behaves, Temple is designed to enforce what it's allowed to do. Your AI works within your rules. Not the other way around.
+
+8
+00:01:57.000 --> 00:02:10.000
+And here's where things get interesting. Your software doesn't have to be perfect on day one. Start simple. Reuse existing capabilities. Connect systems that don't quite agree using explicit seams. Improve the parts that matter.
+
+9
+00:02:10.000 --> 00:02:31.000
+As your requirements grow, you can decompose your application further, strengthen its assurances, and optimise its implementation. Without unnecessarily changing its meaning. Because you should be able to optimise how software works without changing what it's supposed to do.
+
+10
+00:02:31.000 --> 00:02:53.000
+Temple also makes your software navigable. With Context Hub, graph-ranking techniques inspired by Google's PageRank help identify the information most relevant to a question. So your AI can work with meaningful, connected context rather than trying to understand an entire codebase at once.
+
+11
+00:02:53.000 --> 00:03:03.000
+Bring your own agent. Choose your own models. And keep the context where it belongs.
+
+12
+00:03:03.000 --> 00:03:21.000
+Temple is built for sovereignty. Open source. Run it yourself, on your own infrastructure, with your own data. Or use a managed platform if you'd rather leave the operations to us. Your systems. Your rules. Your choice.
+
+13
+00:03:21.000 --> 00:03:38.000
+We believe the future of software isn't just about generating more code, faster. It's about creating systems we can understand. Systems we can trust. Systems that preserve our intentions, adapt as our needs change, and remain under human control.
+
+14
+00:03:38.000 --> 00:03:52.000
+Software that remembers why. Software that evolves without losing its meaning. Software you author, not just program. Welcome to Sorcery and Temple.
+

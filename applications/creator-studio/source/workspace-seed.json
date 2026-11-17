@@ -1,0 +1,49 @@
+{
+  "protocol": "usewords/workspace/1",
+  "definitions": [
+    "construct Encounter\nfield title text shared required max 160\nfield body text shared required max 4000\nfield introduction text local optional max 600\nheading title\nparagraph introduction\nparagraph body"
+  ],
+  "objects": [
+    {
+      "id": "water",
+      "type": "Encounter",
+      "values": {
+        "title": "The horse has a few questions.",
+        "body": "The guide points at the water. The horse looks down. There is already a horse in there, and it seems to have strong opinions about the guide. Nobody mentioned a committee.\n\nPerhaps the next explanation can wait. What is the horse being invited into? The guide can look at the reflection too. You can read the little fable your own way—or just enjoy a horse declining a well-prepared presentation.",
+        "introduction": "An encounter at the water’s edge."
+      },
+      "origin": {
+        "subject": "place.water",
+        "snapshot": "source/reference/water.rel"
+      }
+    }
+  ],
+  "journeys": [
+    {
+      "id": "listening",
+      "name": "Listening well",
+      "entries": [
+        {
+          "id": "water",
+          "object": "water",
+          "overrides": {
+            "introduction": "Start by noticing what the other person is encountering, before offering your explanation."
+          }
+        }
+      ]
+    },
+    {
+      "id": "making",
+      "name": "Making with care",
+      "entries": [
+        {
+          "id": "water",
+          "object": "water",
+          "overrides": {
+            "introduction": "Begin with the invitation you are making. What room does your design leave for another response?"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "protocol": "usewords/languages/1",
+  "purpose": "Usewords authors and inspects languages of expression. Encounter is one family with separate view and process dialects; language profiles explicitly select their meaning and execution route.",
+  "variants": [
+    {
+      "id": "usewords.words.v1",
+      "name": "Usewords sentences",
+      "role": "Bounded command language",
+      "grammar": "source/words.json",
+      "semantics": "source/usewords.encounter#uw.parse",
+      "status": "enabled"
+    },
+    {
+      "id": "encounter.views.v1",
+      "name": "Encounter views",
+      "role": "Representation, contextual contribution and inverse-edit language",
+      "grammar": "Retained ec.compile profile",
+      "source": "source/canonical.json#codeText",
+      "semantics": "Retained ec.prepare / ec.run / ec.patch",
+      "status": "enabled"
+    },
+    {
+      "id": "encounter.process.v1",
+      "name": "Encounter processes",
+      "role": "Executable process authoring",
+      "profile": "source/languages/usewords-process.profile.json",
+      "source": "source/usewords.encounter",
+      "compiler": "source/languages/usewords-frontend.json",
+      "semantics": "Existing lowering, admission and Temple kernel",
+      "status": "enabled"
+    },
+    {
+      "id": "rel.facts.v1",
+      "name": "REL facts and contracts",
+      "role": "Identity, facts and closed type contracts",
+      "source": "source/canonical.json#factText / contractText",
+      "semantics": "Retained source.rel and type contracts",
+      "status": "enabled"
+    },
+    {
+      "id": "usewords.constructs.v1",
+      "name": "Usewords construct definitions",
+      "role": "In-app declaration of text fields, required/maximum constraints, shared/local edit ownership and representations",
+      "source": "Workspace document definitions",
+      "grammar": "source/workspace.encounter#ws.definition",
+      "compiler": "source/workspace.encounter#ws.emit",
+      "semantics": "Closed REL contracts and Encounter views, checked by the retained compiler, type checker and ec.patch",
+      "status": "enabled",
+      "boundary": "This first profile does not install arbitrary host code, add effect grants or define unrestricted computational semantics."
+    },
+    {
+      "id": "usewords.matters.v1",
+      "name": "Matter framing and AI suggestions",
+      "role": "Matter framing, lifecycle, participation, attention requests, relationships and scoped agent briefs",
+      "source": "source/matters.encounter",
+      "grammar": "Closed own-data records validated by mw.validate / mw.itemCheck / mw.checkSuggestions",
+      "semantics": "mw.add through ws.apply and collaborative proposal review/replay; representations through mw.paint",
+      "status": "enabled",
+      "boundary": "Incorporating framing does not establish truth, consent, agreement or resolution. Agent labels are self-reported; BYO responses cannot invoke effects.",
+      "management": "source/matter-management.encounter; source/matter-management-ui.encounter",
+      "partyWork": "source/party-work.encounter; explicit disclosure, separate personal statements and replayable packets; source/party-work-ui.encounter"
+    }
+  ],
+  "extensionContract": [
+    "Declare syntax/profile identity and canonical representation",
+    "Supply an admitted compiler or interpreter through process algebra",
+    "Declare effects separately from syntax eligibility",
+    "Preserve source correspondence and exact identities",
+    "Define representation and inverse-edit correspondence where supported",
+    "Provide semantic checks, refusal cases and bounded correspondence evidence"
+  ],
+  "boundary": "Additional variants require explicit implementation and qualification. Naming a variant does not install a compiler, infer semantic equivalence or grant effects."
+}

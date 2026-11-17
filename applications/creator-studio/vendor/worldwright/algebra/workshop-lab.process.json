@@ -1,0 +1,139 @@
+{
+  "protocol": "temple/surface-process-module/1",
+  "queries": {
+    "lab.snapshot": [
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.run",
+          "input": {
+            "candidate": "$eventInput.candidate"
+          }
+        },
+        "into": "labProjections"
+      },
+      {
+        "fold": "$labProjections",
+        "as": "labP",
+        "accumulator": "labRendered",
+        "initial": [
+          "list"
+        ],
+        "steps": [
+          {
+            "let": "input",
+            "value": "$labP.output.tree"
+          },
+          {
+            "call": "html.serialize"
+          }
+        ],
+        "yield": [
+          "append",
+          "$labRendered",
+          [
+            "list",
+            {
+              "projection": "$labP",
+              "html": "$result"
+            }
+          ]
+        ],
+        "into": "labRendered"
+      },
+      {
+        "let": "result",
+        "value": {
+          "rendered": "$labRendered"
+        }
+      }
+    ],
+    "lab.edit": [
+      {
+        "assert": [
+          "includes",
+          [
+            "list",
+            "title",
+            "web-label"
+          ],
+          "$eventInput.kind"
+        ],
+        "message": "LAB-E001: Choose a story-title or web-label edit."
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.run",
+          "input": {
+            "candidate": "$eventInput.candidate"
+          }
+        },
+        "into": "labCurrent"
+      },
+      {
+        "let": "labMatches",
+        "value": [
+          "filter",
+          "$labCurrent",
+          "labP",
+          [
+            "eq",
+            "$labP.output.type",
+            [
+              "if",
+              [
+                "eq",
+                "$eventInput.kind",
+                "title"
+              ],
+              "Page",
+              "WebLink"
+            ]
+          ]
+        ]
+      },
+      {
+        "assert": [
+          "eq",
+          [
+            "count",
+            "$labMatches"
+          ],
+          1
+        ],
+        "message": "LAB-E002: The edit needs one current, derived projection. Reopen the example."
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.patch",
+          "input": {
+            "candidate": "$eventInput.candidate",
+            "projection": [
+              "at",
+              "$labMatches",
+              0
+            ],
+            "field": [
+              "if",
+              [
+                "eq",
+                "$eventInput.kind",
+                "title"
+              ],
+              "P.title",
+              "N.label"
+            ],
+            "value": "$eventInput.value"
+          }
+        },
+        "into": "labPatched"
+      },
+      {
+        "let": "result",
+        "value": "$labPatched"
+      }
+    ]
+  }
+}

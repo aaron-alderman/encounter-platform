@@ -1,0 +1,134 @@
+[
+  {
+    "protocol": "creator-studio/assurance/1",
+    "case": "baseline",
+    "passed": 4,
+    "budget": 20000000,
+    "programHash": "2288b6da654cd6f72e0ae336172cd034b15e27c9e3c8bd8be532df36018e027e",
+    "stateHash": "79806a6fb9b1e2f70f3a56e9d2d79d76779cf02426243d0f2bf6ebaf6065a60e",
+    "usage": {
+      "steps": 2715394,
+      "limit": 20000000
+    }
+  },
+  {
+    "protocol": "creator-studio/assurance/1",
+    "case": "edit-replay",
+    "passed": 4,
+    "budget": 20000000,
+    "programHash": "2288b6da654cd6f72e0ae336172cd034b15e27c9e3c8bd8be532df36018e027e",
+    "stateHash": "79806a6fb9b1e2f70f3a56e9d2d79d76779cf02426243d0f2bf6ebaf6065a60e",
+    "usage": {
+      "steps": 15332170,
+      "limit": 20000000
+    }
+  },
+  {
+    "protocol": "creator-studio/assurance/1",
+    "case": "model-refusals",
+    "passed": 3,
+    "budget": 20000000,
+    "programHash": "2288b6da654cd6f72e0ae336172cd034b15e27c9e3c8bd8be532df36018e027e",
+    "stateHash": "79806a6fb9b1e2f70f3a56e9d2d79d76779cf02426243d0f2bf6ebaf6065a60e",
+    "usage": {
+      "steps": 12626577,
+      "limit": 20000000
+    }
+  },
+  {
+    "protocol": "creator-studio/assurance/1",
+    "case": "templates",
+    "passed": 5,
+    "budget": 20000000,
+    "programHash": "2288b6da654cd6f72e0ae336172cd034b15e27c9e3c8bd8be532df36018e027e",
+    "stateHash": "79806a6fb9b1e2f70f3a56e9d2d79d76779cf02426243d0f2bf6ebaf6065a60e",
+    "usage": {
+      "steps": 1361741,
+      "limit": 20000000
+    }
+  },
+  {
+    "protocol": "creator-studio/assurance/1",
+    "case": "formats",
+    "passed": 7,
+    "budget": 20000000,
+    "programHash": "2288b6da654cd6f72e0ae336172cd034b15e27c9e3c8bd8be532df36018e027e",
+    "stateHash": "79806a6fb9b1e2f70f3a56e9d2d79d76779cf02426243d0f2bf6ebaf6065a60e",
+    "usage": {
+      "steps": 1393927,
+      "limit": 20000000
+    }
+  },
+  {
+    "protocol": "creator-studio/assurance/1",
+    "case": "commentary",
+    "passed": 7,
+    "budget": 20000000,
+    "programHash": "2288b6da654cd6f72e0ae336172cd034b15e27c9e3c8bd8be532df36018e027e",
+    "stateHash": "79806a6fb9b1e2f70f3a56e9d2d79d76779cf02426243d0f2bf6ebaf6065a60e",
+    "usage": {
+      "steps": 5152171,
+      "limit": 20000000
+    }
+  },
+  {
+    "protocol": "creator-studio/assurance/1",
+    "case": "exchange",
+    "passed": 3,
+    "budget": 20000000,
+    "programHash": "2288b6da654cd6f72e0ae336172cd034b15e27c9e3c8bd8be532df36018e027e",
+    "stateHash": "79806a6fb9b1e2f70f3a56e9d2d79d76779cf02426243d0f2bf6ebaf6065a60e",
+    "usage": {
+      "steps": 1363636,
+      "limit": 20000000
+    }
+  },
+  {
+    "protocol": "creator-studio/assurance/1",
+    "case": "run",
+    "passed": 6,
+    "budget": 20000000,
+    "programHash": "2288b6da654cd6f72e0ae336172cd034b15e27c9e3c8bd8be532df36018e027e",
+    "stateHash": "79806a6fb9b1e2f70f3a56e9d2d79d76779cf02426243d0f2bf6ebaf6065a60e",
+    "usage": {
+      "steps": 1448603,
+      "limit": 20000000
+    }
+  },
+  {
+    "protocol": "creator-studio/assurance/1",
+    "case": "receipts",
+    "passed": 3,
+    "budget": 20000000,
+    "programHash": "2288b6da654cd6f72e0ae336172cd034b15e27c9e3c8bd8be532df36018e027e",
+    "stateHash": "79806a6fb9b1e2f70f3a56e9d2d79d76779cf02426243d0f2bf6ebaf6065a60e",
+    "usage": {
+      "steps": 1361528,
+      "limit": 20000000
+    }
+  },
+  {
+    "protocol": "creator-studio/assurance/1",
+    "case": "contrast",
+    "passed": 2,
+    "budget": 20000000,
+    "programHash": "2288b6da654cd6f72e0ae336172cd034b15e27c9e3c8bd8be532df36018e027e",
+    "stateHash": "79806a6fb9b1e2f70f3a56e9d2d79d76779cf02426243d0f2bf6ebaf6065a60e",
+    "usage": {
+      "steps": 1361878,
+      "limit": 20000000
+    }
+  },
+  {
+    "protocol": "creator-studio/assurance/1",
+    "case": "standards",
+    "passed": 6,
+    "budget": 20000000,
+    "programHash": "2288b6da654cd6f72e0ae336172cd034b15e27c9e3c8bd8be532df36018e027e",
+    "stateHash": "79806a6fb9b1e2f70f3a56e9d2d79d76779cf02426243d0f2bf6ebaf6065a60e",
+    "usage": {
+      "steps": 5146202,
+      "limit": 20000000
+    }
+  }
+]

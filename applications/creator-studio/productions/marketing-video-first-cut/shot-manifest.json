@@ -1,0 +1,386 @@
+[
+  {
+    "id": "S01",
+    "start": "00:00",
+    "end": "00:16",
+    "offset": 0,
+    "seconds": 16,
+    "indexes": [
+      3,
+      4,
+      5,
+      6
+    ],
+    "title": "Output arrives",
+    "assets": [
+      "G01",
+      "VO01"
+    ],
+    "direction": "00:00 type the brief on a neutral canvas. At 00:06 replace it with three clean output windows labelled Website, Application and Platform. Hold the assembled windows from 00:13.",
+    "check": "Use motion graphics for the opening example. No stopwatch or performance claim.",
+    "lines": [
+      "Software development is changing.",
+      "Today, you can ask an AI to build almost anything.",
+      "A website. A business application. An entire platform.",
+      "And in minutes, something appears."
+    ],
+    "temp": false
+  },
+  {
+    "id": "S02",
+    "start": "00:16",
+    "end": "00:38",
+    "offset": 16,
+    "seconds": 22,
+    "indexes": [
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "title": "The reason is missing",
+    "assets": [
+      "G01",
+      "VO01"
+    ],
+    "direction": "00:16 push into one output window. At 00:22 reveal a behavior card with an empty Reason field. At 00:31 follow a broken link back to the initial request. At 00:35 hold on the question.",
+    "check": "The same working screen carries through S01–S02. This is an illustration.",
+    "lines": [
+      "But there's a problem.",
+      "As software grows, so does its complexity.",
+      "Assumptions get buried. Decisions get forgotten. Documentation drifts away from reality.",
+      "And eventually, even the AI that helped build your software struggles to understand it.",
+      "What if we could build software differently?"
+    ],
+    "temp": false
+  },
+  {
+    "id": "S03",
+    "start": "00:38",
+    "end": "00:54",
+    "offset": 38,
+    "seconds": 16,
+    "indexes": [
+      13,
+      14,
+      15,
+      16
+    ],
+    "title": "Name authoring",
+    "assets": [
+      "G01",
+      "VO01"
+    ],
+    "direction": "00:38 bring Request into the center. At 00:43 branch it into Intention, Requirements, Decisions and Reasons. At 00:51 bring in the Authoring title and hold.",
+    "check": "Build the four labels as editable vector titles.",
+    "lines": [
+      "What if, instead of just generating code, we could capture what you actually mean?",
+      "Your intentions. Your requirements. Your decisions. And the reasons behind them.",
+      "That's what we're building.",
+      "We call it authoring."
+    ],
+    "temp": false
+  },
+  {
+    "id": "S04",
+    "start": "00:54",
+    "end": "01:10",
+    "offset": 54,
+    "seconds": 16,
+    "indexes": [
+      17,
+      18,
+      19
+    ],
+    "title": "Request into interpretation",
+    "assets": [
+      "A01",
+      "G02",
+      "VO01"
+    ],
+    "direction": "00:54 open the approved disposable authoring fixture at the request field. Enter “Track equipment loans so staff can see what is out.” At 01:01 show the recorded request beside the actual interpretation and its visible assumption or open decision.",
+    "check": "Capture the request and the resulting interpretation in one continuous take. A basic intent form alone cannot prove semantic decomposition. Use a marked temp card if the proof is unavailable.",
+    "lines": [
+      "You describe what you want to create.",
+      "Sorcery decomposes your request into meaningful, reusable building blocks.",
+      "It shows you what it understands, what it's assuming, and where important decisions need to be made."
+    ],
+    "temp": true
+  },
+  {
+    "id": "S05",
+    "start": "01:10",
+    "end": "01:19",
+    "offset": 70,
+    "seconds": 9,
+    "indexes": [
+      20
+    ],
+    "title": "Preview an alternative",
+    "assets": [
+      "A02",
+      "VO01"
+    ],
+    "direction": "01:10 select the other supported choice from the same saved request. Hold the changed consequence and the available review action for the final three seconds.",
+    "check": "Two replayable choices and a consequence before commitment are required. If the interaction stops at a proposal, label the slot as missing in the review cut.",
+    "lines": [
+      "You can explore alternatives, change your mind, and see the consequences before committing."
+    ],
+    "temp": true
+  },
+  {
+    "id": "S06",
+    "start": "01:19",
+    "end": "01:42",
+    "offset": 79,
+    "seconds": 23,
+    "indexes": [
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28
+    ],
+    "title": "Rules and reasons",
+    "assets": [
+      "G02",
+      "A03",
+      "VO01"
+    ],
+    "direction": "01:19 introduce Temple. At 01:25 connect a Record, a Rule and a Decision as a simple diagram. At 01:33 cut to the matching rule or receipt in the actual capture.",
+    "check": "Illustration explains the relationship. The actual receipt supports whatever provenance can be read on screen.",
+    "lines": [
+      "Underneath it all is Temple.",
+      "A new kind of relational database and execution engine, where your software, its meaning, and the rules that govern it live together.",
+      "Everything is connected.",
+      "Every important decision can have a reason.",
+      "Every change can have provenance.",
+      "And every action can be subject to explicit constraints.",
+      "We call these admissibility gates."
+    ],
+    "temp": true
+  },
+  {
+    "id": "S07",
+    "start": "01:42",
+    "end": "01:57",
+    "offset": 102,
+    "seconds": 15,
+    "indexes": [
+      29,
+      30,
+      31
+    ],
+    "title": "The gate decides",
+    "assets": [
+      "A03",
+      "VO01"
+    ],
+    "direction": "01:42 frame the guarded command and its condition. At 01:47 show the refusal with the condition unsatisfied. At 01:52 repeat the same action after satisfying that condition and hold the outcome.",
+    "check": "Use the supported Encounter guarded-command fixture. Keep the command and other inputs fixed, and record the changed condition explicitly.",
+    "lines": [
+      "Instead of giving AI unrestricted access and hoping it behaves, Temple is designed to enforce what it's allowed to do.",
+      "Your AI works within your rules.",
+      "Not the other way around."
+    ],
+    "temp": true
+  },
+  {
+    "id": "S08",
+    "start": "01:57",
+    "end": "02:10",
+    "offset": 117,
+    "seconds": 13,
+    "indexes": [
+      33,
+      34,
+      35,
+      36,
+      37,
+      38
+    ],
+    "title": "Compose through a seam",
+    "assets": [
+      "G02",
+      "A04",
+      "VO01"
+    ],
+    "direction": "01:57 show two capability blocks. At 02:02 reveal the mismatched field meanings. At 02:06 connect them through a labelled mapping and hold the translated value.",
+    "check": "Use the actual fields and mapping once qualified. A diagram with a TEMP label can occupy this slot in the internal cut.",
+    "lines": [
+      "And here's where things get interesting.",
+      "Your software doesn't have to be perfect on day one.",
+      "Start simple.",
+      "Reuse existing capabilities.",
+      "Connect systems that don't quite agree using explicit seams.",
+      "Improve the parts that matter."
+    ],
+    "temp": true
+  },
+  {
+    "id": "S09",
+    "start": "02:10",
+    "end": "02:31",
+    "offset": 130,
+    "seconds": 21,
+    "indexes": [
+      39,
+      40,
+      41
+    ],
+    "title": "Change the implementation",
+    "assets": [
+      "A04",
+      "G02",
+      "VO01"
+    ],
+    "direction": "02:10 place Before and After side by side. At 02:17 highlight the changed implementation step. At 02:24 reveal the same named behavior check and both outcomes.",
+    "check": "Capture two real revisions and one replayable check. A visual resemblance does not qualify the proof.",
+    "lines": [
+      "As your requirements grow, you can decompose your application further, strengthen its assurances, and optimise its implementation.",
+      "Without unnecessarily changing its meaning.",
+      "Because you should be able to optimise how software works without changing what it's supposed to do."
+    ],
+    "temp": true
+  },
+  {
+    "id": "S10",
+    "start": "02:31",
+    "end": "02:53",
+    "offset": 151,
+    "seconds": 22,
+    "indexes": [
+      43,
+      44,
+      45
+    ],
+    "title": "Find the relevant context",
+    "assets": [
+      "A05",
+      "VO01"
+    ],
+    "direction": "02:31 frame the Context Hub query and run “Casimir boundary response” against the documented retrieval fixture. At 02:40 hold the ranked list. At 02:46 open the selected source and highlight its displayed link or inclusion reason.",
+    "check": "Use a verified Observatory or equivalent capture with ranked output and trace. Clear visible credentials and unrelated research. This shows retrieval rather than an application-specific integration.",
+    "lines": [
+      "Temple also makes your software navigable.",
+      "With Context Hub, graph-ranking techniques inspired by Google's PageRank help identify the information most relevant to a question.",
+      "So your AI can work with meaningful, connected context rather than trying to understand an entire codebase at once."
+    ],
+    "temp": true
+  },
+  {
+    "id": "S11",
+    "start": "02:53",
+    "end": "03:03",
+    "offset": 173,
+    "seconds": 10,
+    "indexes": [
+      46,
+      47,
+      48
+    ],
+    "title": "Choose an agent and model",
+    "assets": [
+      "A06",
+      "G02",
+      "VO01"
+    ],
+    "direction": "02:53 reveal the agent and model as separate inputs to one workflow. At 02:58 use a real model choice or run label if qualified. End on the shared rules boundary.",
+    "check": "The workbench Ollama run can show one local model. Broader bring-your-own support needs its own demonstrated or approved wording.",
+    "lines": [
+      "Bring your own agent.",
+      "Choose your own models.",
+      "And keep the context where it belongs."
+    ],
+    "temp": true
+  },
+  {
+    "id": "S12",
+    "start": "03:03",
+    "end": "03:21",
+    "offset": 183,
+    "seconds": 18,
+    "indexes": [
+      50,
+      51,
+      52,
+      53,
+      54
+    ],
+    "title": "Who operates it",
+    "assets": [
+      "G02",
+      "R01",
+      "VO01"
+    ],
+    "direction": "03:03 show one Temple system. At 03:08 split the operating arrangements into Self-hosted and Managed, with operator and data custody called out. At 03:16 return to one rules boundary.",
+    "check": "Check the exact open-source scope and current managed offering before using those words in a release cut.",
+    "lines": [
+      "Temple is built for sovereignty.",
+      "Open source.",
+      "Run it yourself, on your own infrastructure, with your own data.",
+      "Or use a managed platform if you'd rather leave the operations to us.",
+      "Your systems. Your rules. Your choice."
+    ],
+    "temp": false
+  },
+  {
+    "id": "S13",
+    "start": "03:21",
+    "end": "03:38",
+    "offset": 201,
+    "seconds": 17,
+    "indexes": [
+      56,
+      57,
+      58,
+      59
+    ],
+    "title": "Recover the reason",
+    "assets": [
+      "A01",
+      "A03",
+      "G01",
+      "VO01"
+    ],
+    "direction": "03:21 return to the same behavior shown in the opening. At 03:27 reveal the saved reason from the authoring material, then at 03:32 show the corresponding rule or result if the two captures are linked.",
+    "check": "Continuity check the opening and close. If proof sources differ, mark the linking graphic as illustrative.",
+    "lines": [
+      "We believe the future of software isn't just about generating more code, faster.",
+      "It's about creating systems we can understand.",
+      "Systems we can trust.",
+      "Systems that preserve our intentions, adapt as our needs change, and remain under human control."
+    ],
+    "temp": true
+  },
+  {
+    "id": "S14",
+    "start": "03:38",
+    "end": "03:52",
+    "offset": 218,
+    "seconds": 14,
+    "indexes": [
+      60,
+      61,
+      62,
+      63
+    ],
+    "title": "End card",
+    "assets": [
+      "G03",
+      "VO01"
+    ],
+    "direction": "03:38 reveal the three closing lines in order. At 03:47 resolve to the approved Sorcery and Temple wordmarks. Hold the final lockup to 03:52.",
+    "check": "Confirm spelling, marks, and whether a call to action belongs on the end card. Keep the script’s closing words as the baseline.",
+    "lines": [
+      "Software that remembers why.",
+      "Software that evolves without losing its meaning.",
+      "Software you author, not just program.",
+      "Welcome to Sorcery and Temple."
+    ],
+    "temp": true
+  }
+]

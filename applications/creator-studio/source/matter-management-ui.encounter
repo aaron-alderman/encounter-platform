@@ -1,0 +1,337 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process cs.apps:
+  let result = list(
+    { id = "home"; title = "Your work, connected."; mark = "✳"; kind = ""; short = "Overview"; description = "Choose your way into the work. Shared meaning, selected standards and commentary travel with you." },
+    { id = "documents"; title = "Documents"; mark = "D"; kind = "document"; short = "Documents"; description = "Write with maintained meaning. A change to a named value can travel through every representation." },
+    { id = "tables"; title = "Tables & Models"; mark = "Σ"; kind = "project"; short = "Tables & Models"; description = "Name the quantities, inspect their units, and make every calculation explain where it comes from." },
+    { id = "presentations"; title = "Presentations"; mark = "P"; kind = "presentation"; short = "Presentations"; description = "Compose a conversation for your audience. Keep the findings connected to their maintained source." },
+    { id = "canvas"; title = "Canvas"; mark = "C"; kind = "canvas"; short = "Canvas"; description = "Make a relationship visible. Its identity and meaning remain distinct from where you draw it." },
+    { id = "media"; title = "Media"; mark = "M"; kind = "media"; short = "Media"; description = "Give the work a voice: scripts, timed scenes, cue sheets and captions compiled from shared meaning." },
+    { id = "workflows"; title = "Workflows"; mark = "W"; kind = "workflow"; short = "Workflows"; description = "Choose an approach, make it your own, and repeat the accepted method with inspectable inputs and outputs." },
+    { id = "review"; title = "Review & Commentary"; mark = "R"; kind = "review"; short = "Review"; description = "Understand the consequences. Retain questions, disagreements and the exact version being discussed." },
+    { id = "library"; title = "Project library"; mark = "L"; kind = ""; short = "Library"; description = "Open, create and carry your work. Portable project packets retain source, draft and version history." },
+    { id = "standards"; title = "Standards"; mark = "S"; kind = "standard"; short = "Standards"; description = "Select a professional language and presentation. Inspect what a standard changes before adopting it." },
+    { id = "exchange"; title = "Exchange"; mark = "↗"; kind = "pack"; short = "Exchange"; description = "Compose with other people's methods. Inspect the contracts, versions, terms and limits before adoption." },
+    { id = "inspect"; title = "Inspect the work"; mark = "I"; kind = ""; short = "Inspect"; description = "Follow the source, generated Encounter views, exact identities and the meaning of each operation." },
+    { id = "guide"; title = "A practice you can understand."; mark = "?"; kind = ""; short = "About"; description = "Creator Studio is a professional expression of the Worldwright approach: choose, compose, inspect, improve and exchange." },
+    { id = "new-record"; title = "Add a working record"; mark = "+"; kind = ""; short = "New record"; description = "Give the work a stable identity, then edit it through the same shared authoring route." }
+  )
+
+process cs.navigate:
+  port kernel.invoke { query = "cs.apps"; input = { } } → apps
+  let found = filter($apps, "a", eq($a.id, $eventInput))
+  assert eq(count($found), 1)
+    otherwise "CS-VIEW: That workspace does not exist."
+  let app = at($found, 0)
+  port state.set { key = "cs.view"; value = $app.id } → _
+  port state.get { key = "cs.draft" } → draft
+  port state.get { key = "cs.recordId" } → selected
+  let records = filter($draft.document.objects, "r", and(eq($r.values.kind, $app.kind), eq($r.values.status, "active")))
+  when not(eq(count($records), 0)):
+    when eq(count(filter($records, "r", eq($r.id, $selected))), 0):
+      let record = at($records, 0)
+      port state.set { key = "cs.recordId"; value = $record.id } → _
+  port state.set { key = "cs.slide"; value = 0 } → _
+
+process cs.paint:
+  port state.get { key = "cs.draft" } → draft
+  port state.get { key = "cs.accepted" } → accepted
+  port state.get { key = "cs.history" } → history
+  port state.get { key = "cs.view" } → view
+  port state.get { key = "cs.registry" } → registry
+  port state.get { key = "cs.projectId" } → projectId
+  port state.get { key = "cs.notice" } → notice
+  port kernel.invoke { query = "cs.validate"; input = $draft } → checked
+  port kernel.invoke { query = "cs.record"; input = { document = $draft.document; id = "standard" } } → standardRecord
+  port kernel.invoke { query = "cs.payload"; input = $standardRecord } → standard
+  port state.get { key = "cs.roomy" } → roomy
+  port browser.write { ref = "#cs-shell"; name = "className"; value = concat("studio profile-", $standard.profile, if($roomy, " reading-roomy", "")) } → _
+  port browser.content { ref = "#cs-reading"; html = concat("<button type=\"button\" class=\"quiet\" data-action=\"reading-space\" aria-pressed=\"", if($roomy, "true", "false"), "\">", if($roomy, "Standard text spacing", "Roomier text"), "</button>") } → _
+  port browser.write { ref = "#cs-project-title"; name = "textContent"; value = $checked.model.title } → _
+  port browser.write { ref = "#cs-version"; name = "textContent"; value = concat("Version ", add(count($history), -1), " · ", count($draft.journal), " draft changes") } → _
+  port browser.write { ref = "#cs-version"; name = "className"; value = concat("badge", if(eq(count($draft.journal), 0), "", " pending")) } → _
+  port browser.write { ref = "#cs-status"; name = "textContent"; value = $notice } → _
+  port browser.write { ref = "#cs-status"; name = "className"; value = "notice" } → _
+  port kernel.invoke { query = "cs.apps"; input = { } } → apps
+  fold filter($apps, "a", not(includes(list("guide", "new-record"), $a.id))) as app; nav starts "":
+    yield concat($nav, if(eq($app.id, "library"), "<div class=\"nav-separator\"></div>", ""), "<button type=\"button\" class=\"nav-item\" data-action=\"nav\" data-id=\"", $app.id, "\"", if(eq($app.id, $view), " aria-current=\"page\"", ""), "><span class=\"nav-icon\" aria-hidden=\"true\">", $app.mark, "</span>", $app.short, "</button>") → nav
+  port browser.content { ref = "#cs-nav"; html = $nav } → _
+  fold $registry as item; options starts "":
+    port kernel.invoke { query = "cs.escape"; input = $item.title } → label
+    yield concat($options, "<option value=\"", $item.id, "\"", if(eq($item.id, $projectId), " selected", ""), ">", $label, "</option>") → options
+  port browser.content { ref = "#cs-project-picker"; html = concat("<label>PROJECT<select id=\"cs-project-select\">", $options, "</select></label>") } → _
+  let app = at(filter($apps, "a", eq($a.id, $view)), 0)
+  port browser.write { ref = "#cs-heading"; name = "textContent"; value = $app.title } → _
+  port browser.write { ref = "#cs-description"; name = "textContent"; value = $app.description } → _
+  port browser.write { ref = "#cs-kicker"; name = "textContent"; value = if(eq($view, "home"), "THE WORK, CONNECTED", "A SHARED PROJECT · YOUR PERSPECTIVE") } → _
+  let actions = "<button type=\"button\" class=\"secondary\" data-action=\"nav\" data-id=\"inspect\">Inspect meaning</button>"
+  when includes(list("documents", "tables", "presentations", "canvas", "media", "workflows", "standards", "review"), $view):
+    let actions = concat("<button type=\"button\" class=\"secondary\" data-action=\"export-record\">Export accepted version ↗</button>", $actions)
+  when eq($view, "home"):
+    let actions = "<button type=\"button\" class=\"primary\" data-action=\"nav\" data-id=\"workflows\">Choose an approach →</button>"
+  port browser.content { ref = "#cs-view-actions"; html = $actions } → _
+  let paintInput = { state = $draft; accepted = $accepted; meaning = $checked.model; standard = $standard; app = $app; apps = $apps }
+  port state.get { key = "cs.recordId" } → recordId
+  let record = at(filter($draft.document.objects, "r", eq($r.id, $recordId)), 0)
+  when $record:
+    port record.put { record = $paintInput; key = "record"; value = $record } → paintInput
+  let html = ""
+  when eq($view, "home"):
+    port kernel.invoke { query = "cs.viewHome"; input = $paintInput } → html
+  when includes(list("documents", "presentations"), $view):
+    port kernel.invoke { query = "cs.viewText"; input = $paintInput } → html
+  when eq($view, "tables"):
+    port kernel.invoke { query = "cs.viewTables"; input = $paintInput } → html
+  when eq($view, "canvas"):
+    port kernel.invoke { query = "cs.viewCanvas"; input = $paintInput } → html
+  when eq($view, "media"):
+    port kernel.invoke { query = "cs.viewMedia"; input = $paintInput } → html
+  when eq($view, "workflows"):
+    port kernel.invoke { query = "cs.viewWorkflow"; input = $paintInput } → html
+  when eq($view, "review"):
+    port kernel.invoke { query = "cs.viewReview"; input = $paintInput } → html
+  when eq($view, "standards"):
+    port kernel.invoke { query = "cs.viewStandards"; input = $paintInput } → html
+  when eq($view, "library"):
+    port kernel.invoke { query = "cs.viewLibrary"; input = $paintInput } → html
+  when eq($view, "exchange"):
+    port kernel.invoke { query = "cs.viewExchange"; input = $paintInput } → html
+  when eq($view, "inspect"):
+    port kernel.invoke { query = "cs.viewInspect"; input = $paintInput } → html
+  when eq($view, "guide"):
+    port kernel.invoke { query = "cs.viewGuide"; input = $paintInput } → html
+  when eq($view, "new-record"):
+    port kernel.invoke { query = "cs.viewNewRecord"; input = $paintInput } → html
+  port browser.content { ref = "#cs-workspace"; html = $html } → _
+  let context = ""
+  when not(includes(list("review", "guide", "library", "inspect", "exchange", "new-record"), $view)):
+    port kernel.invoke { query = "cs.context"; input = $paintInput } → context
+  port browser.content { ref = "#cs-context"; html = $context } → _
+
+process cs.picker:
+  let kind = $eventInput.app.kind
+  let selected = $eventInput.record.id
+  fold filter($eventInput.state.document.objects, "r", and(eq($r.values.kind, $kind), eq($r.values.status, "active"))) as record; html starts "":
+    port kernel.invoke { query = "cs.escape"; input = $record.values.title } → label
+    yield concat($html, "<button type=\"button\" class=\"record-tab", if(eq($record.id, $selected), " active", ""), "\" data-action=\"select-record\" data-id=\"", $record.id, "\">", $label, "</button>") → html
+  let result = concat("<div class=\"record-picker\">", $html, if(includes(list("document", "presentation", "canvas", "media", "workflow"), $kind), concat("<button type=\"button\" class=\"record-tab\" data-action=\"new-record\" data-id=\"", $kind, "\">+ Add</button>"), ""), "</div>")
+
+process cs.viewHome:
+  let meaning = $eventInput.meaning
+  port kernel.invoke { query = "cs.escape"; input = $meaning.client } → client
+  let total = "Define your model"
+  when not(eq(count(filter($meaning.quantities, "q", eq($q.id, "total"))), 0)):
+    port kernel.invoke { query = "cs.value"; input = { model = $meaning; id = "total" } } → total
+  fold filter($eventInput.apps, "a", includes(list("documents", "tables", "presentations", "canvas", "media", "workflows", "review"), $a.id)) as app; cards starts "":
+    yield concat($cards, "<button type=\"button\" class=\"work-card\" data-action=\"nav\" data-id=\"", $app.id, "\"><span class=\"card-top\"><span class=\"app-mark\" aria-hidden=\"true\">", $app.mark, "</span><span class=\"card-arrow\" aria-hidden=\"true\">↗</span></span><h2>", $app.short, "</h2><p>", $app.description, "</p></button>") → cards
+  let result = concat("<section class=\"hero-panel\"><div><p class=\"eyebrow\">A MAINTAINED BODY OF WORK</p><h2>Make the meaning.<br>Keep the connections.</h2><p>Your proposal, model, delivery map and briefing share one project. Choose the perspective that makes the next question easiest to see.</p><button type=\"button\" class=\"primary\" data-action=\"nav\" data-id=\"documents\">Open the work →</button></div><div class=\"hero-metrics\"><div class=\"metric\"><strong>7</strong><span>Working perspectives</span></div><div class=\"metric\"><strong>", count($eventInput.state.document.objects), "</strong><span>Connected records</span></div><div class=\"metric\"><strong>", count($meaning.quantities), "</strong><span>Named quantities</span></div><div class=\"metric\"><strong>", $total, "</strong><span>Current model · ", $client, "</span></div></div></section><div class=\"flow-strip\"><span>Understand</span><b>→</b><span>Compose</span><b>→</b><span>Inspect</span><b>→</b><span>Review</span><b>→</b><span>Carry forward</span></div><div class=\"work-grid\">", $cards, "</div>")
+
+process cs.viewText:
+  let record = $eventInput.record
+  port kernel.invoke { query = "cs.picker"; input = $eventInput } → picker
+  port kernel.invoke { query = "cs.escape"; input = $record.values.title } → title
+  port kernel.invoke { query = "cs.escape"; input = $record.values.body } → body
+  port kernel.invoke { query = "cs.escape"; input = $record.values.note } → note
+  let preview = ""
+  when eq($record.values.kind, "document"):
+    port kernel.invoke { query = "cs.markdown"; input = { text = $record.values.body; meaning = $eventInput.meaning; standard = $eventInput.standard } } → rendered
+    let preview = concat("<article class=\"paper\"><p class=\"paper-label\">", $title, " · DRAFT PERSPECTIVE</p>", $rendered.html, "<p class=\"source-line\">", count($rendered.bindings), " maintained bindings · ", $record.id, "</p></article>")
+  when eq($record.values.kind, "presentation"):
+    port kernel.invoke { query = "cs.slides"; input = $record.values.body } → slides
+    port state.get { key = "cs.slide" } → selected
+    when not(at($slides, $selected)):
+      let selected = 0
+    let slide = at($slides, $selected)
+    port kernel.invoke { query = "cs.markdown"; input = { text = concat("# ", $slide.title, "\n", $slide.text); meaning = $eventInput.meaning; standard = $eventInput.standard } } → rendered
+    fold $slides as item; thumbs starts { html = ""; index = 0 }:
+      port kernel.invoke { query = "cs.escape"; input = $item.title } → label
+      yield { html = concat($thumbs.html, "<button type=\"button\" class=\"slide-thumb\" data-action=\"slide\" data-id=\"", $thumbs.index, "\">", add($thumbs.index, 1), ". ", $label, "</button>"); index = add($thumbs.index, 1) } → thumbs
+    let preview = concat("<section class=\"panel\"><div class=\"slide\">", $rendered.html, "<span class=\"slide-number\">", add($selected, 1), " / ", count($slides), " · ", $title, "</span></div><div class=\"slide-strip\">", $thumbs.html, "</div><p class=\"source-line\">HTML presentation export includes print layout. Speaker notes remain part of the maintained record.</p></section>")
+  let result = concat($picker, "<div class=\"split\"><form class=\"panel\" data-command=\"text-record\"><div class=\"panel-head\"><div><p class=\"eyebrow\">AUTHOR THE SOURCE</p><h2>Edit with meaning.</h2></div><span class=\"badge\">", $record.id, "</span></div><label>Title<input id=\"cs-edit-title\" maxlength=\"160\" value=\"", $title, "\" required></label><label>", if(eq($record.values.kind, "presentation"), "Slides · # title, then body; separate with ---", "Document · # headings and named values"), "<textarea id=\"cs-edit-body\" class=\"text-editor\" maxlength=\"4000\" required>", $body, "</textarea><span class=\"help\">Use [[participants]], [[total]], [[client]] or another named value. The value has an owner; its position on this page does not define it.</span></label><label>", if(eq($record.values.kind, "presentation"), "Speaker notes", "Editorial note"), "<textarea id=\"cs-edit-note\" maxlength=\"1200\" rows=\"3\">", $note, "</textarea></label><button type=\"submit\" class=\"primary\">Preview changes →</button></form>", $preview, "</div>")
+
+process cs.viewTables:
+  let meaning = $eventInput.meaning
+  port kernel.invoke { query = "cs.chartPanel"; input = $eventInput } → chart
+  port kernel.invoke { query = "cs.tableHTML"; input = $meaning } → table
+  port state.get { key = "cs.selected" } → selected
+  let item = at(filter($meaning.source.inputs, "i", eq($i.id, $selected)), 0)
+  let fresh = not($item)
+  when $fresh:
+    let item = { id = ""; label = ""; value = 0; unit = "number" }
+  port kernel.invoke { query = "cs.escape"; input = $item.label } → label
+  fold list("person", "session", "number", "ratio", "AUD", "AUD/person", "AUD/session", "hour") as unit; options starts "":
+    yield concat($options, "<option", if(eq($unit, $item.unit), " selected", ""), ">", $unit, "</option>") → options
+  fold $meaning.quantities as quantity; operands starts "":
+    port kernel.invoke { query = "cs.escape"; input = $quantity.label } → name
+    yield concat($operands, "<option value=\"", $quantity.id, "\">", $name, " · ", $quantity.id, "</option>") → operands
+  port kernel.invoke { query = "cs.calculationForm"; input = { meaning = $meaning; selected = $selected } } → calculationForm
+  let result = concat("<div class=\"stack\">", $chart, "<div class=\"panel\"><div class=\"panel-head\"><div><p class=\"eyebrow\">NAMED VALUES · EXPLICIT UNITS</p><h2>The assumptions, visible.</h2></div><button type=\"button\" class=\"secondary\" data-action=\"quantity\" data-id=\"new\">+ Named input</button></div>", $table, "<p class=\"source-line\">Click an input to edit it. Calculations identify their operands by meaning, never by a cell address.</p></div><div class=\"two-col\"><form class=\"panel\" data-command=\"quantity\"><h2>", if($fresh, "Add a named input", "Edit an assumption"), "</h2><input type=\"hidden\" id=\"cs-quantity-existing\" value=\"", if($fresh, "", $item.id), "\"><label>Stable name<input id=\"cs-quantity-id\" value=\"", $item.id, "\"", if($fresh, "", " readonly"), " placeholder=\"travel_cost\" required></label><label>Display label<input id=\"cs-quantity-label\" value=\"", $label, "\" maxlength=\"100\" required></label><div class=\"form-row\"><label>Value<input id=\"cs-quantity-value\" type=\"number\" min=\"0\" max=\"1000000\" step=\"any\" value=\"", $item.value, "\" required></label><label>Unit<select id=\"cs-quantity-unit\">", $options, "</select></label></div><button type=\"submit\" class=\"primary\">Preview model change →</button><p class=\"help\">Dependent text, figures and captions are recompiled in the draft. Professional judgments remain open to review.</p></form>", $calculationForm, "</div></div>")
+
+process cs.viewCanvas:
+  port kernel.invoke { query = "cs.picker"; input = $eventInput } → picker
+  port kernel.invoke { query = "cs.payload"; input = $eventInput.record } → canvas
+  port kernel.invoke { query = "cs.canvasHTML"; input = { canvas = $canvas; meaning = $eventInput.meaning; standard = $eventInput.standard } } → diagram
+  port state.get { key = "cs.selected" } → selected
+  let node = at(filter($canvas.nodes, "n", eq($n.id, $selected)), 0)
+  when not($node):
+    let node = { id = ""; label = ""; detail = ""; x = 40; y = 220 }
+  port kernel.invoke { query = "cs.escape"; input = $node.label } → label
+  port kernel.invoke { query = "cs.escape"; input = $node.detail } → detail
+  fold $canvas.nodes as item; nodes starts "":
+    port kernel.invoke { query = "cs.escape"; input = $item.label } → name
+    yield concat($nodes, "<button type=\"button\" class=\"record-tab\" data-action=\"node\" data-id=\"", $item.id, "\">", $name, "</button>") → nodes
+  fold $canvas.nodes as item; options starts "":
+    port kernel.invoke { query = "cs.escape"; input = $item.label } → name
+    yield concat($options, "<option value=\"", $item.id, "\">", $name, "</option>") → options
+  fold $canvas.edges as edge; edges starts "":
+    port kernel.invoke { query = "cs.escape"; input = $edge.kind } → reason
+    yield concat($edges, "<li>", $edge.from, " → ", $edge.to, " · ", $reason, "</li>") → edges
+  let result = concat($picker, "<div class=\"stack\"><div class=\"panel\"><p class=\"eyebrow\">RELATIONSHIPS · NOT JUST LINES</p><div class=\"diagram-frame\" tabindex=\"0\" aria-label=\"Delivery map; scroll across to inspect nodes\">", $diagram, "</div><ul class=\"impact-list\">", $edges, "</ul></div><div class=\"record-picker\">", $nodes, "<button type=\"button\" class=\"record-tab\" data-action=\"node\" data-id=\"new\">+ Node</button></div><div class=\"two-col\"><form class=\"panel\" data-command=\"node\"><h2>Place a meaningful thing</h2><input type=\"hidden\" id=\"cs-node-existing\" value=\"", $node.id, "\"><label>Stable identity<input id=\"cs-node-id\" value=\"", $node.id, "\"", if(eq($node.id, ""), "", " readonly"), " required></label><label>Label<input id=\"cs-node-label\" value=\"", $label, "\" maxlength=\"80\" required></label><label>Explanation<input id=\"cs-node-detail\" value=\"", $detail, "\" maxlength=\"120\"></label><div class=\"form-row\"><label>Across<input id=\"cs-node-x\" type=\"number\" min=\"0\" max=\"700\" value=\"", $node.x, "\" required></label><label>Down<input id=\"cs-node-y\" type=\"number\" min=\"0\" max=\"1000\" value=\"", $node.y, "\" required></label></div><button type=\"submit\" class=\"primary\">Preview node change</button></form><form class=\"panel\" data-command=\"edge\"><h2>Explain a connection</h2><label>From<select id=\"cs-edge-from\">", $options, "</select></label><label>To<select id=\"cs-edge-to\">", $options, "</select></label><label>Relationship<input id=\"cs-edge-kind\" placeholder=\"informs, prepares, depends on…\" maxlength=\"60\" required></label><button type=\"submit\" class=\"secondary\">Add relationship</button><p class=\"help\">Changing a node's arrangement does not change the relationship it represents.</p></form></div></div>")
+
+process cs.viewMedia:
+  port kernel.invoke { query = "cs.picker"; input = $eventInput } → picker
+  port kernel.invoke { query = "cs.payload"; input = $eventInput.record } → media
+  port state.get { key = "cs.selected" } → selected
+  port number.parse { value = $selected } → selectedIndex
+  let scene = at($media.scenes, $selectedIndex)
+  when not($scene):
+    let scene = { title = ""; text = ""; seconds = 8 }
+    let selectedIndex = -1
+  port kernel.invoke { query = "cs.escape"; input = $scene.title } → title
+  port kernel.invoke { query = "cs.escape"; input = $scene.text } → text
+  fold $media.scenes as beat; timeline starts { html = ""; time = 0; index = 0 }:
+    port kernel.invoke { query = "cs.expand"; input = { text = $beat.text; model = $eventInput.meaning } } → line
+    port kernel.invoke { query = "cs.standardize"; input = { text = $line.text; standard = $eventInput.standard } } → line
+    port kernel.invoke { query = "cs.escape"; input = $line } → line
+    port kernel.invoke { query = "cs.escape"; input = $beat.title } → label
+    port kernel.invoke { query = "cs.timestamp"; input = $timeline.time } → start
+    port kernel.invoke { query = "cs.listControls"; input = { field = "scenes"; index = $timeline.index } } → controls
+    yield { html = concat($timeline.html, "<article class=\"scene\"><div class=\"scene-header\"><div><span class=\"cue\">", $start, " · ", $beat.seconds, " seconds</span><h3>", $label, "</h3></div><button type=\"button\" class=\"secondary\" data-action=\"scene\" data-id=\"", $timeline.index, "\">Edit scene</button></div><p>", $line, "</p>", $controls, "</article>"); time = add($timeline.time, $beat.seconds); index = add($timeline.index, 1) } → timeline
+  let result = concat($picker, "<div class=\"split\"><form class=\"panel\" data-command=\"scene\"><p class=\"eyebrow\">SCRIPT · TIMING · CAPTIONS</p><h2>", if(eq($selectedIndex, -1), "Add a scene", "Edit a scene"), "</h2><input type=\"hidden\" id=\"cs-scene-index\" value=\"", $selectedIndex, "\"><label>Scene title<input id=\"cs-scene-title\" value=\"", $title, "\" maxlength=\"100\" required></label><label>Spoken or captioned text<textarea id=\"cs-scene-text\" rows=\"7\" maxlength=\"600\" required>", $text, "</textarea><span class=\"help\">Named values such as [[participants]] retain their project meaning.</span></label><label>Duration in seconds<input type=\"number\" id=\"cs-scene-seconds\" min=\"0.1\" max=\"3600\" step=\"0.1\" value=\"", $scene.seconds, "\" required></label><button type=\"submit\" class=\"primary\">Preview scene</button><button type=\"button\" class=\"quiet\" data-action=\"scene\" data-id=\"new\">+ Add another scene</button><p class=\"help\">Exports real WebVTT captions. This workspace authors scripts and timing; it does not claim to encode a production film or synthesize a voice.</p></form><section class=\"panel\"><div class=\"panel-head\"><div><p class=\"eyebrow\">STORYBOARD PERSPECTIVE</p><h2>A voice for the work.</h2></div><span class=\"badge\">", $timeline.time, " seconds</span></div><div class=\"timeline\">", $timeline.html, "</div></section></div>")
+
+process cs.viewWorkflow:
+  port kernel.invoke { query = "cs.picker"; input = $eventInput } → picker
+  port kernel.invoke { query = "cs.payload"; input = $eventInput.record } → workflow
+  fold $workflow.steps as step; steps starts { html = ""; index = 1 }:
+    port kernel.invoke { query = "cs.escape"; input = $step.label } → label
+    port kernel.invoke { query = "cs.listControls"; input = { field = "steps"; index = add($steps.index, -1) } } → controls
+    yield { html = concat($steps.html, "<li class=\"step\"><span class=\"step-number\">", $steps.index, "</span><div><h3>", $label, "</h3><p>", $step.app, " · ", $step.operation, " · ", $step.id, "</p>", $controls, "</div><button type=\"button\" class=\"secondary\" data-action=\"nav\" data-id=\"", $step.app, "\">Open →</button></li>"); index = add($steps.index, 1) } → steps
+  port state.get { key = "cs.run" } → run
+  let report = "<p class=\"empty\">Run the accepted method to validate the project and compile its deliverables. Draft work remains separate.</p>"
+  when $run:
+    fold $run.artifacts as artifact; files starts "":
+      yield concat($files, "<li><strong>", $artifact.name, "</strong><span class=\"help\">", $artifact.format, " · ", count($artifact.text), " characters<br>SHA-256 ", $artifact.sha256, "</span></li>") → files
+    let report = concat("<p><strong>", count($run.artifacts), " compiled deliverables</strong></p><ul class=\"impact-list\">", $files, "</ul><p class=\"help\">Source: ", $run.sourceHash, "<br>Status: ", $run.status, "</p><button type=\"button\" class=\"secondary\" data-action=\"download-run\">Export execution report</button>")
+  let result = concat($picker, "<div class=\"two-col\"><section class=\"panel\"><p class=\"eyebrow\">CHOOSE YOUR WAY IN</p><h2>A method, not a funnel.</h2><p class=\"subtle\">Pick a starting approach. Every app remains directly accessible, and changes to the shared method stay reviewable.</p><div class=\"pill-row\"><button type=\"button\" class=\"secondary\" data-action=\"route\" data-id=\"narrative\">Narrative first</button><button type=\"button\" class=\"secondary\" data-action=\"route\" data-id=\"budget\">Budget first</button><button type=\"button\" class=\"secondary\" data-action=\"route\" data-id=\"codesign\">Co-design</button></div><p class=\"source-line\">Selected route: ", $workflow.route, "</p><ol class=\"step-list\">", $steps.html, "</ol><form data-command=\"step\"><h3>Add or update a step</h3><div class=\"form-row\"><label>Identity<input id=\"cs-step-id\" required placeholder=\"review_sources\"></label><label>Label<input id=\"cs-step-label\" required placeholder=\"Review the sources\"></label><label>Workspace<select id=\"cs-step-app\"><option value=\"documents\">Documents</option><option value=\"tables\">Tables</option><option value=\"presentations\">Presentations</option><option value=\"canvas\">Canvas</option><option value=\"media\">Media</option><option value=\"review\">Review</option></select></label><label>Operation<select id=\"cs-step-operation\"><option>inspect</option><option>check</option><option>compile</option><option>review</option></select></label></div><button type=\"submit\" class=\"secondary\">Preview step</button><p class=\"help\">Use an existing step identity to update its label, workspace or operation. Use Earlier and Later to compose the order.</p></form></section><section class=\"panel\"><p class=\"eyebrow\">REPEATABLE · SOURCE-BOUND</p><h2>Run what you understand.</h2><p class=\"subtle\">Check the accepted project, compile each production record, and retain artifact hashes in one report.</p><button type=\"button\" class=\"primary\" data-action=\"run\">Run accepted workflow →</button><div class=\"source-line\">", $report, "</div><p class=\"help\">This run performs bounded checks and compilation. A review step remains a human checkpoint; no publication or payment is inferred.</p></section></div>")
+
+process cs.comments:
+  port kernel.invoke { query = "cs.record"; input = { document = $eventInput.state.document; id = "commentary" } } → record
+  port kernel.invoke { query = "cs.payload"; input = $record } → conversation
+  let comments = $conversation.comments
+  when at($eventInput, "subject"):
+    let comments = filter($comments, "c", or(eq($c.subject, $eventInput.subject), eq($c.subject, "project")))
+  fold $comments as comment; html starts "":
+    port kernel.invoke { query = "cs.escape"; input = $comment.author } → author
+    port kernel.invoke { query = "cs.escape"; input = $comment.text } → text
+    port kernel.invoke { query = "cs.escape"; input = $comment.context } → context
+    port kernel.invoke { query = "cs.record"; input = { document = $eventInput.state.document; id = $comment.subject } } → subject
+    port kernel.invoke { query = "cs.anchor"; input = { state = $eventInput.state; id = $comment.subject } } → anchor
+    let stale = not(eq($anchor.hash, $comment.anchorHash))
+    yield concat($html, "<article class=\"comment ", $comment.status, "\"><div class=\"comment-meta\"><strong>", $author, "</strong><span>", $comment.subject, " · ", $comment.field, "</span><span>", if($stale, "Earlier context — inspect before carrying forward", "Anchor still matches"), "</span></div><p>", $text, "</p><details><summary>Original context and basis</summary><p>", $context, "</p><p class=\"help\">", $comment.basis, "</p></details><div class=\"button-row\"><button type=\"button\" class=\"quiet\" data-action=\"comment-status\" data-id=\"", $comment.id, "\">", if(eq($comment.status, "open"), "Mark resolved locally", "Reopen discussion"), "</button></div></article>") → html
+  when eq($html, ""):
+    let html = "<p class=\"empty\">No discussion here yet. A question or a faithful disagreement is useful work.</p>"
+  let result = concat("<div class=\"stack\">", $html, "</div>")
+
+process cs.commentForm:
+  fold filter($eventInput.state.document.objects, "r", not(eq($r.values.status, "archived"))) as record; options starts "":
+    port kernel.invoke { query = "cs.escape"; input = $record.values.title } → title
+    yield concat($options, "<option value=\"", $record.id, "\"", if(eq($record.id, $eventInput.subject), " selected", ""), ">", $title, "</option>") → options
+  let result = concat("<form data-command=\"comment\"><h3>Leave useful commentary</h3><div class=\"form-row\"><label>About<select id=\"cs-comment-subject\">", $options, "</select></label><label>Your attribution<input id=\"cs-comment-author\" maxlength=\"100\" value=\"You\" required></label></div><label>Question, suggestion or disagreement<textarea id=\"cs-comment-text\" maxlength=\"1000\" rows=\"4\" required></textarea></label><button type=\"submit\" class=\"primary\">Add to the conversation</button><span class=\"help\">This local attribution is not verified identity. Posting records a comment; resolving it does not accept a factual change.</span></form>")
+
+process cs.context:
+  let subject = "project"
+  when at($eventInput, "record"):
+    let subject = $eventInput.record.id
+  port kernel.invoke { query = "cs.comments"; input = { state = $eventInput.state; subject = $subject } } → comments
+  port kernel.invoke { query = "cs.commentForm"; input = { state = $eventInput.state; subject = $subject } } → form
+  let result = concat("<div class=\"context-grid\"><section class=\"panel\"><p class=\"eyebrow\">COMMENTARY TRAVELS WITH THE WORK</p><h2>Keep the conversation.</h2>", $comments, "</section><section class=\"panel\">", $form, "</section></div>")
+
+process cs.viewReview:
+  port kernel.invoke { query = "cs.impact"; input = { before = $eventInput.accepted; after = $eventInput.state } } → impact
+  fold $impact as item; changes starts "":
+    port kernel.invoke { query = "cs.escape"; input = $item.title } → title
+    port text.join { values = $item.fields; separator = ", " } → fields
+    port kernel.invoke { query = "cs.escape"; input = $fields } → fields
+    fold $item.values as value; comparisons starts "":
+      port kernel.invoke { query = "cs.escape"; input = $value.before } → beforeText
+      port kernel.invoke { query = "cs.escape"; input = $value.after } → afterText
+      yield concat($comparisons, "<span class=\"help\">", $value.id, ": ", $beforeText, " → ", $afterText, "</span>") → comparisons
+    yield concat($changes, "<li><strong>", $title, "</strong> · ", $fields, "<span class=\"help\">", if($item.direct, "Direct source change", "Affected through maintained meaning or selected standards"), " · ", $item.id, "</span>", $comparisons, "</li>") → changes
+  when eq($changes, ""):
+    let changes = "<li>No draft changes. Accepted work is intact.</li>"
+  port kernel.invoke { query = "cs.comments"; input = { state = $eventInput.state } } → comments
+  port kernel.invoke { query = "cs.commentForm"; input = { state = $eventInput.state; subject = "project" } } → form
+  port state.get { key = "cs.history" } → history
+  fold $history as version; versions starts "":
+    port kernel.invoke { query = "cs.escape"; input = $version.label } → label
+    yield concat($versions, "<li><button type=\"button\" class=\"quiet\" data-action=\"compare-version\" data-id=\"", $version.version, "\">Version ", $version.version, " · ", $label, " ↗</button></li>") → versions
+  port state.get { key = "cs.comparison" } → comparison
+  let comparisonHTML = ""
+  when $comparison:
+    port json.stringify { value = $comparison; space = 2 } → printable
+    port kernel.invoke { query = "cs.escape"; input = $printable } → printable
+    let comparisonHTML = concat("<pre class=\"code-view\">", $printable, "</pre>")
+  let result = concat("<div class=\"stack\"><div class=\"two-col\"><section class=\"panel\"><p class=\"eyebrow\">BEFORE ACCEPTANCE</p><h2>Understand the consequence.</h2><p class=\"subtle\">", count($eventInput.state.journal), " proposed changes. The preview below distinguishes direct edits from affected representations.</p><ul class=\"impact-list\">", $changes, "</ul><div class=\"button-row\"><button type=\"button\" class=\"primary\" data-action=\"accept\">Save reviewed version</button><button type=\"button\" class=\"secondary\" data-action=\"discard\">Discard draft changes</button></div><p class=\"source-line\">Accepted: ", $eventInput.accepted.documentHash, "<br>Draft: ", $eventInput.state.documentHash, "</p></section><section class=\"panel\"><p class=\"eyebrow\">SCENARIOS RETAIN THEIR BASELINE</p><h2>What if there were 48?</h2><p class=\"subtle\">In the training example, try 48 participants while keeping the accepted 30-person version intact. The arithmetic changes; staffing judgment remains yours.</p><button type=\"button\" class=\"secondary\" data-action=\"scenario\">Preview 48 participants</button><h3>Retained versions</h3><ul class=\"impact-list\">", $versions, "</ul>", $comparisonHTML, "</section></div><div class=\"two-col\"><section class=\"panel\"><h2>Questions stay visible.</h2>", $comments, "</section><section class=\"panel\">", $form, "</section></div></div>")
+
+process cs.viewStandards:
+  let standard = $eventInput.standard
+  fold list("editorial", "technical", "client") as profile; profiles starts "":
+    yield concat($profiles, "<option", if(eq($profile, $standard.profile), " selected", ""), ">", $profile, "</option>") → profiles
+  fold $standard.terminology as term; terms starts "":
+    yield concat($terms, $term.from, " => ", $term.to, "\n") → terms
+  port kernel.invoke { query = "cs.escape"; input = $terms } → terms
+  port kernel.invoke { query = "cs.escape"; input = $standard.licence } → licence
+  port kernel.invoke { query = "cs.escape"; input = $standard.accessibility } → accessibility
+  let result = concat("<div class=\"two-col\"><form class=\"panel\" data-command=\"standard\"><p class=\"eyebrow\">SELECTED · VERSIONED · REVIEWABLE</p><h2>A consistent professional language.</h2><label>Presentation profile<select id=\"cs-standard-profile\">", $profiles, "</select></label><label>Terminology · one from =&gt; to mapping per line<textarea id=\"cs-standard-terms\" rows=\"6\" maxlength=\"1200\">", $terms, "</textarea></label><label>Accessibility requirements<textarea id=\"cs-standard-accessibility\" maxlength=\"500\" rows=\"3\">", $accessibility, "</textarea></label><label>Licence and attribution terms<textarea id=\"cs-standard-licence\" maxlength=\"500\" rows=\"3\">", $licence, "</textarea></label><button type=\"submit\" class=\"primary\">Preview standards change</button></form><section class=\"panel\"><p class=\"eyebrow\">STANDARDIZATION WITH MEANING</p><h2>Keep the distinction.</h2><p>The editorial, technical and client profiles change the suite's presentation deliberately. Terminology mappings apply to compiled prose; the underlying source wording remains available.</p><p>Units are checked by the model. Renaming a currency label cannot turn one currency into another. Unresolved interpretation and professional judgment remain visible.</p><div class=\"flow-strip\"><span>Inspect</span><b>→</b><span>Preview</span><b>→</b><span>Review</span><b>→</b><span>Adopt</span></div><p class=\"source-line\">Selected profile: ", $standard.profile, "<br>Source owner: standard · body<br>New versions never silently replace existing projects.</p></section></div>")
+
+process cs.viewLibrary:
+  port state.get { key = "cs.registry" } → registry
+  fold $registry as project; cards starts "":
+    port kernel.invoke { query = "cs.escape"; input = $project.title } → title
+    yield concat($cards, "<article class=\"project-card\"><p class=\"eyebrow\">LOCAL PROJECT</p><h3>", $title, "</h3><span class=\"help\">", $project.id, " · source and versions retained in this browser</span><button type=\"button\" class=\"quiet\" data-action=\"open-project\" data-id=\"", $project.id, "\">Open project →</button></article>") → cards
+  port kernel.invoke { query = "cs.projectForm"; input = $eventInput.meaning } → projectForm
+  port kernel.invoke { query = "cs.sourcesPanel"; input = $eventInput } → sourcesPanel
+  let result = concat("<div class=\"stack\">", $projectForm, $sourcesPanel, "<div class=\"work-grid\">", $cards, "</div><div class=\"two-col\"><form class=\"panel\" data-command=\"new-project\"><h2>Start another world of work.</h2><label>Project name<input id=\"cs-new-project-title\" maxlength=\"160\" placeholder=\"A useful next project\" required></label><label>Starting composition<select id=\"cs-new-project-template\"><option value=\"blank\">Blank professional project</option><option value=\"training\">Training proposal · illustrative figures</option></select></label><button type=\"submit\" class=\"primary\">Create project</button><p class=\"help\">Up to eight local projects, 32 records and 12 complete versions per project. Export retained work before clearing browser data.</p></form><form class=\"panel wide-form\" data-command=\"import-project\"><h2>Bring work with you.</h2><label>Creator Studio project packet<textarea id=\"cs-import-project\" maxlength=\"1800000\" placeholder=\"Paste an exported project packet\" required></textarea></label><button type=\"submit\" class=\"secondary\">Verify and import as a new project</button><p class=\"help\">The packet is replayed and checked against this process version. Malformed data, altered receipts and stale process identities refuse. Nothing is executed from an imported packet.</p></form></div><section class=\"panel\"><h2>Import a brief or existing text.</h2><form data-command=\"import-text\"><div class=\"form-row\"><label>Source title<input id=\"cs-import-title\" maxlength=\"160\" required></label><label>Original source or attribution<input id=\"cs-import-source\" maxlength=\"500\" placeholder=\"Where did this come from?\" required></label></div><label>Plain text or supported Markdown<textarea id=\"cs-import-text\" maxlength=\"4000\" rows=\"8\" required></textarea></label><button type=\"submit\" class=\"secondary\">Retain as a source document</button><span class=\"help\">Import retains the text and attribution. Bind named values explicitly; formatting alone does not establish semantic identity. Native Office and arbitrary binary imports need qualified adapters.</span></form></section></div>")
+
+process cs.viewInspect:
+  port state.get { key = "cs.sourceMode" } → mode
+  let text = $eventInput.state.inputs.codeText
+  let label = "Generated Encounter view definitions · derived from typed source"
+  when eq($mode, "meaning"):
+    port json.stringify { value = $eventInput.state.document; space = 2 } → text
+    let label = "Managed project source · inert own-data"
+  when eq($mode, "identity"):
+    port json.stringify { value = { programHash = $data.programHash; sources = $data.identity; documentHash = $eventInput.state.documentHash; projectionHash = $eventInput.state.projectionHash; budget = 20000000 }; space = 2 } → text
+    let label = "Exact selected source identities · unchanged native budget"
+  when eq($mode, "history"):
+    port json.stringify { value = $eventInput.state.journal; space = 2 } → text
+    let label = "Current draft's ordered inverse-edit journal"
+  when eq($mode, "process"):
+    let text = $data.policySource
+    let label = "Exact selected Encounter source · document and style owner"
+  port kernel.invoke { query = "cs.escape"; input = $text } → text
+  let result = concat("<section class=\"panel\"><div class=\"pill-row\"><button type=\"button\" class=\"secondary\" data-action=\"source-mode\" data-id=\"meaning\">Meaning</button><button type=\"button\" class=\"secondary\" data-action=\"source-mode\" data-id=\"views\">Encounter views</button><button type=\"button\" class=\"secondary\" data-action=\"source-mode\" data-id=\"process\">Process source</button><button type=\"button\" class=\"secondary\" data-action=\"source-mode\" data-id=\"identity\">Identities</button><button type=\"button\" class=\"secondary\" data-action=\"source-mode\" data-id=\"history\">Draft history</button></div><p class=\"source-line\">", $label, "</p><pre class=\"code-view\">", $text, "</pre><div class=\"button-row\"><button type=\"button\" class=\"secondary\" data-action=\"export-encounter\">Export generated Encounter views</button></div><p class=\"help\">Generated view definitions are not a second source authority. All source changes use the retained ec.patch path. The local agent bridge can inspect, propose and compile; it cannot claim authenticated identity or external authority.</p><details><summary>Exact application process owners</summary><ul><li><a href=\"source/matters.encounter\">Shared semantics and validation</a></li><li><a href=\"source/workspace-ui.encounter\">Local state, persistence and agent surface</a></li><li><a href=\"source/matter-management-ui.encounter\">Seven professional perspectives</a></li><li><a href=\"source/matter-management.encounter\">Interaction and editing operations</a></li><li><a href=\"source/matters-ui.encounter\">Compilation and exported representations</a></li><li><a href=\"source/party-work.encounter\">Exchange, workflow and impact contracts</a></li></ul></details></section>")
+
+process cs.viewGuide:
+  let result = concat("<div class=\"stack\"><section class=\"hero-panel\"><div><p class=\"eyebrow\">CREATOR STUDIO · THE WORLDWRIGHT APPROACH</p><h2>Choose your approach.<br>Carry the meaning.</h2><p>Creator Studio is a professional production suite over one maintained body of work. A document, chart, diagram, briefing and script can present the same identified meaning without copying it into competing sources.</p></div><div><h3>A world, a composition, a journey</h3><p>The world holds the material. A composition offers a way to work with it. Your journey is the route you actually take. You can begin with a budget, a story, a sketch or a question.</p></div></section><div class=\"two-col\"><section class=\"panel\"><h2>Inspect as you go.</h2><p>Meaning, presentation, standards, commentary and processes have different owners. Follow a quantity to its assumptions. Inspect a relationship's reason. Review an edit's consequences before accepting it.</p><p>The same familiar operations should help you learn, adapt another person's approach, and improve your own practice.</p></section><section class=\"panel\"><h2>Compose with other people.</h2><p>Exchange methods, selected standards, review packets and professional work. A package names its inputs, versions, terms and limits. Adopting it is an explicit project decision.</p><p>Local attribution and portable packets are useful for exchange; they are not protected identity, private multi-user storage or payment settlement.</p></section></div><section class=\"panel\"><h2>What this release actually does</h2><p>Encounter owns all new application behaviour. Documents compile to HTML or Markdown; named models to CSV; presentations to print-ready HTML; canvases to SVG; timed scripts to WebVTT; workflows and project histories to checked portable records.</p><p>Native DOCX, XLSX and PPTX import/export, arbitrary binary upload, production audio/video encoding, authenticated co-editing and payment settlement require their qualified adapters. They are not simulated by success buttons.</p><p>This is browser-local work: export important material, retain its source and history, and inspect current limits before adopting it for a project.</p><div class=\"flow-strip\"><span>Understand</span><b>→</b><span>Compose</span><b>→</b><span>Review</span><b>→</b><span>Repeat and improve</span><b>→</b><span>Exchange</span></div></section></div>")
+
+process cs.viewNewRecord:
+  port state.get { key = "cs.newKind" } → selected
+  fold list("document", "presentation", "canvas", "media", "workflow") as kind; options starts "":
+    yield concat($options, "<option", if(eq($kind, $selected), " selected", ""), ">", $kind, "</option>") → options
+  let result = concat("<form class=\"panel\" data-command=\"new-record\"><h2>Give it a place in the project.</h2><div class=\"form-row\"><label>Title<input id=\"cs-new-record-title\" maxlength=\"160\" required></label><label>Working perspective<select id=\"cs-new-record-kind\">", $options, "</select></label></div><p class=\"subtle\">A stable identity is created for this record. Its source, commentary and outputs remain connected when you change the title.</p><button type=\"submit\" class=\"primary\">Create draft record →</button></form>")
+
+# Register summaries are a navigation cache; the selected matter always replays.
+# A failed cache write cannot roll back an already durable accepted board.

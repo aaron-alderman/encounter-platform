@@ -1,0 +1,15 @@
+{
+  "protocol": "encounter/source-lexical-profile/1",
+  "status": "supplied-bootstrap-lexical-definition",
+  "jsonPatternPath": [
+    "queries",
+    "source.jsonSpan",
+    6,
+    "args",
+    "pattern"
+  ],
+  "identifierPattern": "[@$]?[A-Za-z_][A-Za-z0-9_.-]*",
+  "maxCodeUnits": 160000,
+  "maxParts": 36000,
+  "markdownPattern": "(\\[[^\\]\\r\\n]+\\]\\([^\\)\\r\\n]+\\)|`[^`\\r\\n]+`|\\*\\*[^*\\r\\n]+\\*\\*|\\*[^*\\r\\n]+\\*|#{1,6}(?= )|```[^\\r\\n]*|~~~[^\\r\\n]*|\\||^[ \\t]*[-+>] |  \\r?\\n)"
+}

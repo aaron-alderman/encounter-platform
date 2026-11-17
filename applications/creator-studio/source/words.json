@@ -1,0 +1,32 @@
+{
+  "protocol": "usewords/words-profile/1",
+  "scope": "Bounded sentence grammar for shared encounter edits and explicitly addressed journey introductions. Quoted text is data, never host code.",
+  "commands": [
+    {
+      "kind": "recreate",
+      "pattern": "^Recreate the canonical encounter\\.$"
+    },
+    {
+      "kind": "shared-title",
+      "pattern": "^Rename the encounter to \"([^\"\\r\\n]+)\"\\.$"
+    },
+    {
+      "kind": "menu-label",
+      "pattern": "^Call it \"([^\"\\r\\n]+)\" in the menu only\\.$"
+    },
+    {
+      "kind": "recreate",
+      "pattern": "^Recreate the two journeys\\.$"
+    },
+    {
+      "kind": "journey-intro",
+      "target": "journey.Listening",
+      "pattern": "^Introduce it in Listening well as \"([^\"\\r\\n]+)\"\\.$"
+    },
+    {
+      "kind": "journey-intro",
+      "target": "journey.Making",
+      "pattern": "^Introduce it in Making with care as \"([^\"\\r\\n]+)\"\\.$"
+    }
+  ]
+}

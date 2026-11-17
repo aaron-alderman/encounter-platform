@@ -1,0 +1,382 @@
+{
+  "queries": {
+    "css.build": [
+      {
+        "call": "css.render"
+      },
+      {
+        "port": "file.write",
+        "args": {
+          "path": "styles.css",
+          "text": "$css"
+        },
+        "into": "_"
+      }
+    ],
+    "css.render": [
+      {
+        "call": "css.plan"
+      },
+      {
+        "call": "css.renderPlan"
+      }
+    ],
+    "css.plan": [
+      {
+        "let": "cssRuleIds",
+        "value": [
+          "subjects",
+          "isa",
+          "StyleRule"
+        ]
+      },
+      {
+        "let": "cssOrderEntries",
+        "value": [
+          "map",
+          "$cssRuleIds",
+          "cssRule",
+          [
+            "list",
+            [
+              "one",
+              "$cssRule",
+              "order"
+            ],
+            "$cssRule"
+          ]
+        ]
+      },
+      {
+        "port": "record.fromEntries",
+        "args": {
+          "entries": "$cssOrderEntries"
+        },
+        "into": "cssOrder"
+      },
+      {
+        "port": "record.entries",
+        "args": {
+          "value": "$cssOrder"
+        },
+        "into": "cssOrders"
+      },
+      {
+        "assert": [
+          "eq",
+          [
+            "count",
+            "$cssOrders"
+          ],
+          [
+            "count",
+            "$cssRuleIds"
+          ]
+        ],
+        "message": "ENCOUNTER-CSS-001: Each style rule needs its own order. Keep the orders unique from 1 to the number of rules."
+      },
+      {
+        "fold": [
+          "range",
+          [
+            "count",
+            "$cssRuleIds"
+          ]
+        ],
+        "as": "cssPosition",
+        "accumulator": "cssRulePlans",
+        "initial": [
+          "list"
+        ],
+        "steps": [
+          {
+            "let": "cssRule",
+            "value": [
+              "at",
+              "$cssOrder",
+              [
+                "concat",
+                "$cssPosition"
+              ]
+            ]
+          },
+          {
+            "assert": "$cssRule",
+            "message": "ENCOUNTER-CSS-002: Style rule orders need to cover 1 to the number of rules. Correct the missing position."
+          }
+        ],
+        "yield": [
+          "append",
+          "$cssRulePlans",
+          [
+            "list",
+            {
+              "id": "$cssRule",
+              "selector": [
+                "one",
+                "$cssRule",
+                "selector"
+              ],
+              "context": [
+                "or",
+                [
+                  "optional",
+                  "$cssRule",
+                  "context"
+                ],
+                [
+                  "or",
+                  null,
+                  null
+                ]
+              ],
+              "declarations": [
+                "map",
+                [
+                  "objects",
+                  "$cssRule",
+                  "declaration"
+                ],
+                "cssDeclaration",
+                {
+                  "id": "$cssDeclaration",
+                  "property": [
+                    "one",
+                    "$cssDeclaration",
+                    "property"
+                  ],
+                  "value": [
+                    "if",
+                    [
+                      "eq",
+                      [
+                        "add",
+                        [
+                          "count",
+                          [
+                            "objects",
+                            "$cssDeclaration",
+                            "value"
+                          ]
+                        ],
+                        [
+                          "count",
+                          [
+                            "objects",
+                            "$cssDeclaration",
+                            "valueToken"
+                          ]
+                        ]
+                      ],
+                      1
+                    ],
+                    [
+                      "if",
+                      [
+                        "optional",
+                        "$cssDeclaration",
+                        "valueToken"
+                      ],
+                      [
+                        "concat",
+                        "var(--",
+                        [
+                          "one",
+                          [
+                            "one",
+                            "$cssDeclaration",
+                            "valueToken"
+                          ],
+                          "name"
+                        ],
+                        ")"
+                      ],
+                      [
+                        "one",
+                        "$cssDeclaration",
+                        "value"
+                      ]
+                    ],
+                    [
+                      "raise",
+                      [
+                        "concat",
+                        "ENCOUNTER-CSS-003: ",
+                        "$cssDeclaration",
+                        " needs exactly one value or token reference. Correct that declaration’s source."
+                      ]
+                    ]
+                  ]
+                }
+              ]
+            }
+          ]
+        ],
+        "into": "cssRulePlans"
+      },
+      {
+        "let": "cssPlan",
+        "value": {
+          "imports": [
+            "map",
+            [
+              "subjects",
+              "isa",
+              "FontImport"
+            ],
+            "cssFont",
+            {
+              "id": "$cssFont",
+              "statement": [
+                "one",
+                "$cssFont",
+                "statement"
+              ]
+            }
+          ],
+          "tokens": [
+            "map",
+            [
+              "objects",
+              "presentation.perthEncounter",
+              "token"
+            ],
+            "cssToken",
+            {
+              "id": "$cssToken",
+              "name": [
+                "one",
+                "$cssToken",
+                "name"
+              ],
+              "value": [
+                "one",
+                "$cssToken",
+                "cssValue"
+              ]
+            }
+          ],
+          "rules": "$cssRulePlans"
+        }
+      },
+      {
+        "let": "result",
+        "value": "$cssPlan"
+      }
+    ],
+    "css.renderPlan": [
+      {
+        "let": "imports",
+        "value": [
+          "fold",
+          "$cssPlan.imports",
+          "cssFont",
+          "imports",
+          "",
+          [
+            "concat",
+            "$imports",
+            "$cssFont.statement"
+          ]
+        ]
+      },
+      {
+        "let": "tokens",
+        "value": [
+          "fold",
+          "$cssPlan.tokens",
+          "cssToken",
+          "tokens",
+          "",
+          [
+            "concat",
+            "$tokens",
+            "--",
+            "$cssToken.name",
+            ":",
+            "$cssToken.value",
+            ";"
+          ]
+        ]
+      },
+      {
+        "fold": "$cssPlan.rules",
+        "as": "cssRule",
+        "accumulator": "rules",
+        "initial": "",
+        "steps": [
+          {
+            "let": "declarations",
+            "value": [
+              "fold",
+              "$cssRule.declarations",
+              "cssDeclaration",
+              "declarations",
+              "",
+              [
+                "concat",
+                "$declarations",
+                "$cssDeclaration.property",
+                ":",
+                "$cssDeclaration.value",
+                ";"
+              ]
+            ]
+          },
+          {
+            "let": "ruleText",
+            "value": [
+              "concat",
+              "$cssRule.selector",
+              "{",
+              "$declarations",
+              "}"
+            ]
+          }
+        ],
+        "yield": [
+          "concat",
+          "$rules",
+          [
+            "if",
+            "$cssRule.context",
+            [
+              "concat",
+              "@media",
+              "$cssRule.context",
+              "{",
+              "$ruleText",
+              "}"
+            ],
+            "$ruleText"
+          ]
+        ],
+        "into": "rules"
+      },
+      {
+        "let": "css",
+        "value": [
+          "concat",
+          "$imports",
+          ":root{",
+          "$tokens",
+          "}",
+          "$rules"
+        ]
+      },
+      {
+        "assert": [
+          "includes",
+          "$css",
+          ":focus-visible"
+        ],
+        "message": "Visible focus rule missing"
+      },
+      {
+        "let": "result",
+        "value": "$css"
+      }
+    ]
+  },
+  "protocol": "temple/surface-process-module/1"
+}

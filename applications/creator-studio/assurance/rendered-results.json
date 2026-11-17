@@ -1,0 +1,328 @@
+{
+  "protocol": "creator-studio/rendered-assurance/1",
+  "programHash": "2288b6da654cd6f72e0ae336172cd034b15e27c9e3c8bd8be532df36018e027e",
+  "observation": "Final build 2288b6da654cd6f72e0ae336172cd034b15e27c9e3c8bd8be532df36018e027e; actual 320 CSS-pixel viewport, 303-pixel document; roomy text enabled; 12 perspectives",
+  "pairs": [
+    {
+      "label": "Inspect · Skip to work",
+      "ratio": 7.854323007879167,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · c",
+      "ratio": 10.32435773162922,
+      "minimum": 3
+    },
+    {
+      "label": "Inspect · ✳",
+      "ratio": 4.825517330088337,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · Creator",
+      "ratio": 10.32435773162922,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · SELECT",
+      "ratio": 11.643850575076751,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · Inspect",
+      "ratio": 9.340709165615786,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · I",
+      "ratio": 11.612220477385069,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · ✳",
+      "ratio": 11.502726589960384,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · About this practice ↗",
+      "ratio": 5.721685338793411,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · YOUR WORKSPACE",
+      "ratio": 5.528442058041618,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · Northbank learning programme",
+      "ratio": 11.650824524135588,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · Version 0 · 0 draft changes",
+      "ratio": 6.67109110572609,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · Export project",
+      "ratio": 9.266094577411128,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · Save version",
+      "ratio": 6.7602574400129205,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · A SHARED PROJECT · YOUR PERSPECTIVE",
+      "ratio": 5.11404705854711,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · Inspect the work",
+      "ratio": 10.777514580375403,
+      "minimum": 3
+    },
+    {
+      "label": "Inspect · Follow the source, generated Encounter views, exact identities and the",
+      "ratio": 5.521327881231421,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · Saved data was retained but not activated: CS-HISTORY: A retained rece",
+      "ratio": 10.438308998899304,
+      "minimum": 4.5
+    },
+    {
+      "label": "Overview · A MAINTAINED BODY OF WORK",
+      "ratio": 5.575841434632476,
+      "minimum": 4.5
+    },
+    {
+      "label": "Overview · Working perspectives",
+      "ratio": 5.485153190586764,
+      "minimum": 4.5
+    },
+    {
+      "label": "Standards · Inspect",
+      "ratio": 6.059660973247935,
+      "minimum": 4.5
+    },
+    {
+      "label": "Overview · →",
+      "ratio": 5.6377225446146735,
+      "minimum": 4.5
+    },
+    {
+      "label": "Overview · D",
+      "ratio": 7.872471060224635,
+      "minimum": 3
+    },
+    {
+      "label": "Overview · ↗",
+      "ratio": 4.719746085106421,
+      "minimum": 4.5
+    },
+    {
+      "label": "Overview · Write with maintained meaning. A change to a named value can travel th",
+      "ratio": 5.53017543976108,
+      "minimum": 4.5
+    },
+    {
+      "label": "Overview · Σ",
+      "ratio": 6.80314426979199,
+      "minimum": 3
+    },
+    {
+      "label": "Overview · M",
+      "ratio": 5.1492873972602515,
+      "minimum": 3
+    },
+    {
+      "label": "Exchange · MIX AND MATCH",
+      "ratio": 5.53511349581536,
+      "minimum": 4.5
+    },
+    {
+      "label": "Exchange · Bring another person's method.",
+      "ratio": 11.664884136230555,
+      "minimum": 3
+    },
+    {
+      "label": "Standards · No discussion here yet. A question or a faithful disagreement is usefu",
+      "ratio": 5.460371229309676,
+      "minimum": 4.5
+    },
+    {
+      "label": "Exchange · Versioned method packet",
+      "ratio": 11.664884136230555,
+      "minimum": 4.5
+    },
+    {
+      "label": "Exchange · TEXTAREA",
+      "ratio": 11.764754951050785,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · Generated view definitions are not a second source authority. All sour",
+      "ratio": 5.975927894356926,
+      "minimum": 4.5
+    },
+    {
+      "label": "Documents · Programme proposal · DRAFT PERSPECTIVE",
+      "ratio": 5.005482483336849,
+      "minimum": 4.5
+    },
+    {
+      "label": "Documents · A programme people can use",
+      "ratio": 11.57989284165278,
+      "minimum": 3
+    },
+    {
+      "label": "Documents · Prepared for Northbank Learning. Our purpose: A practical programme th",
+      "ratio": 11.57989284165278,
+      "minimum": 4.5
+    },
+    {
+      "label": "Documents · 7 maintained bindings · proposal",
+      "ratio": 5.348801790590311,
+      "minimum": 4.5
+    },
+    {
+      "label": "Tables & Models · Meaning",
+      "ratio": 5.560949657673242,
+      "minimum": 4.5
+    },
+    {
+      "label": "Tables & Models · Participants",
+      "ratio": 7.6001806301241395,
+      "minimum": 4.5
+    },
+    {
+      "label": "Tables & Models · Materials",
+      "ratio": 7.040236228349054,
+      "minimum": 4.5
+    },
+    {
+      "label": "Tables & Models · materials",
+      "ratio": 5.535650546658931,
+      "minimum": 4.5
+    },
+    {
+      "label": "Tables & Models · 1,200",
+      "ratio": 10.805472118633466,
+      "minimum": 4.5
+    },
+    {
+      "label": "Tables & Models · Programme budget",
+      "ratio": 6.623035259950355,
+      "minimum": 4.5
+    },
+    {
+      "label": "Tables & Models · total",
+      "ratio": 5.207610592618288,
+      "minimum": 4.5
+    },
+    {
+      "label": "Tables & Models · 4,200",
+      "ratio": 10.165145106061592,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · Managed project source · inert own-data",
+      "ratio": 5.388059631300805,
+      "minimum": 4.5
+    },
+    {
+      "label": "Presentations · Inspect meaning",
+      "ratio": 8.35039041503301,
+      "minimum": 4.5
+    },
+    {
+      "label": "Presentations · 1 / 4 · Client briefing",
+      "ratio": 5.657156080247477,
+      "minimum": 4.5
+    },
+    {
+      "label": "Presentations · 1. A useful first step",
+      "ratio": 10.725728908807053,
+      "minimum": 4.5
+    },
+    {
+      "label": "Review · Version 0 · Project created ↗",
+      "ratio": 6.464595500843998,
+      "minimum": 4.5
+    },
+    {
+      "label": "Media · 00:00:00.000 · 8 seconds",
+      "ratio": 5.471321576384906,
+      "minimum": 4.5
+    },
+    {
+      "label": "Media · An invitation",
+      "ratio": 11.509663376539029,
+      "minimum": 4.5
+    },
+    {
+      "label": "Media · ↑ Earlier",
+      "ratio": 6.378573264101604,
+      "minimum": 4.5
+    },
+    {
+      "label": "Workflows · 1",
+      "ratio": 5.233818648328284,
+      "minimum": 3
+    },
+    {
+      "label": "Workflows · documents · inspect · purpose",
+      "ratio": 5.46164172126187,
+      "minimum": 4.5
+    },
+    {
+      "label": "Library · Open project →",
+      "ratio": 6.456803764206818,
+      "minimum": 4.5
+    },
+    {
+      "label": "Library · Northbank learning programme",
+      "ratio": 11.650824524135588,
+      "minimum": 3
+    },
+    {
+      "label": "Library · project_1 · source and versions retained in this browser",
+      "ratio": 5.968725145738002,
+      "minimum": 4.5
+    },
+    {
+      "label": "Standards · →",
+      "ratio": 6.101905943592273,
+      "minimum": 4.5
+    },
+    {
+      "label": "Exchange · Terms and scope",
+      "ratio": 6.675529529724547,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · {\n  \"protocol\": \"usewords/workspace/1\",\n  \"definitions\": [\n    \"constr",
+      "ratio": 8.617950128532986,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · Exact application process owners",
+      "ratio": 7.225161045387343,
+      "minimum": 4.5
+    },
+    {
+      "label": "Inspect · Shared semantics and validation",
+      "ratio": 7.787647786684856,
+      "minimum": 4.5
+    }
+  ],
+  "documentOverflow": false,
+  "basis": "Observed opaque DOM text and nearest solid background. Alpha compositing and imagery require independent visual inspection.",
+  "usage": {
+    "steps": 35390,
+    "limit": 20000000
+  }
+}

@@ -1,0 +1,271 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process cs.viewExchange:
+  port kernel.invoke { query = "cs.catalogue"; input = { } } → catalogue
+  fold $catalogue as method; cards starts "":
+    yield concat($cards, "<article class=\"pack\"><p class=\"eyebrow\">COMPOSITION · INCLUDED EXAMPLE</p><h2>", $method.title, "</h2><p class=\"subtle\">", $method.description, "</p><span class=\"badge\">", $method.profile, " · version ", $method.version, "</span><p class=\"help\">", $method.author, "</p><button type=\"button\" class=\"primary\" data-action=\"adopt-example\" data-id=\"", $method.id, "\">Preview this approach →</button><details><summary>Terms and scope</summary><p class=\"help\">", $method.terms, "</p></details></article>") → cards
+  fold filter($eventInput.state.document.objects, "r", eq($r.values.kind, "pack")) as record; imported starts "":
+    port kernel.invoke { query = "cs.payload"; input = $record } → package
+    port kernel.invoke { query = "cs.escape"; input = $package.title } → title
+    port kernel.invoke { query = "cs.escape"; input = $package.author } → author
+    port kernel.invoke { query = "cs.escape"; input = $package.terms } → terms
+    yield concat($imported, "<article class=\"pack\"><p class=\"eyebrow\">RETAINED METHOD · INSPECT BEFORE ADOPTION</p><h2>", $title, "</h2><p class=\"subtle\">", $author, " · version ", $package.version, "</p><p>", $terms, "</p><button type=\"button\" class=\"secondary\" data-action=\"adopt-pack\" data-id=\"", $record.id, "\">Preview adoption</button></article>") → imported
+  let result = concat("<div class=\"stack\"><div class=\"work-grid\">", $cards, $imported, "</div><div class=\"two-col\"><form class=\"panel wide-form\" data-command=\"import-method\"><p class=\"eyebrow\">MIX AND MATCH</p><h2>Bring another person's method.</h2><label>Versioned method packet<textarea id=\"cs-import-method\" maxlength=\"16000\" placeholder=\"Paste an exported Creator Studio method\" required></textarea></label><button type=\"submit\" class=\"primary\">Inspect and retain method</button><p class=\"help\">Required named values, supported steps and standards are checked. A package cannot install callbacks, scripts or native effects.</p></form><form class=\"panel\" data-command=\"method-offer\"><p class=\"eyebrow\">SHARE · OFFER · IMPROVE</p><h2>Make your practice portable.</h2><label>Method title<input id=\"cs-offer-title\" maxlength=\"160\" placeholder=\"My clear proposal approach\" required></label><label>Author attribution<input id=\"cs-offer-author\" maxlength=\"100\" required></label><label>Licence and usage terms<textarea id=\"cs-offer-licence\" maxlength=\"500\" rows=\"3\" required></textarea></label><label>Offer or exchange terms<textarea id=\"cs-offer-terms\" maxlength=\"500\" rows=\"3\" placeholder=\"State your proposed commercial or reciprocal terms.\"></textarea></label><button type=\"submit\" class=\"secondary\">Export method and stated terms</button><p class=\"help\">The packet carries your approach, selected standards and terms. Exchange it with another person, who decides whether to adopt it. This is not payment settlement or authenticated delivery.</p></form></div></div>")
+
+process cs.calculationForm:
+  let selected = at(filter($eventInput.meaning.source.calculations, "c", eq($c.id, $eventInput.selected)), 0)
+  let fresh = not($selected)
+  when $fresh:
+    let selected = { id = ""; label = ""; operation = "add"; left = ""; right = ""; unit = "AUD" }
+  port kernel.invoke { query = "cs.escape"; input = $selected.label } → label
+  fold $eventInput.meaning.quantities as q; options starts { left = ""; right = "" }:
+    port kernel.invoke { query = "cs.escape"; input = $q.label } → text
+    let option = concat("<option value=\"", $q.id, "\"")
+    yield { left = concat($options.left, $option, if(eq($q.id, $selected.left), " selected", ""), ">", $text, "</option>"); right = concat($options.right, $option, if(eq($q.id, $selected.right), " selected", ""), ">", $text, "</option>") } → options
+  fold list("add", "multiply", "divide") as op; operations starts "":
+    yield concat($operations, "<option", if(eq($op, $selected.operation), " selected", ""), ">", $op, "</option>") → operations
+  fold list("AUD", "number", "ratio", "person", "session", "AUD/person", "AUD/session", "hour") as unit; units starts "":
+    yield concat($units, "<option", if(eq($unit, $selected.unit), " selected", ""), ">", $unit, "</option>") → units
+  let result = concat("<form class=\"panel\" data-command=\"calculation\"><h2>", if($fresh, "Compose a calculation", "Edit a calculation"), "</h2><input type=\"hidden\" id=\"cs-calc-existing\" value=\"", $selected.id, "\"><label>Stable name<input id=\"cs-calc-id\" value=\"", $selected.id, "\"", if($fresh, "", " readonly"), " required></label><label>Display label<input id=\"cs-calc-label\" value=\"", $label, "\" maxlength=\"100\" required></label><div class=\"form-row\"><label>First quantity<select id=\"cs-calc-left\">", $options.left, "</select></label><label>Operation<select id=\"cs-calc-operation\">", $operations, "</select></label><label>Second quantity<select id=\"cs-calc-right\">", $options.right, "</select></label><label>Result unit<select id=\"cs-calc-unit\">", $units, "</select></label></div><button type=\"submit\" class=\"secondary\">Check calculation change</button><p class=\"help\">Select any calculation in the table to edit it. Units, missing inputs and cycles are checked before a change is staged.</p></form>")
+
+process cs.projectForm:
+  port kernel.invoke { query = "cs.escape"; input = $eventInput.title } → title
+  port kernel.invoke { query = "cs.escape"; input = $eventInput.client } → client
+  port kernel.invoke { query = "cs.escape"; input = $eventInput.goal } → goal
+  let result = concat("<form class=\"panel\" data-command=\"project-details\"><p class=\"eyebrow\">THE WORK AND ITS PURPOSE</p><h2>Make this your project.</h2><div class=\"form-row\"><label>Project name<input id=\"cs-project-name\" maxlength=\"160\" value=\"", $title, "\" required></label><label>Client or community<input id=\"cs-project-client\" maxlength=\"160\" value=\"", $client, "\" required></label></div><label>Purpose<textarea id=\"cs-project-goal\" maxlength=\"500\" required>", $goal, "</textarea></label><button type=\"submit\" class=\"primary\">Preview project details</button><p class=\"help\">Bindings to [[client]], [[goal]] and [[project_title]] update from these maintained details.</p></form>")
+
+process cs.listControls:
+  let base = concat($eventInput.field, ":", $eventInput.index, ":")
+  let result = concat("<span class=\"button-row\"><button type=\"button\" class=\"quiet\" data-action=\"list-revise\" data-id=\"", $base, "up\" aria-label=\"Move item ", add($eventInput.index, 1), " earlier\">↑ Earlier</button><button type=\"button\" class=\"quiet\" data-action=\"list-revise\" data-id=\"", $base, "down\" aria-label=\"Move item ", add($eventInput.index, 1), " later\">↓ Later</button><button type=\"button\" class=\"quiet\" data-action=\"list-revise\" data-id=\"", $base, "remove\" aria-label=\"Remove item ", add($eventInput.index, 1), " from draft\">Remove</button></span>")
+
+process cs.listReviseUI:
+  port text.split { value = $eventInput; pattern = ":" } → parts
+  let field = at($parts, 0)
+  port number.parse { value = at($parts, 1) } → index
+  let movement = at($parts, 2)
+  port kernel.invoke { query = "cs.selectedBody"; input = { } } → selected
+  let expected = if(eq($selected.record.values.kind, "media"), "scenes", if(eq($selected.record.values.kind, "workflow"), "steps", "edges"))
+  assert and(includes(list("media", "workflow", "canvas"), $selected.record.values.kind), eq($field, $expected))
+    otherwise "Choose a scene, workflow step or Canvas edge in its own workspace."
+  let items = at($selected.body, $field)
+  port kernel.invoke { query = "cs.reorder"; input = { items = $items; index = $index; movement = $movement } } → changed
+  port record.put { record = $selected.body; key = $field; value = $changed } → body
+  when eq($field, "steps"):
+    port record.put { record = $body; key = "route"; value = "custom" } → body
+  port kernel.invoke { query = "cs.stageBody"; input = { id = $selected.id; body = $body } } → _
+  port state.set { key = "cs.selected"; value = "new" } → _
+
+process cs.sourcesPanel:
+  fold filter($eventInput.state.document.objects, "r", eq($r.values.kind, "source")) as source; cards starts "":
+    port kernel.invoke { query = "cs.escape"; input = $source.values.title } → title
+    port kernel.invoke { query = "cs.escape"; input = $source.values.note } → note
+    port kernel.invoke { query = "cs.escape"; input = $source.values.body } → text
+    yield concat($cards, "<article class=\"panel\"><p class=\"eyebrow\">RETAINED ORIGINAL</p><h3>", $title, "</h3><p class=\"source-line\">", $note, "</p><details><summary>Inspect original text</summary><pre class=\"code-view\">", $text, "</pre></details><div class=\"button-row\"><button type=\"button\" class=\"secondary\" data-action=\"copy-source\" data-id=\"", $source.id, "\">Make a working document</button><button type=\"button\" class=\"quiet\" data-action=\"export-source\" data-id=\"", $source.id, "\">Export retained original</button></div><p class=\"help\">Working copies retain their source identity in the editorial note. Interpretation is explicit and reviewable; the original stays intact.</p></article>") → cards
+  let result = if(eq($cards, ""), "", concat("<section class=\"stack\"><h2>Your retained sources</h2>", $cards, "</section>"))
+
+process cs.copySource:
+  port state.get { key = "cs.draft" } → draft
+  port kernel.invoke { query = "cs.record"; input = { document = $draft.document; id = $eventInput } } → source
+  assert eq($source.values.kind, "source")
+    otherwise "Choose a retained source."
+  let id = concat("document_", add(count($draft.document.objects), 1))
+  port kernel.invoke { query = "cs.stage"; input = { kind = "object"; id = $id; type = "StudioRecord"; values = { title = concat("Working: ", $source.values.title); kind = "document"; body = $source.values.body; note = concat("Working interpretation of ", $source.id, " · original retained. ", $source.values.note); author = "Project team"; status = "active" } } } → _
+  port kernel.invoke { query = "cs.navigate"; input = "documents" } → _
+  port state.set { key = "cs.recordId"; value = $id } → _
+
+process cs.openProject:
+  port state.get { key = "cs.registry" } → registry
+  assert eq(count(filter($registry, "p", eq($p.id, $eventInput))), 1)
+    otherwise "This local project is not indexed."
+  port storage.read { key = concat("creator-studio.project.v1.", $eventInput); maxLength = 1800000 } → saved
+  assert and($saved.ok, not(eq($saved.value, null)))
+    otherwise "This project's retained record is unavailable."
+  port json.parse { text = $saved.value } → packet
+  port kernel.invoke { query = "cs.restore"; input = $packet } → restored
+  port kernel.invoke { query = "cs.useProject"; input = $restored } → _
+  port state.set { key = "cs.notice"; value = "Project restored through exact replay. Your draft and accepted version remain distinct." } → _
+
+process cs.importProjectUI:
+  port kernel.invoke { query = "cs.read"; input = "#cs-import-project" } → text
+  port json.parse { text = $text } → packet
+  port kernel.invoke { query = "cs.restore"; input = $packet } → restored
+  port state.get { key = "cs.registry" } → registry
+  port number.calculate { operation = "less"; values = list(count($registry), 8) } → bounded
+  assert $bounded
+    otherwise "This local library is full. Export work before changing browsers."
+  let id = concat("project_", add(count($registry), 1))
+  port record.put { record = $packet; key = "id"; value = $id } → packet
+  port state.set { key = "cs.projectId"; value = $id } → _
+  port kernel.invoke { query = "cs.store"; input = $packet } → _
+  port kernel.invoke { query = "cs.model"; input = $restored.draft.document } → meaning
+  let registry = append($registry, list({ id = $id; title = $meaning.title }))
+  port json.stringify { value = $registry } → encoded
+  port storage.write { key = "creator-studio.registry.v1"; value = $encoded } → stored
+  assert $stored.ok
+    otherwise "The imported project is retained, but the local index could not be written."
+  port state.set { key = "cs.registry"; value = $registry } → _
+  port record.put { record = $restored; key = "id"; value = $id } → restored
+  port kernel.invoke { query = "cs.useProject"; input = $restored } → _
+  port state.set { key = "cs.notice"; value = "Imported as a new local project after complete replay and domain checks. Its supplied attributions are not authenticated identity." } → _
+
+process cs.newRecordUI:
+  port kernel.invoke { query = "cs.read"; input = "#cs-new-record-title" } → title
+  port kernel.invoke { query = "cs.read"; input = "#cs-new-record-kind" } → kind
+  assert includes(list("document", "presentation", "canvas", "media", "workflow"), $kind)
+    otherwise "Choose a supported working perspective."
+  port kernel.invoke { query = "cs.seed"; input = { template = "blank" } } → seed
+  let example = at(filter($seed.objects, "r", eq($r.values.kind, $kind)), 0)
+  port record.put { record = $example.values; key = "title"; value = $title } → values
+  port state.get { key = "cs.draft" } → draft
+  let id = concat($kind, "_", add(count($draft.document.objects), 1))
+  port kernel.invoke { query = "cs.stage"; input = { kind = "object"; id = $id; type = "StudioRecord"; values = $values } } → _
+  let app = if(eq($kind, "document"), "documents", if(eq($kind, "presentation"), "presentations", $kind))
+  port kernel.invoke { query = "cs.navigate"; input = $app } → _
+  port state.set { key = "cs.recordId"; value = $id } → _
+
+process cs.importTextUI:
+  port kernel.invoke { query = "cs.read"; input = "#cs-import-title" } → title
+  port kernel.invoke { query = "cs.read"; input = "#cs-import-source" } → source
+  port kernel.invoke { query = "cs.read"; input = "#cs-import-text" } → text
+  port state.get { key = "cs.draft" } → draft
+  let id = concat("source_", add(count($draft.document.objects), 1))
+  port digest.sha256 { text = $text } → hash
+  let values = { title = $title; kind = "source"; body = $text; note = concat("Retained original · ", $source, " · SHA-256 ", $hash); author = "Supplied source attribution"; status = "active" }
+  port kernel.invoke { query = "cs.stage"; input = { kind = "object"; id = $id; type = "StudioRecord"; values = $values } } → _
+  port state.set { key = "cs.notice"; value = "Original text and attribution retained as a source record. Its formatting has not been promoted into an interpretation." } → _
+
+process cs.exportMethodUI:
+  port state.get { key = "cs.draft" } → draft
+  port kernel.invoke { query = "cs.record"; input = { document = $draft.document; id = "approach" } } → workflowRecord
+  port kernel.invoke { query = "cs.record"; input = { document = $draft.document; id = "standard" } } → standardRecord
+  port kernel.invoke { query = "cs.payload"; input = $workflowRecord } → workflow
+  port kernel.invoke { query = "cs.payload"; input = $standardRecord } → standard
+  port kernel.invoke { query = "cs.read"; input = "#cs-offer-title" } → title
+  port kernel.invoke { query = "cs.read"; input = "#cs-offer-author" } → author
+  port kernel.invoke { query = "cs.read"; input = "#cs-offer-licence" } → licence
+  port kernel.invoke { query = "cs.read"; input = "#cs-offer-terms" } → terms
+  when eq($title, ""):
+    let title = $workflowRecord.values.title
+  when eq($author, ""):
+    let author = "Project team — supplied attribution"
+  when eq($licence, ""):
+    let licence = $standard.licence
+  let package = { protocol = "creator-studio/method/1"; title = $title; author = $author; version = "1"; licence = $licence; terms = $terms; requires = list(); standard = $standard; workflow = $workflow }
+  port kernel.invoke { query = "cs.model"; input = $draft.document } → meaning
+  port kernel.invoke { query = "cs.packageCheck"; input = { package = $package; meaning = $meaning } } → checked
+  port json.stringify { value = $package; space = 2 } → text
+  port download.text { name = "creator-studio-method.json"; text = $text } → _
+  port kernel.invoke { query = "cs.notify"; input = "Exported a versioned method and its stated terms. Exchange this packet with a collaborator; adoption and any commercial agreement remain separate decisions." } → _
+
+process cs.importMethodUI:
+  port kernel.invoke { query = "cs.read"; input = "#cs-import-method" } → text
+  port json.parse { text = $text } → package
+  port state.get { key = "cs.draft" } → draft
+  port kernel.invoke { query = "cs.model"; input = $draft.document } → meaning
+  port kernel.invoke { query = "cs.packageCheck"; input = { package = $package; meaning = $meaning } } → checked
+  let id = concat("method_", add(count($draft.document.objects), 1))
+  port json.stringify { value = $package } → body
+  let values = { title = $package.title; kind = "pack"; body = $body; author = $package.author; status = "active"; note = concat("Imported method ", $package.version, ". Supplied attribution and terms; inspect before adoption.") }
+  port kernel.invoke { query = "cs.stage"; input = { kind = "object"; id = $id; type = "StudioRecord"; values = $values } } → _
+  port state.set { key = "cs.notice"; value = "Method checked and retained as a draft package. Its contents have not silently replaced your workflow or granted effects." } → _
+
+process cs.adoptExample:
+  port kernel.invoke { query = "cs.catalogue"; input = { } } → catalogue
+  let matching = filter($catalogue, "p", eq($p.id, $eventInput))
+  assert eq(count($matching), 1)
+    otherwise "This example method is unavailable."
+  let method = at($matching, 0)
+  port state.get { key = "cs.draft" } → draft
+  port kernel.invoke { query = "cs.record"; input = { document = $draft.document; id = "approach" } } → workflowRecord
+  port kernel.invoke { query = "cs.record"; input = { document = $draft.document; id = "standard" } } → standardRecord
+  port kernel.invoke { query = "cs.payload"; input = $workflowRecord } → workflow
+  port kernel.invoke { query = "cs.payload"; input = $standardRecord } → standard
+  port kernel.invoke { query = "cs.route"; input = { workflow = $workflow; route = $method.route } } → workflow
+  port record.put { record = $standard; key = "profile"; value = $method.profile } → standard
+  port json.stringify { value = $workflow } → workflowText
+  port json.stringify { value = $standard } → standardText
+  let changes = list()
+  when not(eq($workflowText, $workflowRecord.values.body)):
+    let changes = append($changes, list({ kind = "edit"; scope = "shared"; object = "approach"; field = "body"; value = $workflowText }))
+  when not(eq($standardText, $standardRecord.values.body)):
+    let changes = append($changes, list({ kind = "edit"; scope = "shared"; object = "standard"; field = "body"; value = $standardText }))
+  assert not(eq(count($changes), 0))
+    otherwise "This method already matches your selected route and presentation."
+  port kernel.invoke { query = "cs.stage"; input = $changes } → _
+  port state.set { key = "cs.notice"; value = concat("Previewing ", $method.title, " · ", $method.author, ". Review the method and standards changes before saving a version.") } → _
+
+process cs.adoptPack:
+  port state.get { key = "cs.draft" } → draft
+  port kernel.invoke { query = "cs.record"; input = { document = $draft.document; id = $eventInput } } → record
+  assert eq($record.values.kind, "pack")
+    otherwise "Choose a retained method package."
+  port kernel.invoke { query = "cs.payload"; input = $record } → package
+  port kernel.invoke { query = "cs.model"; input = $draft.document } → meaning
+  port kernel.invoke { query = "cs.packageCheck"; input = { package = $package; meaning = $meaning } } → checked
+  port json.stringify { value = $package.workflow } → workflow
+  port json.stringify { value = $package.standard } → standard
+  let proposals = list({ kind = "edit"; scope = "shared"; object = "approach"; field = "body"; value = $workflow }, { kind = "edit"; scope = "shared"; object = "standard"; field = "body"; value = $standard })
+  fold $proposals as proposal; changes starts list():
+    port kernel.invoke { query = "cs.record"; input = { document = $draft.document; id = $proposal.object } } → current
+    yield if(eq($current.values.body, $proposal.value), $changes, append($changes, list($proposal))) → changes
+  assert not(eq(count($changes), 0))
+    otherwise "This package already matches the current composition."
+  port kernel.invoke { query = "cs.stage"; input = $changes } → _
+  port state.set { key = "cs.notice"; value = "Imported method is now a reviewable draft composition. Review its terms and consequences before saving; no payment or external action occurred." } → _
+
+process pc.openRoom:
+  port state.set { key = "preparation"; value = null } → _
+  call pc.clearUI
+  when not(eq($actor, "casey")):
+    port kernel.invoke { query = "pc.room"; input = { matterId = $matter.id; actor = $actor } } → room
+    let key = concat("usewords.preparation.v1.", $data.programHash, ".", $matter.id, ".", $actor)
+    port storage.read { key = $key; maxLength = 70000 } → saved
+    assert $saved.ok
+      otherwise "PC-STORAGE: Preparation could not be read; refuse to overwrite it."
+    when not(eq($saved.value, null)):
+      port json.parse { text = $saved.value } → room
+      port kernel.invoke { query = "pc.roomCheck"; input = $room } → valid
+      assert and(eq($room.actor, $actor), eq($room.matterId, $matter.id))
+        otherwise "PC-SCOPE: Saved preparation belongs to another party or matter."
+    port state.set { key = "preparation"; value = $room } → _
+
+process pc.saveUI:
+  try:
+    port state.get { key = "preparation" } → room
+    port state.get { key = "workspace" } → state
+    port browser.property { ref = "#cw-actor"; name = "value" } → actor
+    assert $room
+      otherwise "PC-ROOM: Open a contributing party's preparation first."
+    port browser.property { ref = "#pc-id"; name = "value" } → id
+    port browser.property { ref = "#pc-kind"; name = "value" } → kind
+    port browser.property { ref = "#pc-title"; name = "value" } → title
+    port browser.property { ref = "#pc-body"; name = "value" } → body
+    port browser.property { ref = "#pc-issue"; name = "value" } → issue
+    port browser.property { ref = "#pc-voice"; name = "value" } → voice
+    port browser.property { ref = "#pc-note"; name = "value" } → note
+    let draft = { item = { id = $id; kind = $kind; title = $title; body = $body; issue = if(eq($kind, "issue"), null, $issue); voice = if(eq($kind, "position"), $voice, null) }; privateNote = $note }
+    port kernel.invoke { query = "pc.saveDraft"; input = { room = $room; actor = $actor; matterId = $state.document.matter.id; expectedRevision = $room.revision; draft = $draft } } → nextRoom
+    port json.stringify { value = $nextRoom; space = 0 } → encoded
+    let key = concat("usewords.preparation.v1.", $data.programHash, ".", $room.matterId, ".", $actor)
+    # Local optimistic check only. A real receiver must do this atomically.
+    port storage.read { key = $key; maxLength = 70000 } → saved
+    assert $saved.ok
+      otherwise "PC-STORAGE: Cannot check the preparation head."
+    when not(eq($saved.value, null)):
+      port json.parse { text = $saved.value } → currentRoom
+      assert eq($currentRoom, $room)
+        otherwise "PC-CONFLICT: Preparation changed in another tab. Reload before saving."
+    when eq($saved.value, null):
+      assert eq($room.revision, 0)
+        otherwise "PC-CONFLICT: Saved preparation disappeared. Reload before saving."
+    port storage.write { key = $key; value = $encoded } → stored
+    assert $stored.ok
+      otherwise "PC-STORAGE: Preparation was not saved; prior draft remains active."
+    port state.set { key = "preparation"; value = $nextRoom } → _
+    port state.set { key = "disclosure"; value = null } → _
+    call pc.paint
+    port state.set { key = "workspaceNotice"; value = "Preparation saved for this simulated party. Nothing was shared. This browser owner can access every persona's local storage." } → _
+    call ws.showNotice
+  catch fault:
+    call mm.refused

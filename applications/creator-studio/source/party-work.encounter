@@ -1,0 +1,326 @@
+# Preparation, disclosure, personal statements and shared packets are distinct.
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process cs.reorder:
+  let index = $eventInput.index
+  assert and(includes(list("up", "down", "remove"), $eventInput.movement), isArray($eventInput.items))
+    otherwise "CS-ORDER: Choose a declared list operation."
+  port number.calculate { operation = "floor"; values = list($index) } → whole
+  port number.calculate { operation = "greaterEqual"; values = list($index, 0) } → lower
+  port number.calculate { operation = "less"; values = list($index, count($eventInput.items)) } → upper
+  assert and(eq($index, $whole), $lower, $upper)
+    otherwise "CS-ORDER: The selected item is not present."
+  let destination = add($index, if(eq($eventInput.movement, "up"), -1, 1))
+  when not(eq($eventInput.movement, "remove")):
+    port number.calculate { operation = "greaterEqual"; values = list($destination, 0) } → lower
+    port number.calculate { operation = "less"; values = list($destination, count($eventInput.items)) } → upper
+    assert and($lower, $upper)
+      otherwise "CS-ORDER: This item is already at that end of the list."
+  fold $eventInput.items as item; revised starts { index = 0; items = list() }:
+    let next = $item
+    when and(not(eq($eventInput.movement, "remove")), eq($revised.index, $index)):
+      let next = at($eventInput.items, $destination)
+    when and(not(eq($eventInput.movement, "remove")), eq($revised.index, $destination)):
+      let next = at($eventInput.items, $index)
+    when eq($eventInput.movement, "remove"):
+      let next = $item
+    let items = $revised.items
+    when not(and(eq($eventInput.movement, "remove"), eq($revised.index, $index))):
+      let items = append($items, list($next))
+    yield { index = add($revised.index, 1); items = $items } → revised
+  let result = $revised.items
+
+process cs.refuses:
+  let refused = false
+  assert includes(list("ws.reconstruct", "cs.validate", "cs.restore", "cs.edit", "cs.testBody", "cs.expand", "cs.packageCheck"), $eventInput.query)
+    otherwise "CS-TEST: Refusal probe has no declared callee."
+  try:
+    when eq($eventInput.query, "ws.reconstruct"):
+      port kernel.invoke { query = "ws.reconstruct"; input = $eventInput.input } → unexpected
+    when eq($eventInput.query, "cs.validate"):
+      port kernel.invoke { query = "cs.validate"; input = $eventInput.input } → unexpected
+    when eq($eventInput.query, "cs.restore"):
+      port kernel.invoke { query = "cs.restore"; input = $eventInput.input } → unexpected
+    when eq($eventInput.query, "cs.edit"):
+      port kernel.invoke { query = "cs.edit"; input = $eventInput.input } → unexpected
+    when eq($eventInput.query, "cs.testBody"):
+      port kernel.invoke { query = "cs.testBody"; input = $eventInput.input } → unexpected
+    when eq($eventInput.query, "cs.expand"):
+      port kernel.invoke { query = "cs.expand"; input = $eventInput.input } → unexpected
+    when eq($eventInput.query, "cs.packageCheck"):
+      port kernel.invoke { query = "cs.packageCheck"; input = $eventInput.input } → unexpected
+  catch fault:
+    assert includes($fault.message, $eventInput.reason)
+      otherwise "CS-TEST: A refusal failed for an unexpected reason."
+    let refused = true
+  assert $refused
+    otherwise "CS-TEST: Invalid input was accepted."
+  let result = true
+
+process cs.testBody:
+  port json.stringify { value = $eventInput.body } → text
+  port kernel.invoke { query = "cs.edit"; input = { state = $eventInput.state; expectedHash = $eventInput.state.documentHash; request = { kind = "edit"; scope = "shared"; object = $eventInput.id; field = "body"; value = $text; baseRevision = $eventInput.state.revision } } } → result
+
+process cs.assuranceCase:
+  let case = or(at($eventInput.input, "case"), "baseline")
+  assert includes(list("standards", "receipts", "contrast", "baseline", "edit-replay", "model-refusals", "templates", "formats", "commentary", "exchange", "run", "platform-boundary"), $case)
+    otherwise "CS-TEST: Unknown assurance case."
+  port kernel.invoke { query = "cs.seed"; input = { } } → document
+  port kernel.invoke { query = "ws.initial"; input = { basis = $document } } → original
+  port kernel.invoke { query = "cs.validate"; input = $original } → checked
+  let meaning = $checked.model
+  let checks = 0
+  when eq($case, "platform-boundary"):
+    port kernel.invoke { query = "assurance.childExecution"; input = {} } → execution
+    port kernel.invoke { query = "assurance.libraryIntegrity"; input = {} } → library
+    port kernel.invoke { query = "assurance.applicationBoundary"; input = { application = "creator-studio" } } → boundary
+    let checks = add(add($execution, $library), $boundary)
+  when eq($case, "standards"):
+    let standard = { profile = "technical"; terminology = list({ from = "participants"; to = "colleagues" }); accessibility = "Retain captions and readable text"; licence = "Review project terms" }
+    port kernel.invoke { query = "cs.testBody"; input = { state = $original; id = "standard"; body = $standard } } → changed
+    port kernel.invoke { query = "cs.model"; input = $changed.document } → currentMeaning
+    assert eq($currentMeaning, $meaning)
+      otherwise "CS-TEST: A representation standard altered the underlying model."
+    port kernel.invoke { query = "cs.impact"; input = { before = $original; after = $changed } } → impact
+    each list("proposal", "briefing", "delivery", "introduction") as id:
+      let affected = at(filter($impact, "i", eq($i.id, $id)), 0)
+      assert and($affected, includes($affected.fields, "selected standard"))
+        otherwise "CS-TEST: Standards impact omitted a production representation."
+    port kernel.invoke { query = "cs.anchor"; input = { state = $changed; id = "proposal" } } → anchor
+    assert includes($anchor.context, "30 colleagues")
+      otherwise "CS-TEST: Commentary did not follow the selected language."
+    let checks = 6
+  when eq($case, "receipts"):
+    port kernel.invoke { query = "ws.receipt"; input = { state = $original; expectedRevision = 0; expectedHash = $original.documentHash } } → receipt
+    port record.put { record = $receipt; key = "sha256"; value = "forged" } → forged
+    port kernel.invoke { query = "cs.refuses"; input = { query = "ws.reconstruct"; input = $forged; reason = "WS-REPLAY" } } → refused
+    port record.put { record = $original.document; key = "definitions"; value = list() } → wrongDocument
+    port record.put { record = $original; key = "document"; value = $wrongDocument } → wrongState
+    port kernel.invoke { query = "cs.refuses"; input = { query = "cs.validate"; input = $wrongState; reason = "CS-SCHEMA" } } → refused
+    let packet = { protocol = "not-studio"; id = "project_1"; accepted = $receipt; draft = $receipt; history = list() }
+    port kernel.invoke { query = "cs.refuses"; input = { query = "cs.restore"; input = $packet; reason = "CS-IMPORT" } } → refused
+    let checks = 3
+  when eq($case, "contrast"):
+    port kernel.invoke { query = "cs.contrast"; input = { foreground = list(0, 0, 0); background = list(255, 255, 255) } } → ratio
+    assert eq($ratio, 21)
+      otherwise "CS-TEST: Contrast luminance endpoints are wrong."
+    port kernel.invoke { query = "cs.contrast"; input = { foreground = list(128, 128, 128); background = list(128, 128, 128) } } → ratio
+    assert eq($ratio, 1)
+      otherwise "CS-TEST: Identical colours must fail readable contrast."
+    let checks = 2
+  when eq($case, "baseline"):
+    let total = at(filter($meaning.quantities, "q", eq($q.id, "total")), 0)
+    assert and(eq($total.value, 4200), eq(count($original.document.objects), 8))
+      otherwise "CS-TEST: The initial model or records are wrong."
+    port kernel.invoke { query = "cs.expand"; input = { model = $meaning; text = "[[participants]] people / [[total]]" } } → expanded
+    assert eq($expanded.text, "30 people / AUD 4,200")
+      otherwise "CS-TEST: Named values did not compile faithfully."
+    port kernel.invoke { query = "cs.seed"; input = { template = "blank" } } → blank
+    port kernel.invoke { query = "ws.initial"; input = { basis = $blank } } → blankState
+    port kernel.invoke { query = "cs.validate"; input = $blankState } → empty
+    assert eq(count($empty.model.quantities), 0)
+      otherwise "CS-TEST: Blank work contains illustrative assumptions."
+    let checks = 4
+  when includes(list("edit-replay", "commentary"), $case):
+    port kernel.invoke { query = "cs.anchor"; input = { state = $original; id = "proposal" } } → anchor
+    let inputs = map($meaning.source.inputs, "i", if(eq($i.id, "participants"), { id = $i.id; label = $i.label; value = 48; unit = $i.unit }, $i))
+    port record.put { record = $meaning.source; key = "inputs"; value = $inputs } → body
+    port kernel.invoke { query = "cs.testBody"; input = { state = $original; id = "project"; body = $body } } → changed
+    port kernel.invoke { query = "cs.model"; input = $changed.document } → newMeaning
+    let total = at(filter($newMeaning.quantities, "q", eq($q.id, "total")), 0)
+    assert eq($total.value, 4920)
+      otherwise "CS-TEST: The changed model is wrong."
+    port kernel.invoke { query = "cs.value"; input = { model = $meaning; id = "participants" } } → baseline
+    assert eq($baseline, "30")
+      otherwise "CS-TEST: An edit mutated the baseline."
+    when eq($case, "edit-replay"):
+      port kernel.invoke { query = "ws.accept"; input = { state = $changed; expectedRevision = $changed.revision; expectedHash = $changed.documentHash } } → receipt
+      port kernel.invoke { query = "ws.reconstruct"; input = $receipt } → replay
+      assert eq($replay.documentHash, $changed.documentHash)
+        otherwise "CS-TEST: Receipt did not replay exactly."
+      port kernel.invoke { query = "cs.refuses"; input = { query = "cs.edit"; input = { state = $changed; expectedHash = $original.documentHash; request = { kind = "edit"; scope = "shared"; object = "proposal"; field = "title"; value = "Stale" } }; reason = "CS-STALE" } } → refused
+      let checks = 4
+    when eq($case, "commentary"):
+      port kernel.invoke { query = "cs.anchor"; input = { state = $changed; id = "proposal" } } → current
+      assert and(not(eq($current.hash, $anchor.hash)), includes($anchor.context, "30 learners"), includes($current.context, "48 learners"))
+        otherwise "CS-TEST: Commentary did not retain its rendered context."
+      port kernel.invoke { query = "cs.impact"; input = { before = $original; after = $changed } } → impact
+      each list("proposal", "briefing", "delivery", "introduction") as id:
+        assert eq(count(filter($impact, "i", eq($i.id, $id))), 1)
+          otherwise "CS-TEST: A dependent representation was omitted from the impact report."
+      let checks = 7
+  when eq($case, "model-refusals"):
+    let badInputs = append($meaning.source.inputs, list(at($meaning.source.inputs, 0)))
+    port record.put { record = $meaning.source; key = "inputs"; value = $badInputs } → bad
+    port kernel.invoke { query = "cs.refuses"; input = { query = "cs.testBody"; input = { state = $original; id = "project"; body = $bad }; reason = "CS-MODEL" } } → refused
+    let cycle = list({ id = "a"; label = "A"; operation = "add"; left = "b"; right = "materials"; unit = "AUD" }, { id = "b"; label = "B"; operation = "add"; left = "a"; right = "materials"; unit = "AUD" })
+    port record.put { record = $meaning.source; key = "calculations"; value = append($meaning.source.calculations, $cycle) } → bad
+    port kernel.invoke { query = "cs.refuses"; input = { query = "cs.testBody"; input = { state = $original; id = "project"; body = $bad }; reason = "CS-CYCLE" } } → refused
+    let formula = { id = "invalid"; label = "Invalid"; operation = "add"; left = "participants"; right = "materials"; unit = "AUD" }
+    port record.put { record = $meaning.source; key = "calculations"; value = append($meaning.source.calculations, list($formula)) } → bad
+    port kernel.invoke { query = "cs.refuses"; input = { query = "cs.testBody"; input = { state = $original; id = "project"; body = $bad }; reason = "CS-UNIT" } } → refused
+    let checks = 3
+  when eq($case, "templates"):
+    each list("[[unknown]]", "[[participants]", "[[participants") as text:
+      port kernel.invoke { query = "cs.refuses"; input = { query = "cs.expand"; input = { text = $text; model = $meaning }; reason = "CS-" } } → refused
+    port kernel.invoke { query = "cs.record"; input = { document = $document; id = "standard" } } → record
+    port kernel.invoke { query = "cs.payload"; input = $record } → standard
+    port kernel.invoke { query = "cs.markdown"; input = { text = "# <script>alert(1)</script>\n30 participants"; meaning = $meaning; standard = $standard } } → html
+    assert and(not(includes($html.html, "<script>")), includes($html.html, "30 learners"))
+      otherwise "CS-TEST: Prose escaping or standardization failed."
+    let checks = 5
+  when eq($case, "formats"):
+    port kernel.invoke { query = "cs.chartSVG"; input = { meaning = $meaning; standard = { profile = "editorial" }; sourceHash = $original.documentHash } } → chart
+    assert and(includes($chart, "Materials: 1,200 AUD"), not(includes($chart, "Sessions: 6 session")), includes($chart, $original.documentHash))
+      otherwise "CS-TEST: The chart mixed units or lost its source."
+    port kernel.invoke { query = "cs.reorder"; input = { items = list("a", "b", "c"); index = 1; movement = "up" } } → reordered
+    assert eq($reordered, list("b", "a", "c"))
+      otherwise "CS-TEST: Reordering lost or duplicated an item."
+    port kernel.invoke { query = "cs.reorder"; input = { items = $reordered; index = 2; movement = "remove" } } → removed
+    assert eq($removed, list("b", "a"))
+      otherwise "CS-TEST: Draft removal did not retain the other identities."
+    port kernel.invoke { query = "cs.timestamp"; input = 59.9999 } → time
+    assert eq($time, "00:01:00.000")
+      otherwise "CS-TEST: Caption rounding did not carry correctly."
+    port kernel.invoke { query = "cs.csv"; input = list("=SUM(A1)", "a,b", "a\"b") } → csv
+    assert eq($csv, "\"'=SUM(A1)\",\"a,b\",\"a\"\"b\"")
+      otherwise "CS-TEST: CSV quoting or formula shielding failed."
+    port kernel.invoke { query = "cs.artifact"; input = { state = $original; id = "delivery" } } → svg
+    assert and(includes($svg.text, "fill=\"#fffef9\""), includes($svg.text, "Serve 30 learners"))
+      otherwise "CS-TEST: SVG is not self-contained or faithfully bound."
+    port kernel.invoke { query = "cs.artifact"; input = { state = $original; id = "introduction" } } → captions
+    assert and(includes($captions.text, "WEBVTT"), includes($captions.text, "00:00:08.000 --> 00:00:18.000"), includes($captions.text, "30 learners"))
+      otherwise "CS-TEST: Caption export is wrong."
+    let checks = 7
+  when eq($case, "exchange"):
+    port kernel.invoke { query = "cs.record"; input = { document = $document; id = "approach" } } → workflowRecord
+    port kernel.invoke { query = "cs.payload"; input = $workflowRecord } → workflow
+    port kernel.invoke { query = "cs.record"; input = { document = $document; id = "standard" } } → standardRecord
+    port kernel.invoke { query = "cs.payload"; input = $standardRecord } → standard
+    let package = { protocol = "creator-studio/method/1"; title = "Budget method"; author = "An attributed person"; version = "1"; licence = "Review terms"; terms = "No settlement"; requires = list("total"); workflow = $workflow; standard = $standard }
+    port kernel.invoke { query = "cs.packageCheck"; input = { package = $package; meaning = $meaning } } → valid
+    port record.put { record = $package; key = "callback"; value = "eval" } → bad
+    port kernel.invoke { query = "cs.refuses"; input = { query = "cs.packageCheck"; input = { package = $bad; meaning = $meaning }; reason = "CS-FIELDS" } } → refused
+    let evil = { route = "custom"; steps = list({ id = "script"; label = "Unknown effect"; app = "documents"; operation = "execute" }) }
+    port record.put { record = $package; key = "workflow"; value = $evil } → bad
+    port kernel.invoke { query = "cs.refuses"; input = { query = "cs.packageCheck"; input = { package = $bad; meaning = $meaning }; reason = "CS-PACKAGE" } } → refused
+    let checks = 3
+  when eq($case, "run"):
+    port kernel.invoke { query = "cs.run"; input = { state = $original; id = "approach" } } → run
+    assert and(eq(count($run.artifacts), 5), eq($run.status, "compiled-awaiting-human-review"), eq($run.externalEffects, "none"))
+      otherwise "CS-TEST: Production run omitted output or falsely completed review."
+    each $run.artifacts as artifact:
+      port digest.sha256 { text = $artifact.text } → hash
+      assert and(eq($hash, $artifact.sha256), eq($artifact.sourceHash, $original.documentHash))
+        otherwise "CS-TEST: Compiled artifact lost source correspondence."
+    let checks = 6
+  let result = { protocol = "creator-studio/assurance/1"; case = $case; passed = $checks; budget = 20000000; programHash = $data.programHash; stateHash = $original.documentHash }
+
+process cs.packageMetadata:
+  let result = { name = "creator-studio-encounter"; version = "0.1.0"; private = true; type = "module"; scripts = { build = "\"${ENCOUNTER_BIN:-encounter}\" build --browser . bootstrap/native-build.rel ../encounter-libraries \"${ENCOUNTER_BROWSER_OUTPUT:-native-dist}\""; dev = "node bootstrap/serve.mjs"; "check:source" = "node bootstrap/cli.mjs creator-check-source assurance/source-projections.request"; "project:source" = "node bootstrap/cli.mjs creator-project-source assurance/source-projections.request"; test = "npm run check:source && node bootstrap/cli.mjs creator-assure assurance/baseline.request && node bootstrap/cli.mjs creator-assure assurance/edit-replay.request && node bootstrap/cli.mjs creator-assure assurance/model-refusals.request && node bootstrap/cli.mjs creator-assure assurance/templates.request && node bootstrap/cli.mjs creator-assure assurance/formats.request && node bootstrap/cli.mjs creator-assure assurance/commentary.request && node bootstrap/cli.mjs creator-assure assurance/exchange.request && node bootstrap/cli.mjs creator-assure assurance/run.request && node bootstrap/cli.mjs creator-assure assurance/receipts.request && node bootstrap/cli.mjs creator-assure assurance/contrast.request && node bootstrap/cli.mjs creator-assure assurance/standards.request && node bootstrap/cli.mjs creator-assure assurance/platform-boundary.request" } }
+
+process cs.impact:
+  let before = $eventInput.before
+  let after = $eventInput.after
+  port kernel.invoke { query = "cs.model"; input = $before.document } → oldMeaning
+  port kernel.invoke { query = "cs.model"; input = $after.document } → newMeaning
+  let names = append(list("project_title", "client", "goal"), map($newMeaning.quantities, "q", $q.id))
+  fold $names as name; valueChanges starts list():
+    let oldText = ""
+    try:
+      port kernel.invoke { query = "cs.value"; input = { model = $oldMeaning; id = $name } } → oldText
+    catch fault:
+      let oldText = "Not present in the earlier version"
+    port kernel.invoke { query = "cs.value"; input = { model = $newMeaning; id = $name } } → newText
+    yield if(eq($oldText, $newText), $valueChanges, append($valueChanges, list({ id = $name; before = $oldText; after = $newText }))) → valueChanges
+  let changedNames = map($valueChanges, "v", $v.id)
+  port kernel.invoke { query = "cs.record"; input = { document = $before.document; id = "standard" } } → oldStandard
+  port kernel.invoke { query = "cs.record"; input = { document = $after.document; id = "standard" } } → newStandard
+  let changedStandard = not(eq($oldStandard.values.body, $newStandard.values.body))
+  fold $after.document.objects as record; impacts starts list():
+    let previous = at(filter($before.document.objects, "r", eq($r.id, $record.id)), 0)
+    let fields = list()
+    when not($previous):
+      let fields = list("New managed record")
+    when $previous:
+      port record.entries { value = $record.values } → pairs
+      let fields = map(filter($pairs, "pair", not(eq(at($pair, 1), at($previous.values, at($pair, 0))))), "pair", at($pair, 0))
+    let direct = not(eq(count($fields), 0))
+    let referenced = filter($changedNames, "name", includes($record.values.body, concat("[[", $name, "]]")))
+    when not(eq(count($referenced), 0)):
+      let fields = append($fields, $referenced)
+    when and($changedStandard, includes(list("document", "presentation", "canvas", "media"), $record.values.kind)):
+      let fields = append($fields, list("selected standard"))
+    let values = if(eq($record.values.kind, "project"), $valueChanges, filter($valueChanges, "v", includes($referenced, $v.id)))
+    yield if(eq(count($fields), 0), $impacts, append($impacts, list({ id = $record.id; title = $record.values.title; fields = $fields; direct = $direct; values = $values }))) → impacts
+  let result = $impacts
+
+process cs.route:
+  let order = list("documents", "tables", "canvas", "presentations", "media", "review", "workflows")
+  when eq($eventInput.route, "budget"):
+    let order = list("tables", "canvas", "documents", "presentations", "media", "review", "workflows")
+  when eq($eventInput.route, "codesign"):
+    let order = list("canvas", "review", "documents", "tables", "presentations", "media", "workflows")
+  assert includes(list("narrative", "budget", "codesign"), $eventInput.route)
+    otherwise "CS-ROUTE: Choose a declared composition."
+  fold $order as app; steps starts list():
+    yield append($steps, filter($eventInput.workflow.steps, "s", eq($s.app, $app))) → steps
+  let result = { route = $eventInput.route; steps = $steps }
+
+process cs.run:
+  let accepted = $eventInput.state
+  port kernel.invoke { query = "cs.validate"; input = $accepted } → checked
+  port kernel.invoke { query = "cs.record"; input = { document = $accepted.document; id = $eventInput.id } } → workflowRecord
+  assert eq($workflowRecord.values.kind, "workflow")
+    otherwise "CS-RUN: Choose an accepted workflow."
+  port kernel.invoke { query = "cs.payload"; input = $workflowRecord } → workflow
+  fold filter($accepted.document.objects, "r", and(eq($r.values.status, "active"), includes(list("document", "project", "presentation", "canvas", "media"), $r.values.kind))) as record; files starts list():
+    port kernel.invoke { query = "cs.artifact"; input = { state = $accepted; id = $record.id } } → artifact
+    yield append($files, list($artifact)) → files
+  let checkpoints = map($workflow.steps, "s", { id = $s.id; app = $s.app; operation = $s.operation; status = if(eq($s.operation, "review"), "human-review-required", if(eq($s.operation, "inspect"), "available-for-human-inspection", if(eq($s.operation, "compile"), "compiled", "validated"))) })
+  let result = { protocol = "creator-studio/run/1"; workflow = $workflowRecord.id; route = $workflow.route; sourceHash = $accepted.documentHash; programHash = $data.programHash; profile = "bounded-text-production"; artifacts = $files; checkpoints = $checkpoints; status = if(eq(count(filter($workflow.steps, "s", eq($s.operation, "review"))), 0), "compiled", "compiled-awaiting-human-review"); externalEffects = "none" }
+
+process cs.catalogue:
+  let result = list(
+    { id = "clear_proposal"; title = "The clear proposal"; author = "Creator Studio example"; version = "1"; route = "narrative"; profile = "editorial"; description = "Begin with the people and purpose. Make assumptions visible before making a persuasive presentation."; terms = "Included demonstration method. Apply your project licence and agreed terms before external exchange." },
+    { id = "budget_clarity"; title = "Budget clarity"; author = "Creator Studio example"; version = "1"; route = "budget"; profile = "technical"; description = "Start with quantities and units, then develop an argument whose figures retain their source."; terms = "Included demonstration method. No commercial transaction is implied by adoption." },
+    { id = "shared_design"; title = "Design in conversation"; author = "Creator Studio example"; version = "1"; route = "codesign"; profile = "client"; description = "Start with the relationship map and the questions people need to discuss. Leave room for different approaches."; terms = "Included demonstration method. Local attribution does not establish an independent professional endorsement." }
+  )
+
+process cs.packageCheck:
+  let package = $eventInput.package
+  port kernel.invoke { query = "cs.closed"; input = { value = $package; fields = list("protocol", "title", "author", "version", "licence", "terms", "requires", "standard", "workflow") } } → valid
+  assert eq($package.protocol, "creator-studio/method/1")
+    otherwise "CS-PACKAGE: Unsupported method grammar."
+  each list($package.title, $package.author, $package.version, $package.licence, $package.terms) as text:
+    port kernel.invoke { query = "cs.text"; input = { value = $text; maximum = 500 } } → valid
+  assert isArray($package.requires)
+    otherwise "CS-PACKAGE: Required inputs must be a list."
+  each $package.requires as name:
+    port kernel.invoke { query = "cs.value"; input = { model = $eventInput.meaning; id = $name } } → exists
+  port kernel.invoke { query = "cs.closed"; input = { value = $package.workflow; fields = list("route", "steps") } } → valid
+  assert and(includes(list("narrative", "budget", "codesign", "custom"), $package.workflow.route), isArray($package.workflow.steps))
+    otherwise "CS-PACKAGE: This method needs a supported route and step list."
+  each $package.workflow.steps as step:
+    port kernel.invoke { query = "ws.id"; input = $step.id } → valid
+    port kernel.invoke { query = "cs.text"; input = { value = $step.label; maximum = 160 } } → valid
+    assert eq(count(filter($package.workflow.steps, "s", eq($s.id, $step.id))), 1)
+      otherwise "CS-PACKAGE: Method steps need unique identities."
+    port kernel.invoke { query = "cs.closed"; input = { value = $step; fields = list("id", "label", "app", "operation") } } → valid
+    assert and(includes(list("documents", "tables", "presentations", "canvas", "media", "review", "workflows"), $step.app), includes(list("inspect", "check", "compile", "review"), $step.operation))
+      otherwise "CS-PACKAGE: Imported data cannot introduce a script, callback, effect or new operation."
+  port kernel.invoke { query = "cs.closed"; input = { value = $package.standard; fields = list("profile", "terminology", "accessibility", "licence") } } → valid
+  assert and(includes(list("editorial", "technical", "client"), $package.standard.profile), isArray($package.standard.terminology))
+    otherwise "CS-PACKAGE: Unsupported standards profile."
+  each $package.standard.terminology as term:
+    port kernel.invoke { query = "cs.text"; input = { value = $term.to; maximum = 80 } } → valid
+    port kernel.invoke { query = "cs.closed"; input = { value = $term; fields = list("from", "to") } } → valid
+    port text.matches { value = $term.from; pattern = "^[A-Za-z][A-Za-z -]{0,40}$" } → valid
+    assert $valid
+      otherwise "CS-PACKAGE: A terminology mapping is plain language, not executable pattern code."
+  each list($package.standard.accessibility, $package.standard.licence) as text:
+    port kernel.invoke { query = "cs.text"; input = { value = $text; maximum = 500 } } → valid
+  let result = { compatible = true; source = $package; effects = "existing checked operations only" }
+
+# Formatting only; export/check callers establish exact replay first.

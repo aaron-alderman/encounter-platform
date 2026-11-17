@@ -1,0 +1,588 @@
+{
+  "protocol": "creator-studio/project/1",
+  "id": "project_2",
+  "accepted": {
+    "protocol": "usewords/workspace-acceptance/1",
+    "body": {
+      "programHash": "51abf1273b06dcfca3aa363f0eb21a6dc1b618fb982389552c96b6893feccc54",
+      "basis": {
+        "protocol": "usewords/workspace/1",
+        "definitions": [
+          "construct StudioRecord\nfield title text shared required max 160\nfield kind text shared required max 24\nfield body text shared required max 4000\nfield note text shared optional max 1200\nfield author text shared required max 100\nfield status text shared required max 20\nheading title\nparagraph note\nparagraph body"
+        ],
+        "objects": [
+          {
+            "id": "project",
+            "type": "StudioRecord",
+            "values": {
+              "title": "Software should understand what you mean — Opening candidate",
+              "kind": "project",
+              "body": "{\"client\":\"Your client\",\"goal\":\"Describe the work and what a useful outcome would be.\",\"inputs\":[],\"calculations\":[]}",
+              "note": "A new project. Define its meaning in Tables and Models.",
+              "author": "Project team",
+              "status": "active"
+            }
+          },
+          {
+            "id": "proposal",
+            "type": "StudioRecord",
+            "values": {
+              "title": "Programme proposal",
+              "kind": "document",
+              "body": "# Start with what matters\n\nDescribe the purpose, sources and assumptions behind this work.\n\n# A useful next step\n\nChoose a workspace or a guided approach.",
+              "note": "A maintained document. Insert named values with [[name]]; inspect their owner in Meaning.",
+              "author": "Project team",
+              "status": "active"
+            }
+          },
+          {
+            "id": "briefing",
+            "type": "StudioRecord",
+            "values": {
+              "title": "Client briefing",
+              "kind": "presentation",
+              "body": "# The purpose\nWhat are we trying to make possible?\n---\n# The next step\nA proposal for discussion.",
+              "note": "Audience: client decision-makers. Slides retain the same named values as the proposal.",
+              "author": "Project team",
+              "status": "active"
+            }
+          },
+          {
+            "id": "delivery",
+            "type": "StudioRecord",
+            "values": {
+              "title": "Delivery map",
+              "kind": "canvas",
+              "body": "{\"nodes\":[{\"id\":\"discover\",\"label\":\"Understand\",\"detail\":\"Listen to the brief\",\"x\":40,\"y\":80},{\"id\":\"design\",\"label\":\"Design\",\"detail\":\"Make assumptions visible\",\"x\":270,\"y\":80},{\"id\":\"deliver\",\"label\":\"Deliver\",\"detail\":\"Learn and improve\",\"x\":500,\"y\":80}],\"edges\":[{\"from\":\"discover\",\"to\":\"design\",\"kind\":\"informs\"},{\"from\":\"design\",\"to\":\"deliver\",\"kind\":\"prepares\"}]}",
+              "note": "The relationship and its reason are retained separately from its visual arrangement.",
+              "author": "Project team",
+              "status": "active"
+            }
+          },
+          {
+            "id": "introduction",
+            "type": "StudioRecord",
+            "values": {
+              "title": "A clear introduction",
+              "kind": "media",
+              "body": "{\"scenes\":[{\"title\":\"An invitation\",\"text\":\"Begin with the people and purpose of this project.\",\"seconds\":8},{\"title\":\"The commitment\",\"text\":\"Make the next commitment visible.\",\"seconds\":10},{\"title\":\"A useful next step\",\"text\":\"Inspect the assumptions. Discuss what matters. Choose what follows.\",\"seconds\":8}]}",
+              "note": "Script, storyboard, cue sheet and WebVTT captions. Picture/audio encoding needs a qualified media adapter.",
+              "author": "Project team",
+              "status": "active"
+            }
+          },
+          {
+            "id": "approach",
+            "type": "StudioRecord",
+            "values": {
+              "title": "Training proposal",
+              "kind": "workflow",
+              "body": "{\"route\":\"narrative\",\"steps\":[{\"id\":\"purpose\",\"label\":\"Understand the purpose\",\"app\":\"documents\",\"operation\":\"inspect\"},{\"id\":\"numbers\",\"label\":\"Make the assumptions visible\",\"app\":\"tables\",\"operation\":\"check\"},{\"id\":\"map\",\"label\":\"Map the delivery\",\"app\":\"canvas\",\"operation\":\"inspect\"},{\"id\":\"story\",\"label\":\"Prepare the conversation\",\"app\":\"presentations\",\"operation\":\"compile\"},{\"id\":\"voice\",\"label\":\"Give it a voice\",\"app\":\"media\",\"operation\":\"compile\"},{\"id\":\"review\",\"label\":\"Review and release\",\"app\":\"review\",\"operation\":\"review\"}]}",
+              "note": "An approach you can follow, inspect and change. Apps remain directly accessible.",
+              "author": "Project team",
+              "status": "active"
+            }
+          },
+          {
+            "id": "commentary",
+            "type": "StudioRecord",
+            "values": {
+              "title": "Project conversation",
+              "kind": "review",
+              "body": "{\"comments\":[]}",
+              "note": "Comments record attributed statements, not verified identity or agreement.",
+              "author": "Project team",
+              "status": "active"
+            }
+          },
+          {
+            "id": "standard",
+            "type": "StudioRecord",
+            "values": {
+              "title": "Clear professional practice",
+              "kind": "standard",
+              "body": "{\"profile\":\"editorial\",\"terminology\":[{\"from\":\"participants\",\"to\":\"learners\"}],\"accessibility\":\"Headings, labels, keyboard access and captions\",\"licence\":\"Project-owned work; inspect terms before exchange.\"}",
+              "note": "Selected standards change representation deliberately; they do not silently change a calculation or claim.",
+              "author": "Project team",
+              "status": "active"
+            }
+          }
+        ],
+        "journeys": []
+      },
+      "predecessor": null,
+      "journal": [
+        {
+          "request": {
+            "kind": "edit",
+            "scope": "shared",
+            "object": "introduction",
+            "field": "title",
+            "value": "Opening candidate · 03:52",
+            "baseRevision": 0
+          },
+          "before": "75c4d8359f39d15b83f79c6b79faa19e0f203979ccb36e45518b30903bc6abbc",
+          "after": "2950f9fbe2e6c860930b014b3dcafe5d33662b1592620d0bc0c9b1ce6ce05c68",
+          "projectionHash": "ca22d6c5581e0dc2efaa7d53b93b41f372156ab314ea701dd6786b8eac0ffc62",
+          "destination": {
+            "kind": "source",
+            "field": "F.title",
+            "node": {
+              "id": 64,
+              "line": 64,
+              "offset": 1917,
+              "raw": "  F.title: source.F.title",
+              "text": "F.title: source.F.title",
+              "indent": 2,
+              "parent": 63
+            }
+          }
+        },
+        {
+          "request": {
+            "kind": "edit",
+            "scope": "shared",
+            "object": "introduction",
+            "field": "body",
+            "value": "{\"scenes\":[{\"title\":\"S01 · AI is great\",\"seconds\":16,\"text\":\"AI is great.\"},{\"title\":\"S02 · At first\",\"seconds\":22,\"text\":\"At first. And then you try to scale. Who decided that, and why? The specs disagree. One little change touches half the app. Suddenly, cleaning it up feels risky. What if we could build software differently?\"},{\"title\":\"S03 · Name authoring\",\"seconds\":16,\"text\":\"What if, instead of just generating code, we could capture what you actually mean? Your intentions. Your requirements. Your decisions. And the reasons behind them. That's what we're building. We call it authoring.\"},{\"title\":\"S04 · TEMP · Request into interpretation\",\"seconds\":16,\"text\":\"You describe what you want to create. Sorcery decomposes your request into meaningful, reusable building blocks. It shows you what it understands, what it's assuming, and where important decisions need to be made.\"},{\"title\":\"S05 · TEMP · Preview an alternative\",\"seconds\":9,\"text\":\"You can explore alternatives, change your mind, and see the consequences before committing.\"},{\"title\":\"S06 · TEMP · Rules and reasons\",\"seconds\":23,\"text\":\"Underneath it all is Temple. A new kind of relational database and execution engine, where your software, its meaning, and the rules that govern it live together. Everything is connected. Every important decision can have a reason. Every change can have provenance. And every action can be subject to explicit constraints. We call these admissibility gates.\"},{\"title\":\"S07 · TEMP · The gate decides\",\"seconds\":15,\"text\":\"Instead of giving AI unrestricted access and hoping it behaves, Temple is designed to enforce what it's allowed to do. Your AI works within your rules. Not the other way around.\"},{\"title\":\"S08 · TEMP · Compose through a seam\",\"seconds\":13,\"text\":\"And here's where things get interesting. Your software doesn't have to be perfect on day one. Start simple. Reuse existing capabilities. Connect systems that don't quite agree using explicit seams. Improve the parts that matter.\"},{\"title\":\"S09 · TEMP · Change the implementation\",\"seconds\":21,\"text\":\"As your requirements grow, you can decompose your application further, strengthen its assurances, and optimise its implementation. Without unnecessarily changing its meaning. Because you should be able to optimise how software works without changing what it's supposed to do.\"},{\"title\":\"S10 · TEMP · Find the relevant context\",\"seconds\":22,\"text\":\"Temple also makes your software navigable. With Context Hub, graph-ranking techniques inspired by Google's PageRank help identify the information most relevant to a question. So your AI can work with meaningful, connected context rather than trying to understand an entire codebase at once.\"},{\"title\":\"S11 · TEMP · Choose an agent and model\",\"seconds\":10,\"text\":\"Bring your own agent. Choose your own models. And keep the context where it belongs.\"},{\"title\":\"S12 · Who operates it\",\"seconds\":18,\"text\":\"Temple is built for sovereignty. Open source. Run it yourself, on your own infrastructure, with your own data. Or use a managed platform if you'd rather leave the operations to us. Your systems. Your rules. Your choice.\"},{\"title\":\"S13 · TEMP · Recover the reason\",\"seconds\":17,\"text\":\"We believe the future of software isn't just about generating more code, faster. It's about creating systems we can understand. Systems we can trust. Systems that preserve our intentions, adapt as our needs change, and remain under human control.\"},{\"title\":\"S14 · TEMP · End card\",\"seconds\":14,\"text\":\"Software that remembers why. Software that evolves without losing its meaning. Software you author, not just program. Welcome to Sorcery and Temple.\"}]}",
+            "baseRevision": 1
+          },
+          "before": "2950f9fbe2e6c860930b014b3dcafe5d33662b1592620d0bc0c9b1ce6ce05c68",
+          "after": "212416295fb41faea82c3fb579c3ef58e1df3ca5cfff96e64fbf1a4f91bcfee8",
+          "projectionHash": "d20f469e6e1db5a18e936a5bfcaf05c6bd0448fa240d9ddf243212d3438405b0",
+          "destination": {
+            "kind": "source",
+            "field": "F.body",
+            "node": {
+              "id": 68,
+              "line": 68,
+              "offset": 2041,
+              "raw": "  F.body: source.F.body",
+              "text": "F.body: source.F.body",
+              "indent": 2,
+              "parent": 63
+            }
+          }
+        }
+      ],
+      "revision": 2,
+      "documentHash": "212416295fb41faea82c3fb579c3ef58e1df3ca5cfff96e64fbf1a4f91bcfee8",
+      "projectionHash": "d20f469e6e1db5a18e936a5bfcaf05c6bd0448fa240d9ddf243212d3438405b0"
+    },
+    "sha256": "de2f62c319c515c1eed6505691283d97fefa31358e0c5afb585271eadda7c7f0"
+  },
+  "draft": {
+    "protocol": "usewords/workspace-acceptance/1",
+    "body": {
+      "programHash": "51abf1273b06dcfca3aa363f0eb21a6dc1b618fb982389552c96b6893feccc54",
+      "basis": {
+        "protocol": "usewords/workspace/1",
+        "definitions": [
+          "construct StudioRecord\nfield title text shared required max 160\nfield kind text shared required max 24\nfield body text shared required max 4000\nfield note text shared optional max 1200\nfield author text shared required max 100\nfield status text shared required max 20\nheading title\nparagraph note\nparagraph body"
+        ],
+        "objects": [
+          {
+            "id": "project",
+            "type": "StudioRecord",
+            "values": {
+              "title": "Software should understand what you mean — Opening candidate",
+              "kind": "project",
+              "body": "{\"client\":\"Your client\",\"goal\":\"Describe the work and what a useful outcome would be.\",\"inputs\":[],\"calculations\":[]}",
+              "note": "A new project. Define its meaning in Tables and Models.",
+              "author": "Project team",
+              "status": "active"
+            }
+          },
+          {
+            "id": "proposal",
+            "type": "StudioRecord",
+            "values": {
+              "title": "Programme proposal",
+              "kind": "document",
+              "body": "# Start with what matters\n\nDescribe the purpose, sources and assumptions behind this work.\n\n# A useful next step\n\nChoose a workspace or a guided approach.",
+              "note": "A maintained document. Insert named values with [[name]]; inspect their owner in Meaning.",
+              "author": "Project team",
+              "status": "active"
+            }
+          },
+          {
+            "id": "briefing",
+            "type": "StudioRecord",
+            "values": {
+              "title": "Client briefing",
+              "kind": "presentation",
+              "body": "# The purpose\nWhat are we trying to make possible?\n---\n# The next step\nA proposal for discussion.",
+              "note": "Audience: client decision-makers. Slides retain the same named values as the proposal.",
+              "author": "Project team",
+              "status": "active"
+            }
+          },
+          {
+            "id": "delivery",
+            "type": "StudioRecord",
+            "values": {
+              "title": "Delivery map",
+              "kind": "canvas",
+              "body": "{\"nodes\":[{\"id\":\"discover\",\"label\":\"Understand\",\"detail\":\"Listen to the brief\",\"x\":40,\"y\":80},{\"id\":\"design\",\"label\":\"Design\",\"detail\":\"Make assumptions visible\",\"x\":270,\"y\":80},{\"id\":\"deliver\",\"label\":\"Deliver\",\"detail\":\"Learn and improve\",\"x\":500,\"y\":80}],\"edges\":[{\"from\":\"discover\",\"to\":\"design\",\"kind\":\"informs\"},{\"from\":\"design\",\"to\":\"deliver\",\"kind\":\"prepares\"}]}",
+              "note": "The relationship and its reason are retained separately from its visual arrangement.",
+              "author": "Project team",
+              "status": "active"
+            }
+          },
+          {
+            "id": "introduction",
+            "type": "StudioRecord",
+            "values": {
+              "title": "Opening candidate · 03:52",
+              "kind": "media",
+              "body": "{\"scenes\":[{\"title\":\"S01 · AI is great\",\"seconds\":16,\"text\":\"AI is great.\"},{\"title\":\"S02 · At first\",\"seconds\":22,\"text\":\"At first. And then you try to scale. Who decided that, and why? The specs disagree. One little change touches half the app. Suddenly, cleaning it up feels risky. What if we could build software differently?\"},{\"title\":\"S03 · Name authoring\",\"seconds\":16,\"text\":\"What if, instead of just generating code, we could capture what you actually mean? Your intentions. Your requirements. Your decisions. And the reasons behind them. That's what we're building. We call it authoring.\"},{\"title\":\"S04 · TEMP · Request into interpretation\",\"seconds\":16,\"text\":\"You describe what you want to create. Sorcery decomposes your request into meaningful, reusable building blocks. It shows you what it understands, what it's assuming, and where important decisions need to be made.\"},{\"title\":\"S05 · TEMP · Preview an alternative\",\"seconds\":9,\"text\":\"You can explore alternatives, change your mind, and see the consequences before committing.\"},{\"title\":\"S06 · TEMP · Rules and reasons\",\"seconds\":23,\"text\":\"Underneath it all is Temple. A new kind of relational database and execution engine, where your software, its meaning, and the rules that govern it live together. Everything is connected. Every important decision can have a reason. Every change can have provenance. And every action can be subject to explicit constraints. We call these admissibility gates.\"},{\"title\":\"S07 · TEMP · The gate decides\",\"seconds\":15,\"text\":\"Instead of giving AI unrestricted access and hoping it behaves, Temple is designed to enforce what it's allowed to do. Your AI works within your rules. Not the other way around.\"},{\"title\":\"S08 · TEMP · Compose through a seam\",\"seconds\":13,\"text\":\"And here's where things get interesting. Your software doesn't have to be perfect on day one. Start simple. Reuse existing capabilities. Connect systems that don't quite agree using explicit seams. Improve the parts that matter.\"},{\"title\":\"S09 · TEMP · Change the implementation\",\"seconds\":21,\"text\":\"As your requirements grow, you can decompose your application further, strengthen its assurances, and optimise its implementation. Without unnecessarily changing its meaning. Because you should be able to optimise how software works without changing what it's supposed to do.\"},{\"title\":\"S10 · TEMP · Find the relevant context\",\"seconds\":22,\"text\":\"Temple also makes your software navigable. With Context Hub, graph-ranking techniques inspired by Google's PageRank help identify the information most relevant to a question. So your AI can work with meaningful, connected context rather than trying to understand an entire codebase at once.\"},{\"title\":\"S11 · TEMP · Choose an agent and model\",\"seconds\":10,\"text\":\"Bring your own agent. Choose your own models. And keep the context where it belongs.\"},{\"title\":\"S12 · Who operates it\",\"seconds\":18,\"text\":\"Temple is built for sovereignty. Open source. Run it yourself, on your own infrastructure, with your own data. Or use a managed platform if you'd rather leave the operations to us. Your systems. Your rules. Your choice.\"},{\"title\":\"S13 · TEMP · Recover the reason\",\"seconds\":17,\"text\":\"We believe the future of software isn't just about generating more code, faster. It's about creating systems we can understand. Systems we can trust. Systems that preserve our intentions, adapt as our needs change, and remain under human control.\"},{\"title\":\"S14 · TEMP · End card\",\"seconds\":14,\"text\":\"Software that remembers why. Software that evolves without losing its meaning. Software you author, not just program. Welcome to Sorcery and Temple.\"}]}",
+              "note": "Script, storyboard, cue sheet and WebVTT captions. Picture/audio encoding needs a qualified media adapter.",
+              "author": "Project team",
+              "status": "active"
+            }
+          },
+          {
+            "id": "approach",
+            "type": "StudioRecord",
+            "values": {
+              "title": "Training proposal",
+              "kind": "workflow",
+              "body": "{\"route\":\"narrative\",\"steps\":[{\"id\":\"purpose\",\"label\":\"Understand the purpose\",\"app\":\"documents\",\"operation\":\"inspect\"},{\"id\":\"numbers\",\"label\":\"Make the assumptions visible\",\"app\":\"tables\",\"operation\":\"check\"},{\"id\":\"map\",\"label\":\"Map the delivery\",\"app\":\"canvas\",\"operation\":\"inspect\"},{\"id\":\"story\",\"label\":\"Prepare the conversation\",\"app\":\"presentations\",\"operation\":\"compile\"},{\"id\":\"voice\",\"label\":\"Give it a voice\",\"app\":\"media\",\"operation\":\"compile\"},{\"id\":\"review\",\"label\":\"Review and release\",\"app\":\"review\",\"operation\":\"review\"}]}",
+              "note": "An approach you can follow, inspect and change. Apps remain directly accessible.",
+              "author": "Project team",
+              "status": "active"
+            }
+          },
+          {
+            "id": "commentary",
+            "type": "StudioRecord",
+            "values": {
+              "title": "Project conversation",
+              "kind": "review",
+              "body": "{\"comments\":[]}",
+              "note": "Comments record attributed statements, not verified identity or agreement.",
+              "author": "Project team",
+              "status": "active"
+            }
+          },
+          {
+            "id": "standard",
+            "type": "StudioRecord",
+            "values": {
+              "title": "Clear professional practice",
+              "kind": "standard",
+              "body": "{\"profile\":\"editorial\",\"terminology\":[{\"from\":\"participants\",\"to\":\"learners\"}],\"accessibility\":\"Headings, labels, keyboard access and captions\",\"licence\":\"Project-owned work; inspect terms before exchange.\"}",
+              "note": "Selected standards change representation deliberately; they do not silently change a calculation or claim.",
+              "author": "Project team",
+              "status": "active"
+            }
+          }
+        ],
+        "journeys": []
+      },
+      "predecessor": "de2f62c319c515c1eed6505691283d97fefa31358e0c5afb585271eadda7c7f0",
+      "journal": [],
+      "revision": 0,
+      "documentHash": "212416295fb41faea82c3fb579c3ef58e1df3ca5cfff96e64fbf1a4f91bcfee8",
+      "projectionHash": "d20f469e6e1db5a18e936a5bfcaf05c6bd0448fa240d9ddf243212d3438405b0"
+    },
+    "sha256": "889b00b2971011f6e73ca8f5d34060f77f5eb1c761a4f2ba977ef62a63437479"
+  },
+  "history": [
+    {
+      "version": 0,
+      "label": "Project created",
+      "receipt": {
+        "protocol": "usewords/workspace-acceptance/1",
+        "body": {
+          "programHash": "51abf1273b06dcfca3aa363f0eb21a6dc1b618fb982389552c96b6893feccc54",
+          "basis": {
+            "protocol": "usewords/workspace/1",
+            "definitions": [
+              "construct StudioRecord\nfield title text shared required max 160\nfield kind text shared required max 24\nfield body text shared required max 4000\nfield note text shared optional max 1200\nfield author text shared required max 100\nfield status text shared required max 20\nheading title\nparagraph note\nparagraph body"
+            ],
+            "objects": [
+              {
+                "id": "project",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "Software should understand what you mean — Opening candidate",
+                  "kind": "project",
+                  "body": "{\"client\":\"Your client\",\"goal\":\"Describe the work and what a useful outcome would be.\",\"inputs\":[],\"calculations\":[]}",
+                  "note": "A new project. Define its meaning in Tables and Models.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              },
+              {
+                "id": "proposal",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "Programme proposal",
+                  "kind": "document",
+                  "body": "# Start with what matters\n\nDescribe the purpose, sources and assumptions behind this work.\n\n# A useful next step\n\nChoose a workspace or a guided approach.",
+                  "note": "A maintained document. Insert named values with [[name]]; inspect their owner in Meaning.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              },
+              {
+                "id": "briefing",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "Client briefing",
+                  "kind": "presentation",
+                  "body": "# The purpose\nWhat are we trying to make possible?\n---\n# The next step\nA proposal for discussion.",
+                  "note": "Audience: client decision-makers. Slides retain the same named values as the proposal.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              },
+              {
+                "id": "delivery",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "Delivery map",
+                  "kind": "canvas",
+                  "body": "{\"nodes\":[{\"id\":\"discover\",\"label\":\"Understand\",\"detail\":\"Listen to the brief\",\"x\":40,\"y\":80},{\"id\":\"design\",\"label\":\"Design\",\"detail\":\"Make assumptions visible\",\"x\":270,\"y\":80},{\"id\":\"deliver\",\"label\":\"Deliver\",\"detail\":\"Learn and improve\",\"x\":500,\"y\":80}],\"edges\":[{\"from\":\"discover\",\"to\":\"design\",\"kind\":\"informs\"},{\"from\":\"design\",\"to\":\"deliver\",\"kind\":\"prepares\"}]}",
+                  "note": "The relationship and its reason are retained separately from its visual arrangement.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              },
+              {
+                "id": "introduction",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "A clear introduction",
+                  "kind": "media",
+                  "body": "{\"scenes\":[{\"title\":\"An invitation\",\"text\":\"Begin with the people and purpose of this project.\",\"seconds\":8},{\"title\":\"The commitment\",\"text\":\"Make the next commitment visible.\",\"seconds\":10},{\"title\":\"A useful next step\",\"text\":\"Inspect the assumptions. Discuss what matters. Choose what follows.\",\"seconds\":8}]}",
+                  "note": "Script, storyboard, cue sheet and WebVTT captions. Picture/audio encoding needs a qualified media adapter.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              },
+              {
+                "id": "approach",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "Training proposal",
+                  "kind": "workflow",
+                  "body": "{\"route\":\"narrative\",\"steps\":[{\"id\":\"purpose\",\"label\":\"Understand the purpose\",\"app\":\"documents\",\"operation\":\"inspect\"},{\"id\":\"numbers\",\"label\":\"Make the assumptions visible\",\"app\":\"tables\",\"operation\":\"check\"},{\"id\":\"map\",\"label\":\"Map the delivery\",\"app\":\"canvas\",\"operation\":\"inspect\"},{\"id\":\"story\",\"label\":\"Prepare the conversation\",\"app\":\"presentations\",\"operation\":\"compile\"},{\"id\":\"voice\",\"label\":\"Give it a voice\",\"app\":\"media\",\"operation\":\"compile\"},{\"id\":\"review\",\"label\":\"Review and release\",\"app\":\"review\",\"operation\":\"review\"}]}",
+                  "note": "An approach you can follow, inspect and change. Apps remain directly accessible.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              },
+              {
+                "id": "commentary",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "Project conversation",
+                  "kind": "review",
+                  "body": "{\"comments\":[]}",
+                  "note": "Comments record attributed statements, not verified identity or agreement.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              },
+              {
+                "id": "standard",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "Clear professional practice",
+                  "kind": "standard",
+                  "body": "{\"profile\":\"editorial\",\"terminology\":[{\"from\":\"participants\",\"to\":\"learners\"}],\"accessibility\":\"Headings, labels, keyboard access and captions\",\"licence\":\"Project-owned work; inspect terms before exchange.\"}",
+                  "note": "Selected standards change representation deliberately; they do not silently change a calculation or claim.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              }
+            ],
+            "journeys": []
+          },
+          "predecessor": null,
+          "journal": [],
+          "revision": 0,
+          "documentHash": "75c4d8359f39d15b83f79c6b79faa19e0f203979ccb36e45518b30903bc6abbc",
+          "projectionHash": "f3767fa4e1218567394b05889a3260c8305e752048f5973cb9b9fceffdd5e71d"
+        },
+        "sha256": "b1717b2e31b6de0a0efb0bc368949b485242c66c895b4b4063d3e9cecb9bbac4"
+      }
+    },
+    {
+      "version": 1,
+      "label": "Saved 2 reviewed changes",
+      "receipt": {
+        "protocol": "usewords/workspace-acceptance/1",
+        "body": {
+          "programHash": "51abf1273b06dcfca3aa363f0eb21a6dc1b618fb982389552c96b6893feccc54",
+          "basis": {
+            "protocol": "usewords/workspace/1",
+            "definitions": [
+              "construct StudioRecord\nfield title text shared required max 160\nfield kind text shared required max 24\nfield body text shared required max 4000\nfield note text shared optional max 1200\nfield author text shared required max 100\nfield status text shared required max 20\nheading title\nparagraph note\nparagraph body"
+            ],
+            "objects": [
+              {
+                "id": "project",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "Software should understand what you mean — Opening candidate",
+                  "kind": "project",
+                  "body": "{\"client\":\"Your client\",\"goal\":\"Describe the work and what a useful outcome would be.\",\"inputs\":[],\"calculations\":[]}",
+                  "note": "A new project. Define its meaning in Tables and Models.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              },
+              {
+                "id": "proposal",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "Programme proposal",
+                  "kind": "document",
+                  "body": "# Start with what matters\n\nDescribe the purpose, sources and assumptions behind this work.\n\n# A useful next step\n\nChoose a workspace or a guided approach.",
+                  "note": "A maintained document. Insert named values with [[name]]; inspect their owner in Meaning.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              },
+              {
+                "id": "briefing",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "Client briefing",
+                  "kind": "presentation",
+                  "body": "# The purpose\nWhat are we trying to make possible?\n---\n# The next step\nA proposal for discussion.",
+                  "note": "Audience: client decision-makers. Slides retain the same named values as the proposal.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              },
+              {
+                "id": "delivery",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "Delivery map",
+                  "kind": "canvas",
+                  "body": "{\"nodes\":[{\"id\":\"discover\",\"label\":\"Understand\",\"detail\":\"Listen to the brief\",\"x\":40,\"y\":80},{\"id\":\"design\",\"label\":\"Design\",\"detail\":\"Make assumptions visible\",\"x\":270,\"y\":80},{\"id\":\"deliver\",\"label\":\"Deliver\",\"detail\":\"Learn and improve\",\"x\":500,\"y\":80}],\"edges\":[{\"from\":\"discover\",\"to\":\"design\",\"kind\":\"informs\"},{\"from\":\"design\",\"to\":\"deliver\",\"kind\":\"prepares\"}]}",
+                  "note": "The relationship and its reason are retained separately from its visual arrangement.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              },
+              {
+                "id": "introduction",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "A clear introduction",
+                  "kind": "media",
+                  "body": "{\"scenes\":[{\"title\":\"An invitation\",\"text\":\"Begin with the people and purpose of this project.\",\"seconds\":8},{\"title\":\"The commitment\",\"text\":\"Make the next commitment visible.\",\"seconds\":10},{\"title\":\"A useful next step\",\"text\":\"Inspect the assumptions. Discuss what matters. Choose what follows.\",\"seconds\":8}]}",
+                  "note": "Script, storyboard, cue sheet and WebVTT captions. Picture/audio encoding needs a qualified media adapter.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              },
+              {
+                "id": "approach",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "Training proposal",
+                  "kind": "workflow",
+                  "body": "{\"route\":\"narrative\",\"steps\":[{\"id\":\"purpose\",\"label\":\"Understand the purpose\",\"app\":\"documents\",\"operation\":\"inspect\"},{\"id\":\"numbers\",\"label\":\"Make the assumptions visible\",\"app\":\"tables\",\"operation\":\"check\"},{\"id\":\"map\",\"label\":\"Map the delivery\",\"app\":\"canvas\",\"operation\":\"inspect\"},{\"id\":\"story\",\"label\":\"Prepare the conversation\",\"app\":\"presentations\",\"operation\":\"compile\"},{\"id\":\"voice\",\"label\":\"Give it a voice\",\"app\":\"media\",\"operation\":\"compile\"},{\"id\":\"review\",\"label\":\"Review and release\",\"app\":\"review\",\"operation\":\"review\"}]}",
+                  "note": "An approach you can follow, inspect and change. Apps remain directly accessible.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              },
+              {
+                "id": "commentary",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "Project conversation",
+                  "kind": "review",
+                  "body": "{\"comments\":[]}",
+                  "note": "Comments record attributed statements, not verified identity or agreement.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              },
+              {
+                "id": "standard",
+                "type": "StudioRecord",
+                "values": {
+                  "title": "Clear professional practice",
+                  "kind": "standard",
+                  "body": "{\"profile\":\"editorial\",\"terminology\":[{\"from\":\"participants\",\"to\":\"learners\"}],\"accessibility\":\"Headings, labels, keyboard access and captions\",\"licence\":\"Project-owned work; inspect terms before exchange.\"}",
+                  "note": "Selected standards change representation deliberately; they do not silently change a calculation or claim.",
+                  "author": "Project team",
+                  "status": "active"
+                }
+              }
+            ],
+            "journeys": []
+          },
+          "predecessor": null,
+          "journal": [
+            {
+              "request": {
+                "kind": "edit",
+                "scope": "shared",
+                "object": "introduction",
+                "field": "title",
+                "value": "Opening candidate · 03:52",
+                "baseRevision": 0
+              },
+              "before": "75c4d8359f39d15b83f79c6b79faa19e0f203979ccb36e45518b30903bc6abbc",
+              "after": "2950f9fbe2e6c860930b014b3dcafe5d33662b1592620d0bc0c9b1ce6ce05c68",
+              "projectionHash": "ca22d6c5581e0dc2efaa7d53b93b41f372156ab314ea701dd6786b8eac0ffc62",
+              "destination": {
+                "kind": "source",
+                "field": "F.title",
+                "node": {
+                  "id": 64,
+                  "line": 64,
+                  "offset": 1917,
+                  "raw": "  F.title: source.F.title",
+                  "text": "F.title: source.F.title",
+                  "indent": 2,
+                  "parent": 63
+                }
+              }
+            },
+            {
+              "request": {
+                "kind": "edit",
+                "scope": "shared",
+                "object": "introduction",
+                "field": "body",
+                "value": "{\"scenes\":[{\"title\":\"S01 · AI is great\",\"seconds\":16,\"text\":\"AI is great.\"},{\"title\":\"S02 · At first\",\"seconds\":22,\"text\":\"At first. And then you try to scale. Who decided that, and why? The specs disagree. One little change touches half the app. Suddenly, cleaning it up feels risky. What if we could build software differently?\"},{\"title\":\"S03 · Name authoring\",\"seconds\":16,\"text\":\"What if, instead of just generating code, we could capture what you actually mean? Your intentions. Your requirements. Your decisions. And the reasons behind them. That's what we're building. We call it authoring.\"},{\"title\":\"S04 · TEMP · Request into interpretation\",\"seconds\":16,\"text\":\"You describe what you want to create. Sorcery decomposes your request into meaningful, reusable building blocks. It shows you what it understands, what it's assuming, and where important decisions need to be made.\"},{\"title\":\"S05 · TEMP · Preview an alternative\",\"seconds\":9,\"text\":\"You can explore alternatives, change your mind, and see the consequences before committing.\"},{\"title\":\"S06 · TEMP · Rules and reasons\",\"seconds\":23,\"text\":\"Underneath it all is Temple. A new kind of relational database and execution engine, where your software, its meaning, and the rules that govern it live together. Everything is connected. Every important decision can have a reason. Every change can have provenance. And every action can be subject to explicit constraints. We call these admissibility gates.\"},{\"title\":\"S07 · TEMP · The gate decides\",\"seconds\":15,\"text\":\"Instead of giving AI unrestricted access and hoping it behaves, Temple is designed to enforce what it's allowed to do. Your AI works within your rules. Not the other way around.\"},{\"title\":\"S08 · TEMP · Compose through a seam\",\"seconds\":13,\"text\":\"And here's where things get interesting. Your software doesn't have to be perfect on day one. Start simple. Reuse existing capabilities. Connect systems that don't quite agree using explicit seams. Improve the parts that matter.\"},{\"title\":\"S09 · TEMP · Change the implementation\",\"seconds\":21,\"text\":\"As your requirements grow, you can decompose your application further, strengthen its assurances, and optimise its implementation. Without unnecessarily changing its meaning. Because you should be able to optimise how software works without changing what it's supposed to do.\"},{\"title\":\"S10 · TEMP · Find the relevant context\",\"seconds\":22,\"text\":\"Temple also makes your software navigable. With Context Hub, graph-ranking techniques inspired by Google's PageRank help identify the information most relevant to a question. So your AI can work with meaningful, connected context rather than trying to understand an entire codebase at once.\"},{\"title\":\"S11 · TEMP · Choose an agent and model\",\"seconds\":10,\"text\":\"Bring your own agent. Choose your own models. And keep the context where it belongs.\"},{\"title\":\"S12 · Who operates it\",\"seconds\":18,\"text\":\"Temple is built for sovereignty. Open source. Run it yourself, on your own infrastructure, with your own data. Or use a managed platform if you'd rather leave the operations to us. Your systems. Your rules. Your choice.\"},{\"title\":\"S13 · TEMP · Recover the reason\",\"seconds\":17,\"text\":\"We believe the future of software isn't just about generating more code, faster. It's about creating systems we can understand. Systems we can trust. Systems that preserve our intentions, adapt as our needs change, and remain under human control.\"},{\"title\":\"S14 · TEMP · End card\",\"seconds\":14,\"text\":\"Software that remembers why. Software that evolves without losing its meaning. Software you author, not just program. Welcome to Sorcery and Temple.\"}]}",
+                "baseRevision": 1
+              },
+              "before": "2950f9fbe2e6c860930b014b3dcafe5d33662b1592620d0bc0c9b1ce6ce05c68",
+              "after": "212416295fb41faea82c3fb579c3ef58e1df3ca5cfff96e64fbf1a4f91bcfee8",
+              "projectionHash": "d20f469e6e1db5a18e936a5bfcaf05c6bd0448fa240d9ddf243212d3438405b0",
+              "destination": {
+                "kind": "source",
+                "field": "F.body",
+                "node": {
+                  "id": 68,
+                  "line": 68,
+                  "offset": 2041,
+                  "raw": "  F.body: source.F.body",
+                  "text": "F.body: source.F.body",
+                  "indent": 2,
+                  "parent": 63
+                }
+              }
+            }
+          ],
+          "revision": 2,
+          "documentHash": "212416295fb41faea82c3fb579c3ef58e1df3ca5cfff96e64fbf1a4f91bcfee8",
+          "projectionHash": "d20f469e6e1db5a18e936a5bfcaf05c6bd0448fa240d9ddf243212d3438405b0"
+        },
+        "sha256": "de2f62c319c515c1eed6505691283d97fefa31358e0c5afb585271eadda7c7f0"
+      }
+    }
+  ]
+}

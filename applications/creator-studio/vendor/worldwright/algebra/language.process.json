@@ -1,0 +1,920 @@
+{
+  "protocol": "temple/surface-process-module/1",
+  "queries": {
+    "language.refuse": [
+      {
+        "let": "state",
+        "value": {
+          "module": "$state.module",
+          "subject": "$state.subject",
+          "seen": "$state.seen",
+          "facts": "$state.facts",
+          "origins": "$state.origins",
+          "ok": false,
+          "diagnostic": {
+            "code": "$code",
+            "phase": "language",
+            "boundary": "encounter-rel/1",
+            "summary": "$summary",
+            "correction": "$correction",
+            "span": "$span",
+            "check": "node --test bootstrap/language.test.cjs"
+          }
+        }
+      }
+    ],
+    "language.line": [
+      {
+        "port": "text.trim",
+        "args": {
+          "value": "$raw"
+        },
+        "into": "line"
+      },
+      {
+        "port": "text.matches",
+        "args": {
+          "value": "$line",
+          "pattern": "^(?:#.*)?$"
+        },
+        "into": "skip"
+      },
+      {
+        "let": "matched",
+        "value": false
+      },
+      {
+        "port": "text.matches",
+        "args": {
+          "value": "$line",
+          "pattern": "^module (\"(?:\\\\[\"\\\\/bfnrt]|\\\\u[0-9a-fA-F]{4}|[^\"\\\\\\x00-\\x1f])*\")$"
+        },
+        "into": "moduleMatch"
+      },
+      {
+        "when": [
+          "and",
+          "$state.ok",
+          [
+            "not",
+            "$skip"
+          ],
+          [
+            "not",
+            "$matched"
+          ],
+          "$moduleMatch"
+        ],
+        "then": [
+          {
+            "let": "matched",
+            "value": true
+          },
+          {
+            "port": "text.split",
+            "args": {
+              "value": "$line",
+              "pattern": "^module (\"(?:\\\\[\"\\\\/bfnrt]|\\\\u[0-9a-fA-F]{4}|[^\"\\\\\\x00-\\x1f])*\")$"
+            },
+            "into": "tokens"
+          },
+          {
+            "call": "language.module"
+          }
+        ]
+      },
+      {
+        "port": "text.matches",
+        "args": {
+          "value": "$line",
+          "pattern": "^entity (\"(?:\\\\[\"\\\\/bfnrt]|\\\\u[0-9a-fA-F]{4}|[^\"\\\\\\x00-\\x1f])*\") \\{$"
+        },
+        "into": "entityMatch"
+      },
+      {
+        "when": [
+          "and",
+          "$state.ok",
+          [
+            "not",
+            "$skip"
+          ],
+          [
+            "not",
+            "$matched"
+          ],
+          "$entityMatch"
+        ],
+        "then": [
+          {
+            "let": "matched",
+            "value": true
+          },
+          {
+            "port": "text.split",
+            "args": {
+              "value": "$line",
+              "pattern": "^entity (\"(?:\\\\[\"\\\\/bfnrt]|\\\\u[0-9a-fA-F]{4}|[^\"\\\\\\x00-\\x1f])*\") \\{$"
+            },
+            "into": "tokens"
+          },
+          {
+            "call": "language.entity"
+          }
+        ]
+      },
+      {
+        "port": "text.matches",
+        "args": {
+          "value": "$line",
+          "pattern": "^(!?)([A-Za-z_][A-Za-z0-9_.-]*) (\"(?:\\\\[\"\\\\/bfnrt]|\\\\u[0-9a-fA-F]{4}|[^\"\\\\\\x00-\\x1f])*\")$"
+        },
+        "into": "propertyMatch"
+      },
+      {
+        "when": [
+          "and",
+          "$state.ok",
+          [
+            "not",
+            "$skip"
+          ],
+          [
+            "not",
+            "$matched"
+          ],
+          "$propertyMatch"
+        ],
+        "then": [
+          {
+            "let": "matched",
+            "value": true
+          },
+          {
+            "port": "text.split",
+            "args": {
+              "value": "$line",
+              "pattern": "^(!?)([A-Za-z_][A-Za-z0-9_.-]*) (\"(?:\\\\[\"\\\\/bfnrt]|\\\\u[0-9a-fA-F]{4}|[^\"\\\\\\x00-\\x1f])*\")$"
+            },
+            "into": "tokens"
+          },
+          {
+            "call": "language.property"
+          }
+        ]
+      },
+      {
+        "when": [
+          "and",
+          "$state.ok",
+          [
+            "not",
+            "$skip"
+          ],
+          [
+            "not",
+            "$matched"
+          ],
+          [
+            "eq",
+            "$line",
+            "}"
+          ]
+        ],
+        "then": [
+          {
+            "let": "matched",
+            "value": true
+          },
+          {
+            "when": [
+              "not",
+              "$state.subject"
+            ],
+            "then": [
+              {
+                "let": "code",
+                "value": "TEMPLE-M004"
+              },
+              {
+                "let": "summary",
+                "value": "Closing brace has no entity."
+              },
+              {
+                "let": "correction",
+                "value": "Open an entity block before closing it."
+              },
+              {
+                "call": "language.refuse"
+              }
+            ]
+          },
+          {
+            "when": "$state.ok",
+            "then": [
+              {
+                "let": "state",
+                "value": {
+                  "module": "$state.module",
+                  "subject": null,
+                  "seen": "$state.seen",
+                  "facts": "$state.facts",
+                  "origins": "$state.origins",
+                  "ok": "$state.ok",
+                  "diagnostic": "$state.diagnostic"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "when": [
+          "and",
+          "$state.ok",
+          [
+            "not",
+            "$skip"
+          ],
+          [
+            "not",
+            "$matched"
+          ]
+        ],
+        "then": [
+          {
+            "let": "code",
+            "value": "TEMPLE-M001"
+          },
+          {
+            "let": "summary",
+            "value": "Unrecognized language statement."
+          },
+          {
+            "let": "correction",
+            "value": "Use module \"name\", entity \"id\" {, predicate \"JSON string\", or }. Put each statement on its own line."
+          },
+          {
+            "call": "language.refuse"
+          }
+        ]
+      }
+    ],
+    "language.module": [
+      {
+        "when": [
+          "not",
+          [
+            "and",
+            [
+              "eq",
+              "$state.module",
+              null
+            ],
+            [
+              "eq",
+              "$state.subject",
+              null
+            ],
+            [
+              "eq",
+              [
+                "count",
+                "$state.seen"
+              ],
+              0
+            ]
+          ]
+        ],
+        "then": [
+          {
+            "let": "code",
+            "value": "TEMPLE-M002"
+          },
+          {
+            "let": "summary",
+            "value": "Module declaration must be first and unique."
+          },
+          {
+            "let": "correction",
+            "value": "Declare exactly one module before any entity."
+          },
+          {
+            "call": "language.refuse"
+          }
+        ]
+      },
+      {
+        "when": "$state.ok",
+        "then": [
+          {
+            "port": "json.parse",
+            "args": {
+              "text": [
+                "at",
+                "$tokens",
+                1
+              ]
+            },
+            "into": "decoded"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "not",
+                [
+                  "eq",
+                  "$decoded",
+                  ""
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "let": "code",
+                "value": "TEMPLE-M002"
+              },
+              {
+                "let": "summary",
+                "value": "Module name is empty."
+              },
+              {
+                "let": "correction",
+                "value": "Supply a nonempty module identity."
+              },
+              {
+                "call": "language.refuse"
+              }
+            ]
+          },
+          {
+            "when": "$state.ok",
+            "then": [
+              {
+                "let": "state",
+                "value": {
+                  "module": "$decoded",
+                  "subject": "$state.subject",
+                  "seen": "$state.seen",
+                  "facts": "$state.facts",
+                  "origins": "$state.origins",
+                  "ok": "$state.ok",
+                  "diagnostic": "$state.diagnostic"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "language.entity": [
+      {
+        "when": [
+          "not",
+          [
+            "and",
+            [
+              "not",
+              [
+                "eq",
+                "$state.module",
+                null
+              ]
+            ],
+            [
+              "eq",
+              "$state.subject",
+              null
+            ]
+          ]
+        ],
+        "then": [
+          {
+            "let": "code",
+            "value": "TEMPLE-M003"
+          },
+          {
+            "let": "summary",
+            "value": "Entity requires a module and cannot be nested."
+          },
+          {
+            "let": "correction",
+            "value": "Declare a module, then close the previous entity before opening another."
+          },
+          {
+            "call": "language.refuse"
+          }
+        ]
+      },
+      {
+        "when": "$state.ok",
+        "then": [
+          {
+            "port": "json.parse",
+            "args": {
+              "text": [
+                "at",
+                "$tokens",
+                1
+              ]
+            },
+            "into": "decoded"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "and",
+                [
+                  "not",
+                  [
+                    "eq",
+                    "$decoded",
+                    ""
+                  ]
+                ],
+                [
+                  "not",
+                  [
+                    "includes",
+                    "$state.seen",
+                    "$decoded"
+                  ]
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "let": "code",
+                "value": "TEMPLE-M005"
+              },
+              {
+                "let": "summary",
+                "value": "Entity identity is empty or declared twice."
+              },
+              {
+                "let": "correction",
+                "value": "Give each entity one nonempty identity in this module."
+              },
+              {
+                "call": "language.refuse"
+              }
+            ]
+          },
+          {
+            "when": "$state.ok",
+            "then": [
+              {
+                "let": "state",
+                "value": {
+                  "module": "$state.module",
+                  "subject": "$decoded",
+                  "seen": [
+                    "append",
+                    "$state.seen",
+                    [
+                      "list",
+                      "$decoded"
+                    ]
+                  ],
+                  "facts": "$state.facts",
+                  "origins": "$state.origins",
+                  "ok": "$state.ok",
+                  "diagnostic": "$state.diagnostic"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "language.property": [
+      {
+        "when": [
+          "not",
+          [
+            "not",
+            [
+              "eq",
+              "$state.subject",
+              null
+            ]
+          ]
+        ],
+        "then": [
+          {
+            "let": "code",
+            "value": "TEMPLE-M006"
+          },
+          {
+            "let": "summary",
+            "value": "Relation appears outside an entity."
+          },
+          {
+            "let": "correction",
+            "value": "Place the relation inside its owning entity block."
+          },
+          {
+            "call": "language.refuse"
+          }
+        ]
+      },
+      {
+        "when": "$state.ok",
+        "then": [
+          {
+            "port": "json.parse",
+            "args": {
+              "text": [
+                "at",
+                "$tokens",
+                3
+              ]
+            },
+            "into": "decoded"
+          },
+          {
+            "let": "fact",
+            "value": {
+              "s": "$state.subject",
+              "p": [
+                "at",
+                "$tokens",
+                2
+              ],
+              "o": "$decoded",
+              "pol": [
+                "if",
+                [
+                  "eq",
+                  [
+                    "at",
+                    "$tokens",
+                    1
+                  ],
+                  "!"
+                ],
+                "is-not",
+                "is"
+              ]
+            }
+          },
+          {
+            "when": [
+              "not",
+              [
+                "not",
+                [
+                  "some",
+                  "$state.facts",
+                  "previous",
+                  [
+                    "eq",
+                    "$previous",
+                    "$fact"
+                  ]
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "let": "code",
+                "value": "TEMPLE-M007"
+              },
+              {
+                "let": "summary",
+                "value": "Duplicate fact in this module."
+              },
+              {
+                "let": "correction",
+                "value": "Keep a single authored assertion; repeated distinct values remain ordered."
+              },
+              {
+                "call": "language.refuse"
+              }
+            ]
+          },
+          {
+            "when": "$state.ok",
+            "then": [
+              {
+                "let": "state",
+                "value": {
+                  "module": "$state.module",
+                  "subject": "$state.subject",
+                  "seen": "$state.seen",
+                  "facts": [
+                    "append",
+                    "$state.facts",
+                    [
+                      "list",
+                      "$fact"
+                    ]
+                  ],
+                  "origins": [
+                    "append",
+                    "$state.origins",
+                    [
+                      "list",
+                      {
+                        "index": [
+                          "count",
+                          "$state.facts"
+                        ],
+                        "module": "$state.module",
+                        "span": "$span"
+                      }
+                    ]
+                  ],
+                  "ok": "$state.ok",
+                  "diagnostic": "$state.diagnostic"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "language.compile": [
+      {
+        "port": "text.split",
+        "args": {
+          "value": "$text",
+          "pattern": "\\r?\\n"
+        },
+        "into": "lines"
+      },
+      {
+        "let": "state",
+        "value": {
+          "module": null,
+          "subject": null,
+          "seen": [
+            "list"
+          ],
+          "facts": [
+            "list"
+          ],
+          "origins": [
+            "list"
+          ],
+          "ok": true,
+          "diagnostic": null
+        }
+      },
+      {
+        "fold": [
+          "range",
+          [
+            "count",
+            "$lines"
+          ]
+        ],
+        "as": "number",
+        "accumulator": "state",
+        "initial": "$state",
+        "steps": [
+          {
+            "let": "raw",
+            "value": [
+              "at",
+              "$lines",
+              [
+                "add",
+                "$number",
+                -1
+              ]
+            ]
+          },
+          {
+            "port": "text.split",
+            "args": {
+              "value": "$raw",
+              "pattern": "\\S"
+            },
+            "into": "indent"
+          },
+          {
+            "let": "span",
+            "value": {
+              "file": "$file",
+              "line": "$number",
+              "column": [
+                "add",
+                [
+                  "count",
+                  [
+                    "at",
+                    "$indent",
+                    0
+                  ]
+                ],
+                1
+              ],
+              "endColumn": [
+                "add",
+                [
+                  "count",
+                  "$raw"
+                ],
+                1
+              ]
+            }
+          },
+          {
+            "fold": [
+              "list",
+              null
+            ],
+            "as": "frame",
+            "accumulator": "ignored",
+            "initial": null,
+            "steps": [
+              {
+                "when": "$state.ok",
+                "then": [
+                  {
+                    "call": "language.line"
+                  }
+                ]
+              }
+            ],
+            "yield": "$state",
+            "into": "state"
+          }
+        ],
+        "yield": "$state",
+        "into": "state"
+      },
+      {
+        "let": "span",
+        "value": {
+          "file": "$file",
+          "line": [
+            "count",
+            "$lines"
+          ],
+          "column": 1,
+          "endColumn": 1
+        }
+      },
+      {
+        "when": "$state.ok",
+        "then": [
+          {
+            "when": [
+              "not",
+              [
+                "not",
+                [
+                  "eq",
+                  "$state.module",
+                  null
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "let": "code",
+                "value": "TEMPLE-M002"
+              },
+              {
+                "let": "summary",
+                "value": "Missing module declaration."
+              },
+              {
+                "let": "correction",
+                "value": "Start with module \"name\"."
+              },
+              {
+                "call": "language.refuse"
+              }
+            ]
+          },
+          {
+            "when": "$state.ok",
+            "then": [
+              {
+                "when": [
+                  "not",
+                  [
+                    "eq",
+                    "$state.subject",
+                    null
+                  ]
+                ],
+                "then": [
+                  {
+                    "let": "code",
+                    "value": "TEMPLE-M008"
+                  },
+                  {
+                    "let": "summary",
+                    "value": "Entity block is not closed."
+                  },
+                  {
+                    "let": "correction",
+                    "value": "Add the closing brace before the end of the source."
+                  },
+                  {
+                    "call": "language.refuse"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "let": "rel",
+        "value": ""
+      },
+      {
+        "when": "$state.ok",
+        "then": [
+          {
+            "fold": "$state.facts",
+            "as": "fact",
+            "accumulator": "rel",
+            "initial": "",
+            "steps": [
+              {
+                "port": "json.stringify",
+                "args": {
+                  "value": "$fact.s"
+                },
+                "into": "s"
+              },
+              {
+                "port": "json.stringify",
+                "args": {
+                  "value": "$fact.p"
+                },
+                "into": "predicate"
+              },
+              {
+                "port": "json.stringify",
+                "args": {
+                  "value": "$fact.o"
+                },
+                "into": "o"
+              },
+              {
+                "port": "json.stringify",
+                "args": {
+                  "value": "$fact.pol"
+                },
+                "into": "polarity"
+              }
+            ],
+            "yield": [
+              "concat",
+              "$rel",
+              "(",
+              "$s",
+              ", ",
+              "$predicate",
+              ", ",
+              "$o",
+              ", ",
+              "$polarity",
+              ")\n"
+            ],
+            "into": "rel"
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "ok": "$state.ok",
+          "module": "$state.module",
+          "facts": [
+            "if",
+            "$state.ok",
+            "$state.facts",
+            [
+              "list"
+            ]
+          ],
+          "origins": [
+            "if",
+            "$state.ok",
+            "$state.origins",
+            [
+              "list"
+            ]
+          ],
+          "rel": [
+            "if",
+            "$state.ok",
+            "$rel",
+            ""
+          ],
+          "diagnostic": "$state.diagnostic"
+        }
+      }
+    ]
+  }
+}

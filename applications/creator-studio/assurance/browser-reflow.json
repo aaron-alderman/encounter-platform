@@ -1,0 +1,86 @@
+[
+  {
+    "workspace": "Overview",
+    "viewport": 320,
+    "clientWidth": 303,
+    "scrollWidth": 303,
+    "overflow": false
+  },
+  {
+    "workspace": "Documents",
+    "viewport": 320,
+    "clientWidth": 303,
+    "scrollWidth": 303,
+    "overflow": false
+  },
+  {
+    "workspace": "Tables & Models",
+    "viewport": 320,
+    "clientWidth": 303,
+    "scrollWidth": 303,
+    "overflow": false
+  },
+  {
+    "workspace": "Presentations",
+    "viewport": 320,
+    "clientWidth": 303,
+    "scrollWidth": 303,
+    "overflow": false
+  },
+  {
+    "workspace": "Canvas",
+    "viewport": 320,
+    "clientWidth": 303,
+    "scrollWidth": 303,
+    "overflow": false
+  },
+  {
+    "workspace": "Media",
+    "viewport": 320,
+    "clientWidth": 303,
+    "scrollWidth": 303,
+    "overflow": false
+  },
+  {
+    "workspace": "Workflows",
+    "viewport": 320,
+    "clientWidth": 303,
+    "scrollWidth": 303,
+    "overflow": false
+  },
+  {
+    "workspace": "Review",
+    "viewport": 320,
+    "clientWidth": 303,
+    "scrollWidth": 303,
+    "overflow": false
+  },
+  {
+    "workspace": "Library",
+    "viewport": 320,
+    "clientWidth": 303,
+    "scrollWidth": 303,
+    "overflow": false
+  },
+  {
+    "workspace": "Standards",
+    "viewport": 320,
+    "clientWidth": 303,
+    "scrollWidth": 303,
+    "overflow": false
+  },
+  {
+    "workspace": "Exchange",
+    "viewport": 320,
+    "clientWidth": 303,
+    "scrollWidth": 303,
+    "overflow": false
+  },
+  {
+    "workspace": "Inspect",
+    "viewport": 320,
+    "clientWidth": 303,
+    "scrollWidth": 303,
+    "overflow": false
+  }
+]

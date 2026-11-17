@@ -1,0 +1,288 @@
+{
+  "protocol": "usewords/runtime/1",
+  "entry": "ws.boot",
+  "agentEntry": "ws.agent",
+  "budget": 20000000,
+  "modules": [
+    "vendor/worldwright/algebra/language.process.json",
+    "vendor/worldwright/algebra/admission.process.json",
+    "vendor/worldwright/algebra/encounter-code-compiler.process.json",
+    "vendor/worldwright/algebra/encounter-code-runtime.process.json",
+    "vendor/worldwright/algebra/encounter-code-types.process.json",
+    "vendor/worldwright/algebra/fact-index.process.json",
+    "vendor/worldwright/algebra/html.process.json",
+    "vendor/worldwright/algebra/lowering.process.json",
+    "vendor/worldwright/algebra/source.process.json",
+    "vendor/worldwright/algebra/workshop-lab.process.json",
+    {
+      "file": "vendor/worldwright/algebra/css.process.json",
+      "queries": [
+        "css.renderPlan"
+      ]
+    }
+  ],
+  "lowerer": "vendor/worldwright/algebra/lowering.process.json",
+  "definitions": "vendor/worldwright/algebra/operators.expression.json",
+  "grants": [
+    "kernel.invoke",
+    "kernel.execute",
+    "kernel.evaluate",
+    "value.describe",
+    "json.parse",
+    "json.stringify",
+    "value.string",
+    "value.type",
+    "record.entries",
+    "record.fromEntries",
+    "record.put",
+    "value.freeze",
+    "record.get",
+    "text.replaceAll",
+    "text.split",
+    "text.join",
+    "text.slice",
+    "text.indexOf",
+    "text.compare",
+    "text.trim",
+    "text.lowerCase",
+    "text.matches",
+    "number.calculate",
+    "number.format",
+    "number.parse",
+    "value.sort",
+    "text.upperCase",
+    "text.replace",
+    "text.match",
+    "text.matchAll",
+    "text.utf8Length",
+    "digest.sha256",
+    "state.get",
+    "state.set",
+    "browser.property",
+    "browser.write",
+    "browser.content",
+    "browser.focus",
+    "browser.on",
+    "storage.read",
+    "storage.write",
+    "download.text",
+    "browser.delay",
+    "dom.exists"
+  ],
+  "sources": [
+    "bootstrap/build.mjs",
+    "bootstrap/cli.mjs",
+    "bootstrap/client.cjs",
+    "bootstrap/frontend.mjs",
+    "bootstrap/runtime.mjs",
+    "source/canonical.json",
+    "source/journeys-contracts.rel",
+    "source/journeys.encounter",
+    "source/journeys.json",
+    "source/journeys.rel",
+    "source/languages.json",
+    "source/languages/presentation-frontend.json",
+    "source/languages/usewords-frontend.json",
+    "source/languages/usewords-process.profile.json",
+    "source/matter-management-ui.encounter",
+    "source/matter-management.encounter",
+    "source/matters-ui.encounter",
+    "source/matters.encounter",
+    "source/origin.json",
+    "source/page.json",
+    "source/party-work-ui.encounter",
+    "source/party-work.encounter",
+    "source/presentation/source-algebra.encounter",
+    "source/reference/water.rel",
+    "source/runtime.json",
+    "source/style.json",
+    "source/usewords.encounter",
+    "source/words.json",
+    "source/workspace-seed.json",
+    "source/workspace-ui.encounter",
+    "source/workspace.encounter",
+    "vendor/worldwright/algebra/admission.process.json",
+    "vendor/worldwright/algebra/css.process.json",
+    "vendor/worldwright/algebra/encounter-code-compiler.process.json",
+    "vendor/worldwright/algebra/encounter-code-runtime.process.json",
+    "vendor/worldwright/algebra/encounter-code-types.process.json",
+    "vendor/worldwright/algebra/fact-index.process.json",
+    "vendor/worldwright/algebra/html.process.json",
+    "vendor/worldwright/algebra/language.process.json",
+    "vendor/worldwright/algebra/lowering.process.json",
+    "vendor/worldwright/algebra/operators.expression.json",
+    "vendor/worldwright/algebra/source.process.json",
+    "vendor/worldwright/algebra/workshop-lab.process.json",
+    "vendor/worldwright/bootstrap/kernel-profile.json",
+    "vendor/worldwright/bootstrap/ports/algebra-lower.cjs",
+    "vendor/worldwright/bootstrap/ports/browser-effects.cjs",
+    "vendor/worldwright/bootstrap/ports/browser.cjs",
+    "vendor/worldwright/bootstrap/ports/kernel.cjs",
+    "vendor/worldwright/bootstrap/ports/process-source.cjs",
+    "vendor/worldwright/bootstrap/ports/programme.cjs",
+    "vendor/worldwright/bootstrap/ports/value.cjs",
+    "vendor/worldwright/bootstrap/temple-seed.cjs",
+    "vendor/worldwright/frontend/bootstrap.json",
+    "vendor/worldwright/frontend/language-process.process.json",
+    "vendor/worldwright/frontend/lexical.json",
+    "vendor/worldwright/frontend/presentation.json",
+    "vendor/worldwright/frontend/profile.json",
+    "package.json",
+    "source/owners/canonical.encounter",
+    "source/owners/page.encounter",
+    "source/owners/page-matters.encounter",
+    "source/owners/page-workbench.encounter",
+    "source/owners/style.encounter",
+    "source/owners/records.encounter",
+    "source/owners/runtime.encounter",
+    "source/owners/projections.encounter",
+    "source/assurance/child-execution.encounter",
+    "source/assurance/library-integrity.encounter",
+    "source/shared/workspace.encounter",
+    "source/shared/workspace-ui.encounter",
+    "source/shared/party-work.encounter",
+    "source/shared/party-work-ui.encounter",
+    "source/shared/matter-management.encounter",
+    "source/shared/matter-management-ui.encounter",
+    "source/assurance/application-boundary.encounter"
+  ],
+  "policySource": "source/usewords.encounter",
+  "processModules": [
+    {
+      "file": "source/usewords.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/usewords.process.json"
+    },
+    {
+      "file": "source/workspace.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/workspace.process.json"
+    },
+    {
+      "file": "source/workspace-ui.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/workspace-ui.process.json"
+    },
+    {
+      "file": "source/matters.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/matters.process.json"
+    },
+    {
+      "file": "source/matters-ui.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/matters-ui.process.json"
+    },
+    {
+      "file": "source/matter-management.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/matter-management.process.json"
+    },
+    {
+      "file": "source/matter-management-ui.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/matter-management-ui.process.json"
+    },
+    {
+      "file": "source/party-work.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/party-work.process.json"
+    },
+    {
+      "file": "source/party-work-ui.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/party-work-ui.process.json"
+    },
+    {
+      "file": "source/presentation/source-algebra.encounter",
+      "frontend": "source/languages/presentation-frontend.json",
+      "output": "algebra/encounter-source.process.json"
+    },
+    {
+      "file": "source/owners/canonical.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/owners/canonical.process.json"
+    },
+    {
+      "file": "source/owners/page.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/owners/page.process.json"
+    },
+    {
+      "file": "source/owners/page-matters.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/owners/page-matters.process.json"
+    },
+    {
+      "file": "source/owners/page-workbench.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/owners/page-workbench.process.json"
+    },
+    {
+      "file": "source/owners/style.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/owners/style.process.json"
+    },
+    {
+      "file": "source/owners/records.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/owners/records.process.json"
+    },
+    {
+      "file": "source/owners/runtime.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/owners/runtime.process.json"
+    },
+    {
+      "file": "source/owners/projections.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/owners/projections.process.json"
+    },
+    {
+      "file": "source/assurance/child-execution.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/assurance/child-execution.process.json"
+    },
+    {
+      "file": "source/assurance/library-integrity.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/assurance/library-integrity.process.json"
+    },
+    {
+      "file": "source/shared/workspace.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/shared/workspace.process.json"
+    },
+    {
+      "file": "source/shared/workspace-ui.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/shared/workspace-ui.process.json"
+    },
+    {
+      "file": "source/shared/party-work.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/shared/party-work.process.json"
+    },
+    {
+      "file": "source/shared/party-work-ui.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/shared/party-work-ui.process.json"
+    },
+    {
+      "file": "source/shared/matter-management.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/shared/matter-management.process.json"
+    },
+    {
+      "file": "source/shared/matter-management-ui.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/shared/matter-management-ui.process.json"
+    },
+    {
+      "file": "source/assurance/application-boundary.encounter",
+      "frontend": "source/languages/usewords-frontend.json",
+      "output": "algebra/assurance/application-boundary.process.json"
+    }
+  ],
+  "cliEntry": "uw.cli"
+}

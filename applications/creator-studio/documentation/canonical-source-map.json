@@ -1,0 +1,26 @@
+{
+  "files": [
+    {
+      "sha256": "608a16702874d5b0792cdc234d29d4ec92be339516ba60c25d0f717828ebd9c2",
+      "source": "corpus/programmes/creator-studio/product-contract.md",
+      "destination": "documentation/creator-studio/product-contract.md"
+    },
+    {
+      "sha256": "eb363b6e2e45bac5324e7aded49636af483892f07c7cc4aba3894466d781083a",
+      "source": "corpus/programmes/creator-studio/implementation-and-assurance.md",
+      "destination": "documentation/creator-studio/implementation-and-assurance.md"
+    },
+    {
+      "sha256": "342c01ce9e7b5b2b660719df0b4cab88c1dfe7e56648fe7213abe871e20eb156",
+      "source": "corpus/programmes/worldwright-storytelling/professional-practice.md",
+      "destination": "documentation/worldwright-storytelling/professional-practice.md"
+    },
+    {
+      "sha256": "4ab630010a8d9d27226445494b9b16ae10e0842626d9706fb024b856f63122ef",
+      "source": "corpus/programmes/worldwright-storytelling/inspection-as-storytelling.md",
+      "destination": "documentation/worldwright-storytelling/inspection-as-storytelling.md"
+    }
+  ],
+  "rule": "Exact publication copies. Edit the canonical corpus source, then refresh and verify each copy; mirrors are not independent authorities.",
+  "protocol": "creator-studio/documentation-mirrors/1"
+}

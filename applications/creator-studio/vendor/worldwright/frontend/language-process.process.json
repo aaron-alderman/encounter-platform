@@ -1,0 +1,7248 @@
+{
+  "protocol": "temple/surface-process-module/1",
+  "queries": {
+    "lp.fail": [
+      {
+        "port": "json.stringify",
+        "args": {
+          "value": {
+            "code": [
+              "at",
+              "$eventInput",
+              "code"
+            ],
+            "phase": "process-text",
+            "boundary": "encounter-process-text/1",
+            "summary": [
+              "at",
+              "$eventInput",
+              "summary"
+            ],
+            "span": {
+              "file": "$lpFile",
+              "start": [
+                "at",
+                [
+                  "at",
+                  "$eventInput",
+                  "token"
+                ],
+                "start"
+              ],
+              "end": [
+                "at",
+                [
+                  "at",
+                  "$eventInput",
+                  "token"
+                ],
+                "end"
+              ],
+              "line": [
+                "at",
+                [
+                  "at",
+                  "$eventInput",
+                  "token"
+                ],
+                "line"
+              ],
+              "column": [
+                "at",
+                [
+                  "at",
+                  "$eventInput",
+                  "token"
+                ],
+                "column"
+              ]
+            },
+            "correction": "Correct the indicated source and rerun the readable process checks.",
+            "check": "node --test bootstrap/readable-process.test.cjs"
+          }
+        },
+        "into": "message"
+      },
+      {
+        "let": "result",
+        "value": [
+          "raise",
+          "$message"
+        ]
+      }
+    ],
+    "lp.origin": [
+      {
+        "port": "text.slice",
+        "args": {
+          "value": "$lpText",
+          "start": [
+            "at",
+            "$eventInput",
+            "start"
+          ],
+          "end": [
+            "at",
+            "$eventInput",
+            "end"
+          ]
+        },
+        "into": "raw"
+      },
+      {
+        "port": "digest.sha256",
+        "args": {
+          "text": "$raw"
+        },
+        "into": "sha"
+      },
+      {
+        "let": "result",
+        "value": {
+          "pointer": [
+            "at",
+            "$eventInput",
+            "pointer"
+          ],
+          "kind": [
+            "at",
+            "$eventInput",
+            "kind"
+          ],
+          "file": "$lpFile",
+          "sourceHash": "$lpHash",
+          "start": [
+            "at",
+            "$eventInput",
+            "start"
+          ],
+          "end": [
+            "at",
+            "$eventInput",
+            "end"
+          ],
+          "line": [
+            "at",
+            [
+              "at",
+              "$eventInput",
+              "token"
+            ],
+            "line"
+          ],
+          "column": [
+            "at",
+            [
+              "at",
+              "$eventInput",
+              "token"
+            ],
+            "column"
+          ],
+          "lexemeSha256": "$sha",
+          "synthetic": false
+        }
+      }
+    ],
+    "lp.name": [
+      {
+        "port": "text.matches",
+        "args": {
+          "value": [
+            "at",
+            "$eventInput",
+            "text"
+          ],
+          "pattern": [
+            "if",
+            [
+              "at",
+              "$eventInput",
+              "qualified"
+            ],
+            "^[A-Za-z_][A-Za-z0-9_-]*(?:\\.[A-Za-z_][A-Za-z0-9_-]*)*$",
+            "^[A-Za-z_][A-Za-z0-9_]*$"
+          ]
+        },
+        "into": "valid"
+      },
+      {
+        "port": "text.split",
+        "args": {
+          "value": [
+            "at",
+            "$eventInput",
+            "text"
+          ],
+          "pattern": "\\."
+        },
+        "into": "segments"
+      },
+      {
+        "let": "bad",
+        "value": [
+          "some",
+          "$segments",
+          "segment",
+          [
+            "includes",
+            [
+              "at",
+              "$lpPolicy",
+              "forbidden"
+            ],
+            "$segment"
+          ]
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "and",
+            "$valid",
+            [
+              "not",
+              "$bad"
+            ]
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-NAME",
+                "summary": "Invalid or reserved source name.",
+                "token": [
+                  "at",
+                  "$eventInput",
+                  "token"
+                ]
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": [
+          "at",
+          "$eventInput",
+          "text"
+        ]
+      }
+    ],
+    "lp.gap": [
+      {
+        "port": "text.slice",
+        "args": {
+          "value": "$lpText",
+          "start": [
+            "at",
+            [
+              "at",
+              "$eventInput",
+              "left"
+            ],
+            "end"
+          ],
+          "end": [
+            "at",
+            [
+              "at",
+              "$eventInput",
+              "right"
+            ],
+            "start"
+          ]
+        },
+        "into": "gap"
+      },
+      {
+        "port": "text.matches",
+        "args": {
+          "value": "$gap",
+          "pattern": "^[ \\r\\n]+$"
+        },
+        "into": "ok"
+      },
+      {
+        "when": [
+          "not",
+          "$ok"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-SYNTAX",
+                "summary": "Expected separating whitespace.",
+                "token": [
+                  "at",
+                  "$eventInput",
+                  "right"
+                ]
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": true
+      }
+    ],
+    "lp.decode": [
+      {
+        "try": [
+          {
+            "port": "json.parse",
+            "args": {
+              "text": [
+                "at",
+                [
+                  "at",
+                  "$eventInput",
+                  "token"
+                ],
+                "text"
+              ]
+            },
+            "into": "value"
+          }
+        ],
+        "error": "decodeFault",
+        "catch": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-LEX",
+                "summary": "Invalid strict JSON scalar.",
+                "token": [
+                  "at",
+                  "$eventInput",
+                  "token"
+                ]
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": "$value"
+      }
+    ],
+    "lp.layout": [
+      {
+        "let": "raw",
+        "value": [
+          "at",
+          "$eventInput",
+          "tokens"
+        ]
+      },
+      {
+        "fold": "$raw",
+        "as": "rawToken",
+        "accumulator": "state",
+        "initial": {
+          "tokens": [
+            "list"
+          ],
+          "groups": [
+            "list"
+          ],
+          "line": 1,
+          "column": 1,
+          "indent": 0,
+          "leading": true,
+          "lineHasCode": false
+        },
+        "steps": [
+          {
+            "let": "v",
+            "value": [
+              "at",
+              "$rawToken",
+              "text"
+            ]
+          },
+          {
+            "let": "line",
+            "value": [
+              "at",
+              "$state",
+              "line"
+            ]
+          },
+          {
+            "let": "column",
+            "value": [
+              "at",
+              "$state",
+              "column"
+            ]
+          },
+          {
+            "let": "indent",
+            "value": [
+              "at",
+              "$state",
+              "indent"
+            ]
+          },
+          {
+            "let": "leading",
+            "value": [
+              "at",
+              "$state",
+              "leading"
+            ]
+          },
+          {
+            "let": "lineHasCode",
+            "value": [
+              "at",
+              "$state",
+              "lineHasCode"
+            ]
+          },
+          {
+            "let": "groups",
+            "value": [
+              "at",
+              "$state",
+              "groups"
+            ]
+          },
+          {
+            "let": "tokens",
+            "value": [
+              "at",
+              "$state",
+              "tokens"
+            ]
+          },
+          {
+            "let": "token",
+            "value": {
+              "text": "$v",
+              "start": [
+                "at",
+                "$rawToken",
+                "start"
+              ],
+              "end": [
+                "at",
+                "$rawToken",
+                "end"
+              ],
+              "line": "$line",
+              "column": "$column",
+              "indent": "$indent",
+              "synthetic": false
+            }
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$v",
+              "pattern": "\\t"
+            },
+            "into": "tabs"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "not",
+                "$tabs"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LAYOUT",
+                    "summary": "Tabs are not layout whitespace.",
+                    "token": "$token"
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "not",
+                [
+                  "eq",
+                  "$v",
+                  "\r"
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LEX",
+                    "summary": "Bare CR is not a source newline.",
+                    "token": "$token"
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "newline",
+            "value": [
+              "includes",
+              [
+                "list",
+                "\n",
+                "\r\n"
+              ],
+              "$v"
+            ]
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$v",
+              "pattern": "^ +$"
+            },
+            "into": "spaces"
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$v",
+              "pattern": "^#"
+            },
+            "into": "comment"
+          },
+          {
+            "when": "$newline",
+            "then": [
+              {
+                "when": [
+                  "and",
+                  [
+                    "eq",
+                    [
+                      "count",
+                      "$groups"
+                    ],
+                    0
+                  ],
+                  "$lineHasCode"
+                ],
+                "then": [
+                  {
+                    "let": "tokens",
+                    "value": [
+                      "append",
+                      "$tokens",
+                      [
+                        "list",
+                        {
+                          "text": "\n",
+                          "start": [
+                            "at",
+                            "$rawToken",
+                            "start"
+                          ],
+                          "end": [
+                            "at",
+                            "$rawToken",
+                            "end"
+                          ],
+                          "line": "$line",
+                          "column": "$column",
+                          "indent": "$indent",
+                          "synthetic": false
+                        }
+                      ]
+                    ]
+                  }
+                ]
+              },
+              {
+                "let": "line",
+                "value": [
+                  "add",
+                  "$line",
+                  1
+                ]
+              },
+              {
+                "let": "column",
+                "value": 1
+              },
+              {
+                "let": "indent",
+                "value": 0
+              },
+              {
+                "let": "leading",
+                "value": true
+              },
+              {
+                "let": "lineHasCode",
+                "value": false
+              }
+            ]
+          },
+          {
+            "when": [
+              "not",
+              "$newline"
+            ],
+            "then": [
+              {
+                "when": "$spaces",
+                "then": [
+                  {
+                    "when": "$leading",
+                    "then": [
+                      {
+                        "let": "indent",
+                        "value": [
+                          "add",
+                          "$indent",
+                          [
+                            "count",
+                            "$v"
+                          ]
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "when": "$comment",
+                "then": [
+                  {
+                    "when": [
+                      "not",
+                      [
+                        "not",
+                        "$lineHasCode"
+                      ]
+                    ],
+                    "then": [
+                      {
+                        "port": "kernel.invoke",
+                        "args": {
+                          "query": "lp.fail",
+                          "input": {
+                            "code": "PROC-TEXT-SYNTAX",
+                            "summary": "Only whole-line comments are supported.",
+                            "token": "$token"
+                          }
+                        },
+                        "into": "unused"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "and",
+                  [
+                    "not",
+                    "$spaces"
+                  ],
+                  [
+                    "not",
+                    "$comment"
+                  ]
+                ],
+                "then": [
+                  {
+                    "port": "record.put",
+                    "args": {
+                      "record": "$token",
+                      "key": "indent",
+                      "value": "$indent"
+                    },
+                    "into": "token"
+                  },
+                  {
+                    "when": [
+                      "includes",
+                      [
+                        "list",
+                        "(",
+                        "{"
+                      ],
+                      "$v"
+                    ],
+                    "then": [
+                      {
+                        "let": "groups",
+                        "value": [
+                          "append",
+                          "$groups",
+                          [
+                            "list",
+                            "$v"
+                          ]
+                        ]
+                      },
+                      {
+                        "when": [
+                          "not",
+                          [
+                            "includes",
+                            [
+                              "range",
+                              64
+                            ],
+                            [
+                              "count",
+                              "$groups"
+                            ]
+                          ]
+                        ],
+                        "then": [
+                          {
+                            "port": "kernel.invoke",
+                            "args": {
+                              "query": "lp.fail",
+                              "input": {
+                                "code": "PROC-TEXT-LIMIT",
+                                "summary": "Expression nesting exceeds 64.",
+                                "token": "$token"
+                              }
+                            },
+                            "into": "unused"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "when": [
+                      "includes",
+                      [
+                        "list",
+                        ")",
+                        "}"
+                      ],
+                      "$v"
+                    ],
+                    "then": [
+                      {
+                        "when": [
+                          "not",
+                          [
+                            "eq",
+                            [
+                              "at",
+                              "$groups",
+                              [
+                                "add",
+                                [
+                                  "count",
+                                  "$groups"
+                                ],
+                                -1
+                              ]
+                            ],
+                            [
+                              "if",
+                              [
+                                "eq",
+                                "$v",
+                                ")"
+                              ],
+                              "(",
+                              "{"
+                            ]
+                          ]
+                        ],
+                        "then": [
+                          {
+                            "port": "kernel.invoke",
+                            "args": {
+                              "query": "lp.fail",
+                              "input": {
+                                "code": "PROC-TEXT-SYNTAX",
+                                "summary": "Unmatched expression delimiter.",
+                                "token": "$token"
+                              }
+                            },
+                            "into": "unused"
+                          }
+                        ]
+                      },
+                      {
+                        "let": "groups",
+                        "value": [
+                          "fold",
+                          [
+                            "range",
+                            [
+                              "add",
+                              [
+                                "count",
+                                "$groups"
+                              ],
+                              -1
+                            ]
+                          ],
+                          "n",
+                          "prefix",
+                          [
+                            "list"
+                          ],
+                          [
+                            "append",
+                            "$prefix",
+                            [
+                              "list",
+                              [
+                                "at",
+                                "$groups",
+                                [
+                                  "add",
+                                  "$n",
+                                  -1
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "let": "tokens",
+                    "value": [
+                      "append",
+                      "$tokens",
+                      [
+                        "list",
+                        "$token"
+                      ]
+                    ]
+                  },
+                  {
+                    "let": "leading",
+                    "value": false
+                  },
+                  {
+                    "let": "lineHasCode",
+                    "value": true
+                  }
+                ]
+              },
+              {
+                "let": "column",
+                "value": [
+                  "add",
+                  "$column",
+                  [
+                    "count",
+                    "$v"
+                  ]
+                ]
+              }
+            ]
+          }
+        ],
+        "yield": {
+          "tokens": "$tokens",
+          "groups": "$groups",
+          "line": "$line",
+          "column": "$column",
+          "indent": "$indent",
+          "leading": "$leading",
+          "lineHasCode": "$lineHasCode"
+        },
+        "into": "state"
+      },
+      {
+        "let": "i",
+        "value": 0
+      },
+      {
+        "let": "endToken",
+        "value": {
+          "text": "<eof>",
+          "start": [
+            "count",
+            "$lpText"
+          ],
+          "end": [
+            "count",
+            "$lpText"
+          ],
+          "line": [
+            "at",
+            "$state",
+            "line"
+          ],
+          "column": [
+            "at",
+            "$state",
+            "column"
+          ],
+          "indent": 0,
+          "synthetic": true
+        }
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            [
+              "count",
+              [
+                "at",
+                "$state",
+                "groups"
+              ]
+            ],
+            0
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-SYNTAX",
+                "summary": "Unterminated expression group.",
+                "token": "$endToken"
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "let": "tokens",
+        "value": [
+          "at",
+          "$state",
+          "tokens"
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            [
+              "at",
+              [
+                "at",
+                "$tokens",
+                [
+                  "add",
+                  [
+                    "count",
+                    "$tokens"
+                  ],
+                  -1
+                ]
+              ],
+              "text"
+            ],
+            "\n"
+          ]
+        ],
+        "then": [
+          {
+            "let": "tokens",
+            "value": [
+              "append",
+              "$tokens",
+              [
+                "list",
+                {
+                  "text": "\n",
+                  "start": [
+                    "count",
+                    "$lpText"
+                  ],
+                  "end": [
+                    "count",
+                    "$lpText"
+                  ],
+                  "line": [
+                    "at",
+                    "$state",
+                    "line"
+                  ],
+                  "column": [
+                    "at",
+                    "$state",
+                    "column"
+                  ],
+                  "indent": 0,
+                  "synthetic": true
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": [
+          "append",
+          "$tokens",
+          [
+            "list",
+            "$endToken"
+          ]
+        ]
+      }
+    ],
+    "lp.expression": [
+      {
+        "let": "i",
+        "value": [
+          "at",
+          "$eventInput",
+          "i"
+        ]
+      },
+      {
+        "let": "pointer",
+        "value": [
+          "at",
+          "$eventInput",
+          "pointer"
+        ]
+      },
+      {
+        "let": "depth",
+        "value": [
+          "at",
+          "$eventInput",
+          "depth"
+        ]
+      },
+      {
+        "let": "origins",
+        "value": [
+          "at",
+          "$eventInput",
+          "origins"
+        ]
+      },
+      {
+        "let": "begin",
+        "value": [
+          "at",
+          "$lpTokens",
+          "$i"
+        ]
+      },
+      {
+        "let": "v",
+        "value": [
+          "at",
+          [
+            "at",
+            "$lpTokens",
+            "$i"
+          ],
+          "text"
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "includes",
+            [
+              "range",
+              65
+            ],
+            [
+              "add",
+              "$depth",
+              1
+            ]
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-LIMIT",
+                "summary": "Expression depth exceeds 64.",
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "let": "done",
+        "value": false
+      },
+      {
+        "let": "value",
+        "value": null
+      },
+      {
+        "when": [
+          "eq",
+          "$v",
+          "{"
+        ],
+        "then": [
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fields",
+              "input": {
+                "i": "$i",
+                "pointer": "$pointer",
+                "depth": "$depth",
+                "origins": "$origins",
+                "entries": [
+                  "list"
+                ],
+                "keys": [
+                  "list"
+                ]
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": [
+              "at",
+              "$parsed",
+              "i"
+            ]
+          },
+          {
+            "let": "origins",
+            "value": [
+              "at",
+              "$parsed",
+              "origins"
+            ]
+          },
+          {
+            "let": "value",
+            "value": [
+              "at",
+              "$parsed",
+              "value"
+            ]
+          },
+          {
+            "let": "done",
+            "value": true
+          }
+        ]
+      },
+      {
+        "port": "text.matches",
+        "args": {
+          "value": "$v",
+          "pattern": "^\""
+        },
+        "into": "quoted"
+      },
+      {
+        "when": [
+          "and",
+          [
+            "not",
+            "$done"
+          ],
+          "$quoted"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.decode",
+              "input": {
+                "token": "$begin"
+              }
+            },
+            "into": "value"
+          },
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$value",
+              "start": 0,
+              "end": 1
+            },
+            "into": "first"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "not",
+                [
+                  "eq",
+                  "$first",
+                  [
+                    "at",
+                    "$lpPolicy",
+                    "referenceSigil"
+                  ]
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-STRING",
+                    "summary": "Quoted leading-dollar data has no literal encoding in this profile.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "let": "done",
+            "value": true
+          }
+        ]
+      },
+      {
+        "port": "text.matches",
+        "args": {
+          "value": "$v",
+          "pattern": "^\\$"
+        },
+        "into": "reference"
+      },
+      {
+        "when": [
+          "and",
+          [
+            "not",
+            "$done"
+          ],
+          "$reference"
+        ],
+        "then": [
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$v",
+              "start": 1,
+              "end": [
+                "count",
+                "$v"
+              ]
+            },
+            "into": "name"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.name",
+              "input": {
+                "text": "$name",
+                "qualified": true,
+                "token": "$begin"
+              }
+            },
+            "into": "name"
+          },
+          {
+            "let": "value",
+            "value": "$v"
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "let": "done",
+            "value": true
+          }
+        ]
+      },
+      {
+        "port": "text.matches",
+        "args": {
+          "value": "$v",
+          "pattern": "^(?:-?[0-9]|true$|false$|null$)"
+        },
+        "into": "scalar"
+      },
+      {
+        "when": [
+          "and",
+          [
+            "not",
+            "$done"
+          ],
+          "$scalar"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.decode",
+              "input": {
+                "token": "$begin"
+              }
+            },
+            "into": "value"
+          },
+          {
+            "port": "value.describe",
+            "args": {
+              "value": "$value"
+            },
+            "into": "description"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "or",
+                [
+                  "at",
+                  "$description",
+                  "finite"
+                ],
+                [
+                  "at",
+                  "$description",
+                  "null"
+                ],
+                [
+                  "eq",
+                  [
+                    "at",
+                    "$description",
+                    "type"
+                  ],
+                  "boolean"
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LEX",
+                    "summary": "Finite scalar required.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "let": "done",
+            "value": true
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          "$done"
+        ],
+        "then": [
+          {
+            "when": [
+              "not",
+              [
+                "includes",
+                [
+                  "at",
+                  "$lpPolicy",
+                  "operators"
+                ],
+                "$v"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": "Unknown expression or operator.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "op",
+            "value": "$v"
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                "("
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": [
+                      "concat",
+                      "Expected ",
+                      "(",
+                      "."
+                    ],
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.arguments",
+              "input": {
+                "i": "$i",
+                "pointer": "$pointer",
+                "depth": "$depth",
+                "origins": "$origins",
+                "args": [
+                  "list"
+                ],
+                "op": "$op"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": [
+              "at",
+              "$parsed",
+              "i"
+            ]
+          },
+          {
+            "let": "origins",
+            "value": [
+              "at",
+              "$parsed",
+              "origins"
+            ]
+          },
+          {
+            "let": "value",
+            "value": [
+              "at",
+              "$parsed",
+              "value"
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.origin",
+              "input": {
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/0"
+                ],
+                "kind": "operator",
+                "start": [
+                  "at",
+                  "$begin",
+                  "start"
+                ],
+                "end": [
+                  "at",
+                  "$begin",
+                  "end"
+                ],
+                "token": "$begin"
+              }
+            },
+            "into": "origin"
+          },
+          {
+            "let": "origins",
+            "value": [
+              "append",
+              "$origins",
+              [
+                "list",
+                "$origin"
+              ]
+            ]
+          }
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "lp.origin",
+          "input": {
+            "pointer": "$pointer",
+            "kind": "expression",
+            "start": [
+              "at",
+              "$begin",
+              "start"
+            ],
+            "end": [
+              "at",
+              [
+                "at",
+                "$lpTokens",
+                [
+                  "add",
+                  "$i",
+                  -1
+                ]
+              ],
+              "end"
+            ],
+            "token": "$begin"
+          }
+        },
+        "into": "origin"
+      },
+      {
+        "let": "origins",
+        "value": [
+          "append",
+          "$origins",
+          [
+            "list",
+            "$origin"
+          ]
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "i": "$i",
+          "value": "$value",
+          "origins": "$origins"
+        }
+      }
+    ],
+    "lp.arguments": [
+      {
+        "let": "i",
+        "value": [
+          "at",
+          "$eventInput",
+          "i"
+        ]
+      },
+      {
+        "let": "pointer",
+        "value": [
+          "at",
+          "$eventInput",
+          "pointer"
+        ]
+      },
+      {
+        "let": "depth",
+        "value": [
+          "at",
+          "$eventInput",
+          "depth"
+        ]
+      },
+      {
+        "let": "origins",
+        "value": [
+          "at",
+          "$eventInput",
+          "origins"
+        ]
+      },
+      {
+        "let": "args",
+        "value": [
+          "at",
+          "$eventInput",
+          "args"
+        ]
+      },
+      {
+        "let": "op",
+        "value": [
+          "at",
+          "$eventInput",
+          "op"
+        ]
+      },
+      {
+        "let": "done",
+        "value": [
+          "eq",
+          [
+            "at",
+            [
+              "at",
+              "$lpTokens",
+              "$i"
+            ],
+            "text"
+          ],
+          ")"
+        ]
+      },
+      {
+        "when": "$done",
+        "then": [
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          "$done"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.expression",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  [
+                    "add",
+                    [
+                      "count",
+                      "$args"
+                    ],
+                    1
+                  ]
+                ],
+                "depth": [
+                  "add",
+                  "$depth",
+                  1
+                ],
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": [
+              "at",
+              "$parsed",
+              "i"
+            ]
+          },
+          {
+            "let": "origins",
+            "value": [
+              "at",
+              "$parsed",
+              "origins"
+            ]
+          },
+          {
+            "let": "args",
+            "value": [
+              "append",
+              "$args",
+              [
+                "list",
+                [
+                  "at",
+                  "$parsed",
+                  "value"
+                ]
+              ]
+            ]
+          },
+          {
+            "when": [
+              "eq",
+              [
+                "at",
+                [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ],
+                "text"
+              ],
+              ","
+            ],
+            "then": [
+              {
+                "let": "i",
+                "value": [
+                  "add",
+                  "$i",
+                  1
+                ]
+              },
+              {
+                "when": [
+                  "not",
+                  [
+                    "not",
+                    [
+                      "eq",
+                      [
+                        "at",
+                        [
+                          "at",
+                          "$lpTokens",
+                          "$i"
+                        ],
+                        "text"
+                      ],
+                      ")"
+                    ]
+                  ]
+                ],
+                "then": [
+                  {
+                    "port": "kernel.invoke",
+                    "args": {
+                      "query": "lp.fail",
+                      "input": {
+                        "code": "PROC-TEXT-SYNTAX",
+                        "summary": "Trailing argument separator.",
+                        "token": [
+                          "at",
+                          "$lpTokens",
+                          "$i"
+                        ]
+                      }
+                    },
+                    "into": "unused"
+                  }
+                ]
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.arguments",
+                  "input": {
+                    "i": "$i",
+                    "pointer": "$pointer",
+                    "depth": "$depth",
+                    "origins": "$origins",
+                    "args": "$args",
+                    "op": "$op"
+                  }
+                },
+                "into": "parsed"
+              },
+              {
+                "let": "i",
+                "value": [
+                  "at",
+                  "$parsed",
+                  "i"
+                ]
+              },
+              {
+                "let": "origins",
+                "value": [
+                  "at",
+                  "$parsed",
+                  "origins"
+                ]
+              },
+              {
+                "let": "args",
+                "value": [
+                  "at",
+                  "$parsed",
+                  "args"
+                ]
+              },
+              {
+                "let": "done",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          "$done"
+        ],
+        "then": [
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                ")"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": [
+                      "concat",
+                      "Expected ",
+                      ")",
+                      "."
+                    ],
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "i": "$i",
+          "value": [
+            "append",
+            [
+              "list",
+              "$op"
+            ],
+            "$args"
+          ],
+          "args": "$args",
+          "origins": "$origins"
+        }
+      }
+    ],
+    "lp.fields": [
+      {
+        "let": "i",
+        "value": [
+          "at",
+          "$eventInput",
+          "i"
+        ]
+      },
+      {
+        "let": "pointer",
+        "value": [
+          "at",
+          "$eventInput",
+          "pointer"
+        ]
+      },
+      {
+        "let": "depth",
+        "value": [
+          "at",
+          "$eventInput",
+          "depth"
+        ]
+      },
+      {
+        "let": "origins",
+        "value": [
+          "at",
+          "$eventInput",
+          "origins"
+        ]
+      },
+      {
+        "let": "entries",
+        "value": [
+          "at",
+          "$eventInput",
+          "entries"
+        ]
+      },
+      {
+        "let": "keys",
+        "value": [
+          "at",
+          "$eventInput",
+          "keys"
+        ]
+      },
+      {
+        "let": "done",
+        "value": [
+          "eq",
+          [
+            "at",
+            [
+              "at",
+              "$lpTokens",
+              "$i"
+            ],
+            "text"
+          ],
+          "}"
+        ]
+      },
+      {
+        "when": "$done",
+        "then": [
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          "$done"
+        ],
+        "then": [
+          {
+            "let": "begin",
+            "value": [
+              "at",
+              "$lpTokens",
+              "$i"
+            ]
+          },
+          {
+            "let": "key",
+            "value": [
+              "at",
+              [
+                "at",
+                "$lpTokens",
+                "$i"
+              ],
+              "text"
+            ]
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$key",
+              "pattern": "^\""
+            },
+            "into": "quoted"
+          },
+          {
+            "when": "$quoted",
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.decode",
+                  "input": {
+                    "token": "$begin"
+                  }
+                },
+                "into": "key"
+              }
+            ]
+          },
+          {
+            "when": [
+              "not",
+              "$quoted"
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.name",
+                  "input": {
+                    "text": "$key",
+                    "qualified": false,
+                    "token": "$begin"
+                  }
+                },
+                "into": "key"
+              }
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "not",
+                [
+                  "includes",
+                  [
+                    "at",
+                    "$lpPolicy",
+                    "forbidden"
+                  ],
+                  "$key"
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-NAME",
+                    "summary": "Reserved record key.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "not",
+                [
+                  "includes",
+                  "$keys",
+                  "$key"
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-DUPLICATE",
+                    "summary": "Duplicate decoded record key.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "keys",
+            "value": [
+              "append",
+              "$keys",
+              [
+                "list",
+                "$key"
+              ]
+            ]
+          },
+          {
+            "port": "text.replaceAll",
+            "args": {
+              "value": "$key",
+              "search": "~",
+              "replacement": "~0"
+            },
+            "into": "escaped"
+          },
+          {
+            "port": "text.replaceAll",
+            "args": {
+              "value": "$escaped",
+              "search": "/",
+              "replacement": "~1"
+            },
+            "into": "escaped"
+          },
+          {
+            "let": "fieldPointer",
+            "value": [
+              "concat",
+              "$pointer",
+              "/",
+              "$escaped"
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.origin",
+              "input": {
+                "pointer": "$fieldPointer",
+                "kind": "key",
+                "start": [
+                  "at",
+                  "$begin",
+                  "start"
+                ],
+                "end": [
+                  "at",
+                  "$begin",
+                  "end"
+                ],
+                "token": "$begin"
+              }
+            },
+            "into": "origin"
+          },
+          {
+            "let": "origins",
+            "value": [
+              "append",
+              "$origins",
+              [
+                "list",
+                "$origin"
+              ]
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.gap",
+              "input": {
+                "left": "$begin",
+                "right": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "gap"
+          },
+          {
+            "let": "equal",
+            "value": [
+              "at",
+              "$lpTokens",
+              "$i"
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                "="
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": [
+                      "concat",
+                      "Expected ",
+                      "=",
+                      "."
+                    ],
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.gap",
+              "input": {
+                "left": "$equal",
+                "right": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "gap"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.expression",
+              "input": {
+                "i": "$i",
+                "pointer": "$fieldPointer",
+                "depth": [
+                  "add",
+                  "$depth",
+                  1
+                ],
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": [
+              "at",
+              "$parsed",
+              "i"
+            ]
+          },
+          {
+            "let": "origins",
+            "value": [
+              "at",
+              "$parsed",
+              "origins"
+            ]
+          },
+          {
+            "let": "entries",
+            "value": [
+              "append",
+              "$entries",
+              [
+                "list",
+                [
+                  "list",
+                  "$key",
+                  [
+                    "at",
+                    "$parsed",
+                    "value"
+                  ]
+                ]
+              ]
+            ]
+          },
+          {
+            "when": [
+              "eq",
+              [
+                "at",
+                [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ],
+                "text"
+              ],
+              ";"
+            ],
+            "then": [
+              {
+                "let": "i",
+                "value": [
+                  "add",
+                  "$i",
+                  1
+                ]
+              },
+              {
+                "when": [
+                  "not",
+                  [
+                    "not",
+                    [
+                      "eq",
+                      [
+                        "at",
+                        [
+                          "at",
+                          "$lpTokens",
+                          "$i"
+                        ],
+                        "text"
+                      ],
+                      "}"
+                    ]
+                  ]
+                ],
+                "then": [
+                  {
+                    "port": "kernel.invoke",
+                    "args": {
+                      "query": "lp.fail",
+                      "input": {
+                        "code": "PROC-TEXT-SYNTAX",
+                        "summary": "Trailing record separator.",
+                        "token": [
+                          "at",
+                          "$lpTokens",
+                          "$i"
+                        ]
+                      }
+                    },
+                    "into": "unused"
+                  }
+                ]
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fields",
+                  "input": {
+                    "i": "$i",
+                    "pointer": "$pointer",
+                    "depth": "$depth",
+                    "origins": "$origins",
+                    "entries": "$entries",
+                    "keys": "$keys"
+                  }
+                },
+                "into": "parsed"
+              },
+              {
+                "let": "i",
+                "value": [
+                  "at",
+                  "$parsed",
+                  "i"
+                ]
+              },
+              {
+                "let": "origins",
+                "value": [
+                  "at",
+                  "$parsed",
+                  "origins"
+                ]
+              },
+              {
+                "let": "entries",
+                "value": [
+                  "at",
+                  "$parsed",
+                  "entries"
+                ]
+              },
+              {
+                "let": "done",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          "$done"
+        ],
+        "then": [
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                "}"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": [
+                      "concat",
+                      "Expected ",
+                      "}",
+                      "."
+                    ],
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          }
+        ]
+      },
+      {
+        "port": "record.fromEntries",
+        "args": {
+          "entries": "$entries"
+        },
+        "into": "value"
+      },
+      {
+        "let": "result",
+        "value": {
+          "i": "$i",
+          "value": "$value",
+          "entries": "$entries",
+          "origins": "$origins"
+        }
+      }
+    ],
+    "lp.statement": [
+      {
+        "let": "i",
+        "value": [
+          "at",
+          "$eventInput",
+          "i"
+        ]
+      },
+      {
+        "let": "pointer",
+        "value": [
+          "at",
+          "$eventInput",
+          "pointer"
+        ]
+      },
+      {
+        "let": "level",
+        "value": [
+          "at",
+          "$eventInput",
+          "level"
+        ]
+      },
+      {
+        "let": "origins",
+        "value": [
+          "at",
+          "$eventInput",
+          "origins"
+        ]
+      },
+      {
+        "let": "depth",
+        "value": 0
+      },
+      {
+        "let": "begin",
+        "value": [
+          "at",
+          "$lpTokens",
+          "$i"
+        ]
+      },
+      {
+        "let": "kind",
+        "value": [
+          "at",
+          [
+            "at",
+            "$lpTokens",
+            "$i"
+          ],
+          "text"
+        ]
+      },
+      {
+        "let": "i",
+        "value": [
+          "add",
+          "$i",
+          1
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            "$kind",
+            "try"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.gap",
+              "input": {
+                "left": "$begin",
+                "right": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "gap"
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "includes",
+            [
+              "or",
+              [
+                "at",
+                "$lpPolicy",
+                "statementForms"
+              ],
+              [
+                "list",
+                "let",
+                "when",
+                "port",
+                "assert",
+                "call",
+                "fold",
+                "try"
+              ]
+            ],
+            "$kind"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-SYNTAX",
+                "summary": "Unsupported process statement.",
+                "token": "$begin"
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$kind",
+          "let"
+        ],
+        "then": [
+          {
+            "let": "bindingToken",
+            "value": [
+              "at",
+              "$lpTokens",
+              "$i"
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.name",
+              "input": {
+                "text": [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                "qualified": false,
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "binding"
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.gap",
+              "input": {
+                "left": "$bindingToken",
+                "right": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "gap"
+          },
+          {
+            "let": "equal",
+            "value": [
+              "at",
+              "$lpTokens",
+              "$i"
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                "="
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": [
+                      "concat",
+                      "Expected ",
+                      "=",
+                      "."
+                    ],
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.gap",
+              "input": {
+                "left": "$equal",
+                "right": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "gap"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.expression",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/value"
+                ],
+                "depth": [
+                  "add",
+                  "$depth",
+                  1
+                ],
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": [
+              "at",
+              "$parsed",
+              "i"
+            ]
+          },
+          {
+            "let": "origins",
+            "value": [
+              "at",
+              "$parsed",
+              "origins"
+            ]
+          },
+          {
+            "let": "value",
+            "value": {
+              "let": "$binding",
+              "value": [
+                "at",
+                "$parsed",
+                "value"
+              ]
+            }
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.origin",
+              "input": {
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/let"
+                ],
+                "kind": "binding",
+                "start": [
+                  "at",
+                  "$bindingToken",
+                  "start"
+                ],
+                "end": [
+                  "at",
+                  "$bindingToken",
+                  "end"
+                ],
+                "token": "$bindingToken"
+              }
+            },
+            "into": "origin"
+          },
+          {
+            "let": "origins",
+            "value": [
+              "append",
+              "$origins",
+              [
+                "list",
+                "$origin"
+              ]
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                "\n"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": [
+                      "concat",
+                      "Expected ",
+                      "\n",
+                      "."
+                    ],
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$kind",
+          "port"
+        ],
+        "then": [
+          {
+            "let": "portToken",
+            "value": [
+              "at",
+              "$lpTokens",
+              "$i"
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.name",
+              "input": {
+                "text": [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                "qualified": true,
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "portName"
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.gap",
+              "input": {
+                "left": "$portToken",
+                "right": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "gap"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                "{"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": "Port arguments must be a record.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.expression",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/args"
+                ],
+                "depth": [
+                  "add",
+                  "$depth",
+                  1
+                ],
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": [
+              "at",
+              "$parsed",
+              "i"
+            ]
+          },
+          {
+            "let": "origins",
+            "value": [
+              "at",
+              "$parsed",
+              "origins"
+            ]
+          },
+          {
+            "let": "arguments",
+            "value": [
+              "at",
+              "$parsed",
+              "value"
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.gap",
+              "input": {
+                "left": [
+                  "at",
+                  "$lpTokens",
+                  [
+                    "add",
+                    "$i",
+                    -1
+                  ]
+                ],
+                "right": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "gap"
+          },
+          {
+            "let": "arrow",
+            "value": [
+              "at",
+              "$lpTokens",
+              "$i"
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                "→"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": [
+                      "concat",
+                      "Expected ",
+                      "→",
+                      "."
+                    ],
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.gap",
+              "input": {
+                "left": "$arrow",
+                "right": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "gap"
+          },
+          {
+            "let": "bindingToken",
+            "value": [
+              "at",
+              "$lpTokens",
+              "$i"
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.name",
+              "input": {
+                "text": [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                "qualified": false,
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "binding"
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.origin",
+              "input": {
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/port"
+                ],
+                "kind": "port",
+                "start": [
+                  "at",
+                  "$portToken",
+                  "start"
+                ],
+                "end": [
+                  "at",
+                  "$portToken",
+                  "end"
+                ],
+                "token": "$portToken"
+              }
+            },
+            "into": "origin"
+          },
+          {
+            "let": "origins",
+            "value": [
+              "append",
+              "$origins",
+              [
+                "list",
+                "$origin"
+              ]
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.origin",
+              "input": {
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/into"
+                ],
+                "kind": "binding",
+                "start": [
+                  "at",
+                  "$bindingToken",
+                  "start"
+                ],
+                "end": [
+                  "at",
+                  "$bindingToken",
+                  "end"
+                ],
+                "token": "$bindingToken"
+              }
+            },
+            "into": "origin"
+          },
+          {
+            "let": "origins",
+            "value": [
+              "append",
+              "$origins",
+              [
+                "list",
+                "$origin"
+              ]
+            ]
+          },
+          {
+            "let": "value",
+            "value": {
+              "port": "$portName",
+              "args": "$arguments",
+              "into": "$binding"
+            }
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                "\n"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": [
+                      "concat",
+                      "Expected ",
+                      "\n",
+                      "."
+                    ],
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$kind",
+          "when"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.expression",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/when"
+                ],
+                "depth": [
+                  "add",
+                  "$depth",
+                  1
+                ],
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": [
+              "at",
+              "$parsed",
+              "i"
+            ]
+          },
+          {
+            "let": "origins",
+            "value": [
+              "at",
+              "$parsed",
+              "origins"
+            ]
+          },
+          {
+            "let": "condition",
+            "value": [
+              "at",
+              "$parsed",
+              "value"
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                ":"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": [
+                      "concat",
+                      "Expected ",
+                      ":",
+                      "."
+                    ],
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                "\n"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": [
+                      "concat",
+                      "Expected ",
+                      "\n",
+                      "."
+                    ],
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.programme",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/then"
+                ],
+                "level": [
+                  "add",
+                  "$level",
+                  1
+                ],
+                "indent": [
+                  "add",
+                  [
+                    "at",
+                    "$begin",
+                    "indent"
+                  ],
+                  2
+                ],
+                "origins": "$origins",
+                "statements": [
+                  "list"
+                ]
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": [
+              "at",
+              "$parsed",
+              "i"
+            ]
+          },
+          {
+            "let": "origins",
+            "value": [
+              "at",
+              "$parsed",
+              "origins"
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "not",
+                [
+                  "eq",
+                  [
+                    "count",
+                    [
+                      "at",
+                      "$parsed",
+                      "value"
+                    ]
+                  ],
+                  0
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LAYOUT",
+                    "summary": "A condition suite must not be empty.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "value",
+            "value": {
+              "when": "$condition",
+              "then": [
+                "at",
+                "$parsed",
+                "value"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "when": [
+          "includes",
+          [
+            "list",
+            "assert",
+            "call",
+            "fold",
+            "try",
+            "each"
+          ],
+          "$kind"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.extended",
+              "input": {
+                "i": "$i",
+                "pointer": "$pointer",
+                "level": "$level",
+                "origins": "$origins",
+                "begin": "$begin",
+                "kind": "$kind"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "value",
+            "value": "$parsed.value"
+          }
+        ]
+      },
+      {
+        "let": "fieldOrder",
+        "value": [
+          "at",
+          [
+            "or",
+            [
+              "at",
+              "$lpPolicy",
+              "statementFieldOrder"
+            ],
+            {}
+          ],
+          "$kind"
+        ]
+      },
+      {
+        "when": "$fieldOrder",
+        "then": [
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$value"
+            },
+            "into": "orderedFields"
+          },
+          {
+            "let": "orderedKeys",
+            "value": [
+              "map",
+              "$orderedFields",
+              "orderedField",
+              [
+                "at",
+                "$orderedField",
+                0
+              ]
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "and",
+                [
+                  "eq",
+                  [
+                    "count",
+                    "$fieldOrder"
+                  ],
+                  [
+                    "count",
+                    "$orderedKeys"
+                  ]
+                ],
+                [
+                  "eq",
+                  [
+                    "count",
+                    [
+                      "distinct",
+                      "$fieldOrder"
+                    ]
+                  ],
+                  [
+                    "count",
+                    "$fieldOrder"
+                  ]
+                ],
+                [
+                  "every",
+                  "$fieldOrder",
+                  "orderedKey",
+                  [
+                    "includes",
+                    "$orderedKeys",
+                    "$orderedKey"
+                  ]
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-BASIS",
+                    "summary": "Statement field-order profile differs from its parsed fields.",
+                    "token": "$begin"
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "port": "record.fromEntries",
+            "args": {
+              "entries": [
+                "map",
+                "$fieldOrder",
+                "orderedKey",
+                [
+                  "list",
+                  "$orderedKey",
+                  [
+                    "at",
+                    "$value",
+                    "$orderedKey"
+                  ]
+                ]
+              ]
+            },
+            "into": "value"
+          }
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "lp.origin",
+          "input": {
+            "pointer": "$pointer",
+            "kind": "statement",
+            "start": [
+              "at",
+              "$begin",
+              "start"
+            ],
+            "end": [
+              "at",
+              [
+                "at",
+                "$lpTokens",
+                [
+                  "add",
+                  "$i",
+                  -1
+                ]
+              ],
+              "end"
+            ],
+            "token": "$begin"
+          }
+        },
+        "into": "origin"
+      },
+      {
+        "let": "origins",
+        "value": [
+          "append",
+          "$origins",
+          [
+            "list",
+            "$origin"
+          ]
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "i": "$i",
+          "value": "$value",
+          "origins": "$origins"
+        }
+      }
+    ],
+    "lp.programme": [
+      {
+        "let": "i",
+        "value": [
+          "at",
+          "$eventInput",
+          "i"
+        ]
+      },
+      {
+        "let": "pointer",
+        "value": [
+          "at",
+          "$eventInput",
+          "pointer"
+        ]
+      },
+      {
+        "let": "level",
+        "value": [
+          "at",
+          "$eventInput",
+          "level"
+        ]
+      },
+      {
+        "let": "indent",
+        "value": [
+          "at",
+          "$eventInput",
+          "indent"
+        ]
+      },
+      {
+        "let": "origins",
+        "value": [
+          "at",
+          "$eventInput",
+          "origins"
+        ]
+      },
+      {
+        "let": "statements",
+        "value": [
+          "at",
+          "$eventInput",
+          "statements"
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "includes",
+            [
+              "range",
+              64
+            ],
+            "$level"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-LIMIT",
+                "summary": "Suite nesting exceeds 64.",
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "let": "dedent",
+        "value": [
+          "includes",
+          [
+            "range",
+            "$indent"
+          ],
+          [
+            "add",
+            [
+              "at",
+              [
+                "at",
+                "$lpTokens",
+                "$i"
+              ],
+              "indent"
+            ],
+            1
+          ]
+        ]
+      },
+      {
+        "let": "done",
+        "value": [
+          "or",
+          [
+            "eq",
+            [
+              "at",
+              [
+                "at",
+                "$lpTokens",
+                "$i"
+              ],
+              "text"
+            ],
+            "<eof>"
+          ],
+          "$dedent",
+          [
+            "includes",
+            [
+              "or",
+              [
+                "at",
+                "$eventInput",
+                "stops"
+              ],
+              [
+                "list"
+              ]
+            ],
+            [
+              "at",
+              [
+                "at",
+                "$lpTokens",
+                "$i"
+              ],
+              "text"
+            ]
+          ]
+        ]
+      },
+      {
+        "when": [
+          "not",
+          "$done"
+        ],
+        "then": [
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "indent"
+                ],
+                "$indent"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LAYOUT",
+                    "summary": "Suites add exactly two spaces.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.statement",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  [
+                    "count",
+                    "$statements"
+                  ]
+                ],
+                "level": "$level",
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": [
+              "at",
+              "$parsed",
+              "i"
+            ]
+          },
+          {
+            "let": "origins",
+            "value": [
+              "at",
+              "$parsed",
+              "origins"
+            ]
+          },
+          {
+            "let": "statements",
+            "value": [
+              "append",
+              "$statements",
+              [
+                "list",
+                [
+                  "at",
+                  "$parsed",
+                  "value"
+                ]
+              ]
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.programme",
+              "input": {
+                "i": "$i",
+                "pointer": "$pointer",
+                "level": "$level",
+                "indent": "$indent",
+                "origins": "$origins",
+                "statements": "$statements",
+                "stops": [
+                  "or",
+                  [
+                    "at",
+                    "$eventInput",
+                    "stops"
+                  ],
+                  [
+                    "list"
+                  ]
+                ]
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": [
+              "at",
+              "$parsed",
+              "i"
+            ]
+          },
+          {
+            "let": "origins",
+            "value": [
+              "at",
+              "$parsed",
+              "origins"
+            ]
+          },
+          {
+            "let": "statements",
+            "value": [
+              "at",
+              "$parsed",
+              "value"
+            ]
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "i": "$i",
+          "value": "$statements",
+          "origins": "$origins"
+        }
+      }
+    ],
+    "lp.definitions": [
+      {
+        "let": "i",
+        "value": [
+          "at",
+          "$eventInput",
+          "i"
+        ]
+      },
+      {
+        "let": "origins",
+        "value": [
+          "at",
+          "$eventInput",
+          "origins"
+        ]
+      },
+      {
+        "let": "definitions",
+        "value": [
+          "at",
+          "$eventInput",
+          "definitions"
+        ]
+      },
+      {
+        "let": "names",
+        "value": [
+          "at",
+          "$eventInput",
+          "names"
+        ]
+      },
+      {
+        "let": "done",
+        "value": [
+          "eq",
+          [
+            "at",
+            [
+              "at",
+              "$lpTokens",
+              "$i"
+            ],
+            "text"
+          ],
+          "<eof>"
+        ]
+      },
+      {
+        "when": [
+          "not",
+          "$done"
+        ],
+        "then": [
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "indent"
+                ],
+                0
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LAYOUT",
+                    "summary": "Process declarations start at column one.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "begin",
+            "value": [
+              "at",
+              "$lpTokens",
+              "$i"
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                "process"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": [
+                      "concat",
+                      "Expected ",
+                      "process",
+                      "."
+                    ],
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.gap",
+              "input": {
+                "left": "$begin",
+                "right": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "gap"
+          },
+          {
+            "let": "nameToken",
+            "value": [
+              "at",
+              "$lpTokens",
+              "$i"
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.name",
+              "input": {
+                "text": [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                "qualified": true,
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "name"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "not",
+                [
+                  "includes",
+                  "$names",
+                  "$name"
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-DUPLICATE",
+                    "summary": "Duplicate process declaration.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "names",
+            "value": [
+              "append",
+              "$names",
+              [
+                "list",
+                "$name"
+              ]
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                ":"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": [
+                      "concat",
+                      "Expected ",
+                      ":",
+                      "."
+                    ],
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "text"
+                ],
+                "\n"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": [
+                      "concat",
+                      "Expected ",
+                      "\n",
+                      "."
+                    ],
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "i",
+            "value": [
+              "add",
+              "$i",
+              1
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.origin",
+              "input": {
+                "pointer": [
+                  "concat",
+                  "/queries/",
+                  "$name"
+                ],
+                "kind": "process",
+                "start": [
+                  "at",
+                  "$nameToken",
+                  "start"
+                ],
+                "end": [
+                  "at",
+                  "$nameToken",
+                  "end"
+                ],
+                "token": "$nameToken"
+              }
+            },
+            "into": "origin"
+          },
+          {
+            "let": "origins",
+            "value": [
+              "append",
+              "$origins",
+              [
+                "list",
+                "$origin"
+              ]
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.programme",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "/queries/",
+                  "$name"
+                ],
+                "level": 1,
+                "indent": 2,
+                "origins": "$origins",
+                "statements": [
+                  "list"
+                ]
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": [
+              "at",
+              "$parsed",
+              "i"
+            ]
+          },
+          {
+            "let": "origins",
+            "value": [
+              "at",
+              "$parsed",
+              "origins"
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "not",
+                [
+                  "eq",
+                  [
+                    "count",
+                    [
+                      "at",
+                      "$parsed",
+                      "value"
+                    ]
+                  ],
+                  0
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LAYOUT",
+                    "summary": "A process suite must not be empty.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "definitions",
+            "value": [
+              "append",
+              "$definitions",
+              [
+                "list",
+                [
+                  "list",
+                  "$name",
+                  [
+                    "at",
+                    "$parsed",
+                    "value"
+                  ]
+                ]
+              ]
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.origin",
+              "input": {
+                "pointer": [
+                  "concat",
+                  "/queries/",
+                  "$name"
+                ],
+                "kind": "process-definition",
+                "start": "$begin.start",
+                "end": [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    [
+                      "add",
+                      "$i",
+                      -1
+                    ]
+                  ],
+                  "end"
+                ],
+                "token": "$begin"
+              }
+            },
+            "into": "definitionOrigin"
+          },
+          {
+            "let": "origins",
+            "value": [
+              "append",
+              "$origins",
+              [
+                "list",
+                "$definitionOrigin"
+              ]
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.definitions",
+              "input": {
+                "i": "$i",
+                "origins": "$origins",
+                "definitions": "$definitions",
+                "names": "$names"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": [
+              "at",
+              "$parsed",
+              "i"
+            ]
+          },
+          {
+            "let": "origins",
+            "value": [
+              "at",
+              "$parsed",
+              "origins"
+            ]
+          },
+          {
+            "let": "definitions",
+            "value": [
+              "at",
+              "$parsed",
+              "definitions"
+            ]
+          }
+        ]
+      },
+      {
+        "port": "record.fromEntries",
+        "args": {
+          "entries": "$definitions"
+        },
+        "into": "queries"
+      },
+      {
+        "let": "result",
+        "value": {
+          "i": "$i",
+          "definitions": "$definitions",
+          "value": "$queries",
+          "origins": "$origins"
+        }
+      }
+    ],
+    "lp.parse": [
+      {
+        "let": "i",
+        "value": 0
+      },
+      {
+        "let": "origins",
+        "value": [
+          "list"
+        ]
+      },
+      {
+        "let": "header",
+        "value": [
+          "at",
+          "$lpTokens",
+          "$i"
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            [
+              "at",
+              "$header",
+              "indent"
+            ],
+            0
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-LAYOUT",
+                "summary": "Header starts at column one.",
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            [
+              "at",
+              [
+                "at",
+                "$lpTokens",
+                "$i"
+              ],
+              "text"
+            ],
+            "process-module"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-SYNTAX",
+                "summary": [
+                  "concat",
+                  "Expected ",
+                  "process-module",
+                  "."
+                ],
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "let": "i",
+        "value": [
+          "add",
+          "$i",
+          1
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "lp.gap",
+          "input": {
+            "left": "$header",
+            "right": [
+              "at",
+              "$lpTokens",
+              "$i"
+            ]
+          }
+        },
+        "into": "gap"
+      },
+      {
+        "let": "begin",
+        "value": [
+          "at",
+          "$lpTokens",
+          "$i"
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "lp.decode",
+          "input": {
+            "token": [
+              "at",
+              "$lpTokens",
+              "$i"
+            ]
+          }
+        },
+        "into": "protocol"
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            "$protocol",
+            "temple/surface-process-module/1"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-SYNTAX",
+                "summary": "Unsupported process module protocol.",
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "lp.origin",
+          "input": {
+            "pointer": "/protocol",
+            "kind": "header",
+            "start": [
+              "at",
+              "$begin",
+              "start"
+            ],
+            "end": [
+              "at",
+              "$begin",
+              "end"
+            ],
+            "token": "$begin"
+          }
+        },
+        "into": "origin"
+      },
+      {
+        "let": "origins",
+        "value": [
+          "append",
+          "$origins",
+          [
+            "list",
+            "$origin"
+          ]
+        ]
+      },
+      {
+        "let": "i",
+        "value": [
+          "add",
+          "$i",
+          1
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            [
+              "at",
+              [
+                "at",
+                "$lpTokens",
+                "$i"
+              ],
+              "text"
+            ],
+            "\n"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-SYNTAX",
+                "summary": [
+                  "concat",
+                  "Expected ",
+                  "\n",
+                  "."
+                ],
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "let": "i",
+        "value": [
+          "add",
+          "$i",
+          1
+        ]
+      },
+      {
+        "let": "header",
+        "value": [
+          "at",
+          "$lpTokens",
+          "$i"
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            [
+              "at",
+              "$header",
+              "indent"
+            ],
+            0
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-LAYOUT",
+                "summary": "Header starts at column one.",
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            [
+              "at",
+              [
+                "at",
+                "$lpTokens",
+                "$i"
+              ],
+              "text"
+            ],
+            "profile"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-SYNTAX",
+                "summary": [
+                  "concat",
+                  "Expected ",
+                  "profile",
+                  "."
+                ],
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "let": "i",
+        "value": [
+          "add",
+          "$i",
+          1
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "lp.gap",
+          "input": {
+            "left": "$header",
+            "right": [
+              "at",
+              "$lpTokens",
+              "$i"
+            ]
+          }
+        },
+        "into": "gap"
+      },
+      {
+        "let": "begin",
+        "value": [
+          "at",
+          "$lpTokens",
+          "$i"
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "lp.decode",
+          "input": {
+            "token": [
+              "at",
+              "$lpTokens",
+              "$i"
+            ]
+          }
+        },
+        "into": "profileName"
+      },
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$profileName"
+        },
+        "into": "profileType"
+      },
+      {
+        "when": [
+          "and",
+          "$lpPolicy.name",
+          [
+            "not",
+            [
+              "eq",
+              "$profileName",
+              "$lpPolicy.name"
+            ]
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-BASIS",
+                "summary": "Declared profile differs from the selected syntax profile.",
+                "token": "$begin"
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "and",
+            [
+              "eq",
+              [
+                "at",
+                "$profileType",
+                "type"
+              ],
+              "string"
+            ],
+            [
+              "not",
+              [
+                "eq",
+                "$profileName",
+                ""
+              ]
+            ]
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-SYNTAX",
+                "summary": "An explicit profile identity is required.",
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "lp.origin",
+          "input": {
+            "pointer": "/profile",
+            "kind": "header",
+            "start": [
+              "at",
+              "$begin",
+              "start"
+            ],
+            "end": [
+              "at",
+              "$begin",
+              "end"
+            ],
+            "token": "$begin"
+          }
+        },
+        "into": "origin"
+      },
+      {
+        "let": "origins",
+        "value": [
+          "append",
+          "$origins",
+          [
+            "list",
+            "$origin"
+          ]
+        ]
+      },
+      {
+        "let": "i",
+        "value": [
+          "add",
+          "$i",
+          1
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            [
+              "at",
+              [
+                "at",
+                "$lpTokens",
+                "$i"
+              ],
+              "text"
+            ],
+            "\n"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-SYNTAX",
+                "summary": [
+                  "concat",
+                  "Expected ",
+                  "\n",
+                  "."
+                ],
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "let": "i",
+        "value": [
+          "add",
+          "$i",
+          1
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "lp.definitions",
+          "input": {
+            "i": "$i",
+            "origins": "$origins",
+            "definitions": [
+              "list"
+            ],
+            "names": [
+              "list"
+            ]
+          }
+        },
+        "into": "parsed"
+      },
+      {
+        "let": "i",
+        "value": [
+          "at",
+          "$parsed",
+          "i"
+        ]
+      },
+      {
+        "let": "origins",
+        "value": [
+          "at",
+          "$parsed",
+          "origins"
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "not",
+            [
+              "eq",
+              [
+                "count",
+                [
+                  "at",
+                  "$parsed",
+                  "definitions"
+                ]
+              ],
+              0
+            ]
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-SYNTAX",
+                "summary": "At least one process is required.",
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "surface": [
+            "if",
+            [
+              "eq",
+              "$lpPolicy.emitProfile",
+              false
+            ],
+            {
+              "protocol": "$protocol",
+              "queries": "$parsed.value"
+            },
+            {
+              "protocol": "$protocol",
+              "profile": "$profileName",
+              "queries": [
+                "at",
+                "$parsed",
+                "value"
+              ]
+            }
+          ],
+          "origins": "$origins"
+        }
+      }
+    ],
+    "language.process.compile": [
+      {
+        "let": "lpFile",
+        "value": [
+          "at",
+          "$eventInput",
+          "file"
+        ]
+      },
+      {
+        "let": "lpText",
+        "value": [
+          "at",
+          "$eventInput",
+          "text"
+        ]
+      },
+      {
+        "let": "lpHash",
+        "value": [
+          "at",
+          "$eventInput",
+          "expectedTextSha256"
+        ]
+      },
+      {
+        "try": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "s01.portable",
+              "input": {
+                "value": "$eventInput",
+                "ancestors": [
+                  "list"
+                ]
+              }
+            },
+            "into": "portable"
+          },
+          {
+            "when": [
+              "not",
+              "$portable"
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LEX",
+                    "summary": "Compilation input must be portable own-data.",
+                    "token": {
+                      "start": 0,
+                      "end": 0,
+                      "line": 1,
+                      "column": 1
+                    }
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "port": "value.describe",
+            "args": {
+              "value": "$lpText"
+            },
+            "into": "textType"
+          },
+          {
+            "port": "value.describe",
+            "args": {
+              "value": "$lpFile"
+            },
+            "into": "fileType"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "and",
+                [
+                  "eq",
+                  [
+                    "at",
+                    "$textType",
+                    "type"
+                  ],
+                  "string"
+                ],
+                [
+                  "eq",
+                  [
+                    "at",
+                    "$fileType",
+                    "type"
+                  ],
+                  "string"
+                ],
+                [
+                  "not",
+                  [
+                    "eq",
+                    "$lpFile",
+                    ""
+                  ]
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LEX",
+                    "summary": "Exact text and an explicit file identity are required.",
+                    "token": {
+                      "start": 0,
+                      "end": 0,
+                      "line": 1,
+                      "column": 1
+                    }
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "port": "digest.sha256",
+            "args": {
+              "text": "$lpText"
+            },
+            "into": "actualHash"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "and",
+                [
+                  "eq",
+                  "$actualHash",
+                  "$lpHash"
+                ],
+                [
+                  "eq",
+                  [
+                    "at",
+                    "$eventInput",
+                    "expectedBasis"
+                  ],
+                  "$lpBasis"
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-BASIS",
+                    "summary": "Text or compiler dependencies differ from their pinned basis.",
+                    "token": {
+                      "start": 0,
+                      "end": 0,
+                      "line": 1,
+                      "column": 1
+                    }
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "source.lex",
+              "input": {
+                "text": "$lpText",
+                "language": "process"
+              }
+            },
+            "into": "lexed"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "at",
+                "$lexed",
+                "withinLimit"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LIMIT",
+                    "summary": "Source/token bound exceeded.",
+                    "token": {
+                      "start": 0,
+                      "end": 0,
+                      "line": 1,
+                      "column": 1
+                    }
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.layout",
+              "input": {
+                "tokens": [
+                  "at",
+                  "$lexed",
+                  "tokens"
+                ]
+              }
+            },
+            "into": "lpTokens"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.parse",
+              "input": {}
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "result",
+            "value": {
+              "ok": true,
+              "surface": [
+                "at",
+                "$parsed",
+                "surface"
+              ],
+              "origins": [
+                "at",
+                "$parsed",
+                "origins"
+              ],
+              "tokens": [
+                "at",
+                "$lexed",
+                "tokens"
+              ],
+              "layout": "$lpTokens",
+              "sourceHash": "$lpHash",
+              "basis": "$lpBasis",
+              "scope": "supplied-core-process-candidate",
+              "admitted": false
+            }
+          }
+        ],
+        "error": "fault",
+        "catch": [
+          {
+            "try": [
+              {
+                "port": "json.parse",
+                "args": {
+                  "text": [
+                    "at",
+                    "$fault",
+                    "message"
+                  ]
+                },
+                "into": "diagnostic"
+              }
+            ],
+            "error": "unstructured",
+            "catch": [
+              {
+                "let": "result",
+                "value": [
+                  "raise",
+                  [
+                    "at",
+                    "$fault",
+                    "message"
+                  ]
+                ]
+              }
+            ]
+          },
+          {
+            "let": "result",
+            "value": {
+              "ok": false,
+              "diagnostic": "$diagnostic"
+            }
+          }
+        ]
+      }
+    ],
+    "lp.linkProgramme": [
+      {
+        "fold": [
+          "at",
+          "$eventInput",
+          "programme"
+        ],
+        "as": "statement",
+        "accumulator": "checked",
+        "initial": true,
+        "steps": [
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$statement"
+            },
+            "into": "statementEntries"
+          },
+          {
+            "let": "statementKeys",
+            "value": [
+              "map",
+              "$statementEntries",
+              "pair",
+              [
+                "at",
+                "$pair",
+                0
+              ]
+            ]
+          },
+          {
+            "when": [
+              "at",
+              "$statement",
+              "port"
+            ],
+            "then": [
+              {
+                "when": [
+                  "not",
+                  [
+                    "includes",
+                    [
+                      "at",
+                      "$lpPolicy",
+                      "directPorts"
+                    ],
+                    [
+                      "at",
+                      "$statement",
+                      "port"
+                    ]
+                  ]
+                ],
+                "then": [
+                  {
+                    "port": "kernel.invoke",
+                    "args": {
+                      "query": "lp.fail",
+                      "input": {
+                        "code": "PROC-TEXT-LINK",
+                        "summary": "Native port is not in the selected inspection profile.",
+                        "token": {
+                          "start": 0,
+                          "end": 0,
+                          "line": 1,
+                          "column": 1
+                        }
+                      }
+                    },
+                    "into": "unused"
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "eq",
+                  [
+                    "at",
+                    "$statement",
+                    "port"
+                  ],
+                  "kernel.invoke"
+                ],
+                "then": [
+                  {
+                    "let": "query",
+                    "value": [
+                      "at",
+                      [
+                        "at",
+                        "$statement",
+                        "args"
+                      ],
+                      "query"
+                    ]
+                  },
+                  {
+                    "port": "value.describe",
+                    "args": {
+                      "value": "$query"
+                    },
+                    "into": "queryType"
+                  },
+                  {
+                    "when": [
+                      "not",
+                      [
+                        "and",
+                        [
+                          "eq",
+                          [
+                            "at",
+                            "$queryType",
+                            "type"
+                          ],
+                          "string"
+                        ],
+                        [
+                          "not",
+                          [
+                            "eq",
+                            [
+                              "at",
+                              "$query",
+                              0
+                            ],
+                            [
+                              "at",
+                              "$lpPolicy",
+                              "referenceSigil"
+                            ]
+                          ]
+                        ],
+                        [
+                          "at",
+                          "$lpDependencies",
+                          "$query"
+                        ]
+                      ]
+                    ],
+                    "then": [
+                      {
+                        "port": "kernel.invoke",
+                        "args": {
+                          "query": "lp.fail",
+                          "input": {
+                            "code": "PROC-TEXT-LINK",
+                            "summary": "A static declared callee is required.",
+                            "token": {
+                              "start": 0,
+                              "end": 0,
+                              "line": 1,
+                              "column": 1
+                            }
+                          }
+                        },
+                        "into": "unused"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "when": [
+              "includes",
+              "$statementKeys",
+              "call"
+            ],
+            "then": [
+              {
+                "when": [
+                  "not",
+                  [
+                    "at",
+                    "$lpDependencies",
+                    [
+                      "at",
+                      "$statement",
+                      "call"
+                    ]
+                  ]
+                ],
+                "then": [
+                  {
+                    "port": "kernel.invoke",
+                    "args": {
+                      "query": "lp.fail",
+                      "input": {
+                        "code": "PROC-TEXT-LINK",
+                        "summary": "A direct call requires a declared callee.",
+                        "token": {
+                          "start": 0,
+                          "end": 0,
+                          "line": 1,
+                          "column": 1
+                        }
+                      }
+                    },
+                    "into": "unused"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "fold": [
+              "list",
+              "then",
+              "steps",
+              "try",
+              "catch"
+            ],
+            "as": "childField",
+            "accumulator": "childrenChecked",
+            "initial": true,
+            "steps": [
+              {
+                "when": [
+                  "includes",
+                  "$statementKeys",
+                  "$childField"
+                ],
+                "then": [
+                  {
+                    "port": "kernel.invoke",
+                    "args": {
+                      "query": "lp.linkProgramme",
+                      "input": {
+                        "programme": [
+                          "at",
+                          "$statement",
+                          "$childField"
+                        ]
+                      }
+                    },
+                    "into": "nested"
+                  }
+                ]
+              }
+            ],
+            "yield": true,
+            "into": "childrenChecked"
+          }
+        ],
+        "yield": true,
+        "into": "checked"
+      },
+      {
+        "let": "result",
+        "value": true
+      }
+    ],
+    "language.process.link": [
+      {
+        "port": "record.entries",
+        "args": {
+          "value": [
+            "at",
+            [
+              "at",
+              "$eventInput",
+              "surface"
+            ],
+            "queries"
+          ]
+        },
+        "into": "definitions"
+      },
+      {
+        "fold": "$definitions",
+        "as": "definition",
+        "accumulator": "checked",
+        "initial": true,
+        "steps": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.linkProgramme",
+              "input": {
+                "programme": [
+                  "at",
+                  "$definition",
+                  1
+                ]
+              }
+            },
+            "into": "checked"
+          }
+        ],
+        "yield": true,
+        "into": "checked"
+      },
+      {
+        "let": "result",
+        "value": {
+          "ok": true,
+          "scope": "read-only-core-link-check",
+          "authoredInstallation": false
+        }
+      }
+    ],
+    "lp.take": [
+      {
+        "let": "i",
+        "value": "$eventInput.i"
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            [
+              "at",
+              [
+                "at",
+                "$lpTokens",
+                "$i"
+              ],
+              "text"
+            ],
+            "$eventInput.expected"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.fail",
+              "input": {
+                "code": "PROC-TEXT-SYNTAX",
+                "summary": [
+                  "concat",
+                  "Expected ",
+                  "$eventInput.expected",
+                  "."
+                ],
+                "token": [
+                  "at",
+                  "$lpTokens",
+                  "$i"
+                ]
+              }
+            },
+            "into": "unused"
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": [
+          "add",
+          "$i",
+          1
+        ]
+      }
+    ],
+    "lp.binding": [
+      {
+        "let": "bindingToken",
+        "value": [
+          "at",
+          "$lpTokens",
+          "$eventInput.i"
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "lp.name",
+          "input": {
+            "text": "$bindingToken.text",
+            "qualified": "$eventInput.qualified",
+            "token": "$bindingToken"
+          }
+        },
+        "into": "bindingValue"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "lp.origin",
+          "input": {
+            "pointer": "$eventInput.pointer",
+            "kind": "binding",
+            "start": "$bindingToken.start",
+            "end": "$bindingToken.end",
+            "token": "$bindingToken"
+          }
+        },
+        "into": "bindingOrigin"
+      },
+      {
+        "let": "result",
+        "value": {
+          "i": [
+            "add",
+            "$eventInput.i",
+            1
+          ],
+          "value": "$bindingValue",
+          "origins": [
+            "append",
+            "$eventInput.origins",
+            [
+              "list",
+              "$bindingOrigin"
+            ]
+          ]
+        }
+      }
+    ],
+    "lp.extended": [
+      {
+        "let": "i",
+        "value": "$eventInput.i"
+      },
+      {
+        "let": "origins",
+        "value": "$eventInput.origins"
+      },
+      {
+        "let": "pointer",
+        "value": "$eventInput.pointer"
+      },
+      {
+        "let": "level",
+        "value": "$eventInput.level"
+      },
+      {
+        "let": "begin",
+        "value": "$eventInput.begin"
+      },
+      {
+        "let": "kind",
+        "value": "$eventInput.kind"
+      },
+      {
+        "when": [
+          "eq",
+          "$kind",
+          "call"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.binding",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  "call"
+                ],
+                "qualified": true,
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "callee",
+            "value": "$parsed.value"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": "\n"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "let": "value",
+            "value": {
+              "call": "$callee"
+            }
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$kind",
+          "assert"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.expression",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  "assert"
+                ],
+                "depth": 1,
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "condition",
+            "value": "$parsed.value"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": "\n"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "indent"
+                ],
+                [
+                  "add",
+                  "$begin.indent",
+                  2
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LAYOUT",
+                    "summary": "Otherwise must be indented exactly two spaces.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": "otherwise"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.expression",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  "message"
+                ],
+                "depth": 1,
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "message",
+            "value": "$parsed.value"
+          },
+          {
+            "port": "value.describe",
+            "args": {
+              "value": "$message"
+            },
+            "into": "messageType"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                "$messageType.type",
+                "string"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-SYNTAX",
+                    "summary": "Assertion message must be text.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": "\n"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "let": "value",
+            "value": {
+              "assert": "$condition",
+              "message": "$message"
+            }
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$kind",
+          "fold"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.expression",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  "fold"
+                ],
+                "depth": 1,
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "items",
+            "value": "$parsed.value"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": "as"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.binding",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  "as"
+                ],
+                "qualified": false,
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "itemName",
+            "value": "$parsed.value"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": ";"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.binding",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  "accumulator"
+                ],
+                "qualified": false,
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "accName",
+            "value": "$parsed.value"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": "starts"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.expression",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  "initial"
+                ],
+                "depth": 1,
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "initial",
+            "value": "$parsed.value"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": ":"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": "\n"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.programme",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  "steps"
+                ],
+                "level": [
+                  "add",
+                  "$level",
+                  1
+                ],
+                "indent": [
+                  "add",
+                  "$begin.indent",
+                  2
+                ],
+                "origins": "$origins",
+                "statements": [
+                  "list"
+                ],
+                "stops": [
+                  "list",
+                  "yield"
+                ]
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "body",
+            "value": "$parsed.value"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "indent"
+                ],
+                [
+                  "add",
+                  "$begin.indent",
+                  2
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LAYOUT",
+                    "summary": "Yield must belong to its fold suite.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": "yield"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.expression",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  "yield"
+                ],
+                "depth": 1,
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "yieldValue",
+            "value": "$parsed.value"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": "→"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.binding",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  "into"
+                ],
+                "qualified": false,
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "into",
+            "value": "$parsed.value"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": "\n"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "let": "value",
+            "value": {
+              "fold": "$items",
+              "as": "$itemName",
+              "accumulator": "$accName",
+              "initial": "$initial",
+              "steps": "$body",
+              "yield": "$yieldValue",
+              "into": "$into"
+            }
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$kind",
+          "try"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": ":"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": "\n"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.programme",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  "try"
+                ],
+                "level": [
+                  "add",
+                  "$level",
+                  1
+                ],
+                "indent": [
+                  "add",
+                  "$begin.indent",
+                  2
+                ],
+                "origins": "$origins",
+                "statements": [
+                  "list"
+                ],
+                "stops": [
+                  "list"
+                ]
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "tryBody",
+            "value": "$parsed.value"
+          },
+          {
+            "when": [
+              "eq",
+              [
+                "count",
+                "$tryBody"
+              ],
+              0
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LAYOUT",
+                    "summary": "A statement suite must not be empty.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  [
+                    "at",
+                    "$lpTokens",
+                    "$i"
+                  ],
+                  "indent"
+                ],
+                "$begin.indent"
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LAYOUT",
+                    "summary": "Catch must align with its try.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": "catch"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.binding",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  "error"
+                ],
+                "qualified": false,
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "errorName",
+            "value": "$parsed.value"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": ":"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": "\n"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.programme",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  "catch"
+                ],
+                "level": [
+                  "add",
+                  "$level",
+                  1
+                ],
+                "indent": [
+                  "add",
+                  "$begin.indent",
+                  2
+                ],
+                "origins": "$origins",
+                "statements": [
+                  "list"
+                ],
+                "stops": [
+                  "list"
+                ]
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "catchBody",
+            "value": "$parsed.value"
+          },
+          {
+            "when": [
+              "and",
+              [
+                "eq",
+                [
+                  "count",
+                  "$catchBody"
+                ],
+                0
+              ],
+              [
+                "not",
+                [
+                  "eq",
+                  [
+                    "at",
+                    "$lpPolicy",
+                    "allowEmptyCatch"
+                  ],
+                  true
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LAYOUT",
+                    "summary": "A statement suite must not be empty.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "value",
+            "value": {
+              "try": "$tryBody",
+              "error": "$errorName",
+              "catch": "$catchBody"
+            }
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$kind",
+          "each"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.expression",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/each"
+                ],
+                "depth": 1,
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "items",
+            "value": "$parsed.value"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": "as"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.binding",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  "as"
+                ],
+                "qualified": false,
+                "origins": "$origins"
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "itemName",
+            "value": "$parsed.value"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": ":"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.take",
+              "input": {
+                "i": "$i",
+                "expected": "\n"
+              }
+            },
+            "into": "i"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "lp.programme",
+              "input": {
+                "i": "$i",
+                "pointer": [
+                  "concat",
+                  "$pointer",
+                  "/",
+                  "steps"
+                ],
+                "level": [
+                  "add",
+                  "$level",
+                  1
+                ],
+                "indent": [
+                  "add",
+                  "$begin.indent",
+                  2
+                ],
+                "origins": "$origins",
+                "statements": [
+                  "list"
+                ],
+                "stops": [
+                  "list"
+                ]
+              }
+            },
+            "into": "parsed"
+          },
+          {
+            "let": "i",
+            "value": "$parsed.i"
+          },
+          {
+            "let": "origins",
+            "value": "$parsed.origins"
+          },
+          {
+            "let": "body",
+            "value": "$parsed.value"
+          },
+          {
+            "when": [
+              "eq",
+              [
+                "count",
+                "$body"
+              ],
+              0
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "lp.fail",
+                  "input": {
+                    "code": "PROC-TEXT-LAYOUT",
+                    "summary": "An each suite must not be empty.",
+                    "token": [
+                      "at",
+                      "$lpTokens",
+                      "$i"
+                    ]
+                  }
+                },
+                "into": "unused"
+              }
+            ]
+          },
+          {
+            "let": "value",
+            "value": {
+              "each": "$items",
+              "as": "$itemName",
+              "steps": "$body"
+            }
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "i": "$i",
+          "value": "$value",
+          "origins": "$origins"
+        }
+      }
+    ]
+  }
+}

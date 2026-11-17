@@ -1,0 +1,933 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+# Editing and inspection controls in the retained document.
+
+process owner.workbench:
+  let workbench = {
+    tag = "details";
+    attrs = { id = "mw-workbench"; class = "ws-panel" };
+    children = list(
+      { tag = "summary"; attrs = {}; children = list("Review changes, encounters and language definitions") },
+      {
+        tag = "div";
+        attrs = { class = "ws-toolbar" };
+        children = list(
+          { tag = "span"; attrs = { id = "ws-revision" }; children = list("Starting…") },
+          {
+            tag = "button";
+            attrs = { id = "ws-accept"; type = "button"; class = "primary" };
+            children = list("Verify history & save")
+          },
+          {
+            tag = "button";
+            attrs = { id = "ws-segment"; type = "button"; class = ""; hidden = "hidden" };
+            children = list("Start new segment")
+          },
+          {
+            tag = "button";
+            attrs = { id = "ws-export"; type = "button"; class = "" };
+            children = list("Export proposal history")
+          }
+        )
+      },
+      {
+        tag = "section";
+        attrs = { class = "ws-panel cw-board"; "aria-label" = "Collaborative proposal workbench" };
+        children = list(
+          { tag = "p"; attrs = { class = "eyebrow" }; children = list("COLLABORATE") },
+          { tag = "h2"; attrs = {}; children = list("Propose a change. Understand it together.") },
+          {
+            tag = "p";
+            attrs = { class = "muted" };
+            children = list(
+              "Local simulation: Alice and Bob can propose, review and accept. Casey can observe. These personas are not authenticated people."
+            )
+          },
+          {
+            tag = "div";
+            attrs = { class = "cw-controls" };
+            children = list(
+              {
+                tag = "label";
+                attrs = {};
+                children = list(
+                  "Title for your next proposal",
+                  {
+                    tag = "input";
+                    attrs = { id = "cw-title"; type = "text"; maxlength = 160; placeholder = "Optional — describe the intention" };
+                    children = list()
+                  }
+                )
+              }
+            )
+          },
+          {
+            tag = "p";
+            attrs = {};
+            children = list(
+              "Use the encounter, journey and construct forms below. They create proposals; accepted material changes only after independent review and acceptance."
+            )
+          },
+          { tag = "p"; attrs = { id = "cw-revision"; class = "muted" }; children = list("Starting…") },
+          {
+            tag = "label";
+            attrs = {};
+            children = list("Proposal to inspect", { tag = "select"; attrs = { id = "cw-selection" }; children = list() })
+          },
+          { tag = "p"; attrs = { id = "cw-details"; class = "cw-details" }; children = list("No proposals yet.") },
+          {
+            tag = "div";
+            attrs = { class = "cw-diff" };
+            children = list(
+              {
+                tag = "section";
+                attrs = {};
+                children = list(
+                  { tag = "h3"; attrs = {}; children = list("Before") },
+                  { tag = "div"; attrs = { id = "cw-before"; class = "cw-code" }; children = list() }
+                )
+              },
+              {
+                tag = "section";
+                attrs = {};
+                children = list(
+                  { tag = "h3"; attrs = {}; children = list("Proposed") },
+                  { tag = "div"; attrs = { id = "cw-after"; class = "cw-code" }; children = list() }
+                )
+              }
+            )
+          },
+          { tag = "div"; attrs = { id = "cw-reviews"; "aria-label" = "Reviews and disposition" }; children = list() },
+          {
+            tag = "div";
+            attrs = { class = "cw-controls" };
+            children = list(
+              {
+                tag = "label";
+                attrs = {};
+                children = list(
+                  "Review decision",
+                  {
+                    tag = "select";
+                    attrs = { id = "cw-decision" };
+                    children = list(
+                      { tag = "option"; attrs = { value = "approve" }; children = list("Approve") },
+                      { tag = "option"; attrs = { value = "request-changes" }; children = list("Request changes") }
+                    )
+                  }
+                )
+              },
+              {
+                tag = "label";
+                attrs = {};
+                children = list(
+                  "Review or rejection comment",
+                  { tag = "textarea"; attrs = { id = "cw-comment"; rows = 2; maxlength = 1000 }; children = list() }
+                )
+              }
+            )
+          },
+          {
+            tag = "div";
+            attrs = { class = "ws-toolbar" };
+            children = list(
+              { tag = "button"; attrs = { id = "cw-review"; type = "button" }; children = list("Record review") },
+              {
+                tag = "button";
+                attrs = { id = "cw-accept"; type = "button"; class = "primary" };
+                children = list("Accept selected proposal")
+              },
+              {
+                tag = "button";
+                attrs = { id = "cw-reject"; type = "button" };
+                children = list("Reject selected proposal")
+              }
+            )
+          },
+          {
+            tag = "p";
+            attrs = { class = "muted" };
+            children = list(
+              "Acceptance needs a different persona’s approval of this exact content. If the accepted head changes, resubmit against it and obtain a fresh review. Original proposals and reviews remain in history."
+            )
+          }
+        )
+      },
+      {
+        tag = "div";
+        attrs = { class = "ws-layout" };
+        children = list(
+          {
+            tag = "div";
+            attrs = { class = "ws-tools" };
+            children = list(
+              {
+                tag = "details";
+                attrs = { class = "ws-panel" };
+                children = list(
+                  { tag = "summary"; attrs = {}; children = list("Create an encounter or object") },
+                  {
+                    tag = "form";
+                    attrs = { id = "ws-object-form" };
+                    children = list(
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Construct",
+                          {
+                            tag = "select";
+                            attrs = { id = "ws-object-type" };
+                            children = list({ tag = "option"; attrs = { value = "Encounter" }; children = list("Encounter") })
+                          }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Identifier",
+                          {
+                            tag = "input";
+                            attrs = { id = "ws-object-id"; type = "text"; placeholder = "e.g. first_light"; maxlength = 100 };
+                            children = list()
+                          }
+                        )
+                      },
+                      { tag = "p"; attrs = { class = "hint" }; children = list("Use lowercase letters, numbers and underscores.") },
+                      { tag = "div"; attrs = { id = "ws-new-fields" }; children = list() },
+                      { tag = "button"; attrs = { type = "submit"; class = "primary" }; children = list("Propose object") }
+                    )
+                  }
+                )
+              },
+              {
+                tag = "details";
+                attrs = { class = "ws-panel" };
+                children = list(
+                  { tag = "summary"; attrs = {}; children = list("Create and compose journeys") },
+                  {
+                    tag = "form";
+                    attrs = { id = "ws-journey-form" };
+                    children = list(
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Journey identifier",
+                          {
+                            tag = "input";
+                            attrs = { id = "ws-journey-id"; type = "text"; placeholder = "e.g. discovery"; maxlength = 100 };
+                            children = list()
+                          }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Journey name",
+                          {
+                            tag = "input";
+                            attrs = { id = "ws-journey-name"; type = "text"; placeholder = "A journey of discovery"; maxlength = 100 };
+                            children = list()
+                          }
+                        )
+                      },
+                      { tag = "button"; attrs = { type = "submit" }; children = list("Create journey") }
+                    )
+                  },
+                  {
+                    tag = "form";
+                    attrs = { id = "ws-compose-form" };
+                    children = list(
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list("Journey", { tag = "select"; attrs = { id = "ws-compose-journey" }; children = list() })
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list("Object to include", { tag = "select"; attrs = { id = "ws-compose-object" }; children = list() })
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Entry identifier (optional)",
+                          {
+                            tag = "input";
+                            attrs = { id = "ws-entry-id"; type = "text"; placeholder = "Defaults to the object identifier"; maxlength = 100 };
+                            children = list()
+                          }
+                        )
+                      },
+                      { tag = "button"; attrs = { type = "submit"; class = "primary" }; children = list("Add to journey") }
+                    )
+                  }
+                )
+              },
+              {
+                tag = "details";
+                attrs = { class = "ws-panel" };
+                children = list(
+                  { tag = "summary"; attrs = {}; children = list("Edit shared or local meaning") },
+                  {
+                    tag = "form";
+                    attrs = { id = "ws-edit-form" };
+                    children = list(
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Edit scope",
+                          {
+                            tag = "select";
+                            attrs = { id = "ws-edit-scope" };
+                            children = list(
+                              { tag = "option"; attrs = { value = "shared" }; children = list("Shared object") },
+                              { tag = "option"; attrs = { value = "local" }; children = list("Local journey entry") }
+                            )
+                          }
+                        )
+                      },
+                      {
+                        tag = "div";
+                        attrs = { id = "ws-shared-target" };
+                        children = list(
+                          {
+                            tag = "label";
+                            attrs = {};
+                            children = list("Object", { tag = "select"; attrs = { id = "ws-edit-object" }; children = list() })
+                          }
+                        )
+                      },
+                      {
+                        tag = "div";
+                        attrs = { id = "ws-local-target"; hidden = "hidden" };
+                        children = list(
+                          {
+                            tag = "label";
+                            attrs = {};
+                            children = list("Journey entry", { tag = "select"; attrs = { id = "ws-edit-entry" }; children = list() })
+                          }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list("Field", { tag = "select"; attrs = { id = "ws-edit-field" }; children = list() })
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Value",
+                          { tag = "textarea"; attrs = { id = "ws-edit-value"; rows = 4; maxlength = 4000 }; children = list() }
+                        )
+                      },
+                      { tag = "button"; attrs = { type = "submit"; class = "primary" }; children = list("Propose edit") }
+                    )
+                  }
+                )
+              },
+              {
+                tag = "section";
+                attrs = { class = "ws-panel" };
+                children = list(
+                  { tag = "h3"; attrs = {}; children = list("Objects in this workspace") },
+                  { tag = "ul"; attrs = { id = "ws-library"; class = "ws-library" }; children = list() }
+                )
+              }
+            )
+          },
+          {
+            tag = "section";
+            attrs = { class = "ws-preview"; "aria-label" = "Journey previews" };
+            children = list(
+              { tag = "p"; attrs = { class = "eyebrow" }; children = list("COMPOSE AND EXPLORE") },
+              { tag = "h2"; attrs = {}; children = list("Your journeys") },
+              {
+                tag = "p";
+                attrs = { class = "muted" };
+                children = list("Each entry reads one shared object. Fields declared local belong to its journey context.")
+              },
+              { tag = "div"; attrs = { id = "ws-journey-preview"; class = "ws-journey-grid" }; children = list() }
+            )
+          }
+        )
+      },
+      {
+        tag = "section";
+        attrs = { class = "ws-language" };
+        children = list(
+          {
+            tag = "div";
+            attrs = {};
+            children = list(
+              { tag = "p"; attrs = { class = "eyebrow" }; children = list("DEFINE YOUR LANGUAGE") },
+              { tag = "h2"; attrs = {}; children = list("Give a new idea a construct.") },
+              {
+                tag = "p";
+                attrs = { class = "muted" };
+                children = list(
+                  "A construct defines fields, requirements, edit ownership and representation. Propose it, review its effect, and accept it together."
+                )
+              },
+              { tag = "label"; attrs = { for = "ws-definition" }; children = list("Construct definition") },
+              { tag = "textarea"; attrs = { id = "ws-definition"; rows = 10; spellcheck = "false" }; children = list() },
+              {
+                tag = "div";
+                attrs = { class = "ws-actions" };
+                children = list(
+                  {
+                    tag = "button";
+                    attrs = { id = "ws-check-definition"; type = "button"; class = "" };
+                    children = list("Check definition")
+                  },
+                  {
+                    tag = "button";
+                    attrs = { id = "ws-adopt"; type = "button"; class = "primary" };
+                    children = list("Propose construct")
+                  }
+                )
+              }
+            )
+          },
+          {
+            tag = "div";
+            attrs = { class = "ws-language-help" };
+            children = list(
+              { tag = "h3"; attrs = {}; children = list("This language profile") },
+              {
+                tag = "p";
+                attrs = {};
+                children = list(
+                  "Name a construct. Declare text fields with shared or local ownership. Required fields cannot be empty; max limits their length."
+                )
+              },
+              {
+                tag = "pre";
+                attrs = {};
+                children = list(
+                  "construct Reflection\nfield question text shared required max 200\nfield invitation text local optional max 600\nheading question\nparagraph invitation"
+                )
+              },
+              {
+                tag = "p";
+                attrs = {};
+                children = list(
+                  "Heading and paragraph declarations select the representation. Your new construct becomes available in Create an encounter or object."
+                )
+              },
+              {
+                tag = "p";
+                attrs = { class = "hint" };
+                children = list(
+                  "Incomplete definitions stay in the editor and are saved separately. An incompatible definition cannot replace a working construct."
+                )
+              }
+            )
+          }
+        )
+      },
+      {
+        tag = "details";
+        attrs = { class = "ws-panel" };
+        children = list(
+          { tag = "summary"; attrs = {}; children = list("Inspect the source, contracts and history") },
+          {
+            tag = "label";
+            attrs = {};
+            children = list(
+              "Source view",
+              {
+                tag = "select";
+                attrs = { id = "ws-inspect-choice" };
+                children = list(
+                  { tag = "option"; attrs = { value = "definitions" }; children = list("Authored construct definitions") },
+                  { tag = "option"; attrs = { value = "encounter" }; children = list("Generated Encounter") },
+                  { tag = "option"; attrs = { value = "facts" }; children = list("Generated REL facts") },
+                  { tag = "option"; attrs = { value = "contracts" }; children = list("Generated type contracts") },
+                  { tag = "option"; attrs = { value = "source" }; children = list("Workspace source") },
+                  { tag = "option"; attrs = { value = "history" }; children = list("Actual authoring events") },
+                  { tag = "option"; attrs = { value = "collaboration" }; children = list("Proposal and review history") }
+                )
+              }
+            )
+          },
+          { tag = "p"; attrs = { id = "ws-source-label"; class = "hint" }; children = list("") },
+          { tag = "pre"; attrs = { id = "ws-source"; tabindex = 0 }; children = list() },
+          { tag = "p"; attrs = { class = "hint" }; children = list("Workspace identity") },
+          { tag = "code"; attrs = { id = "ws-identity" }; children = list("") },
+          {
+            tag = "p";
+            attrs = { class = "hint" };
+            children = list(
+              "Generated views derive from the authored document. Lexical highlighting is not a validity or execution claim."
+            )
+          }
+        )
+      },
+      {
+        tag = "details";
+        attrs = { class = "ws-panel" };
+        children = list(
+          { tag = "summary"; attrs = {}; children = list("Keep, import or move your workspace") },
+          {
+            tag = "p";
+            attrs = { class = "muted" };
+            children = list(
+              "Export accepted material as source, or move the complete proposal history with exact replay. Import only into an empty board."
+            )
+          },
+          {
+            tag = "button";
+            attrs = { id = "cw-import-history"; type = "button" };
+            children = list("Import proposal history into empty board")
+          },
+          {
+            tag = "div";
+            attrs = { class = "ws-actions" };
+            children = list(
+              {
+                tag = "button";
+                attrs = { id = "ws-source-package"; type = "button"; class = "" };
+                children = list("Show current source")
+              },
+              {
+                tag = "button";
+                attrs = { id = "ws-download-source"; type = "button"; class = "" };
+                children = list("Download source")
+              },
+              {
+                tag = "button";
+                attrs = { id = "ws-import"; type = "button"; class = "" };
+                children = list("Import source as baseline")
+              }
+            )
+          },
+          {
+            tag = "label";
+            attrs = {};
+            children = list(
+              "Workspace source package or acceptance receipt",
+              { tag = "textarea"; attrs = { id = "ws-package"; rows = 7; spellcheck = "false" }; children = list() }
+            )
+          },
+          {
+            tag = "p";
+            attrs = { class = "hint" };
+            children = list(
+              "Proposal history is stored in this browser under its exact runtime version. Source imports establish an explicit baseline; history imports reproduce reviews and decisions."
+            )
+          }
+        )
+      },
+      {
+        tag = "details";
+        attrs = { id = "ws-earlier"; class = "ws-panel" };
+        children = list(
+          { tag = "summary"; attrs = {}; children = list("Earlier proof: one encounter in two journeys") },
+          {
+            tag = "button";
+            attrs = { id = "ws-old-demo"; type = "button"; class = "" };
+            children = list("Load the earlier demonstration")
+          },
+          {
+            tag = "main";
+            attrs = {};
+            children = list(
+              {
+                tag = "section";
+                attrs = { class = "intro" };
+                children = list(
+                  { tag = "p"; attrs = { class = "eyebrow" }; children = list("THE FIRST LIGHTNING STRIKE") },
+                  { tag = "h1"; attrs = {}; children = list("One encounter. Two journeys.") },
+                  {
+                    tag = "p";
+                    attrs = { class = "lede" };
+                    children = list(
+                      "The horse has a few questions. Meet the same Worldwright encounter through two different introductions. Change its shared title once, then change an introduction in just one journey."
+                    )
+                  },
+                  {
+                    tag = "div";
+                    attrs = { class = "provenance" };
+                    children = list(
+                      {
+                        tag = "a";
+                        attrs = { href = "https://aaronalderman.com/places/water.html"; target = "_blank"; rel = "noreferrer" };
+                        children = list("Read the original encounter ↗")
+                      },
+                      { tag = "span"; attrs = {}; children = list("Source snapshot · new Usewords journey compositions") }
+                    )
+                  }
+                )
+              },
+              {
+                tag = "div";
+                attrs = { class = "workspace" };
+                children = list(
+                  {
+                    tag = "section";
+                    attrs = { class = "words-panel"; "aria-labelledby" = "words-heading" };
+                    children = list(
+                      { tag = "p"; attrs = { class = "eyebrow" }; children = list("01 / AUTHOR") },
+                      { tag = "h2"; attrs = { id = "words-heading" }; children = list("Start with your words") },
+                      {
+                        tag = "p";
+                        attrs = { class = "muted" };
+                        children = list("Use a supported sentence to change shared meaning or address one journey by name.")
+                      },
+                      {
+                        tag = "form";
+                        attrs = { id = "words-form" };
+                        children = list(
+                          { tag = "label"; attrs = { for = "words" }; children = list("What would you like to do?") },
+                          {
+                            tag = "textarea";
+                            attrs = { id = "words"; rows = 4; maxlength = 512; spellcheck = "false" };
+                            children = list("Recreate the two journeys.")
+                          },
+                          { tag = "button"; attrs = { type = "submit"; class = "primary" }; children = list("Make it happen →") }
+                        )
+                      },
+                      {
+                        tag = "div";
+                        attrs = { class = "examples" };
+                        children = list(
+                          {
+                            tag = "button";
+                            attrs = { id = "example-recreate"; type = "button" };
+                            children = list("1 · Recreate journeys")
+                          },
+                          {
+                            tag = "button";
+                            attrs = { id = "example-shared"; type = "button" };
+                            children = list("2 · Change shared title")
+                          },
+                          {
+                            tag = "button";
+                            attrs = { id = "example-local"; type = "button" };
+                            children = list("3 · Change Listening intro")
+                          },
+                          { tag = "button"; attrs = { id = "example-making"; type = "button" }; children = list("Edit Making intro") }
+                        )
+                      },
+                      {
+                        tag = "p";
+                        attrs = { class = "hint" };
+                        children = list("Choose an example to fill the sentence, then Make it happen.")
+                      },
+                      {
+                        tag = "p";
+                        attrs = { id = "notice"; class = "notice"; role = "status"; "aria-live" = "polite" };
+                        children = list("Starting Temple…")
+                      },
+                      { tag = "div"; attrs = { class = "error"; role = "alert"; "data-temple-errors" = "" }; children = list() },
+                      {
+                        tag = "div";
+                        attrs = { class = "agreement" };
+                        children = list(
+                          { tag = "h3"; attrs = {}; children = list("Where the meaning lives") },
+                          { tag = "p"; attrs = {}; children = list("Encounter identity: place.water") },
+                          { tag = "p"; attrs = {}; children = list("Shared: title and both source paragraphs") },
+                          { tag = "p"; attrs = {}; children = list("Local: each journey’s introduction") },
+                          {
+                            tag = "p";
+                            attrs = { class = "hint" };
+                            children = list("The introductions are new authored compositions. The encounter text is a pinned source snapshot.")
+                          }
+                        )
+                      }
+                    )
+                  },
+                  {
+                    tag = "section";
+                    attrs = { class = "preview"; "aria-labelledby" = "preview-heading" };
+                    children = list(
+                      {
+                        tag = "div";
+                        attrs = { class = "section-head" };
+                        children = list(
+                          {
+                            tag = "div";
+                            attrs = {};
+                            children = list(
+                              { tag = "p"; attrs = { class = "eyebrow" }; children = list("02 / EXPERIENCE") },
+                              { tag = "h2"; attrs = { id = "preview-heading" }; children = list("Two invitations. One encounter.") }
+                            )
+                          },
+                          { tag = "span"; attrs = { id = "revision"; class = "revision" }; children = list("Revision 0") }
+                        )
+                      },
+                      {
+                        tag = "div";
+                        attrs = { id = "journeys-preview" };
+                        children = list(
+                          {
+                            tag = "p";
+                            attrs = { id = "shared-proof"; class = "shared-proof"; "aria-live" = "polite" };
+                            children = list("One encounter identity. Two introductions. A single shared title and text.")
+                          },
+                          {
+                            tag = "div";
+                            attrs = { class = "journey-grid" };
+                            children = list(
+                              {
+                                tag = "section";
+                                attrs = { class = "journey-card"; "aria-label" = "Listening well" };
+                                children = list(
+                                  { tag = "p"; attrs = { class = "eyebrow" }; children = list("JOURNEY") },
+                                  { tag = "h3"; attrs = {}; children = list("Listening well") },
+                                  {
+                                    tag = "p";
+                                    attrs = { id = "listening-scope"; class = "journey-scope" };
+                                    children = list("Own introduction · shared encounter")
+                                  },
+                                  { tag = "div"; attrs = { id = "journey-listening" }; children = list() },
+                                  { tag = "p"; attrs = { class = "journey-identity" }; children = list("Same encounter · place.water") }
+                                )
+                              },
+                              {
+                                tag = "section";
+                                attrs = { class = "journey-card"; "aria-label" = "Making with care" };
+                                children = list(
+                                  { tag = "p"; attrs = { class = "eyebrow" }; children = list("JOURNEY") },
+                                  { tag = "h3"; attrs = {}; children = list("Making with care") },
+                                  {
+                                    tag = "p";
+                                    attrs = { id = "making-scope"; class = "journey-scope" };
+                                    children = list("Own introduction · shared encounter")
+                                  },
+                                  { tag = "div"; attrs = { id = "journey-making" }; children = list() },
+                                  { tag = "p"; attrs = { class = "journey-identity" }; children = list("Same encounter · place.water") }
+                                )
+                              }
+                            )
+                          }
+                        )
+                      },
+                      {
+                        tag = "div";
+                        attrs = { id = "legacy-preview"; hidden = "hidden" };
+                        children = list(
+                          {
+                            tag = "div";
+                            attrs = { class = "reader-frame" };
+                            children = list(
+                              {
+                                tag = "div";
+                                attrs = { class = "reader-top" };
+                                children = list(
+                                  { tag = "span"; attrs = {}; children = list("READING PAGE") },
+                                  { tag = "span"; attrs = {}; children = list("Subject · TheStory") }
+                                )
+                              },
+                              {
+                                tag = "article";
+                                attrs = { id = "reading"; tabindex = "-1"; "aria-label" = "Encounter reading page" };
+                                children = list({ tag = "p"; attrs = {}; children = list("Preparing the canonical story…") })
+                              }
+                            )
+                          },
+                          {
+                            tag = "div";
+                            attrs = { class = "alternate-views" };
+                            children = list(
+                              {
+                                tag = "div";
+                                attrs = { class = "view" };
+                                children = list(
+                                  { tag = "p"; attrs = { class = "eyebrow" }; children = list("STORY ROW") },
+                                  {
+                                    tag = "button";
+                                    attrs = { id = "row-open"; type = "button"; class = "row-button" };
+                                    children = list(
+                                      { tag = "span"; attrs = { class = "row-number" }; children = list("01") },
+                                      { tag = "span"; attrs = { id = "row-title" }; children = list("What happened") },
+                                      { tag = "span"; attrs = { "aria-hidden" = "true" }; children = list("↗") }
+                                    )
+                                  },
+                                  { tag = "p"; attrs = { class = "hint" }; children = list("Inherits the story title") }
+                                )
+                              },
+                              {
+                                tag = "div";
+                                attrs = { class = "view" };
+                                children = list(
+                                  { tag = "p"; attrs = { class = "eyebrow" }; children = list("WEB MENU") },
+                                  {
+                                    tag = "button";
+                                    attrs = { id = "menu-open"; type = "button"; class = "menu-button" };
+                                    children = list(
+                                      { tag = "span"; attrs = { id = "menu-title" }; children = list("The story") },
+                                      { tag = "span"; attrs = { "aria-hidden" = "true" }; children = list("→") }
+                                    )
+                                  },
+                                  { tag = "p"; attrs = { class = "hint" }; children = list("Has its own contextual label") }
+                                )
+                              }
+                            )
+                          }
+                        )
+                      },
+                      {
+                        tag = "div";
+                        attrs = { class = "accept-bar" };
+                        children = list(
+                          {
+                            tag = "div";
+                            attrs = {};
+                            children = list(
+                              { tag = "strong"; attrs = {}; children = list("Keep this exact revision") },
+                              {
+                                tag = "p";
+                                attrs = { class = "hint" };
+                                children = list("Replay first. Then save acceptance in this browser.")
+                              }
+                            )
+                          },
+                          {
+                            tag = "button";
+                            attrs = { id = "accept"; type = "button"; class = "primary" };
+                            children = list("Verify & accept")
+                          }
+                        )
+                      }
+                    )
+                  }
+                )
+              },
+              {
+                tag = "section";
+                attrs = { class = "inspection"; "aria-labelledby" = "inspect-heading" };
+                children = list(
+                  {
+                    tag = "div";
+                    attrs = { class = "section-head" };
+                    children = list(
+                      {
+                        tag = "div";
+                        attrs = {};
+                        children = list(
+                          { tag = "p"; attrs = { class = "eyebrow" }; children = list("03 / UNDERSTAND") },
+                          { tag = "h2"; attrs = { id = "inspect-heading" }; children = list("Nothing hidden behind the words") }
+                        )
+                      },
+                      { tag = "span"; attrs = { class = "muted" }; children = list("Sources · routes · actual edit events") }
+                    )
+                  },
+                  {
+                    tag = "div";
+                    attrs = { class = "inspection-tabs"; "aria-label" = "Inspect source" };
+                    children = list(
+                      { tag = "button"; attrs = { id = "inspect-meaning"; type = "button" }; children = list("View definitions") },
+                      { tag = "button"; attrs = { id = "inspect-facts"; type = "button" }; children = list("Shared facts") },
+                      { tag = "button"; attrs = { id = "inspect-contract"; type = "button" }; children = list("Type contracts") },
+                      { tag = "button"; attrs = { id = "inspect-process"; type = "button" }; children = list("Encounter process") },
+                      { tag = "button"; attrs = { id = "inspect-generated"; type = "button" }; children = list("Generated JSON") },
+                      { tag = "button"; attrs = { id = "inspect-map"; type = "button" }; children = list("Source map") },
+                      { tag = "button"; attrs = { id = "inspect-languages"; type = "button" }; children = list("Languages") },
+                      { tag = "button"; attrs = { id = "inspect-receipt"; type = "button" }; children = list("Edit events") }
+                    )
+                  },
+                  {
+                    tag = "div";
+                    attrs = { class = "source-caption" };
+                    children = list(
+                      { tag = "strong"; attrs = { id = "inspection-file" }; children = list("Loading…") },
+                      { tag = "code"; attrs = { id = "inspection-hash" }; children = list("") }
+                    )
+                  },
+                  {
+                    tag = "pre";
+                    attrs = { id = "inspection-source"; "aria-label" = "Exact inspected source"; tabindex = 0 };
+                    children = list()
+                  },
+                  {
+                    tag = "p";
+                    attrs = { id = "presentation-status"; class = "hint"; role = "status" };
+                    children = list("Shared Worldwright presenter")
+                  },
+                  {
+                    tag = "p";
+                    attrs = { class = "hint" };
+                    children = list(
+                      "Definitions describe the programme. Edit events record performed changes. Hashes identify exact text; they do not establish human identity."
+                    )
+                  },
+                  {
+                    tag = "details";
+                    attrs = {};
+                    children = list(
+                      { tag = "summary"; attrs = {}; children = list("Current identities and edit history") },
+                      { tag = "p"; attrs = {}; children = list("Source identity") },
+                      { tag = "code"; attrs = { id = "source-hash" }; children = list("") },
+                      { tag = "p"; attrs = {}; children = list("Projection identity") },
+                      { tag = "code"; attrs = { id = "projection-hash" }; children = list("") },
+                      { tag = "pre"; attrs = { id = "events"; tabindex = 0 }; children = list() }
+                    )
+                  }
+                )
+              },
+              {
+                tag = "section";
+                attrs = { class = "reproduction"; "aria-labelledby" = "reproduce-heading" };
+                children = list(
+                  {
+                    tag = "div";
+                    attrs = {};
+                    children = list(
+                      { tag = "p"; attrs = { class = "eyebrow" }; children = list("04 / REPRODUCE") },
+                      { tag = "h2"; attrs = { id = "reproduce-heading" }; children = list("Take the acceptance with you") },
+                      {
+                        tag = "p";
+                        attrs = { class = "muted" };
+                        children = list(
+                          "An acceptance binds the canonical input, process closure, ordered edits, final source and projections. Reopening replays it before restoring anything."
+                        )
+                      },
+                      { tag = "button"; attrs = { id = "export"; type = "button" }; children = list("Export accepted receipt") }
+                    )
+                  },
+                  {
+                    tag = "div";
+                    attrs = {};
+                    children = list(
+                      {
+                        tag = "label";
+                        attrs = { for = "receipt-input" };
+                        children = list("Paste an acceptance receipt to replay")
+                      },
+                      {
+                        tag = "textarea";
+                        attrs = { id = "receipt-input"; rows = 5; spellcheck = "false"; placeholder = "Paste exported JSON here" };
+                        children = list()
+                      },
+                      { tag = "button"; attrs = { id = "import"; type = "button" }; children = list("Replay receipt as a draft") }
+                    )
+                  }
+                )
+              },
+              {
+                tag = "footer";
+                attrs = {};
+                children = list(
+                  { tag = "p"; attrs = {}; children = list("Built on Temple. Authored through process algebra.") },
+                  {
+                    tag = "p";
+                    attrs = {};
+                    children = list("Owner-local prototype · bounded words grammar · no LLM connection or remote publishing grant.")
+                  }
+                )
+              }
+            )
+          }
+        )
+      }
+    )
+  }

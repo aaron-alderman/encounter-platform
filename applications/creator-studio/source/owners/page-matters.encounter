@@ -1,0 +1,965 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+# Matter controls in the retained document.
+
+process owner.matters:
+  let matters = {
+    tag = "section";
+    attrs = { id = "mw-root" };
+    children = list(
+      {
+        tag = "section";
+        attrs = { class = "ws-panel" };
+        children = list(
+          {
+            tag = "div";
+            attrs = { class = "cw-controls" };
+            children = list(
+              { tag = "h2"; attrs = {}; children = list("My matters") },
+              {
+                tag = "label";
+                attrs = {};
+                children = list(
+                  "Show",
+                  {
+                    tag = "select";
+                    attrs = { id = "mm-filter" };
+                    children = list(
+                      { tag = "option"; attrs = { value = "all" }; children = list("All matters") },
+                      { tag = "option"; attrs = { value = "active" }; children = list("Active, waiting and paused") },
+                      { tag = "option"; attrs = { value = "attention" }; children = list("Pending requests or changes") },
+                      { tag = "option"; attrs = { value = "concluded" }; children = list("Concluded") },
+                      { tag = "option"; attrs = { value = "archived" }; children = list("Archived") }
+                    )
+                  }
+                )
+              }
+            )
+          },
+          {
+            tag = "p";
+            attrs = { class = "muted" };
+            children = list(
+              "Local register. Summaries reflect the last saved view; opening a matter checks its exact history. Pending counts are for all participants."
+            )
+          },
+          { tag = "div"; attrs = { id = "mm-register" }; children = list() }
+        )
+      },
+      {
+        tag = "div";
+        attrs = { class = "mw-opening ws-panel" };
+        children = list(
+          {
+            tag = "div";
+            attrs = { class = "cw-controls" };
+            children = list(
+              {
+                tag = "label";
+                attrs = {};
+                children = list("Your local matters", { tag = "select"; attrs = { id = "mw-select" }; children = list() })
+              },
+              {
+                tag = "label";
+                attrs = {};
+                children = list(
+                  "Local persona · simulated",
+                  {
+                    tag = "select";
+                    attrs = { id = "cw-actor" };
+                    children = list(
+                      { tag = "option"; attrs = { value = "alice" }; children = list("Alice · contributor") },
+                      { tag = "option"; attrs = { value = "bob" }; children = list("Bob · contributor") },
+                      { tag = "option"; attrs = { value = "casey" }; children = list("Casey · observer") }
+                    )
+                  }
+                )
+              }
+            )
+          },
+          {
+            tag = "form";
+            attrs = { id = "mw-create" };
+            children = list(
+              {
+                tag = "label";
+                attrs = {};
+                children = list(
+                  "Give this matter a name",
+                  {
+                    tag = "input";
+                    attrs = { id = "mw-title"; required = "required"; maxlength = 160; placeholder = "What would you like to explore?" };
+                    children = list()
+                  }
+                )
+              },
+              {
+                tag = "label";
+                attrs = {};
+                children = list(
+                  "In your own words, what matters here?",
+                  {
+                    tag = "textarea";
+                    attrs = {
+                      id = "mw-description";
+                      rows = 4;
+                      required = "required";
+                      maxlength = 6000;
+                      placeholder = "What is happening? Who may see it differently? What remains uncertain?"
+                    };
+                    children = list()
+                  }
+                )
+              },
+              {
+                tag = "div";
+                attrs = { class = "ws-toolbar" };
+                children = list(
+                  { tag = "button"; attrs = { type = "submit"; class = "primary" }; children = list("Create a matter") },
+                  {
+                    tag = "button";
+                    attrs = { id = "mw-example"; type = "button"; class = "" };
+                    children = list("Try an example")
+                  }
+                )
+              }
+            )
+          },
+          {
+            tag = "p";
+            attrs = { class = "muted" };
+            children = list(
+              "Saved in this browser. Personas simulate collaboration; this is not an authenticated private workspace."
+            )
+          },
+          {
+            tag = "details";
+            attrs = {};
+            children = list(
+              { tag = "summary"; attrs = {}; children = list("Import a matter history") },
+              {
+                tag = "label";
+                attrs = {};
+                children = list(
+                  "Exported matter history JSON",
+                  { tag = "textarea"; attrs = { id = "mw-import-text"; rows = 5 }; children = list() }
+                )
+              },
+              { tag = "button"; attrs = { id = "mw-import"; type = "button" }; children = list("Check and import matter") }
+            )
+          }
+        )
+      },
+      {
+        tag = "section";
+        attrs = { id = "mw-active"; hidden = "hidden" };
+        children = list(
+          { tag = "p"; attrs = { class = "eyebrow" }; children = list("YOUR MATTER") },
+          { tag = "h2"; attrs = { id = "mw-name" }; children = list("") },
+          { tag = "p"; attrs = { id = "mw-status"; class = "mw-status" }; children = list("") },
+          { tag = "p"; attrs = { id = "mw-narrative"; class = "mw-narrative" }; children = list("") },
+          {
+            tag = "section";
+            attrs = { id = "mm-overview"; class = "ws-panel" };
+            children = list(
+              { tag = "h2"; attrs = {}; children = list("Matter overview") },
+              { tag = "p"; attrs = { id = "mm-orientation" }; children = list() },
+              { tag = "p"; attrs = { id = "mm-lifecycle"; class = "notice" }; children = list() },
+              {
+                tag = "section";
+                attrs = {};
+                children = list(
+                  { tag = "h3"; attrs = {}; children = list("Needs your attention") },
+                  { tag = "div"; attrs = { id = "mm-attention" }; children = list() }
+                )
+              },
+              {
+                tag = "section";
+                attrs = {};
+                children = list(
+                  { tag = "h3"; attrs = {}; children = list("Participants and capacities") },
+                  { tag = "div"; attrs = { id = "mm-participants" }; children = list() }
+                )
+              },
+              {
+                tag = "p";
+                attrs = { class = "muted" };
+                children = list(
+                  "Roles govern this local simulation. They do not authenticate people or make this browser a private workspace. Casey remains an observer; two contributors and a coordinator are required."
+                )
+              },
+              {
+                tag = "section";
+                attrs = {};
+                children = list(
+                  { tag = "h3"; attrs = {}; children = list("Response requests") },
+                  { tag = "div"; attrs = { id = "mm-requests" }; children = list() }
+                )
+              },
+              {
+                tag = "section";
+                attrs = {};
+                children = list(
+                  { tag = "h3"; attrs = {}; children = list("Related matters") },
+                  { tag = "div"; attrs = { id = "mm-links" }; children = list() }
+                )
+              },
+              {
+                tag = "details";
+                attrs = {};
+                children = list(
+                  { tag = "summary"; attrs = {}; children = list("Manage this matter") },
+                  {
+                    tag = "p";
+                    attrs = { class = "muted" };
+                    children = list(
+                      "These changes become proposals. A different contributor must review the exact change before acceptance. Incorporation records a management decision, not substantive agreement."
+                    )
+                  },
+                  {
+                    tag = "form";
+                    attrs = { id = "mm-orient"; class = "mm-form" };
+                    children = list(
+                      { tag = "h3"; attrs = {}; children = list("Purpose and scope") },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Why are we working on this?",
+                          { tag = "textarea"; attrs = { id = "mm-purpose-input"; rows = 3; maxlength = 1200 }; children = list() }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "What is in scope, and what is outside it?",
+                          { tag = "textarea"; attrs = { id = "mm-scope-input"; rows = 3; maxlength = 1200 }; children = list() }
+                        )
+                      },
+                      { tag = "button"; attrs = { type = "submit" }; children = list("Propose purpose and scope") }
+                    )
+                  },
+                  {
+                    tag = "form";
+                    attrs = { id = "mm-participant"; class = "mm-form" };
+                    children = list(
+                      { tag = "h3"; attrs = {}; children = list("Participation") },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Persona",
+                          {
+                            tag = "select";
+                            attrs = { id = "mm-persona" };
+                            children = list(
+                              { tag = "option"; attrs = { value = "alice" }; children = list("Alice") },
+                              { tag = "option"; attrs = { value = "bob" }; children = list("Bob") },
+                              { tag = "option"; attrs = { value = "casey" }; children = list("Casey") }
+                            )
+                          }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Role",
+                          {
+                            tag = "select";
+                            attrs = { id = "mm-role" };
+                            children = list(
+                              { tag = "option"; attrs = { value = "contributor" }; children = list("Contributor") },
+                              { tag = "option"; attrs = { value = "coordinator" }; children = list("Coordinator") },
+                              { tag = "option"; attrs = { value = "observer" }; children = list("Observer") }
+                            )
+                          }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "In what capacity?",
+                          { tag = "input"; attrs = { id = "mm-capacity"; maxlength = 240 }; children = list() }
+                        )
+                      },
+                      { tag = "button"; attrs = { type = "submit" }; children = list("Propose participation change") }
+                    )
+                  },
+                  {
+                    tag = "form";
+                    attrs = { id = "mm-transition"; class = "mm-form" };
+                    children = list(
+                      { tag = "h3"; attrs = {}; children = list("Lifecycle") },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Move to",
+                          {
+                            tag = "select";
+                            attrs = { id = "mm-next-status" };
+                            children = list(
+                              { tag = "option"; attrs = { value = "waiting" }; children = list("Waiting") },
+                              { tag = "option"; attrs = { value = "paused" }; children = list("Paused") },
+                              { tag = "option"; attrs = { value = "concluded" }; children = list("Concluded") },
+                              { tag = "option"; attrs = { value = "archived" }; children = list("Archived") },
+                              { tag = "option"; attrs = { value = "open" }; children = list("Active / reopen") }
+                            )
+                          }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Reason for this change",
+                          { tag = "textarea"; attrs = { id = "mm-reason"; rows = 3; maxlength = 1200 }; children = list() }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "If concluding, what kind of conclusion?",
+                          {
+                            tag = "select";
+                            attrs = { id = "mm-outcome" };
+                            children = list(
+                              { tag = "option"; attrs = { value = "disagreement" }; children = list("Recorded disagreement") },
+                              { tag = "option"; attrs = { value = "agreement" }; children = list("Recorded agreement") },
+                              { tag = "option"; attrs = { value = "withdrawal" }; children = list("Withdrawal") },
+                              { tag = "option"; attrs = { value = "stopped" }; children = list("Stopped without resolution") }
+                            )
+                          }
+                        )
+                      },
+                      {
+                        tag = "p";
+                        attrs = { class = "muted" };
+                        children = list(
+                          "A conclusion label records the outcome framing. It does not attest anyone’s consent. Archive follows conclusion and preserves its kind. Reopening preserves the history."
+                        )
+                      },
+                      { tag = "button"; attrs = { type = "submit" }; children = list("Propose lifecycle change") }
+                    )
+                  },
+                  {
+                    tag = "form";
+                    attrs = { id = "mm-request"; class = "mm-form" };
+                    children = list(
+                      { tag = "h3"; attrs = {}; children = list("Request a response") },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Request identifier",
+                          { tag = "input"; attrs = { id = "mm-request-id"; maxlength = 64 }; children = list() }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "What needs a response?",
+                          { tag = "input"; attrs = { id = "mm-request-title"; maxlength = 240 }; children = list() }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Requested from",
+                          {
+                            tag = "select";
+                            attrs = { id = "mm-assignee" };
+                            children = list(
+                              { tag = "option"; attrs = { value = "alice" }; children = list("Alice") },
+                              { tag = "option"; attrs = { value = "bob" }; children = list("Bob") }
+                            )
+                          }
+                        )
+                      },
+                      { tag = "button"; attrs = { type = "submit" }; children = list("Propose response request") }
+                    )
+                  },
+                  {
+                    tag = "form";
+                    attrs = { id = "mm-response"; class = "mm-form" };
+                    children = list(
+                      { tag = "h3"; attrs = {}; children = list("Respond or withdraw") },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list("Open request", { tag = "select"; attrs = { id = "mm-response-id" }; children = list() })
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Action",
+                          {
+                            tag = "select";
+                            attrs = { id = "mm-response-operation" };
+                            children = list(
+                              { tag = "option"; attrs = { value = "respond" }; children = list("Record my response") },
+                              { tag = "option"; attrs = { value = "withdraw" }; children = list("Withdraw request as coordinator") }
+                            )
+                          }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Response, or reason for withdrawal",
+                          { tag = "textarea"; attrs = { id = "mm-response-text"; rows = 3; maxlength = 1200 }; children = list() }
+                        )
+                      },
+                      {
+                        tag = "p";
+                        attrs = { class = "muted" };
+                        children = list(
+                          "Only the assigned participant can propose their response. Recording an answer does not accept its claims."
+                        )
+                      },
+                      { tag = "button"; attrs = { type = "submit" }; children = list("Propose request update") }
+                    )
+                  },
+                  {
+                    tag = "form";
+                    attrs = { id = "mm-link"; class = "mm-form" };
+                    children = list(
+                      { tag = "h3"; attrs = {}; children = list("Relate matters") },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Other matter identifier",
+                          { tag = "input"; attrs = { id = "mm-link-id"; maxlength = 64 }; children = list() }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Relationship",
+                          {
+                            tag = "select";
+                            attrs = { id = "mm-relation" };
+                            children = list(
+                              { tag = "option"; attrs = { value = "related" }; children = list("Related to") },
+                              { tag = "option"; attrs = { value = "part-of" }; children = list("Part of") },
+                              { tag = "option"; attrs = { value = "depends-on" }; children = list("Depends on") }
+                            )
+                          }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Explain the relationship",
+                          { tag = "textarea"; attrs = { id = "mm-link-note"; rows = 3; maxlength = 600 }; children = list() }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Action",
+                          {
+                            tag = "select";
+                            attrs = { id = "mm-link-operation" };
+                            children = list(
+                              { tag = "option"; attrs = { value = "link" }; children = list("Add reference") },
+                              { tag = "option"; attrs = { value = "unlink" }; children = list("Remove reference") }
+                            )
+                          }
+                        )
+                      },
+                      {
+                        tag = "p";
+                        attrs = { class = "muted" };
+                        children = list(
+                          "References can point outside this browser. They do not grant access, verify a dependency or change the other matter."
+                        )
+                      },
+                      { tag = "button"; attrs = { type = "submit" }; children = list("Propose relationship change") }
+                    )
+                  }
+                )
+              },
+              {
+                tag = "details";
+                attrs = {};
+                children = list(
+                  { tag = "summary"; attrs = {}; children = list("Activity and record") },
+                  {
+                    tag = "p";
+                    attrs = { class = "muted" };
+                    children = list(
+                      "Recorded proposal activity, in replay order. Review the exact before and after in the workbench below."
+                    )
+                  },
+                  { tag = "div"; attrs = { id = "mm-activity" }; children = list() }
+                )
+              }
+            )
+          },
+          {
+            tag = "details";
+            attrs = { class = "ws-panel" };
+            children = list(
+              { tag = "summary"; attrs = {}; children = list("Prepare separately, then choose what to share") },
+              { tag = "p"; attrs = { id = "pc-room-label" }; children = list() },
+              {
+                tag = "p";
+                attrs = { class = "muted" };
+                children = list(
+                  "This is a local party-work simulation. Drafts are separated by persona and matter, but the browser owner can access every persona’s storage. Protected private areas and real participant identity require an authenticated Temple/Sourcery receiver, which is not connected."
+                )
+              },
+              {
+                tag = "div";
+                attrs = { id = "pc-room-controls" };
+                children = list(
+                  {
+                    tag = "form";
+                    attrs = { id = "pc-preparation-form"; class = "mm-form" };
+                    children = list(
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Preparation identifier",
+                          { tag = "input"; attrs = { id = "pc-id"; maxlength = 64 }; children = list() }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Kind",
+                          {
+                            tag = "select";
+                            attrs = { id = "pc-kind" };
+                            children = list(
+                              { tag = "option"; attrs = { value = "issue" }; children = list("Open issue") },
+                              { tag = "option"; attrs = { value = "position" }; children = list("Possible position") },
+                              { tag = "option"; attrs = { value = "option" }; children = list("Possible proposal") }
+                            )
+                          }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Title to consider sharing",
+                          { tag = "input"; attrs = { id = "pc-title"; maxlength = 160 }; children = list() }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Text to consider sharing",
+                          { tag = "textarea"; attrs = { id = "pc-body"; maxlength = 2400; rows = 3 }; children = list() }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Linked incorporated issue ID, for positions and proposals",
+                          { tag = "input"; attrs = { id = "pc-issue"; maxlength = 64 }; children = list() }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Perspective label, for positions",
+                          { tag = "input"; attrs = { id = "pc-voice"; maxlength = 120 }; children = list() }
+                        )
+                      },
+                      {
+                        tag = "label";
+                        attrs = {};
+                        children = list(
+                          "Preparation note — excluded from sharing, AI briefs and matter packets",
+                          { tag = "textarea"; attrs = { id = "pc-note"; maxlength = 2400; rows = 3 }; children = list() }
+                        )
+                      },
+                      { tag = "button"; attrs = { type = "submit" }; children = list("Save my preparation") }
+                    )
+                  },
+                  {
+                    tag = "label";
+                    attrs = {};
+                    children = list("Saved preparation drafts", { tag = "select"; attrs = { id = "pc-drafts" }; children = list() })
+                  },
+                  {
+                    tag = "button";
+                    attrs = { id = "pc-load-draft"; type = "button" };
+                    children = list("Load my selected draft")
+                  },
+                  {
+                    tag = "button";
+                    attrs = { id = "pc-preview"; type = "button" };
+                    children = list("Preview exactly what I will share")
+                  },
+                  {
+                    tag = "label";
+                    attrs = {};
+                    children = list(
+                      "Exact shared contribution, excluding preparation notes",
+                      { tag = "textarea"; attrs = { id = "pc-disclosure"; rows = 10; readonly = "readonly" }; children = list() }
+                    )
+                  },
+                  {
+                    tag = "button";
+                    attrs = { id = "pc-share"; type = "button" };
+                    children = list("Share this preview as a proposal")
+                  },
+                  {
+                    tag = "p";
+                    attrs = { class = "muted" };
+                    children = list(
+                      "Sharing exposes this saved contribution to the common workbench. It still needs independent review before incorporation. Editing a preparation draft never changes an already shared proposal."
+                    )
+                  }
+                )
+              }
+            )
+          },
+          {
+            tag = "details";
+            attrs = { class = "ws-panel" };
+            children = list(
+              { tag = "summary"; attrs = {}; children = list("My position, agreement and acceptance of the record") },
+              {
+                tag = "p";
+                attrs = { class = "muted" };
+                children = list(
+                  "Review approval accepts a change into the record. Personal statements below have separate meanings and speak only for the selected persona. Silence is not agreement."
+                )
+              },
+              { tag = "p"; attrs = { id = "pc-record-status"; class = "notice" }; children = list() },
+              { tag = "div"; attrs = { id = "pc-statements" }; children = list() },
+              {
+                tag = "label";
+                attrs = {};
+                children = list("Exact target", { tag = "select"; attrs = { id = "pc-target" }; children = list() })
+              },
+              {
+                tag = "label";
+                attrs = {};
+                children = list(
+                  "What am I saying?",
+                  {
+                    tag = "select";
+                    attrs = { id = "pc-meaning" };
+                    children = list(
+                      {
+                        tag = "option";
+                        attrs = { value = "record-accuracy" };
+                        children = list("This matter record accurately includes our differences")
+                      },
+                      { tag = "option"; attrs = { value = "represents-me" }; children = list("This position represents me") },
+                      {
+                        tag = "option";
+                        attrs = { value = "agree-to-proposal" };
+                        children = list("I agree to this possible proposal")
+                      },
+                      { tag = "option"; attrs = { value = "dispute" }; children = list("I dispute this item") }
+                    )
+                  }
+                )
+              },
+              {
+                tag = "label";
+                attrs = {};
+                children = list(
+                  "My explanation, or reason for withdrawal",
+                  { tag = "textarea"; attrs = { id = "pc-comment"; maxlength = 1000; rows = 3 }; children = list() }
+                )
+              },
+              {
+                tag = "button";
+                attrs = { id = "pc-attest"; type = "button" };
+                children = list("Record my explicit statement")
+              },
+              {
+                tag = "label";
+                attrs = {};
+                children = list(
+                  "My active statement to withdraw",
+                  { tag = "select"; attrs = { id = "pc-withdraw-id" }; children = list() }
+                )
+              },
+              {
+                tag = "button";
+                attrs = { id = "pc-withdraw"; type = "button" };
+                children = list("Withdraw my selected statement")
+              },
+              {
+                tag = "p";
+                attrs = { class = "muted" };
+                children = list(
+                  "Statements bind the exact target text. Earlier or withdrawn statements remain inspectable. Agreement here records a statement; no external action or execution follows automatically."
+                )
+              }
+            )
+          },
+          {
+            tag = "details";
+            attrs = { class = "ws-panel" };
+            children = list(
+              { tag = "summary"; attrs = {}; children = list("Inspect and export a matter packet") },
+              {
+                tag = "p";
+                attrs = { class = "muted" };
+                children = list(
+                  "A packet contains the shared matter, unresolved questions, evidence requests, personal statements, disputes and reproducible shared history. Separate preparation and its notes are excluded. Both parties can accept record accuracy while disputing each other’s positions."
+                )
+              },
+              {
+                tag = "button";
+                attrs = { id = "pc-export-packet"; type = "button" };
+                children = list("Build and verify matter packet")
+              },
+              {
+                tag = "button";
+                attrs = { id = "pc-download-json"; type = "button" };
+                children = list("Download packet JSON")
+              },
+              {
+                tag = "button";
+                attrs = { id = "pc-download-html"; type = "button" };
+                children = list("Download readable packet")
+              },
+              {
+                tag = "label";
+                attrs = {};
+                children = list(
+                  "Verified matter packet JSON — copy to export",
+                  { tag = "textarea"; attrs = { id = "pc-packet"; rows = 10; readonly = "readonly" }; children = list() }
+                )
+              },
+              {
+                tag = "label";
+                attrs = {};
+                children = list(
+                  "Packet JSON to verify independently",
+                  { tag = "textarea"; attrs = { id = "pc-packet-import"; maxlength = 500000; rows = 6 }; children = list() }
+                )
+              },
+              {
+                tag = "button";
+                attrs = { id = "pc-check-packet"; type = "button" };
+                children = list("Reproduce this packet from its history")
+              }
+            )
+          },
+          {
+            tag = "div";
+            attrs = { class = "mw-columns" };
+            children = list(
+              {
+                tag = "section";
+                attrs = {};
+                children = list(
+                  { tag = "h3"; attrs = {}; children = list("Issues") },
+                  { tag = "div"; attrs = { id = "mw-issues" }; children = list() }
+                )
+              },
+              {
+                tag = "section";
+                attrs = {};
+                children = list(
+                  { tag = "h3"; attrs = {}; children = list("Positions") },
+                  { tag = "div"; attrs = { id = "mw-positions" }; children = list() }
+                )
+              },
+              {
+                tag = "section";
+                attrs = {};
+                children = list(
+                  { tag = "h3"; attrs = {}; children = list("Possible proposals") },
+                  { tag = "div"; attrs = { id = "mw-options" }; children = list() }
+                )
+              }
+            )
+          },
+          {
+            tag = "details";
+            attrs = { class = "ws-panel mw-ai" };
+            children = list(
+              { tag = "summary"; attrs = {}; children = list("Let AI help structure this matter") },
+              {
+                tag = "p";
+                attrs = {};
+                children = list(
+                  "Bring your agent. Prepare a brief, inspect exactly what it contains, give it to your AI, then paste its JSON response. No model is connected automatically and nothing is sent by this app."
+                )
+              },
+              {
+                tag = "button";
+                attrs = { id = "mw-prepare"; type = "button"; class = "" };
+                children = list("Prepare an AI brief")
+              },
+              {
+                tag = "label";
+                attrs = {};
+                children = list(
+                  "Brief to inspect and share with your agent",
+                  { tag = "textarea"; attrs = { id = "mw-brief"; rows = 10; readonly = "readonly" }; children = list() }
+                )
+              },
+              {
+                tag = "p";
+                attrs = {};
+                children = list(
+                  "Ask for issues, contrasting possible positions and possible approaches. The agent must return the response protocol and exact brief hash shown above. Its framing remains contestable."
+                )
+              },
+              {
+                tag = "label";
+                attrs = {};
+                children = list(
+                  "Agent response JSON",
+                  {
+                    tag = "textarea";
+                    attrs = { id = "mw-ai-response"; rows = 8; placeholder = "Paste the structured response from your agent" };
+                    children = list()
+                  }
+                )
+              },
+              {
+                tag = "button";
+                attrs = { id = "mw-check-ai"; type = "button"; class = "" };
+                children = list("Check suggestions")
+              },
+              { tag = "div"; attrs = { id = "mw-suggestion-cards" }; children = list() },
+              {
+                tag = "label";
+                attrs = {};
+                children = list("Suggestion to reconsider", { tag = "select"; attrs = { id = "mw-suggestion" }; children = list() })
+              },
+              {
+                tag = "div";
+                attrs = { class = "ws-toolbar" };
+                children = list(
+                  {
+                    tag = "button";
+                    attrs = { id = "mw-propose-ai"; type = "button"; class = "primary" };
+                    children = list("Propose selected framing")
+                  },
+                  {
+                    tag = "button";
+                    attrs = { id = "mw-dismiss-ai"; type = "button"; class = "" };
+                    children = list("Dismiss suggestion draft")
+                  }
+                )
+              },
+              {
+                tag = "p";
+                attrs = { class = "muted" };
+                children = list(
+                  "Incorporate a linked issue before proposing a position or approach about it. Older suggestions are rechecked against the current matter and still require independent review."
+                )
+              }
+            )
+          },
+          {
+            tag = "details";
+            attrs = { class = "ws-panel" };
+            children = list(
+              { tag = "summary"; attrs = {}; children = list("Add your own framing") },
+              {
+                tag = "form";
+                attrs = { id = "mw-item-form" };
+                children = list(
+                  {
+                    tag = "label";
+                    attrs = {};
+                    children = list(
+                      "Kind",
+                      {
+                        tag = "select";
+                        attrs = { id = "mw-kind" };
+                        children = list(
+                          { tag = "option"; attrs = { value = "issue" }; children = list("Open issue") },
+                          { tag = "option"; attrs = { value = "position" }; children = list("Unconfirmed position") },
+                          { tag = "option"; attrs = { value = "option" }; children = list("Possible proposal / approach") }
+                        )
+                      }
+                    )
+                  },
+                  {
+                    tag = "label";
+                    attrs = {};
+                    children = list(
+                      "Identifier · lowercase letters and underscores",
+                      { tag = "input"; attrs = { id = "mw-item-id"; required = "required"; maxlength = 32 }; children = list() }
+                    )
+                  },
+                  {
+                    tag = "label";
+                    attrs = {};
+                    children = list(
+                      "Title",
+                      {
+                        tag = "input";
+                        attrs = { id = "mw-item-title"; required = "required"; maxlength = 160 };
+                        children = list()
+                      }
+                    )
+                  },
+                  {
+                    tag = "label";
+                    attrs = {};
+                    children = list(
+                      "Framing, reasons and uncertainties",
+                      {
+                        tag = "textarea";
+                        attrs = { id = "mw-item-body"; rows = 3; required = "required"; maxlength = 2400 };
+                        children = list()
+                      }
+                    )
+                  },
+                  {
+                    tag = "label";
+                    attrs = {};
+                    children = list(
+                      "Linked issue · positions and approaches only",
+                      { tag = "select"; attrs = { id = "mw-issue" }; children = list() }
+                    )
+                  },
+                  {
+                    tag = "label";
+                    attrs = {};
+                    children = list(
+                      "Perspective label · positions only, unconfirmed",
+                      { tag = "input"; attrs = { id = "mw-voice"; maxlength = 120 }; children = list() }
+                    )
+                  },
+                  { tag = "button"; attrs = { type = "submit" }; children = list("Propose this framing") }
+                )
+              }
+            )
+          },
+          {
+            tag = "button";
+            attrs = { id = "mw-export"; type = "button" };
+            children = list("Export this matter and its history")
+          }
+        )
+      }
+    )
+  }
