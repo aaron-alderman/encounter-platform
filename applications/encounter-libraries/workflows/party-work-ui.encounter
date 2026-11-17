@@ -1,0 +1,172 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process pc.boot:
+  port state.set { key = "preparation"; value = null } → _
+  port state.set { key = "disclosure"; value = null } → _
+  port browser.on { ref = "#pc-preparation-form"; event = "submit"; query = "pc.saveUI"; input = { }; preventDefault = true } → _
+  port browser.on { ref = "#pc-download-json"; event = "click"; query = "pc.downloadUI"; input = { format = "json" }; preventDefault = false } → _
+  port browser.on { ref = "#pc-download-html"; event = "click"; query = "pc.downloadUI"; input = { format = "html" }; preventDefault = false } → _
+  each list({ ref = "#pc-load-draft"; query = "pc.loadDraftUI" }, { ref = "#pc-preview"; query = "pc.previewUI" }, { ref = "#pc-share"; query = "pc.shareUI" }, { ref = "#pc-attest"; query = "pc.attestUI" }, { ref = "#pc-withdraw"; query = "pc.withdrawUI" }, { ref = "#pc-export-packet"; query = "pc.exportUI" }, { ref = "#pc-check-packet"; query = "pc.checkUI" }) as binding:
+    port browser.on { ref = $binding.ref; event = "click"; query = $binding.query; input = { }; preventDefault = false } → _
+
+process pc.clearUI:
+  each list("#pc-id", "#pc-title", "#pc-body", "#pc-issue", "#pc-voice", "#pc-note", "#pc-comment", "#pc-packet", "#pc-packet-import") as ref:
+    port browser.write { ref = $ref; name = "value"; value = "" } → _
+  port state.set { key = "disclosure"; value = null } → _
+
+process pc.loadDraftUI:
+  try:
+    port state.get { key = "preparation" } → room
+    port browser.property { ref = "#pc-drafts"; name = "value" } → id
+    let draft = at(filter($room.drafts, "d", eq($d.item.id, $id)), 0)
+    assert $draft
+      otherwise "PC-DRAFT: Select a saved draft."
+    each list({ ref = "#pc-id"; value = $draft.item.id }, { ref = "#pc-kind"; value = $draft.item.kind }, { ref = "#pc-title"; value = $draft.item.title }, { ref = "#pc-body"; value = $draft.item.body }, { ref = "#pc-issue"; value = if($draft.item.issue, $draft.item.issue, "") }, { ref = "#pc-voice"; value = if($draft.item.voice, $draft.item.voice, "") }, { ref = "#pc-note"; value = $draft.privateNote }) as field:
+      port browser.write { ref = $field.ref; name = "value"; value = $field.value } → _
+  catch fault:
+    call mm.refused
+
+process pc.previewUI:
+  try:
+    port state.get { key = "preparation" } → room
+    port state.get { key = "collaboration" } → board
+    port browser.property { ref = "#cw-actor"; name = "value" } → actor
+    port browser.property { ref = "#pc-drafts"; name = "value" } → id
+    port kernel.invoke { query = "pc.share"; input = { room = $room; board = $board; actor = $actor; id = $id } } → change
+    port kernel.invoke { query = "ws.apply"; input = { state = $board.head; request = $change } } → preview
+    port state.set { key = "disclosure"; value = { roomRevision = $room.revision; change = $change } } → _
+    call pc.paint
+    port state.set { key = "workspaceNotice"; value = "Inspect the exact contribution below. Only these item fields and your persona label will enter the shared proposal; the preparation note is excluded." } → _
+    call ws.showNotice
+  catch fault:
+    call mm.refused
+
+process pc.shareUI:
+  try:
+    port state.get { key = "preparation" } → room
+    port state.get { key = "disclosure" } → disclosure
+    port state.get { key = "collaboration" } → board
+    port browser.property { ref = "#cw-actor"; name = "value" } → actor
+    port browser.property { ref = "#pc-drafts"; name = "value" } → id
+    assert and($disclosure, eq(at($room, "revision"), at($disclosure, "roomRevision")))
+      otherwise "PC-DISCLOSURE: Preview this saved draft before sharing."
+    port kernel.invoke { query = "pc.share"; input = { room = $room; board = $board; actor = $actor; id = $id } } → change
+    assert eq($change, $disclosure.change)
+      otherwise "PC-DISCLOSURE: Selection or shared record changed. Preview again."
+    call mw.propose
+    port state.set { key = "disclosure"; value = null } → _
+    call pc.paint
+  catch fault:
+    call mm.refused
+
+process pc.attestUI:
+  try:
+    port state.get { key = "collaboration" } → board
+    port browser.property { ref = "#cw-actor"; name = "value" } → actor
+    port browser.property { ref = "#pc-meaning"; name = "value" } → meaning
+    port browser.property { ref = "#pc-target"; name = "value" } → targetId
+    port browser.property { ref = "#pc-comment"; name = "value" } → comment
+    let target = { kind = if(eq($targetId, "@record"), "record", "item"); id = if(eq($targetId, "@record"), null, $targetId) }
+    port kernel.invoke { query = "pc.binding"; input = { board = $board; target = $target } } → binding
+    let input = { action = "attest"; actor = $actor; expectedBoardRevision = $board.revision; id = concat("statement_", add(count($board.assertions), 1)); meaning = $meaning; target = $target; bindingHash = $binding.hash; comment = $comment }
+    call cw.commitUI
+    port state.set { key = "workspaceNotice"; value = "Your exact personal statement was recorded. It does not speak for another party or alter the standing of their contributions." } → _
+    call ws.showNotice
+  catch fault:
+    call mm.refused
+
+process pc.withdrawUI:
+  try:
+    port state.get { key = "collaboration" } → board
+    port browser.property { ref = "#cw-actor"; name = "value" } → actor
+    port browser.property { ref = "#pc-withdraw-id"; name = "value" } → id
+    port browser.property { ref = "#pc-comment"; name = "value" } → comment
+    let input = { action = "withdraw-attestation"; actor = $actor; expectedBoardRevision = $board.revision; id = $id; comment = $comment }
+    call cw.commitUI
+    port state.set { key = "workspaceNotice"; value = "Your statement was withdrawn. The original statement and withdrawal remain in the shared history." } → _
+    call ws.showNotice
+  catch fault:
+    call mm.refused
+
+process pc.exportUI:
+  try:
+    port state.get { key = "collaboration" } → board
+    port kernel.invoke { query = "cw.receipt"; input = $board } → history
+    port kernel.invoke { query = "cw.reconstruct"; input = $history } → replayed
+    port kernel.invoke { query = "pc.packet"; input = $replayed } → packet
+    port json.stringify { value = $packet; space = 2 } → encoded
+    port browser.write { ref = "#pc-packet"; name = "value"; value = $encoded } → _
+    port state.set { key = "workspaceNotice"; value = "Matter packet reproduced from shared history. Copy the JSON below. Preparation rooms and their notes are excluded; persona labels are not authenticated identities." } → _
+    call ws.showNotice
+  catch fault:
+    call mm.refused
+
+process pc.checkUI:
+  try:
+    port browser.property { ref = "#pc-packet-import"; name = "value" } → encoded
+    port number.calculate { operation = "lessEqual"; values = list(count($encoded), 500000) } → bounded
+    assert $bounded
+      otherwise "PC-LIMIT: Packet exceeds the import profile."
+    port json.parse { text = $encoded } → packet
+    port kernel.invoke { query = "pc.checkPacket"; input = $packet } → check
+    port state.set { key = "workspaceNotice"; value = concat("Packet reproduced exactly. Mutual acceptance of record accuracy: ", $check.mutualRecordAcceptance, ". This does not establish agreement on its claims or real identities.") } → _
+    call ws.showNotice
+  catch fault:
+    call mm.refused
+
+process pc.downloadUI:
+  try:
+    let format = $eventInput.format
+    assert includes(list("json", "html"), $format)
+      otherwise "PC-FORMAT: Choose JSON or readable HTML."
+    call pc.exportUI
+    # Refuse stale text if export failed; bind it to the currently active board.
+    port browser.property { ref = "#pc-packet"; name = "value" } → encoded
+    port json.parse { text = $encoded } → packet
+    port kernel.invoke { query = "pc.checkPacket"; input = $packet } → check
+    port state.get { key = "collaboration" } → board
+    port kernel.invoke { query = "pc.packet"; input = $board } → current
+    assert eq($packet, $current)
+      otherwise "PC-STALE: Export did not reproduce the current board."
+    let output = $encoded
+    when eq($format, "html"):
+      port kernel.invoke { query = "pc.packetView"; input = $packet } → html
+      let output = concat("<!doctype html>\n", $html)
+    port download.text { name = concat("usewords-", $packet.body.matter.id, ".", $format); text = $output } → _
+  catch fault:
+    call mm.refused
+
+process pc.paint:
+  port state.get { key = "collaboration" } → board
+  let matter = at($board.head.document, "matter")
+  when $matter:
+    port browser.property { ref = "#cw-actor"; name = "value" } → actor
+    port state.get { key = "preparation" } → room
+    when or(not($room), not(eq(at($room, "actor"), $actor)), not(eq(at($room, "matterId"), $matter.id))):
+      try:
+        call pc.openRoom
+      catch fault:
+        port state.set { key = "workspaceNotice"; value = concat("Preparation unavailable; stored bytes retained. ", $fault.message) } → _
+      port state.get { key = "preparation" } → room
+    port browser.write { ref = "#pc-room-label"; name = "textContent"; value = concat("Preparation for ", $actor, " in ", $matter.title, " · local simulation, not protected privacy") } → _
+    port browser.write { ref = "#pc-room-controls"; name = "hidden"; value = not($room) } → _
+    when $room:
+      port browser.property { ref = "#pc-drafts"; name = "value" } → selectedDraft
+      port kernel.invoke { query = "ws.options"; input = { items = map($room.drafts, "d", { value = $d.item.id; label = $d.item.title }); selected = $selectedDraft } } → html
+      port browser.content { ref = "#pc-drafts"; html = $html } → _
+    port browser.write { ref = "#pc-disclosure"; name = "value"; value = "" } → _
+    port state.get { key = "disclosure" } → disclosure
+    when $disclosure:
+      port json.stringify { value = $disclosure.change; space = 2 } → encoded
+      port browser.write { ref = "#pc-disclosure"; name = "value"; value = $encoded } → _
+    port browser.property { ref = "#pc-target"; name = "value" } → targetId
+    port kernel.invoke { query = "ws.options"; input = { items = append(list({ value = "@record"; label = "This exact matter record" }), map($matter.items, "r", { value = $r.item.id; label = concat($r.item.kind, " · ", $r.item.title) })); selected = $targetId } } → html
+    port browser.content { ref = "#pc-target"; html = $html } → _
+    port kernel.invoke { query = "pc.packet"; input = $board } → packet
+    port browser.write { ref = "#pc-record-status"; name = "textContent"; value = concat("Record accuracy accepted by: ", if(eq(count($packet.body.recordAcceptedBy), 0), "neither party", $packet.body.recordAcceptedBy), ". Mutual record acceptance: ", $packet.body.mutualRecordAcceptance, ". This says nothing about agreement on positions or proposals.") } → _
+    let input = { tag = "ul"; attrs = { }; children = if(eq(count($packet.body.assertions), 0), list({ tag = "li"; attrs = { }; children = list("No personal statements. Inclusion in the shared record does not imply endorsement.") }), map($packet.body.assertions, "a", { tag = "li"; attrs = { }; children = list(concat($a.id, " · ", $a.actor, " · ", $a.meaning, " · ", if(eq($a.target.kind, "record"), "matter record", $a.target.id), " · ", if(not($a.active), "withdrawn", if($a.current, "current exact target", "earlier target — not current")), " · ", $a.comment)) })) }
+    call html.serialize
+    port browser.content { ref = "#pc-statements"; html = $result } → _
+    port kernel.invoke { query = "ws.options"; input = { items = map(filter($board.assertions, "a", and($a.active, eq($a.actor, $actor))), "a", { value = $a.id; label = concat($a.meaning, " · ", $a.id) }); selected = "" } } → html
+    port browser.content { ref = "#pc-withdraw-id"; html = $html } → _

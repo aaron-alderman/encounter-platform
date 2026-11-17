@@ -1,0 +1,81 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process assurance.workflowEffects:
+  each $steps as step:
+    let effect = at($step, "port")
+    when $effect:
+      assert includes($grants, $effect)
+        otherwise "ASSURANCE-EFFECT: Shared work uses an effect outside this application's grants."
+      assert not(includes(list("storage.read", "storage.write"), $effect))
+        otherwise "ASSURANCE-STORAGE: Shared work must leave durable storage to the application."
+      assert not(eq($effect, "browser.fileText"))
+        otherwise "ASSURANCE-EFFECT: Selected file reads belong to the consuming application."
+      assert not(eq($effect, "runtime.nonce"))
+        otherwise "ASSURANCE-EFFECT: Shared work must leave local identifier allocation to the application."
+    each list("then", "steps", "try", "catch") as branch:
+      let steps = at($step, $branch)
+      when $steps:
+        call assurance.workflowEffects
+
+process assurance.applicationBoundary:
+  let application = $eventInput.application
+  assert includes(list("creator-studio", "usewords-lightning"), $application)
+    otherwise "ASSURANCE-APP: Supply the consumer being checked."
+  let creator = eq($application, "creator-studio")
+  let boundary = $data.applicationBoundary
+  let grants = $boundary.grants
+  let reviewed = list("kernel.invoke", "kernel.execute", "kernel.evaluate", "value.describe", "json.parse", "json.stringify", "value.string", "value.type", "record.entries", "record.fromEntries", "record.put", "value.freeze", "record.get", "text.replaceAll", "text.split", "text.join", "text.slice", "text.indexOf", "text.compare", "text.trim", "text.lowerCase", "text.matches", "number.calculate", "number.format", "number.parse", "value.sort", "text.upperCase", "text.replace", "text.match", "text.matchAll", "text.utf8Length", "digest.sha256", "state.get", "state.set", "browser.property", "browser.write", "browser.content", "browser.focus", "browser.on", "storage.read", "storage.write", "download.text", "browser.delay", "dom.exists")
+  when not($creator):
+    let reviewed = append($reviewed, list("browser.fileText", "runtime.nonce"))
+  assert eq($grants, $reviewed)
+    otherwise "ASSURANCE-GRANTS: The consuming application's declared browser grants changed."
+  when not($creator):
+    let createSteps = at(at(at($model.queries, "mw.createUI"), 0), "try")
+    let allocation = filter($createSteps, "step", eq(at($step, "port"), "runtime.nonce"))
+    assert and(eq(at($boundary.owners, "mw.createUI"), "source/matters-ui.encounter"), eq(count($allocation), 1), eq(at(at($allocation, 0), "args"), {}))
+      otherwise "ASSURANCE-IDENTITY: Local matter creation must allocate its identifier without passing matter content to the host."
+  let files = list("source/shared/workspace.encounter", "source/shared/workspace-ui.encounter", "source/shared/party-work.encounter", "source/shared/party-work-ui.encounter", "source/shared/matter-management.encounter", "source/shared/matter-management-ui.encounter")
+  port record.entries { value = $boundary.owners } → owners
+  let shared = filter($owners, "owner", includes($files, at($owner, 1)))
+  assert eq(count($shared), 83)
+    otherwise "ASSURANCE-OWNERS: Every extracted workflow must link from a shared source."
+  each $files as file:
+    assert not(eq(count(filter($shared, "owner", eq(at($owner, 1), $file))), 0))
+      otherwise "ASSURANCE-OWNERS: A shared workflow source is missing."
+  each $shared as owner:
+    let steps = at($model.queries, at($owner, 0))
+    call assurance.workflowEffects
+
+  let writer = if($creator, "cs.store", "ws.persist")
+  let writerSteps = at($model.queries, $writer)
+  let writes = filter($writerSteps, "step", eq(at($step, "port"), "storage.write"))
+  assert eq(count($writes), 1)
+    otherwise "ASSURANCE-STORAGE: The application writer must own its one durable write."
+  let write = at($writes, 0)
+  port text.slice { value = "ref:$id"; start = 4 } → idReference
+  let key = if($creator, list("concat", "creator-studio.project.v1.", $idReference), "usewords.workspace.draft.v1")
+  assert and(eq($write.args.key, $key), eq(at($boundary.owners, $writer), "source/workspace-ui.encounter"), eq(at($boundary.owners, "pc.openRoom"), "source/party-work-ui.encounter"), eq(at($boundary.owners, "pc.saveUI"), "source/party-work-ui.encounter"))
+    otherwise "ASSURANCE-STORAGE: The workspace and preparation storage paths must remain app-local."
+  assert and(eq(at($boundary.owners, "ws.agent"), "source/workspace-ui.encounter"), eq(at($boundary.owners, "ws.boot"), "source/workspace-ui.encounter"), eq(eq(at($boundary.owners, "cs.agent"), "source/workspace-ui.encounter"), $creator))
+    otherwise "ASSURANCE-IDENTITY: The local agent and boot surface belong to the application."
+
+  port kernel.invoke { query = "pc.room"; input = { actor = "alice"; matterId = "assurance" } } → room
+  assert and(eq($room.actor, "alice"), eq($room.programHash, $data.programHash))
+    otherwise "ASSURANCE-IDENTITY: Preparation must retain its actor and runtime basis."
+  port record.put { record = $room; key = "programHash"; value = "foreign-runtime" } → foreign
+  let refused = false
+  try:
+    port kernel.invoke { query = "pc.roomCheck"; input = $foreign } → _
+  catch fault:
+    let refused = includes($fault.message, "PC-ROOM:")
+  assert $refused
+    otherwise "ASSURANCE-IDENTITY: A foreign runtime's preparation must be refused."
+  let refused = false
+  try:
+    port kernel.invoke { query = "mm.authority"; input = { matter = {}; actor = "casey"; change = { kind = "matter-manage"; operation = "orient" } } } → _
+  catch fault:
+    let refused = includes($fault.message, "MM-AUTHORITY:")
+  assert $refused
+    otherwise "ASSURANCE-IDENTITY: Shared matter management must refuse an observer's change."
+  let result = 9

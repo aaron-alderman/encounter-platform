@@ -1,0 +1,146 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process mm.boot:
+  each list({ ref = "#mm-orient"; query = "mm.orientUI" }, { ref = "#mm-participant"; query = "mm.participantUI" }, { ref = "#mm-transition"; query = "mm.transitionUI" }, { ref = "#mm-request"; query = "mm.requestUI" }, { ref = "#mm-response"; query = "mm.responseUI" }, { ref = "#mm-link"; query = "mm.linkUI" }) as binding:
+    port browser.on { ref = $binding.ref; event = "submit"; query = $binding.query; input = { }; preventDefault = true } → _
+  each list("#cw-actor", "#mm-filter") as ref:
+    port browser.on { ref = $ref; event = "change"; query = "mm.refreshUI"; input = { }; preventDefault = false } → _
+
+process mm.refreshUI:
+  call ws.paint
+
+process mm.syncIndex:
+  port state.get { key = "matterIndex" } → index
+  when $index:
+    port state.get { key = "collaboration" } → currentBoard
+    when at($currentBoard.head.document, "matter"):
+      port kernel.invoke { query = "mm.summary"; input = $currentBoard } → summary
+      let nextIndex = { items = map($index.items, "m", if(eq($m.id, $summary.id), $summary, $m)); selected = $index.selected }
+      call mw.saveIndex
+      port state.set { key = "matterIndex"; value = $nextIndex } → _
+
+process mm.stage:
+  port state.get { key = "workspace" } → state
+  port state.get { key = "collaboration" } → board
+  port browser.property { ref = "#cw-actor"; name = "value" } → actor
+  let change = { kind = "matter-manage"; matterId = $state.document.matter.id; operation = $operation; payload = $payload; baseRevision = $state.revision }
+  let input = { action = "propose"; actor = $actor; expectedBoardRevision = $board.revision; id = concat("proposal_", add(count($board.proposals), 1)); title = concat("Manage matter: ", $operation); change = $change }
+  call cw.commitUI
+  port browser.write { ref = "#mw-workbench"; name = "open"; value = true } → _
+
+process mm.orientUI:
+  try:
+    port browser.property { ref = "#mm-purpose-input"; name = "value" } → purpose
+    port browser.property { ref = "#mm-scope-input"; name = "value" } → scope
+    let operation = "orient"
+    let payload = { purpose = $purpose; scope = $scope }
+    call mm.stage
+  catch fault:
+    call mm.refused
+
+process mm.participantUI:
+  try:
+    port browser.property { ref = "#mm-persona"; name = "value" } → id
+    port browser.property { ref = "#mm-role"; name = "value" } → role
+    port browser.property { ref = "#mm-capacity"; name = "value" } → capacity
+    let operation = "participant"
+    let payload = { id = $id; role = $role; capacity = $capacity }
+    call mm.stage
+  catch fault:
+    call mm.refused
+
+process mm.transitionUI:
+  try:
+    port state.get { key = "workspace" } → state
+    port kernel.invoke { query = "mm.get"; input = $state.document.matter } → management
+    port browser.property { ref = "#mm-next-status"; name = "value" } → status
+    port browser.property { ref = "#mm-reason"; name = "value" } → reason
+    port browser.property { ref = "#mm-outcome"; name = "value" } → outcome
+    let operation = "transition"
+    let payload = { status = $status; reason = $reason; outcome = if(eq($status, "archived"), $management.outcome, if(eq($status, "concluded"), $outcome, null)) }
+    call mm.stage
+  catch fault:
+    call mm.refused
+
+process mm.requestUI:
+  try:
+    port browser.property { ref = "#mm-request-id"; name = "value" } → id
+    port browser.property { ref = "#mm-request-title"; name = "value" } → title
+    port browser.property { ref = "#mm-assignee"; name = "value" } → assignee
+    let operation = "request"
+    let payload = { id = $id; title = $title; assignee = $assignee }
+    call mm.stage
+  catch fault:
+    call mm.refused
+
+process mm.responseUI:
+  try:
+    port browser.property { ref = "#mm-response-id"; name = "value" } → id
+    port browser.property { ref = "#mm-response-text"; name = "value" } → response
+    port browser.property { ref = "#mm-response-operation"; name = "value" } → operation
+    let payload = { id = $id; response = $response }
+    call mm.stage
+  catch fault:
+    call mm.refused
+
+process mm.linkUI:
+  try:
+    port browser.property { ref = "#mm-link-id"; name = "value" } → matterId
+    port browser.property { ref = "#mm-relation"; name = "value" } → relation
+    port browser.property { ref = "#mm-link-note"; name = "value" } → note
+    port browser.property { ref = "#mm-link-operation"; name = "value" } → operation
+    let payload = if(eq($operation, "unlink"), { matterId = $matterId }, { matterId = $matterId; relation = $relation; note = $note })
+    call mm.stage
+  catch fault:
+    call mm.refused
+
+process mm.refused:
+  port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+  call ws.showNotice
+
+process mm.openUI:
+  port browser.write { ref = "#mw-select"; name = "value"; value = $eventInput.id } → _
+  call mw.selectUI
+
+process mm.paint:
+  port state.get { key = "matterIndex" } → index
+  port state.get { key = "collaboration" } → board
+  port browser.property { ref = "#cw-actor"; name = "value" } → actor
+  port browser.property { ref = "#mm-filter"; name = "value" } → filter
+  let rows = $index.items
+  when not(includes(list("all", ""), $filter)):
+    let rows = filter($rows, "m", if(eq($filter, "attention"), or(at($m, "requests"), at($m, "proposals")), if(eq($filter, "active"), not(includes(list("concluded", "archived"), at($m, "status"))), eq(at($m, "status"), $filter))))
+  fold $rows as row; cards starts list():
+    yield append($cards, list({ tag = "article"; attrs = { class = "mw-card" }; children = list({ tag = "h3"; attrs = { }; children = list($row.title) }, { tag = "p"; attrs = { class = "muted" }; children = list(concat(if(at($row, "status"), if(eq($row.status, "open"), "Active", $row.status), "Open to inspect"), " · ", if(at($row, "requests"), $row.requests, 0), " response requests · ", if(at($row, "proposals"), $row.proposals, 0), " pending changes")) }, { tag = "button"; attrs = { id = concat("mm-open-", $row.id); type = "button" }; children = list(if(eq($index.selected, $row.id), "Return to this matter", "Open matter")) }) })) → cards
+  let input = { tag = "div"; attrs = { class = "mw-columns" }; children = if(eq(count($cards), 0), list({ tag = "p"; attrs = { class = "muted" }; children = list("No matters in this view. Start with what matters to you.") }), $cards) }
+  call html.serialize
+  port browser.content { ref = "#mm-register"; html = $result } → _
+  each $rows as row:
+    port browser.on { ref = concat("#mm-open-", $row.id); event = "click"; query = "mm.openUI"; input = { id = $row.id }; preventDefault = false } → _
+  when at($board.head.document, "matter"):
+    port kernel.invoke { query = "mm.overview"; input = { board = $board; actor = $actor } } → view
+    let m = $view.management
+    port browser.write { ref = "#mm-orientation"; name = "textContent"; value = concat("Purpose: ", if($m.purpose, $m.purpose, "Not yet framed."), " Scope: ", if($m.scope, $m.scope, "Not yet framed.")) } → _
+    port browser.write { ref = "#mm-lifecycle"; name = "textContent"; value = concat(if(eq($view.matter.status, "open"), "Active", $view.matter.status), if($m.reason, concat(" · ", $m.reason), ""), if($m.outcome, concat(" · conclusion: ", $m.outcome), ""), " · ", $view.unresolvedIssues, " issues remain open. Lifecycle does not settle them.") } → _
+    port browser.write { ref = "#mm-purpose-input"; name = "value"; value = $m.purpose } → _
+    port browser.write { ref = "#mm-scope-input"; name = "value"; value = $m.scope } → _
+    let lines = append(map($view.responseRequests, "r", concat("Response requested from you: ", $r.title)), append(map($view.needsReview, "p", concat("Review requested: ", $p.content.title)), map($view.staleProposals, "p", concat("Changed basis — inspect and propose anew: ", $p.content.title))))
+    let input = { tag = "ul"; attrs = { }; children = map(if(eq(count($lines), 0), list("Nothing currently requests your response or review. Open questions can remain open."), $lines), "line", { tag = "li"; attrs = { }; children = list($line) }) }
+    call html.serialize
+    port browser.content { ref = "#mm-attention"; html = $result } → _
+    let input = { tag = "ul"; attrs = { }; children = map($m.participants, "p", { tag = "li"; attrs = { }; children = list(concat($p.id, " · ", $p.role, " · ", $p.capacity)) }) }
+    call html.serialize
+    port browser.content { ref = "#mm-participants"; html = $result } → _
+    let input = { tag = "ul"; attrs = { }; children = if(eq(count($m.requests), 0), list({ tag = "li"; attrs = { }; children = list("No response requests yet.") }), map($m.requests, "r", { tag = "li"; attrs = { }; children = list(concat($r.id, " · ", $r.title, " · ", $r.assignee, " · ", $r.status, if($r.response, concat(" · ", $r.response), ""))) })) }
+    call html.serialize
+    port browser.content { ref = "#mm-requests"; html = $result } → _
+    let input = { tag = "ul"; attrs = { }; children = if(eq(count($m.links), 0), list({ tag = "li"; attrs = { }; children = list("No related matters recorded.") }), map($m.links, "r", { tag = "li"; attrs = { }; children = list(concat($r.relation, " → ", $r.matterId, " · ", $r.note, " · declared reference; does not confer access or prove dependency")) })) }
+    call html.serialize
+    port browser.content { ref = "#mm-links"; html = $result } → _
+    port browser.property { ref = "#mm-response-id"; name = "value" } → responseId
+    port kernel.invoke { query = "ws.options"; input = { items = map(filter($m.requests, "r", eq($r.status, "open")), "r", { value = $r.id; label = concat($r.title, " · ", $r.assignee) }); selected = $responseId } } → html
+    port browser.content { ref = "#mm-response-id"; html = $html } → _
+    let input = { tag = "ol"; attrs = { }; children = if(eq(count($board.events), 0), list({ tag = "li"; attrs = { }; children = list("Matter created. No subsequent proposal activity.") }), map($board.events, "e", { tag = "li"; attrs = { }; children = list(concat($e.request.actor, " · ", $e.request.action, " · ", $e.request.id, if(eq($e.request.action, "propose"), concat(" · ", $e.request.title), ""))) })) }
+    call html.serialize
+    port browser.content { ref = "#mm-activity"; html = $result } → _

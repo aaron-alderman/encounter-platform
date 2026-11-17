@@ -1,0 +1,8 @@
+process-module "temple/surface-process-module/1"
+
+process sourcery.codeInput.styles:
+  let cssRules = list({
+    selector = ":is(input,textarea):is([data-input-kind=code],[data-input-kind=command])";
+    declarations = list({ property = "font-family"; value = "monospace"; important = true })
+  })
+  call css.renderRules

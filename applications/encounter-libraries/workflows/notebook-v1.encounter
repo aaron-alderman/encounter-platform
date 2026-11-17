@@ -1,0 +1,126 @@
+process-module "temple/surface-process-module/1"
+
+process notebook.v1.text:
+  port value.describe { value = $eventInput } → shape
+  assert eq($shape.type, "string")
+    otherwise "NOTEBOOK ADMISSION: A text slot requires plain text."
+  let result = true
+
+process notebook.v1.admit:
+  let book = $eventInput
+  assert not(or(at($book, "style"), at($book, "css"), at($book, "class"), at($book, "html")))
+    otherwise "NOTEBOOK ADMISSION: Local styles and markup are refused."
+  port kernel.invoke { query = "mw.exact"; input = { value = $book; keys = list("profile", "screen", "project", "title", "reference", "revision", "status", "body", "action", "widgets", "notice", "error") } } → _
+  assert eq($book.profile, "encounter/notebook/1")
+    otherwise "NOTEBOOK ADMISSION: Pin Encounter Notebook v1."
+  assert includes(list("approved-task", "implementation-review"), $book.screen)
+    otherwise "NOTEBOOK ADMISSION: Unknown composition."
+  each list($book.project, $book.title, $book.reference, $book.revision, $book.status, $book.body, $book.notice) as text:
+    port kernel.invoke { query = "notebook.v1.text"; input = $text } → _
+  assert eq(map($book.widgets, "widget", $widget.kind), list("plan", "receipt"))
+    otherwise "NOTEBOOK ADMISSION: Unregistered widget or slot."
+  each $book.widgets as widget:
+    assert not(or(at($widget, "style"), at($widget, "css"), at($widget, "class"), at($widget, "html")))
+      otherwise "NOTEBOOK ADMISSION: Local styles and markup are refused."
+    port kernel.invoke { query = "mw.exact"; input = { value = $widget; keys = list("kind", "lines") } } → _
+    each $widget.lines as line:
+      port kernel.invoke { query = "notebook.v1.text"; input = $line } → _
+  let action = $book.action
+  let keys = if(eq($book.screen, "approved-task"), list("href", "replan"), list("href", "csrf", "base", "source", "plan", "receipt"))
+  port kernel.invoke { query = "mw.exact"; input = { value = $action; keys = $keys } } → _
+  port text.indexOf { value = $action.href; search = if(eq($book.screen, "approved-task"), "/?task=", "/project?implementation="); from = 0 } → path
+  assert eq($path, 0)
+    otherwise "NOTEBOOK ADMISSION: The primary action requires an admitted local route."
+  when eq($book.screen, "approved-task"):
+    port text.indexOf { value = $action.replan; search = "/project?new=1&from="; from = 0 } → path
+    assert eq($path, 0)
+      otherwise "NOTEBOOK ADMISSION: The replan link requires an admitted local route."
+  let result = $book
+
+process notebook.v1.titlebar:
+  port kernel.invoke { query = "notebook.v1.text"; input = $eventInput } → _
+  let result = { tag = "div"; attrs = { class = "nb1-title" }; children = list(
+    { tag = "strong"; attrs = {}; children = list({ tag = "span"; attrs = { class = "nb1-book"; "aria-hidden" = "true" }; children = list("N") }, "Encounter Notebook") },
+    { tag = "small"; attrs = {}; children = list($eventInput) }
+  ) }
+
+process notebook.v1.inspector:
+  let spec = $eventInput
+  port kernel.invoke { query = "mw.exact"; input = { value = $spec; keys = list("kind", "sections") } } → _
+  assert includes(list("plan", "receipt", "approval-context"), $spec.kind)
+    otherwise "NOTEBOOK ADMISSION: Unregistered inspector."
+  let id = if(eq($spec.kind, "plan"), "current-plan-record", if(eq($spec.kind, "receipt"), "approval-record", "handoff-approval"))
+  let title = if(eq($spec.kind, "plan"), "Approved plan", if(eq($spec.kind, "receipt"), "Approval receipt", "Approved plan and receipt"))
+  let close = if(eq($spec.kind, "plan"), "Close plan", if(eq($spec.kind, "receipt"), "Close receipt", "Close approval context"))
+  each $spec.sections as group:
+    port kernel.invoke { query = "mw.exact"; input = { value = $group; keys = list("heading", "lines") } } → _
+    each append(list($group.heading), $group.lines) as text:
+      port kernel.invoke { query = "notebook.v1.text"; input = $text } → _
+  let groups = map($spec.sections, "group", { tag = "div"; attrs = { class = "nb1-inspector-group" }; children = append(list(
+    if(count($group.heading), { tag = "h3"; attrs = {}; children = list($group.heading) }, null)
+  ), map($group.lines, "line", { tag = "p"; attrs = {}; children = list($line) })) })
+  let result = { tag = "section"; attrs = { class = "nb1-inspector"; id = $id; tabindex = -1; "aria-label" = $title }; children = append(list(
+    { tag = "div"; attrs = { class = "nb1-inspector-head" }; children = list(
+      { tag = "h2"; attrs = {}; children = list($title) },
+      { tag = "a"; attrs = { href = "#current-decision" }; children = list($close) }
+    ) }
+  ), $groups) }
+
+process notebook.v1.render:
+  port kernel.invoke { query = "notebook.v1.admit"; input = $eventInput } → book
+  let approved = eq($book.screen, "approved-task")
+  let plan = at($book.widgets, 0)
+  let receipt = at($book.widgets, 1)
+  let action = { tag = "a"; attrs = { class = "nb1-primary decision-default"; href = $book.action.href }; children = list("Continue") }
+  when not($approved):
+    let values = list(list("_csrf", $book.action.csrf), list("base", $book.action.base), list("action", "approve-start-implementation"),
+      list("source", $book.action.source), list("plan", $book.action.plan), list("receipt", $book.action.receipt))
+    let fields = map($values, "pair", { tag = "input"; attrs = { type = "hidden"; name = at($pair, 0); value = at($pair, 1) }; children = list() })
+    let action = { tag = "form"; attrs = { method = "post"; action = $book.action.href }; children = append($fields, list(
+      { tag = "button"; attrs = { type = "submit"; class = "nb1-primary decision-default" }; children = list("Approve and start") }
+    )) }
+  let links = list(
+    { tag = "a"; attrs = { href = "#current-decision"; "aria-current" = "page" }; children = list("Decision") },
+    { tag = "a"; attrs = { href = "#current-plan-record" }; children = list("Plan") },
+    { tag = "a"; attrs = { href = "#approval-record" }; children = list("Approval receipt") }
+  )
+  port kernel.invoke { query = "notebook.v1.titlebar"; input = if($approved, "Plan checkpoint", "Implementation checkpoint") } → title
+  port kernel.invoke { query = "sourcery.presentation.decision"; input = {
+    attrs = { class = "decision-form"; "data-presentation" = "vb6"; "data-tone" = if($approved, "saved", "decision");
+      id = "current-decision"; tabindex = -1; "aria-label" = "Current decision" };
+    title = if($approved, "The plan is the agreed direction", "Review implementation");
+    properties = list({ label = "Status"; value = $book.status }, { label = "Revision"; value = $book.revision });
+    legend = "Next step"; body = list({ tag = "p"; attrs = {}; children = list($book.body) });
+    commands = list($action, { tag = "a"; attrs = { href = "#approval-record" }; children = list("Inspect approval receipt") }, if($approved, { tag = "a"; attrs = { href = at($book.action, "replan") }; children = list("Replan from request") }, null))
+  } } → decision
+  let document = { tag = "div"; attrs = { class = "nb1-paper decision-workspace" }; children = list(
+    { tag = "header"; attrs = {}; children = list(
+      { tag = "p"; attrs = { class = "nb1-label" }; children = list($book.reference) },
+      { tag = "h1"; attrs = {}; children = list($book.title) }
+    ) },
+    if(count($book.notice), { tag = "p"; attrs = { class = "nb1-notice"; role = if($book.error, "alert", "status") }; children = list($book.notice) }, null),
+    $decision
+  ) }
+  port kernel.invoke { query = "notebook.v1.inspector"; input = { kind = "plan"; sections = list({ heading = ""; lines = $plan.lines }) } } → planInspector
+  port kernel.invoke { query = "notebook.v1.inspector"; input = { kind = "receipt"; sections = list({ heading = ""; lines = $receipt.lines }) } } → receiptInspector
+  let inspectors = list($planInspector, $receiptInspector)
+  let frame = { tag = "div"; attrs = { class = "task-workbench nb1"; "data-notebook-profile" = $book.profile }; children = append(list(
+    $title,
+    { tag = "div"; attrs = { class = "nb1-path" }; children = list({ tag = "a"; attrs = { href = "/project" }; children = list("Project home") }, " › ", $book.project, " › ", $book.reference) },
+    { tag = "nav"; attrs = { class = "nb1-tabs"; "aria-label" = "Task views" }; children = $links },
+    $document,
+    { tag = "footer"; attrs = { class = "nb1-footer" }; children = list(
+      { tag = "span"; attrs = {}; children = list($book.project) },
+      { tag = "span"; attrs = {}; children = list("Encounter Notebook v1") }) }
+  ), $inspectors) }
+  let head = { tag = "head"; attrs = {}; children = list(
+    { tag = "meta"; attrs = { charset = "utf-8" }; children = list() },
+    { tag = "meta"; attrs = { name = "viewport"; content = "width=device-width, initial-scale=1" }; children = list() },
+    { tag = "title"; attrs = {}; children = list(concat($book.title, " · Encounter Notebook")) },
+    { tag = "link"; attrs = { rel = "stylesheet"; href = "/styles.css" }; children = list() }
+  ) }
+  let input = { tag = "html"; attrs = { lang = "en" }; children = list($head, { tag = "body"; attrs = {}; children = list(
+    { tag = "main"; attrs = {}; children = list($frame) }
+  ) }) }
+  call html.serialize
+  let result = concat("<!doctype html>", $result)

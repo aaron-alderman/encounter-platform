@@ -1,0 +1,9 @@
+process-module "temple/surface-process-module/1"
+
+# Shared by Authoring and Harborboard. Each standalone release declares these exact bytes.
+process dependency.guard:
+  let input = $eventInput
+  let blocked = filter($input.blockers, "blocker", or(eq($blocker.id, $input.target), not(eq($blocker.status, $input.required))))
+  let result = { allowed = not(count($blocked)); blocked = $blocked }
+
+# Isolated guard upgrade rehearsal 1.0.1.
