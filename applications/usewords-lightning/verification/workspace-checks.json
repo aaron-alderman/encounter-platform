@@ -1,0 +1,131 @@
+{
+  "protocol": "usewords/workspace-checks/1",
+  "date": "2026-11-07",
+  "programHash": "a372eaa837310fd67cc9cf9d68d275a1390f98c34aa06b26d75f16958878e798",
+  "evidenceFamily": "same-author-engineering-run",
+  "automated": {
+    "command": "node --test tests/*.test.mjs",
+    "tests": 29,
+    "passed": 29,
+    "failed": 0,
+    "logSha256": "d4a57c289b947fb89c5c7d3ad4a7008f99539e82c3ac123507274e921011e772",
+    "durationMs": 161530.7153
+  },
+  "cli": {
+    "command": "node bootstrap/cli.mjs workspace-replay verification/workspace-browser-acceptance.json",
+    "ok": true,
+    "revision": 2,
+    "documentHash": "d874a1f90dc285f6235a81df7a06ebea6e8f80134d85b4bb05e779d4c7e8ef66",
+    "projectionHash": "86ed93b81ded5de07598204d9849bf252904ca02a9c7a9c66c359870864044ff",
+    "receipt": "dc79d394d72832def6bb125b13a8c86413348106fb2866a2f9409dcc8896d096"
+  },
+  "browser": {
+    "created": [
+      "Encounter first_light",
+      "journey discovery",
+      "construct Question",
+      "Question question1"
+    ],
+    "composed": [
+      "discovery/first_light",
+      "discovery/question1",
+      "listening/question1"
+    ],
+    "finalRuntimeBaseline": "Explicit source-package import after native adapter correction; earlier UI creations retained as source, not represented as this segment operations.",
+    "finalSegment": [
+      {
+        "kind": "edit",
+        "scope": "shared",
+        "object": "question1",
+        "journey": "listening",
+        "field": "prompt",
+        "destination": "source"
+      },
+      {
+        "kind": "edit",
+        "scope": "local",
+        "object": "question1",
+        "journey": "discovery",
+        "field": "invitation",
+        "destination": "literal"
+      }
+    ],
+    "sharedPropagation": [
+      "Listening well",
+      "A journey of discovery"
+    ],
+    "localIsolation": {
+      "listening": "Pause before explaining.",
+      "discovery": "This invitation belongs to discovery alone."
+    },
+    "incompleteDefinitionPreserved": true,
+    "exportSucceeded": true,
+    "restoredAfterReplay": true,
+    "narrowLayout": {
+      "viewport": 375,
+      "content": 360,
+      "errorSink": ""
+    },
+    "screenshot": "verification/workspace.jpg"
+  },
+  "boundaries": {
+    "localOwnerAcceptance": true,
+    "remoteApplicationMutation": false,
+    "hostedDeployment": false,
+    "constructProfile": "text fields; shared/local; required/optional; maximum length; heading/paragraph",
+    "segmentReplay": "Explicit baseline and up to 16 operations; predecessor hash is a link, not replay of unavailable history."
+  },
+  "sourceClosure": {
+    "bootstrap/build.mjs": "a3a48b058ba03a70b64e71683b5c6aaa6030702f6bb96283fdb3ca92b1b2fec1",
+    "bootstrap/cli.mjs": "1386fc72e1c5869917c05c168cec2776233fabb2ad461f3b751c0201c20f5d32",
+    "bootstrap/client.cjs": "f3336c00a849fe122a9084ced4683d2f4de0a66aafb5974d2f521d7bf2b2f6fe",
+    "bootstrap/frontend.mjs": "aea59fe7d00e8363c10b2d669a2258cb8eec136242940ca596a9b86abb904246",
+    "bootstrap/runtime.mjs": "03a80db316caa42a82a6522e57d7462d86665d96a23d4ee753a373c66bcc4221",
+    "source/canonical.json": "7a2e765e96ba7d5b2e9a8f972d3244f9db62ea8ee8ad75795a86ec21546d232d",
+    "source/journeys-contracts.rel": "d9d131a4d74c0cf63e3008765cfd50d4b75255c22777f0bd199f094c7fe41ca7",
+    "source/journeys.encounter": "b4033c4459ee30f13c37c3025df72ff46eaaa1d8ee8b0d8857c02e5be04d231c",
+    "source/journeys.json": "b254cd8f95359043644f1af561e389f5e578bd4bdd4149a1183798067c009968",
+    "source/journeys.rel": "442d8de068114d980c48b94ce160bc075c2745e8edcb96204f91daf85779d52b",
+    "source/languages.json": "670fcf9884711a5a494c89416fdf007118e8fb7ab9c1892ba7e512aaedc21c24",
+    "source/languages/presentation-frontend.json": "21489e6604743ce8273ce581d702a36d09edfdc7978bb4a7b0d4d028b0a17193",
+    "source/languages/usewords-frontend.json": "bbd356c0597ea2caa56a27e24aa789a04659537ab165f0f902158a001c4d73fc",
+    "source/languages/usewords-process.profile.json": "a3767295b983348bec692ba8d86d80d312463b7ec88b042bb1f39069956c000c",
+    "source/origin.json": "bdfaad01aabb3b340b9c15d9c10c663fa6838df5829513fa9ccb65103c030c79",
+    "source/page.json": "3532b5752cf4c7baa7615912e7bf607c95278aa78f7e9af98a3aef0b0e276f2c",
+    "source/presentation/source-algebra.encounter": "927be102d80170a4eb2dc6d4d9f7f28589ed0f484121bdf1838275e3f930c2db",
+    "source/reference/water.rel": "695b4067e51ffdc265de7f72c9c5b653ab2f40b4762d896b325e2e5f3663fe86",
+    "source/runtime.json": "95d7d11a29d3d06265f15de936d5056fc87cda41e322837715e43a6150d82a39",
+    "source/style.json": "030f231dee50cd091a4e856644dd778b99209d32dda2e7c0ab47d053d615357a",
+    "source/usewords.encounter": "04eaa5c8a556cdfe74f77e60a3f833678f8e98a017c62133b91320d0024c1455",
+    "source/words.json": "aeb2739fdb2fae139a1e885ab730832dfdbb696763a96db824a51eb94efc44cf",
+    "source/workspace-seed.json": "7d1a0a75238a809df1375cdbaaa51febd60818c59de08f54879d63bd0908eb03",
+    "source/workspace-ui.encounter": "a2ed7da45311b3550590472e9e3375e1b5c57acf202c7041922ac15d69c75d55",
+    "source/workspace.encounter": "c31207ca5492a15aa6e2c545ff5e66c997f2d0589feab371ad6fe0576e9806aa",
+    "vendor/worldwright/algebra/admission.process.json": "c459c0aacbb5905b6aca01a6e8344b9e645f854c35244f59c1ea7ac1c1bf662b",
+    "vendor/worldwright/algebra/css.process.json": "12dc9aca9f4c3d9d61588105246e6ae7194f638768f2d5718d0730ebecb6b4f1",
+    "vendor/worldwright/algebra/encounter-code-compiler.process.json": "4e2559bb1b560f30a245a9e71566005e7425825cb6f15e056a626ea1178582d9",
+    "vendor/worldwright/algebra/encounter-code-runtime.process.json": "4c7f7e56e0eb303b1419970f7895903b2e0581a3a27d3bb180a56424bdb64ffc",
+    "vendor/worldwright/algebra/encounter-code-types.process.json": "1289d28de383f0b00e06d9e7ae323da31ad8460668afbb6c9e49e6b6daa79b05",
+    "vendor/worldwright/algebra/fact-index.process.json": "66ba62d753114df7abad1b11a0c89cb014474da7744d391668508caa0ce336d9",
+    "vendor/worldwright/algebra/html.process.json": "3c0daa63fd4ca49a59d3228db2dc55f74f145c3f715bc7d365de0dfbbd6261ef",
+    "vendor/worldwright/algebra/language.process.json": "83e8fcd65685ea08bc875d92d68bef37c95bad2e1f702cd8f8ecbe0337c61cda",
+    "vendor/worldwright/algebra/lowering.process.json": "616c1c5860d0245bad4df16de9e04074e44a601a716d99b641e7fec07d43bbd8",
+    "vendor/worldwright/algebra/operators.expression.json": "b03c2c863cab748899675ffb4afd8f7ead0979f5e992923a086d19ad89a2c7f2",
+    "vendor/worldwright/algebra/source.process.json": "27d5b5a43e7bf6eac502e7096770bf871c6e6ea5a68d9b35e6df40012d5c6246",
+    "vendor/worldwright/algebra/workshop-lab.process.json": "9e3049811c1325c840711a8aa091f44b3f670480fa376421a47e5f69399cd037",
+    "vendor/worldwright/bootstrap/kernel-profile.json": "3067678f68016886d77569c62523c101d299648f37697df51c4524c83647a875",
+    "vendor/worldwright/bootstrap/ports/algebra-lower.cjs": "8cc997c2bc965c85b7b5615e796277a485bb1e64765c7df3031f9a30385a3ec2",
+    "vendor/worldwright/bootstrap/ports/browser-effects.cjs": "23d5aece795c7a6338ab4b302853682996797418dbdb4122b08454ce4dbb7c0d",
+    "vendor/worldwright/bootstrap/ports/browser.cjs": "ff320be4c37276a6f4e5ad5979b6eaf7f9d3a3d1190be40b32021356240abf72",
+    "vendor/worldwright/bootstrap/ports/kernel.cjs": "0ab9faa6dbd5c6d3d811171d46301037436c53b6fd5e11afab4769246d121c5c",
+    "vendor/worldwright/bootstrap/ports/process-source.cjs": "ba6c413ea117047e85e024c8aedaf4947ee37761625159ed3f16584c6206bb19",
+    "vendor/worldwright/bootstrap/ports/programme.cjs": "88d1c4d2aefe341533af1f967268e1c9da555d556db34adb7eea6b5838a5c1ec",
+    "vendor/worldwright/bootstrap/ports/value.cjs": "0f7d884a3eb5bd8eb33bcdc236560e4156c2c7498ac3ae39afc1702853fd8ca2",
+    "vendor/worldwright/bootstrap/temple-seed.cjs": "c1fdf47cb183a0c8e69d000d091ada457fdc8333b34a2a5bba4bcc51d53ac71e",
+    "vendor/worldwright/frontend/bootstrap.json": "eb38af5f82a0a2229aebcbbb0f0b6ee98ffd5251a4ed8fefd2c93071ab84e520",
+    "vendor/worldwright/frontend/language-process.process.json": "c7b765b4bb18d2c6b0b97e11e41cbacaf2ed756586dd25e748a4c48aacb63640",
+    "vendor/worldwright/frontend/lexical.json": "60f3ccd74eed17738478a63f2e24559c430f71d5091974a5c9a3d8b637801f06",
+    "vendor/worldwright/frontend/presentation.json": "04725adbc103d9e53be08a7daa6f14c053bbde9f9d2eeef2cd8e4c27a4700786",
+    "vendor/worldwright/frontend/profile.json": "d1ac279dcbb8488a61384b6cef6f07f587166bf7d995148671fa160bfb8170d6"
+  }
+}

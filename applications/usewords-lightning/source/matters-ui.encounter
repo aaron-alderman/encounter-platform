@@ -1,0 +1,423 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process mw.indexCheck:
+  let index = $eventInput
+  assert isArray($index.items)
+    otherwise "MW-INDEX: Matter list is invalid."
+  port number.calculate { operation = "lessEqual"; values = list(count($index.items), 6) } → bounded
+  assert $bounded
+    otherwise "MW-LIMIT: Six local matters in this profile."
+  each $index.items as item:
+    port kernel.invoke { query = "ws.id"; input = $item.id } → valid
+    port kernel.invoke { query = "mw.text"; input = { value = $item.title; required = true; maximum = 160 } } → valid
+    assert eq(count(filter($index.items, "r", eq($r.id, $item.id))), 1)
+      otherwise "MW-INDEX: Duplicate matter identifier."
+  when not(eq($index.selected, "")):
+    assert eq(count(filter($index.items, "r", eq($r.id, $index.selected))), 1)
+      otherwise "MW-INDEX: Selected matter is not registered."
+  let result = true
+
+process mw.saveIndex:
+  port kernel.invoke { query = "mw.indexCheck"; input = $nextIndex } → valid
+  port json.stringify { value = $nextIndex; space = 0 } → encodedIndex
+  port storage.write { key = concat("usewords.matters.index.v1.", $data.programHash); value = $encodedIndex } → storedIndex
+  assert $storedIndex.ok
+    otherwise "MW-STORAGE: Could not save the local matter list."
+
+process mw.boot:
+  port state.set { key = "matterIndex"; value = { items = list(); selected = "" } } → _
+  port state.set { key = "matterBrief"; value = null } → _
+  port state.set { key = "matterSuggestions"; value = null } → _
+  port state.set { key = "matterModelRun"; value = null } → _
+  port state.set { key = "workspaceNotice"; value = "Begin with what matters to you. You can give it structure without deciding how it must end." } → _
+  try:
+    port storage.read { key = concat("usewords.matters.index.v1.", $data.programHash); maxLength = 20000 } → stored
+    when and($stored.ok, not(eq($stored.value, null))):
+      port json.parse { text = $stored.value } → index
+      port kernel.invoke { query = "mw.indexCheck"; input = $index } → valid
+      port state.set { key = "matterIndex"; value = $index } → _
+      when not(eq($index.selected, "")):
+        let matterId = $index.selected
+        call mw.readBoard
+        call mw.activateBoard
+        port state.set { key = "workspaceNotice"; value = "Restored this matter and its proposal history after replay. Its lifecycle and framings were preserved." } → _
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Saved matter could not be opened; its stored records were retained. ", $fault.message) } → _
+  call mm.boot
+  call pc.boot
+  each list({ ref = "#mw-example"; query = "mw.exampleUI" }, { ref = "#mw-prepare"; query = "mw.briefUI" }, { ref = "#mw-check-ai"; query = "mw.checkUI" }, { ref = "#mw-propose-ai"; query = "mw.suggestUI" }, { ref = "#mw-dismiss-ai"; query = "mw.dismissUI" }, { ref = "#mw-import"; query = "mw.importUI" }, { ref = "#mw-export"; query = "cw.exportUI" }) as binding:
+    port browser.on { ref = $binding.ref; event = "click"; query = $binding.query; input = { }; preventDefault = false } → _
+  port browser.on { ref = "#mw-create"; event = "submit"; query = "mw.createUI"; input = { }; preventDefault = true } → _
+  port browser.on { ref = "#mw-item-form"; event = "submit"; query = "mw.itemUI"; input = { }; preventDefault = true } → _
+  port browser.on { ref = "#mw-select"; event = "change"; query = "mw.selectUI"; input = { }; preventDefault = false } → _
+  port browser.on { ref = "#mw-verify-model-run"; event = "click"; query = "mw.verifyModelRunUI"; input = { }; preventDefault = false } → _
+  port browser.on { ref = "#mw-model-run-json"; event = "input"; query = "mw.modelRunInputUI"; input = { }; preventDefault = false } → _
+  port browser.on { ref = "#mw-export-visual-receipt"; event = "click"; query = "mw.exportVisualReceiptUI"; input = { }; preventDefault = false } → _
+
+process mw.exampleUI:
+  port browser.write { ref = "#mw-title"; name = "value"; value = "A shared workshop space" } → _
+  port browser.write { ref = "#mw-description"; name = "value"; value = "A community group wants to open a shared workshop. Some members prioritise low fees; others want enough paid staff to make opening hours reliable. We do not yet know likely usage or operating costs. We want to understand the different priorities and possibilities before making a decision." } → _
+
+process mw.createUI:
+  try:
+    port browser.property { ref = "#cw-actor"; name = "value" } → actorId
+    port kernel.invoke { query = "cw.member"; input = $actorId } → actor
+    assert $actor.canChange
+      otherwise "CW-ROLE: An observer cannot create a matter."
+    port state.get { key = "matterIndex" } → index
+    port browser.property { ref = "#mw-title"; name = "value" } → title
+    port browser.property { ref = "#mw-description"; name = "value" } → description
+    port runtime.nonce {} → nonce
+    port text.slice { value = $nonce; start = 0; end = 25 } → coordinate
+    let matterId = concat("matter_", $coordinate)
+    let nextIndex = { items = append($index.items, list({ id = $matterId; title = $title })); selected = $matterId }
+    port kernel.invoke { query = "mw.indexCheck"; input = $nextIndex } → valid
+    port kernel.invoke { query = "mw.create"; input = { id = $matterId; title = $title; description = $description } } → board
+    port kernel.invoke { query = "cw.receipt"; input = $board } → receipt
+    port json.stringify { value = $receipt; space = 0 } → encoded
+    call mw.installBoard
+    port state.set { key = "workspaceNotice"; value = "Matter created and saved in this browser. Its description is your starting framing; no agreement or resolution is implied." } → _
+    call ws.paint
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+# Creation/import is registered only after the exact board and index are saved.
+process mw.installBoard:
+  port kernel.invoke { query = "mm.summary"; input = $board } → summary
+  let nextIndex = { items = map($nextIndex.items, "m", if(eq($m.id, $matterId), $summary, $m)); selected = $nextIndex.selected }
+  port kernel.invoke { query = "mw.storageKey"; input = $matterId } → key
+  port storage.write { key = $key; value = $encoded } → stored
+  assert $stored.ok
+    otherwise "MW-STORAGE: Could not keep the new matter. Previous selection remains active."
+  call mw.saveIndex
+  port state.set { key = "matterIndex"; value = $nextIndex } → _
+  port state.set { key = "collaboration"; value = $board } → _
+  port state.set { key = "workspace"; value = $board.head } → _
+  port state.set { key = "collaborationSelected"; value = "" } → _
+  port state.set { key = "matterBrief"; value = null } → _
+  port state.set { key = "matterSuggestions"; value = null } → _
+  port state.set { key = "matterModelRun"; value = null } → _
+  call mw.clearDrafts
+
+process mw.readBoard:
+  port kernel.invoke { query = "mw.storageKey"; input = $matterId } → key
+  port storage.read { key = $key; maxLength = 300000 } → stored
+  assert and($stored.ok, not(eq($stored.value, null)))
+    otherwise "MW-STORAGE: This matter's board is unavailable."
+  port json.parse { text = $stored.value } → receipt
+  port kernel.invoke { query = "cw.reconstruct"; input = $receipt } → board
+  assert eq($board.head.document.matter.id, $matterId)
+    otherwise "MW-SCOPE: Stored board belongs to another matter."
+
+process mw.activateBoard:
+  port state.set { key = "collaboration"; value = $board } → _
+  port state.set { key = "workspace"; value = $board.head } → _
+  port state.set { key = "collaborationSelected"; value = "" } → _
+  port state.set { key = "matterBrief"; value = null } → _
+  port state.set { key = "matterSuggestions"; value = null } → _
+  port state.set { key = "matterModelRun"; value = null } → _
+  call mw.clearDrafts
+  try:
+    call mm.syncIndex
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Matter replayed; its register summary could not be refreshed. ", $fault.message) } → _
+  try:
+    port storage.read { key = concat($key, ".ai"); maxLength = 140000 } → savedAI
+    when and($savedAI.ok, not(eq($savedAI.value, null))):
+      port json.parse { text = $savedAI.value } → ai
+      assert eq($ai.brief.request.matterId, $matterId)
+        otherwise "MW-SCOPE: AI draft belongs to another matter."
+      port kernel.invoke { query = "mw.checkBrief"; input = $ai.brief } → source
+      when $ai.package:
+        assert eq($ai.package.brief, $ai.brief)
+          otherwise "MW-SCOPE: Saved suggestions belong to a different brief."
+        port kernel.invoke { query = "mw.checkSuggestions"; input = $ai.package } → checked
+      let modelRun = if(at($ai, "run"), $ai.run, null)
+      when $modelRun:
+        assert $ai.package
+          otherwise "MW-MODEL-RUN: Saved model run requires a checked draft."
+        port kernel.invoke { query = "mw.checkModelRun"; input = { run = $modelRun; package = $ai.package } } → valid
+      port state.set { key = "matterBrief"; value = $ai.brief } → _
+      port state.set { key = "matterSuggestions"; value = $ai.package } → _
+      port state.set { key = "matterModelRun"; value = $modelRun } → _
+      when $ai.package:
+        port json.stringify { value = $ai.package.response; space = 2 } → responseText
+        port browser.write { ref = "#mw-ai-response"; name = "value"; value = $responseText } → _
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Matter opened; AI draft was refused and retained: ", $fault.message) } → _
+
+process mw.selectUI:
+  try:
+    port browser.property { ref = "#mw-select"; name = "value" } → matterId
+    port state.get { key = "matterIndex" } → index
+    let nextIndex = { items = $index.items; selected = $matterId }
+    port kernel.invoke { query = "mw.indexCheck"; input = $nextIndex } → valid
+    when not(eq($matterId, "")):
+      call mw.readBoard
+      call mw.saveIndex
+      port state.set { key = "matterIndex"; value = $nextIndex } → _
+      call mw.activateBoard
+      port state.set { key = "workspaceNotice"; value = "Opened this matter after replay. Other matters and AI drafts remain separate." } → _
+      call ws.paint
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Could not open matter: ", $fault.message) } → _
+    call ws.showNotice
+
+process mw.persistAI:
+  port state.get { key = "matterBrief" } → brief
+  port state.get { key = "matterSuggestions" } → package
+  port state.get { key = "matterModelRun" } → modelRun
+  let nextAI = { brief = $brief; package = $package; run = $modelRun }
+  call mw.storeAI
+
+process mw.storeAI:
+  port state.get { key = "workspace" } → state
+  port json.stringify { value = $nextAI; space = 0 } → encodedAI
+  port number.calculate { operation = "lessEqual"; values = list(count($encodedAI), 140000) } → bounded
+  assert $bounded
+    otherwise "MW-LIMIT: AI draft exceeds the local profile."
+  port kernel.invoke { query = "mw.storageKey"; input = $state.document.matter.id } → key
+  port storage.write { key = concat($key, ".ai"); value = $encodedAI } → storedAI
+  assert $storedAI.ok
+    otherwise "MW-STORAGE: Could not save AI draft. Previous draft is unchanged."
+  port state.set { key = "matterBrief"; value = $nextAI.brief } → _
+  port state.set { key = "matterSuggestions"; value = $nextAI.package } → _
+  port state.set { key = "matterModelRun"; value = if(at($nextAI, "run"), $nextAI.run, null) } → _
+
+process mw.briefUI:
+  try:
+    port state.get { key = "workspace" } → state
+    port kernel.invoke { query = "mw.brief"; input = $state } → brief
+    let nextAI = { brief = $brief; package = null }
+    call mw.storeAI
+    port browser.write { ref = "#mw-ai-response"; name = "value"; value = "" } → _
+    port state.set { key = "workspaceNotice"; value = "Brief prepared below for your agent. Inspect it before sharing. Nothing was sent automatically." } → _
+    call mw.paint
+    call ws.showNotice
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process mw.checkResponseUI:
+  port state.get { key = "workspace" } → state
+  port state.get { key = "matterBrief" } → brief
+  assert $brief
+    otherwise "MW-AI: Prepare a brief first."
+  assert eq($state.documentHash, $brief.request.sourceHash)
+    otherwise "MW-STALE: Matter changed while the agent was working. Prepare a new brief."
+  port kernel.invoke { query = "mw.checkSuggestions"; input = { brief = $brief; response = $response } } → checked
+  let nextAI = { brief = $brief; package = $checked }
+  when $modelRun:
+    port kernel.invoke { query = "mw.checkModelRun"; input = { run = $modelRun; package = $checked } } → recorded
+    let nextAI = { brief = $brief; package = $checked; run = $recorded }
+  call mw.storeAI
+  call mw.paint
+
+process mw.checkUI:
+  try:
+    port browser.property { ref = "#mw-ai-response"; name = "value" } → encoded
+    port number.calculate { operation = "lessEqual"; values = list(count($encoded), 50000) } → bounded
+    assert $bounded
+      otherwise "MW-AI: Response exceeds the import limit."
+    port json.parse { text = $encoded } → response
+    let modelRun = null
+    call mw.checkResponseUI
+    port state.set { key = "workspaceNotice"; value = "Suggestions checked and saved as AI framing. Select one to propose; nothing has entered the matter or resolved an issue." } → _
+    call ws.showNotice
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process mw.propose:
+  port state.get { key = "collaboration" } → board
+  port browser.property { ref = "#cw-actor"; name = "value" } → actor
+  let input = { action = "propose"; actor = $actor; expectedBoardRevision = $board.revision; id = concat("proposal_", add(count($board.proposals), 1)); title = concat("Frame ", $change.item.kind, ": ", $change.item.title); change = $change }
+  call cw.commitUI
+  port browser.write { ref = "#mw-workbench"; name = "open"; value = true } → _
+
+process mw.suggestUI:
+  try:
+    port state.get { key = "workspace" } → state
+    port state.get { key = "matterSuggestions" } → package
+    assert $package
+      otherwise "MW-AI: Import checked suggestions first."
+    port browser.property { ref = "#mw-suggestion"; name = "value" } → id
+    port state.get { key = "matterModelRun" } → modelRun
+    port kernel.invoke { query = "mw.suggestionChange"; input = { state = $state; package = $package; id = $id; run = $modelRun } } → change
+    call mw.propose
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process mw.dismissUI:
+  try:
+    port state.get { key = "matterBrief" } → brief
+    assert $brief
+      otherwise "MW-AI: No AI draft to dismiss."
+    let nextAI = { brief = $brief; package = null }
+    call mw.storeAI
+    port browser.write { ref = "#mw-ai-response"; name = "value"; value = "" } → _
+    call mw.paint
+    port state.set { key = "workspaceNotice"; value = "Suggestion draft dismissed. Existing contributions and open questions are unchanged." } → _
+    call ws.showNotice
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Could not save dismissal: ", $fault.message) } → _
+    call ws.showNotice
+
+process mw.itemUI:
+  try:
+    port state.get { key = "workspace" } → state
+    port browser.property { ref = "#mw-kind"; name = "value" } → kind
+    port browser.property { ref = "#mw-item-id"; name = "value" } → id
+    port browser.property { ref = "#mw-item-title"; name = "value" } → title
+    port browser.property { ref = "#mw-item-body"; name = "value" } → body
+    port browser.property { ref = "#mw-issue"; name = "value" } → issueId
+    port browser.property { ref = "#mw-voice"; name = "value" } → voice
+    port browser.property { ref = "#cw-actor"; name = "value" } → actor
+    let change = { kind = "matter-item"; matterId = $state.document.matter.id; item = { id = $id; kind = $kind; title = $title; body = $body; issue = if(eq($kind, "issue"), null, $issueId); voice = if(eq($kind, "position"), $voice, null) }; origin = { kind = "participant"; label = $actor; briefHash = null; sourceHash = null }; baseRevision = $state.revision }
+    call mw.propose
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process mw.selectProposalUI:
+  call cw.selectionUI
+  call mw.paintModelRun
+
+process mw.selectedModelRunOrigin:
+  port state.get { key = "collaboration" } → modelRunBoard
+  port state.get { key = "collaborationSelected" } → modelRunSelection
+  let modelRunProposal = null
+  let modelRunOrigin = null
+  when $modelRunBoard:
+    let modelRunProposal = at(filter($modelRunBoard.proposals, "p", eq($p.id, $modelRunSelection)), 0)
+    let modelRunProposal = if($modelRunProposal, $modelRunProposal, at($modelRunBoard.proposals, 0))
+    let modelRunOrigin = at(at(at($modelRunProposal, "content"), "change"), "origin")
+
+process mw.paintModelRun:
+  call mw.selectedModelRunOrigin
+  port browser.write { ref = "#mw-export-visual-receipt"; name = "disabled"; value = not($modelRunProposal) } → _
+  let linkedHash = at($modelRunOrigin, "modelRunHash")
+  port browser.write { ref = "#mw-model-run-panel"; name = "hidden"; value = not($linkedHash) } → _
+  port browser.write { ref = "#mw-model-run-json"; name = "value"; value = "" } → _
+  when $linkedHash:
+    port browser.write { ref = "#mw-model-run-hash"; name = "textContent"; value = $linkedHash } → _
+    let runStatus = "Model-run record unavailable. Supply its JSON to verify the link."
+    port state.get { key = "matterModelRun" } → localModelRun
+    when $localModelRun:
+      try:
+        port kernel.invoke { query = "mw.verifyModelRun"; input = { origin = $modelRunOrigin; run = $localModelRun } } → verified
+        let runStatus = "Verified. The local draft’s model-run record matches this link."
+      catch fault:
+        let runStatus = "Model-run record unavailable. Supply its JSON to verify the link."
+    port browser.write { ref = "#mw-model-run-status"; name = "textContent"; value = $runStatus } → _
+
+process mw.exportVisualReceiptUI:
+  call mw.selectedModelRunOrigin
+  assert $modelRunProposal
+    otherwise "Select a proposal to download its visual receipt."
+  port kernel.invoke { query = "cw.receipt"; input = $modelRunBoard } → receipt
+  port kernel.invoke { query = "mw.visualReceipt"; input = { board = $modelRunBoard; receipt = $receipt; id = $modelRunProposal.id } } → visual
+  port download.text { name = concat("usewords-", $modelRunProposal.id, "-receipt.html"); text = $visual } → _
+
+process mw.modelRunInputUI:
+  port browser.write { ref = "#mw-model-run-status"; name = "textContent"; value = "Check the supplied JSON to verify the link." } → _
+
+process mw.verifyModelRunUI:
+  try:
+    call mw.selectedModelRunOrigin
+    port browser.property { ref = "#mw-model-run-json"; name = "value" } → encodedRun
+    assert $encodedRun
+      otherwise "Supply a model-run record first."
+    port number.calculate { operation = "lessEqual"; values = list(count($encodedRun), 4096) } → bounded
+    assert $bounded
+      otherwise "The model-run record exceeds the input limit."
+    port json.parse { text = $encodedRun } → suppliedRun
+    port kernel.invoke { query = "mw.verifyModelRun"; input = { origin = $modelRunOrigin; run = $suppliedRun } } → verified
+    port browser.write { ref = "#mw-model-run-status"; name = "textContent"; value = "Verified. The supplied model-run record matches this link." } → _
+  catch fault:
+    port browser.write { ref = "#mw-model-run-status"; name = "textContent"; value = concat("Verification refused: ", $fault.message) } → _
+
+process mw.paint:
+  port state.get { key = "workspace" } → state
+  call mm.paint
+  call pc.paint
+  port state.get { key = "matterIndex" } → index
+  port state.get { key = "matterBrief" } → brief
+  port state.get { key = "matterSuggestions" } → package
+  let matter = at($state.document, "matter")
+  port browser.write { ref = "#mw-active"; name = "hidden"; value = not($matter) } → _
+  port kernel.invoke { query = "ws.options"; input = { items = append(list({ value = ""; label = "Choose a local matter" }), map($index.items, "m", { value = $m.id; label = $m.title })); selected = $index.selected } } → html
+  port browser.content { ref = "#mw-select"; html = $html } → _
+  when $matter:
+    port browser.write { ref = "#mw-name"; name = "textContent"; value = $matter.title } → _
+    port browser.write { ref = "#mw-narrative"; name = "textContent"; value = $matter.description } → _
+    port browser.write { ref = "#mw-status"; name = "textContent"; value = concat(if(eq($matter.status, "open"), "Open matter", $matter.status), " · ", count(filter($matter.items, "r", eq($r.item.kind, "issue"))), " issues · ", count(filter($matter.items, "r", eq($r.item.kind, "position"))), " positions · ", count(filter($matter.items, "r", eq($r.item.kind, "option"))), " possible approaches. Recording a framing does not endorse a claim or settle the matter.") } → _
+    each list({ kind = "issue"; ref = "#mw-issues" }, { kind = "position"; ref = "#mw-positions" }, { kind = "option"; ref = "#mw-options" }) as group:
+      fold filter($matter.items, "r", eq($r.item.kind, $group.kind)) as record; cards starts list():
+        let item = $record.item
+        yield append($cards, list({ tag = "article"; attrs = { class = "mw-card" }; children = list({ tag = "h4"; attrs = { }; children = list($item.title) }, { tag = "p"; attrs = { }; children = list($item.body) }, { tag = "p"; attrs = { class = "muted" }; children = list(concat($record.standing, if($item.issue, concat(" · issue: ", $item.issue), ""), if($item.voice, concat(" · perspective: ", $item.voice), ""))) }, { tag = "p"; attrs = { class = "mw-origin" }; children = list(concat(if(eq($record.origin.kind, "ai-suggestion"), "AI-origin framing · ", "Participant framing · "), $record.origin.label)) }) })) → cards
+      let input = { tag = "div"; attrs = { }; children = if(eq(count($cards), 0), list({ tag = "p"; attrs = { class = "muted" }; children = list("Nothing incorporated here yet. It is fine to leave this open.") }), $cards) }
+      call html.serialize
+      port browser.content { ref = $group.ref; html = $result } → _
+    port browser.property { ref = "#mw-issue"; name = "value" } → selectedIssue
+    port kernel.invoke { query = "ws.options"; input = { items = map(filter($matter.items, "r", eq($r.item.kind, "issue")), "r", { value = $r.item.id; label = $r.item.title }); selected = $selectedIssue } } → html
+    port browser.content { ref = "#mw-issue"; html = $html } → _
+    port browser.write { ref = "#mw-brief"; name = "value"; value = "" } → _
+    when $brief:
+      port json.stringify { value = { request = $brief.request; sha256 = $brief.sha256 }; space = 2 } → encoded
+      port browser.write { ref = "#mw-brief"; name = "value"; value = $encoded } → _
+    port browser.content { ref = "#mw-suggestion-cards"; html = "" } → _
+    port browser.content { ref = "#mw-suggestion"; html = "" } → _
+    when $package:
+      port kernel.invoke { query = "ws.options"; input = { items = map($package.response.items, "s", { value = $s.id; label = concat($s.kind, " · ", $s.title) }); selected = "" } } → html
+      port browser.content { ref = "#mw-suggestion"; html = $html } → _
+      fold $package.response.items as item; cards starts list():
+        yield append($cards, list({ tag = "article"; attrs = { class = "mw-card" }; children = list({ tag = "h4"; attrs = { }; children = list(concat($item.kind, " · ", $item.title)) }, { tag = "p"; attrs = { }; children = list($item.body) }, { tag = "p"; attrs = { class = "muted" }; children = list(concat("AI suggestion, not incorporated", if($item.issue, concat(" · linked issue: ", $item.issue), ""))) }) })) → cards
+      let input = { tag = "div"; attrs = { }; children = append(list({ tag = "p"; attrs = { class = "muted" }; children = list(concat("Agent label (self-reported): ", $package.response.provider, if(eq($state.documentHash, $package.brief.request.sourceHash), " · based on this version", " · based on an earlier version; recheck each suggestion against the current matter"))) }), $cards) }
+      call html.serialize
+      port browser.content { ref = "#mw-suggestion-cards"; html = $result } → _
+  call mw.paintModelRun
+
+process mw.importUI:
+  try:
+    port browser.property { ref = "#cw-actor"; name = "value" } → actorId
+    port kernel.invoke { query = "cw.member"; input = $actorId } → actor
+    assert $actor.canChange
+      otherwise "CW-ROLE: An observer cannot import a matter."
+    port browser.property { ref = "#mw-import-file"; name = "value" } → selectedFile
+    let historyText = ""
+    when $selectedFile:
+      port browser.fileText { ref = "#mw-import-file"; maxBytes = 3000000 } → historyText
+    when not($selectedFile):
+      port browser.property { ref = "#mw-import-text"; name = "value" } → historyText
+    port kernel.invoke { query = "mw.historyJson"; input = $historyText } → encoded
+    port number.calculate { operation = "lessEqual"; values = list(count($encoded), 300000) } → bounded
+    assert $bounded
+      otherwise "MW-IMPORT: History exceeds the local import limit."
+    port json.parse { text = $encoded } → receipt
+    port kernel.invoke { query = "cw.reconstruct"; input = $receipt } → board
+    let matter = at($board.head.document, "matter")
+    assert $matter
+      otherwise "MW-IMPORT: This history contains no matter."
+    port state.get { key = "matterIndex" } → index
+    assert eq(count(filter($index.items, "m", eq($m.id, $matter.id))), 0)
+      otherwise "MW-IMPORT: This identifier already exists. Existing matters are never replaced."
+    let matterId = $matter.id
+    let nextIndex = { items = append($index.items, list({ id = $matterId; title = $matter.title })); selected = $matterId }
+    port kernel.invoke { query = "mw.indexCheck"; input = $nextIndex } → valid
+    call mw.installBoard
+    port browser.write { ref = "#mw-import-file"; name = "value"; value = "" } → _
+    port state.set { key = "workspaceNotice"; value = "Imported this matter and its history after exact replay. Origin labels remain self-reported; separate AI drafts are not included." } → _
+    call ws.paint
+  catch fault:
+    port state.set { key = "workspaceNotice"; value = concat("Refused: ", $fault.message) } → _
+    call ws.showNotice
+
+process mw.clearDrafts:
+  each list("#mm-reason", "#mm-capacity", "#mm-request-id", "#mm-request-title", "#mm-response-text", "#mm-link-id", "#mm-link-note", "#mw-ai-response", "#mw-item-id", "#mw-item-title", "#mw-item-body", "#mw-voice", "#cw-title", "#cw-comment", "#ws-object-id", "#ws-journey-id", "#ws-journey-name", "#ws-entry-id") as ref:
+    port browser.write { ref = $ref; name = "value"; value = "" } → _
+  port state.set { key = "workspaceObjectFormType"; value = null } → _
+  port browser.write { ref = "#ws-definition"; name = "value"; value = "construct Reflection\nfield question text shared required max 200\nfield invitation text local optional max 600\nheading question\nparagraph invitation" } → _

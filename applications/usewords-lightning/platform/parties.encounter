@@ -1,0 +1,80 @@
+# Inactive receiver policy. Trusted identity and atomic storage are host effects.
+# No browser-supplied persona can authenticate a real participant.
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process pr.prepare:
+  let trusted = $eventInput.trusted
+  let request = $eventInput.request
+  assert and(eq($trusted.applicationId, "app.usewords"), eq($trusted.programHash, $data.programHash), eq($trusted.authenticated, true), eq($trusted.csrfVerified, true))
+    otherwise "PR-AUTH: An application-bound authenticated and CSRF-checked receiver context is required."
+  port kernel.invoke { query = "mw.text"; input = { value = $trusted.principal; required = true; maximum = 240 } } → valid
+  port kernel.invoke { query = "mw.exact"; input = { value = $request; keys = list("action", "matterId", "operationId", "expectedHead", "payload") } } → valid
+  port kernel.invoke { query = "ws.id"; input = $request.matterId } → valid
+  port kernel.invoke { query = "ws.id"; input = $request.operationId } → valid
+  assert eq($trusted.matterId, $request.matterId)
+    otherwise "PR-SCOPE: Receiver loaded another matter."
+  assert and(isArray($trusted.members), eq(count($trusted.members), 2))
+    otherwise "PR-MEMBERS: Two receiver-bound participants are required."
+  each $trusted.members as member:
+    port kernel.invoke { query = "mw.text"; input = { value = $member.principal; required = true; maximum = 240 } } → valid
+    assert includes(list("alice", "bob"), $member.actor)
+      otherwise "PR-MEMBERS: Unknown party slot."
+    assert and(eq(count(filter($trusted.members, "m", eq($m.actor, $member.actor))), 1), eq(count(filter($trusted.members, "m", eq($m.principal, $member.principal))), 1))
+      otherwise "PR-MEMBERS: Principal and party bindings must be unique."
+  let member = at(filter($trusted.members, "m", eq($m.principal, $trusted.principal)), 0)
+  assert $member
+    otherwise "PR-MEMBERS: This principal is not a participant."
+  assert includes(list("read-shared", "read-private", "save-private", "shared-command", "packet"), $request.action)
+    otherwise "PR-ACTION: Unsupported application operation."
+  port kernel.invoke { query = "uw.hash"; input = $request } → requestHash
+  let prior = at($trusted, "priorOperation")
+  when $prior:
+    assert and(eq($prior.principal, $trusted.principal), eq($prior.matterId, $request.matterId), eq($prior.operationId, $request.operationId), eq($prior.requestHash, $requestHash))
+      otherwise "PR-IDEMPOTENCY: Operation identifier was reused or belongs to another scope."
+    let result = $prior.result
+  when not($prior):
+    let private = includes(list("read-private", "save-private"), $request.action)
+    let slot = if($private, $trusted.privateSlot, $trusted.sharedSlot)
+    when $private:
+      assert and(eq($slot.principal, $trusted.principal), eq($slot.matterId, $request.matterId))
+        otherwise "PR-PRIVATE: Receiver must load only this principal's preparation slot."
+    when not($private):
+      assert eq($slot.matterId, $request.matterId)
+        otherwise "PR-SCOPE: Shared slot belongs to another matter."
+    let writing = includes(list("save-private", "shared-command"), $request.action)
+    when $writing:
+      assert eq($request.expectedHead, $slot.head)
+        otherwise "PR-CONFLICT: Head changed; read the current value and propose anew."
+    let value = null
+    when $private:
+      let room = at($slot, "value")
+      when not($room):
+        port kernel.invoke { query = "pc.room"; input = { matterId = $request.matterId; actor = $member.actor } } → room
+      port kernel.invoke { query = "pc.roomCheck"; input = $room } → valid
+      assert and(eq($room.actor, $member.actor), eq($room.matterId, $request.matterId))
+        otherwise "PR-PRIVATE: Preparation identity differs from the receiver binding."
+      let value = $room
+      when eq($request.action, "save-private"):
+        port kernel.invoke { query = "mw.exact"; input = { value = $request.payload; keys = list("draft", "expectedRevision") } } → valid
+        port kernel.invoke { query = "pc.saveDraft"; input = { room = $room; actor = $member.actor; matterId = $request.matterId; expectedRevision = $request.payload.expectedRevision; draft = $request.payload.draft } } → value
+    when not($private):
+      port kernel.invoke { query = "cw.reconstruct"; input = $slot.value } → board
+      assert eq($board.head.document.matter.id, $request.matterId)
+        otherwise "PR-SCOPE: Shared history belongs to another matter."
+      let value = $slot.value
+      when eq($request.action, "shared-command"):
+        port record.entries { value = $request.payload } → fields
+        each $fields as pair:
+          assert not(includes(list("actor", "principal", "owner", "trusted", "session"), at($pair, 0)))
+            otherwise "PR-IDENTITY: Clients cannot supply receiver identity or authority."
+        port record.put { record = $request.payload; key = "actor"; value = $member.actor } → command
+        port kernel.invoke { query = "cw.apply"; input = { board = $board; request = $command } } → next
+        port kernel.invoke { query = "cw.receipt"; input = $next } → value
+        port kernel.invoke { query = "cw.reconstruct"; input = $value } → replayed
+        assert eq($replayed, $next)
+          otherwise "PR-REPLAY: Shared command did not reproduce."
+      when eq($request.action, "packet"):
+        port kernel.invoke { query = "pc.packet"; input = $board } → value
+    port kernel.invoke { query = "uw.hash"; input = $value } → valueHash
+    let result = { protocol = "usewords/party-receiver-candidate/1"; applicationAdmission = false; authenticatedEffectProven = false; principal = $trusted.principal; matterId = $request.matterId; operationId = $request.operationId; requestHash = $requestHash; mode = if($writing, "atomic-write-required", "scoped-read-projection"); scope = if($private, "principal-preparation", "shared-matter"); expectedHead = $slot.head; value = $value; valueHash = $valueHash; requiredBoundary = "Receiver authenticates and revalidates membership; load only the declared scope; atomically compare head and commit value plus principal-scoped idempotency outcome; reconcile uncertain requests without automatic replay." }

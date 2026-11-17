@@ -1,0 +1,935 @@
+{
+  "protocol": "temple/surface-process-module/1",
+  "queries": {
+    "admit.binding": [
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$binding"
+        },
+        "into": "bindingKind"
+      },
+      {
+        "assert": [
+          "eq",
+          "$bindingKind.type",
+          "string"
+        ],
+        "message": "TEMPLE-S001: Binding must be a string identifier. Correct the authored source."
+      },
+      {
+        "port": "text.matches",
+        "args": {
+          "value": "$binding",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "into": "valid"
+      },
+      {
+        "assert": [
+          "and",
+          "$valid",
+          [
+            "not",
+            [
+              "includes",
+              [
+                "list",
+                "__proto__",
+                "prototype",
+                "constructor",
+                "model"
+              ],
+              "$binding"
+            ]
+          ]
+        ],
+        "message": "TEMPLE-S001: Invalid binding. Use a safe lexical identifier; correct the authored source."
+      }
+    ],
+    "admit.expression": [
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$expression"
+        },
+        "into": "kind"
+      },
+      {
+        "assert": [
+          "or",
+          "$kind.null",
+          [
+            "eq",
+            "$kind.type",
+            "string"
+          ],
+          [
+            "eq",
+            "$kind.type",
+            "boolean"
+          ],
+          "$kind.finite",
+          "$kind.array",
+          "$kind.plain"
+        ],
+        "message": "TEMPLE-S002: Unsupported source value. Use finite JSON data."
+      },
+      {
+        "assert": "$kind.dataOnly",
+        "message": "TEMPLE-S003: Accessor-bearing source is forbidden. Supply own-data records."
+      },
+      {
+        "when": [
+          "eq",
+          "$kind.type",
+          "string"
+        ],
+        "then": [
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$expression",
+              "pattern": "^\\$"
+            },
+            "into": "referenceLike"
+          },
+          {
+            "when": "$referenceLike",
+            "then": [
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$expression",
+                  "pattern": "^\\$[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_-]+)*$"
+                },
+                "into": "valid"
+              },
+              {
+                "assert": "$valid",
+                "message": "TEMPLE-S004: Invalid reference. Correct the source reference."
+              },
+              {
+                "port": "text.split",
+                "args": {
+                  "value": "$expression",
+                  "pattern": "^\\$|\\."
+                },
+                "into": "segments"
+              },
+              {
+                "assert": [
+                  "every",
+                  "$segments",
+                  "segment",
+                  [
+                    "not",
+                    [
+                      "includes",
+                      [
+                        "list",
+                        "__proto__",
+                        "prototype",
+                        "constructor"
+                      ],
+                      "$segment"
+                    ]
+                  ]
+                ],
+                "message": "TEMPLE-S004: Reserved reference segment. Correct the authored reference before effects."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "when": "$kind.plain",
+        "then": [
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$expression"
+            },
+            "into": "entries"
+          },
+          {
+            "each": "$entries",
+            "as": "entry",
+            "steps": [
+              {
+                "assert": [
+                  "not",
+                  [
+                    "includes",
+                    [
+                      "list",
+                      "__proto__",
+                      "prototype",
+                      "constructor"
+                    ],
+                    [
+                      "at",
+                      "$entry",
+                      0
+                    ]
+                  ]
+                ],
+                "message": "TEMPLE-S005: Reserved source field. Rename the field."
+              },
+              {
+                "let": "expression",
+                "value": [
+                  "at",
+                  "$entry",
+                  1
+                ]
+              },
+              {
+                "call": "admit.expression"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "when": "$kind.array",
+        "then": [
+          {
+            "assert": "$kind.dense",
+            "message": "TEMPLE-S006: Sparse source arrays are forbidden."
+          },
+          {
+            "when": [
+              "count",
+              "$expression"
+            ],
+            "then": [
+              {
+                "let": "operation",
+                "value": [
+                  "at",
+                  "$expression",
+                  0
+                ]
+              },
+              {
+                "let": "rule",
+                "value": [
+                  "at",
+                  "$profile.operators",
+                  "$operation"
+                ]
+              },
+              {
+                "assert": "$rule",
+                "message": "TEMPLE-S007: Unknown core operation. Lower authored operators before admission."
+              },
+              {
+                "assert": [
+                  "includes",
+                  "$rule.arities",
+                  [
+                    "add",
+                    [
+                      "count",
+                      "$expression"
+                    ],
+                    -1
+                  ]
+                ],
+                "message": "TEMPLE-S008: Wrong core arity. Correct the source call."
+              },
+              {
+                "each": [
+                  "range",
+                  [
+                    "add",
+                    [
+                      "count",
+                      "$expression"
+                    ],
+                    -1
+                  ]
+                ],
+                "as": "position",
+                "steps": [
+                  {
+                    "let": "argument",
+                    "value": [
+                      "at",
+                      "$expression",
+                      "$position"
+                    ]
+                  },
+                  {
+                    "when": [
+                      "includes",
+                      "$rule.binders",
+                      [
+                        "add",
+                        "$position",
+                        -1
+                      ]
+                    ],
+                    "then": [
+                      {
+                        "let": "binding",
+                        "value": "$argument"
+                      },
+                      {
+                        "call": "admit.binding"
+                      }
+                    ]
+                  },
+                  {
+                    "when": [
+                      "not",
+                      [
+                        "includes",
+                        "$rule.binders",
+                        [
+                          "add",
+                          "$position",
+                          -1
+                        ]
+                      ]
+                    ],
+                    "then": [
+                      {
+                        "let": "expression",
+                        "value": "$argument"
+                      },
+                      {
+                        "call": "admit.expression"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "eq",
+                  "$operation",
+                  "fold"
+                ],
+                "then": [
+                  {
+                    "assert": [
+                      "not",
+                      [
+                        "eq",
+                        [
+                          "at",
+                          "$expression",
+                          2
+                        ],
+                        [
+                          "at",
+                          "$expression",
+                          3
+                        ]
+                      ]
+                    ],
+                    "message": "TEMPLE-S009: Fold item and accumulator must have distinct bindings."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "admit.programme": [
+      {
+        "assert": [
+          "isArray",
+          "$programme"
+        ],
+        "message": "TEMPLE-S010: Process must be an array."
+      },
+      {
+        "each": "$programme",
+        "as": "statement",
+        "steps": [
+          {
+            "port": "value.describe",
+            "args": {
+              "value": "$statement"
+            },
+            "into": "shape"
+          },
+          {
+            "assert": [
+              "and",
+              "$shape.plain",
+              "$shape.dataOnly"
+            ],
+            "message": "TEMPLE-S011: Statement must be an own-data record."
+          },
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$profile.statements"
+            },
+            "into": "forms"
+          },
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$statement"
+            },
+            "into": "fields"
+          },
+          {
+            "let": "keys",
+            "value": [
+              "map",
+              "$fields",
+              "entry",
+              [
+                "at",
+                "$entry",
+                0
+              ]
+            ]
+          },
+          {
+            "let": "kinds",
+            "value": [
+              "filter",
+              "$forms",
+              "form",
+              [
+                "includes",
+                "$keys",
+                [
+                  "at",
+                  "$form",
+                  0
+                ]
+              ]
+            ]
+          },
+          {
+            "assert": [
+              "eq",
+              [
+                "count",
+                "$kinds"
+              ],
+              1
+            ],
+            "message": "TEMPLE-S012: Unknown or ambiguous statement. Use one declared statement kind."
+          },
+          {
+            "let": "form",
+            "value": [
+              "at",
+              [
+                "at",
+                "$kinds",
+                0
+              ],
+              0
+            ]
+          },
+          {
+            "let": "schema",
+            "value": [
+              "at",
+              [
+                "at",
+                "$kinds",
+                0
+              ],
+              1
+            ]
+          },
+          {
+            "assert": [
+              "and",
+              [
+                "eq",
+                [
+                  "count",
+                  "$keys"
+                ],
+                [
+                  "count",
+                  "$schema.fields"
+                ]
+              ],
+              [
+                "every",
+                "$keys",
+                "key",
+                [
+                  "includes",
+                  "$schema.fields",
+                  "$key"
+                ]
+              ]
+            ],
+            "message": "TEMPLE-S013: Unknown or missing statement field. Correct the authored statement before effects."
+          },
+          {
+            "each": "$schema.bindings",
+            "as": "field",
+            "steps": [
+              {
+                "let": "binding",
+                "value": [
+                  "at",
+                  "$statement",
+                  "$field"
+                ]
+              },
+              {
+                "call": "admit.binding"
+              }
+            ]
+          },
+          {
+            "each": "$schema.strings",
+            "as": "field",
+            "steps": [
+              {
+                "port": "value.describe",
+                "args": {
+                  "value": [
+                    "at",
+                    "$statement",
+                    "$field"
+                  ]
+                },
+                "into": "fieldKind"
+              },
+              {
+                "assert": [
+                  "eq",
+                  "$fieldKind.type",
+                  "string"
+                ],
+                "message": "TEMPLE-S014: Statement name or message must be a string."
+              }
+            ]
+          },
+          {
+            "when": [
+              "eq",
+              "$form",
+              "fold"
+            ],
+            "then": [
+              {
+                "assert": [
+                  "not",
+                  [
+                    "eq",
+                    "$statement.as",
+                    "$statement.accumulator"
+                  ]
+                ],
+                "message": "TEMPLE-S009: Fold bindings must be distinct."
+              }
+            ]
+          },
+          {
+            "when": [
+              "eq",
+              "$form",
+              "call"
+            ],
+            "then": [
+              {
+                "port": "record.entries",
+                "args": {
+                  "value": "$target.queries"
+                },
+                "into": "queries"
+              },
+              {
+                "assert": [
+                  "some",
+                  "$queries",
+                  "entry",
+                  [
+                    "eq",
+                    [
+                      "at",
+                      "$entry",
+                      0
+                    ],
+                    "$statement.call"
+                  ]
+                ],
+                "message": "TEMPLE-S015: Unknown process target. Declare it in this module closure."
+              }
+            ]
+          },
+          {
+            "each": "$schema.expressions",
+            "as": "field",
+            "steps": [
+              {
+                "let": "expression",
+                "value": [
+                  "at",
+                  "$statement",
+                  "$field"
+                ]
+              },
+              {
+                "call": "admit.expression"
+              }
+            ]
+          },
+          {
+            "each": "$schema.programmes",
+            "as": "field",
+            "steps": [
+              {
+                "let": "programme",
+                "value": [
+                  "at",
+                  "$statement",
+                  "$field"
+                ]
+              },
+              {
+                "call": "admit.programme"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "admit.model": [
+      {
+        "port": "record.entries",
+        "args": {
+          "value": "$target.queries"
+        },
+        "into": "queries"
+      },
+      {
+        "assert": [
+          "some",
+          "$queries",
+          "entry",
+          [
+            "eq",
+            [
+              "at",
+              "$entry",
+              0
+            ],
+            "$target.entry"
+          ]
+        ],
+        "message": "TEMPLE-S016: Missing entrypoint. Declare the selected root."
+      },
+      {
+        "each": "$queries",
+        "as": "query",
+        "steps": [
+          {
+            "let": "programme",
+            "value": [
+              "at",
+              "$query",
+              1
+            ]
+          },
+          {
+            "call": "admit.programme"
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "ok": true,
+          "profile": "temple/kernel-profile/1"
+        }
+      }
+    ],
+    "admit.effects.programme": [
+      {
+        "as": "statement",
+        "steps": [
+          {
+            "when": [
+              "at",
+              "$statement",
+              "port"
+            ],
+            "then": [
+              {
+                "assert": [
+                  "includes",
+                  "$grants",
+                  "$statement.port"
+                ],
+                "message": "TEMPLE-S017: Undeclared host effect. Correct the authored programme or review an explicit grant; do not widen permissions to bypass this check."
+              }
+            ]
+          },
+          {
+            "when": [
+              "at",
+              "$statement",
+              "call"
+            ],
+            "then": [
+              {
+                "when": [
+                  "not",
+                  [
+                    "includes",
+                    "$visited",
+                    "$statement.call"
+                  ]
+                ],
+                "then": [
+                  {
+                    "let": "visited",
+                    "value": [
+                      "append",
+                      "$visited",
+                      [
+                        "list",
+                        "$statement.call"
+                      ]
+                    ]
+                  },
+                  {
+                    "let": "programme",
+                    "value": [
+                      "at",
+                      "$target.queries",
+                      "$statement.call"
+                    ]
+                  },
+                  {
+                    "call": "admit.effects.programme"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$statement"
+            },
+            "into": "fields"
+          },
+          {
+            "let": "keys",
+            "value": [
+              "map",
+              "$fields",
+              "entry",
+              [
+                "at",
+                "$entry",
+                0
+              ]
+            ]
+          },
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$profile.statements"
+            },
+            "into": "forms"
+          },
+          {
+            "as": "form",
+            "steps": [
+              {
+                "when": [
+                  "includes",
+                  "$keys",
+                  [
+                    "at",
+                    "$form",
+                    0
+                  ]
+                ],
+                "then": [
+                  {
+                    "as": "field",
+                    "steps": [
+                      {
+                        "let": "programme",
+                        "value": [
+                          "at",
+                          "$statement",
+                          "$field"
+                        ]
+                      },
+                      {
+                        "call": "admit.effects.programme"
+                      }
+                    ],
+                    "fold": [
+                      "at",
+                      [
+                        "at",
+                        "$form",
+                        1
+                      ],
+                      "programmes"
+                    ],
+                    "accumulator": "visited",
+                    "initial": "$visited",
+                    "yield": "$visited",
+                    "into": "visited"
+                  }
+                ]
+              }
+            ],
+            "fold": "$forms",
+            "accumulator": "visited",
+            "initial": "$visited",
+            "yield": "$visited",
+            "into": "visited"
+          }
+        ],
+        "fold": "$programme",
+        "accumulator": "visited",
+        "initial": "$visited",
+        "yield": "$visited",
+        "into": "visited"
+      }
+    ],
+    "admit.effects": [
+      {
+        "let": "visited",
+        "value": [
+          "list",
+          "$target.entry"
+        ]
+      },
+      {
+        "let": "programme",
+        "value": [
+          "at",
+          "$target.queries",
+          "$target.entry"
+        ]
+      },
+      {
+        "call": "admit.effects.programme"
+      },
+      {
+        "let": "result",
+        "value": {
+          "ok": true
+        }
+      }
+    ],
+    "admit.ownership": [
+      {
+        "fold": "$sources",
+        "as": "source",
+        "accumulator": "ownershipEntries",
+        "initial": [
+          "list"
+        ],
+        "steps": [
+          {
+            "fold": "$source.facts",
+            "as": "fact",
+            "accumulator": "ownershipKeys",
+            "initial": [
+              "list"
+            ],
+            "steps": [
+              {
+                "port": "json.stringify",
+                "args": {
+                  "value": [
+                    "list",
+                    "$fact.s",
+                    "$fact.p"
+                  ]
+                },
+                "into": "ownershipKey"
+              }
+            ],
+            "yield": [
+              "append",
+              "$ownershipKeys",
+              [
+                "list",
+                "$ownershipKey"
+              ]
+            ],
+            "into": "ownershipKeys"
+          }
+        ],
+        "yield": [
+          "append",
+          "$ownershipEntries",
+          [
+            "map",
+            [
+              "distinct",
+              "$ownershipKeys"
+            ],
+            "ownershipKey",
+            [
+              "list",
+              "$ownershipKey",
+              "$source.file"
+            ]
+          ]
+        ],
+        "into": "ownershipEntries"
+      },
+      {
+        "port": "record.fromEntries",
+        "args": {
+          "entries": "$ownershipEntries"
+        },
+        "into": "owners"
+      },
+      {
+        "each": "$ownershipEntries",
+        "as": "ownershipEntry",
+        "steps": [
+          {
+            "assert": [
+              "eq",
+              [
+                "at",
+                "$owners",
+                [
+                  "at",
+                  "$ownershipEntry",
+                  0
+                ]
+              ],
+              [
+                "at",
+                "$ownershipEntry",
+                1
+              ]
+            ],
+            "message": "TEMPLE-S018: Relation cell has multiple source owners. Correct the owning module; do not duplicate shared facts."
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "ok": true,
+          "owners": "$owners"
+        }
+      }
+    ]
+  }
+}

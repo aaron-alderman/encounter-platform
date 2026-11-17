@@ -1,0 +1,1201 @@
+{
+  "protocol": "temple/surface-process-module/1",
+  "queries": {
+    "html.escape": [
+      {
+        "port": "value.string",
+        "args": {
+          "value": "$input"
+        },
+        "into": "escaped"
+      },
+      {
+        "fold": [
+          "list",
+          [
+            "list",
+            "&",
+            "&amp;"
+          ],
+          [
+            "list",
+            "<",
+            "&lt;"
+          ],
+          [
+            "list",
+            ">",
+            "&gt;"
+          ],
+          [
+            "list",
+            "\"",
+            "&quot;"
+          ]
+        ],
+        "as": "replacement",
+        "accumulator": "escaped",
+        "initial": "$escaped",
+        "steps": [
+          {
+            "port": "text.replaceAll",
+            "args": {
+              "value": "$escaped",
+              "search": [
+                "at",
+                "$replacement",
+                0
+              ],
+              "replacement": [
+                "at",
+                "$replacement",
+                1
+              ]
+            },
+            "into": "escaped"
+          }
+        ],
+        "yield": "$escaped",
+        "into": "result"
+      }
+    ],
+    "html.serialize": [
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$input"
+        },
+        "into": "kind"
+      },
+      {
+        "let": "result",
+        "value": ""
+      },
+      {
+        "when": [
+          "and",
+          [
+            "not",
+            [
+              "eq",
+              "$input",
+              null
+            ]
+          ],
+          [
+            "not",
+            [
+              "eq",
+              "$input",
+              false
+            ]
+          ],
+          [
+            "not",
+            [
+              "eq",
+              "$kind.type",
+              "undefined"
+            ]
+          ]
+        ],
+        "then": [
+          {
+            "when": "$kind.array",
+            "then": [
+              {
+                "fold": "$input",
+                "as": "part",
+                "accumulator": "rendered",
+                "initial": "",
+                "steps": [
+                  {
+                    "let": "input",
+                    "value": "$part"
+                  },
+                  {
+                    "call": "html.serialize"
+                  }
+                ],
+                "yield": [
+                  "concat",
+                  "$rendered",
+                  "$result"
+                ],
+                "into": "result"
+              }
+            ]
+          },
+          {
+            "when": [
+              "and",
+              [
+                "not",
+                "$kind.array"
+              ],
+              [
+                "not",
+                [
+                  "eq",
+                  "$kind.type",
+                  "object"
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "call": "html.escape"
+              }
+            ]
+          },
+          {
+            "when": [
+              "and",
+              [
+                "not",
+                "$kind.array"
+              ],
+              [
+                "eq",
+                "$kind.type",
+                "object"
+              ]
+            ],
+            "then": [
+              {
+                "let": "element",
+                "value": "$input"
+              },
+              {
+                "let": "tag",
+                "value": [
+                  "at",
+                  "$element",
+                  "tag"
+                ]
+              },
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$tag",
+                  "pattern": "^[a-zA-Z][a-zA-Z0-9-]*$"
+                },
+                "into": "valid"
+              },
+              {
+                "assert": "$valid",
+                "message": "Invalid HTML tag"
+              },
+              {
+                "port": "record.entries",
+                "args": {
+                  "value": [
+                    "or",
+                    [
+                      "at",
+                      "$element",
+                      "attrs"
+                    ],
+                    {}
+                  ]
+                },
+                "into": "attributes"
+              },
+              {
+                "fold": "$attributes",
+                "as": "attribute",
+                "accumulator": "attributesText",
+                "initial": "",
+                "steps": [
+                  {
+                    "let": "key",
+                    "value": [
+                      "at",
+                      "$attribute",
+                      0
+                    ]
+                  },
+                  {
+                    "let": "value",
+                    "value": [
+                      "at",
+                      "$attribute",
+                      1
+                    ]
+                  },
+                  {
+                    "let": "attributeText",
+                    "value": ""
+                  },
+                  {
+                    "when": [
+                      "and",
+                      [
+                        "not",
+                        [
+                          "eq",
+                          "$value",
+                          null
+                        ]
+                      ],
+                      [
+                        "not",
+                        [
+                          "eq",
+                          "$value",
+                          false
+                        ]
+                      ],
+                      [
+                        "not",
+                        [
+                          "eq",
+                          "$value",
+                          [
+                            "at",
+                            {},
+                            "absent"
+                          ]
+                        ]
+                      ]
+                    ],
+                    "then": [
+                      {
+                        "port": "text.matches",
+                        "args": {
+                          "value": "$key",
+                          "pattern": "^[a-zA-Z_:][a-zA-Z0-9_:.-]*$"
+                        },
+                        "into": "valid"
+                      },
+                      {
+                        "assert": "$valid",
+                        "message": "Invalid HTML attribute"
+                      },
+                      {
+                        "port": "text.matches",
+                        "args": {
+                          "value": "$key",
+                          "pattern": "^on",
+                          "flags": "i"
+                        },
+                        "into": "eventHandler"
+                      },
+                      {
+                        "assert": [
+                          "not",
+                          "$eventHandler"
+                        ],
+                        "message": "Invalid HTML attribute"
+                      },
+                      {
+                        "when": [
+                          "includes",
+                          [
+                            "list",
+                            "href",
+                            "src",
+                            "action"
+                          ],
+                          "$key"
+                        ],
+                        "then": [
+                          {
+                            "port": "value.string",
+                            "args": {
+                              "value": "$value"
+                            },
+                            "into": "url"
+                          },
+                          {
+                            "port": "text.matches",
+                            "args": {
+                              "value": "$url",
+                              "pattern": "^\\s*(javascript|data):",
+                              "flags": "i"
+                            },
+                            "into": "unsafe"
+                          },
+                          {
+                            "assert": [
+                              "not",
+                              "$unsafe"
+                            ],
+                            "message": "Unsafe URL"
+                          }
+                        ]
+                      },
+                      {
+                        "let": "input",
+                        "value": [
+                          "if",
+                          [
+                            "eq",
+                            "$value",
+                            true
+                          ],
+                          "",
+                          "$value"
+                        ]
+                      },
+                      {
+                        "call": "html.escape"
+                      },
+                      {
+                        "let": "attributeText",
+                        "value": [
+                          "concat",
+                          " ",
+                          "$key",
+                          "=\"",
+                          "$result",
+                          "\""
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "yield": [
+                  "concat",
+                  "$attributesText",
+                  "$attributeText"
+                ],
+                "into": "attributesText"
+              },
+              {
+                "let": "void",
+                "value": [
+                  "includes",
+                  [
+                    "list",
+                    "area",
+                    "base",
+                    "br",
+                    "col",
+                    "embed",
+                    "hr",
+                    "img",
+                    "input",
+                    "link",
+                    "meta",
+                    "source",
+                    "track",
+                    "wbr"
+                  ],
+                  "$tag"
+                ]
+              },
+              {
+                "let": "childrenText",
+                "value": ""
+              },
+              {
+                "when": [
+                  "not",
+                  "$void"
+                ],
+                "then": [
+                  {
+                    "fold": [
+                      "list",
+                      [
+                        "or",
+                        [
+                          "at",
+                          "$element",
+                          "children"
+                        ],
+                        [
+                          "list"
+                        ]
+                      ]
+                    ],
+                    "as": "child",
+                    "accumulator": "ignored",
+                    "initial": "",
+                    "steps": [
+                      {
+                        "let": "input",
+                        "value": "$child"
+                      },
+                      {
+                        "when": [
+                          "eq",
+                          "$tag",
+                          "style"
+                        ],
+                        "then": [
+                          {
+                            "call": "html.cssText"
+                          }
+                        ]
+                      },
+                      {
+                        "when": [
+                          "not",
+                          [
+                            "eq",
+                            "$tag",
+                            "style"
+                          ]
+                        ],
+                        "then": [
+                          {
+                            "call": "html.serialize"
+                          }
+                        ]
+                      }
+                    ],
+                    "yield": "$result",
+                    "into": "childrenText"
+                  }
+                ]
+              },
+              {
+                "let": "result",
+                "value": [
+                  "concat",
+                  "<",
+                  "$tag",
+                  "$attributesText",
+                  ">",
+                  [
+                    "if",
+                    "$void",
+                    "",
+                    [
+                      "concat",
+                      "$childrenText",
+                      "</",
+                      "$tag",
+                      ">"
+                    ]
+                  ]
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "html.observe": [
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$input"
+        },
+        "into": "kind"
+      },
+      {
+        "let": "result",
+        "value": {
+          "nodes": [
+            "list"
+          ],
+          "text": ""
+        }
+      },
+      {
+        "when": [
+          "and",
+          [
+            "not",
+            [
+              "eq",
+              "$input",
+              null
+            ]
+          ],
+          [
+            "not",
+            [
+              "eq",
+              "$input",
+              false
+            ]
+          ],
+          [
+            "not",
+            [
+              "eq",
+              "$kind.type",
+              "undefined"
+            ]
+          ]
+        ],
+        "then": [
+          {
+            "when": "$kind.array",
+            "then": [
+              {
+                "fold": "$input",
+                "as": "part",
+                "accumulator": "observed",
+                "initial": {
+                  "nodes": [
+                    "list"
+                  ],
+                  "text": ""
+                },
+                "steps": [
+                  {
+                    "let": "input",
+                    "value": "$part"
+                  },
+                  {
+                    "call": "html.observe"
+                  }
+                ],
+                "yield": {
+                  "nodes": [
+                    "append",
+                    "$observed.nodes",
+                    "$result.nodes"
+                  ],
+                  "text": [
+                    "concat",
+                    "$observed.text",
+                    "$result.text"
+                  ]
+                },
+                "into": "result"
+              }
+            ]
+          },
+          {
+            "when": [
+              "and",
+              [
+                "not",
+                "$kind.array"
+              ],
+              [
+                "not",
+                [
+                  "eq",
+                  "$kind.type",
+                  "object"
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "value.string",
+                "args": {
+                  "value": "$input"
+                },
+                "into": "string"
+              },
+              {
+                "let": "result",
+                "value": {
+                  "nodes": [
+                    "list"
+                  ],
+                  "text": "$string"
+                }
+              }
+            ]
+          },
+          {
+            "when": [
+              "and",
+              [
+                "not",
+                "$kind.array"
+              ],
+              [
+                "eq",
+                "$kind.type",
+                "object"
+              ]
+            ],
+            "then": [
+              {
+                "let": "element",
+                "value": "$input"
+              },
+              {
+                "let": "attrs",
+                "value": [
+                  "or",
+                  [
+                    "at",
+                    "$element",
+                    "attrs"
+                  ],
+                  {}
+                ]
+              },
+              {
+                "let": "tag",
+                "value": [
+                  "at",
+                  "$element",
+                  "tag"
+                ]
+              },
+              {
+                "fold": [
+                  "list",
+                  [
+                    "or",
+                    [
+                      "at",
+                      "$element",
+                      "children"
+                    ],
+                    [
+                      "list"
+                    ]
+                  ]
+                ],
+                "as": "child",
+                "accumulator": "ignored",
+                "initial": null,
+                "steps": [
+                  {
+                    "let": "input",
+                    "value": "$child"
+                  },
+                  {
+                    "let": "parents",
+                    "value": [
+                      "append",
+                      "$parents",
+                      [
+                        "if",
+                        [
+                          "at",
+                          "$attrs",
+                          "id"
+                        ],
+                        [
+                          "list",
+                          [
+                            "at",
+                            "$attrs",
+                            "id"
+                          ]
+                        ],
+                        [
+                          "list"
+                        ]
+                      ]
+                    ]
+                  },
+                  {
+                    "call": "html.observe"
+                  }
+                ],
+                "yield": "$result",
+                "into": "children"
+              },
+              {
+                "port": "text.trim",
+                "args": {
+                  "value": "$children.text"
+                },
+                "into": "trimmed"
+              },
+              {
+                "let": "label",
+                "value": [
+                  "and",
+                  [
+                    "eq",
+                    "$tag",
+                    "label"
+                  ],
+                  [
+                    "not",
+                    [
+                      "eq",
+                      "$trimmed",
+                      ""
+                    ]
+                  ]
+                ]
+              },
+              {
+                "let": "result",
+                "value": {
+                  "text": "$children.text",
+                  "nodes": [
+                    "append",
+                    [
+                      "list",
+                      {
+                        "tag": "$tag",
+                        "attrs": "$attrs",
+                        "text": "$children.text",
+                        "named": [
+                          "not",
+                          [
+                            "eq",
+                            "$trimmed",
+                            ""
+                          ]
+                        ],
+                        "parents": "$parents",
+                        "wrapped": false
+                      }
+                    ],
+                    [
+                      "map",
+                      "$children.nodes",
+                      "n",
+                      {
+                        "tag": "$n.tag",
+                        "attrs": "$n.attrs",
+                        "text": "$n.text",
+                        "named": "$n.named",
+                        "parents": "$n.parents",
+                        "wrapped": [
+                          "or",
+                          "$label",
+                          "$n.wrapped"
+                        ]
+                      }
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "html.inspect": [
+      {
+        "let": "parents",
+        "value": [
+          "list"
+        ]
+      },
+      {
+        "call": "html.observe"
+      },
+      {
+        "let": "nodes",
+        "value": "$result.nodes"
+      },
+      {
+        "let": "ids",
+        "value": [
+          "map",
+          [
+            "filter",
+            "$nodes",
+            "n",
+            [
+              "at",
+              "$n.attrs",
+              "id"
+            ]
+          ],
+          "n",
+          [
+            "at",
+            "$n.attrs",
+            "id"
+          ]
+        ]
+      },
+      {
+        "fold": "$ids",
+        "as": "id",
+        "accumulator": "duplicates",
+        "initial": {
+          "seen": [
+            "list"
+          ],
+          "repeated": [
+            "list"
+          ]
+        },
+        "steps": [],
+        "yield": {
+          "seen": [
+            "append",
+            "$duplicates.seen",
+            [
+              "list",
+              "$id"
+            ]
+          ],
+          "repeated": [
+            "if",
+            [
+              "includes",
+              "$duplicates.seen",
+              "$id"
+            ],
+            [
+              "append",
+              "$duplicates.repeated",
+              [
+                "list",
+                "$id"
+              ]
+            ],
+            "$duplicates.repeated"
+          ]
+        },
+        "into": "duplicates"
+      },
+      {
+        "let": "controls",
+        "value": [
+          "filter",
+          "$nodes",
+          "n",
+          [
+            "includes",
+            [
+              "list",
+              "button",
+              "input",
+              "select",
+              "textarea"
+            ],
+            "$n.tag"
+          ]
+        ]
+      },
+      {
+        "fold": "$controls",
+        "as": "control",
+        "accumulator": "unnamed",
+        "initial": [],
+        "steps": [
+          {
+            "let": "attrs",
+            "value": "$control.attrs"
+          },
+          {
+            "let": "named",
+            "value": [
+              "or",
+              [
+                "eq",
+                [
+                  "at",
+                  "$attrs",
+                  "type"
+                ],
+                "hidden"
+              ],
+              "$control.wrapped",
+              [
+                "and",
+                [
+                  "eq",
+                  "$control.tag",
+                  "button"
+                ],
+                "$control.named"
+              ],
+              [
+                "and",
+                [
+                  "at",
+                  "$attrs",
+                  "id"
+                ],
+                [
+                  "some",
+                  "$nodes",
+                  "label",
+                  [
+                    "and",
+                    [
+                      "eq",
+                      "$label.tag",
+                      "label"
+                    ],
+                    "$label.named",
+                    [
+                      "eq",
+                      [
+                        "at",
+                        "$label.attrs",
+                        "for"
+                      ],
+                      [
+                        "at",
+                        "$attrs",
+                        "id"
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          },
+          {
+            "when": [
+              "at",
+              "$attrs",
+              "aria-label"
+            ],
+            "then": [
+              {
+                "port": "text.trim",
+                "args": {
+                  "value": [
+                    "at",
+                    "$attrs",
+                    "aria-label"
+                  ]
+                },
+                "into": "label"
+              },
+              {
+                "let": "named",
+                "value": [
+                  "or",
+                  "$named",
+                  "$label"
+                ]
+              }
+            ]
+          },
+          {
+            "when": [
+              "at",
+              "$attrs",
+              "aria-labelledby"
+            ],
+            "then": [
+              {
+                "port": "text.split",
+                "args": {
+                  "value": [
+                    "at",
+                    "$attrs",
+                    "aria-labelledby"
+                  ],
+                  "pattern": "\\s+"
+                },
+                "into": "labelIds"
+              },
+              {
+                "let": "named",
+                "value": [
+                  "or",
+                  "$named",
+                  [
+                    "every",
+                    "$labelIds",
+                    "id",
+                    [
+                      "some",
+                      "$nodes",
+                      "label",
+                      [
+                        "and",
+                        [
+                          "eq",
+                          [
+                            "at",
+                            "$label.attrs",
+                            "id"
+                          ],
+                          "$id"
+                        ],
+                        "$label.named"
+                      ]
+                    ]
+                  ]
+                ]
+              }
+            ]
+          }
+        ],
+        "yield": [
+          "if",
+          "$named",
+          "$unnamed",
+          [
+            "append",
+            "$unnamed",
+            [
+              "list",
+              "$control.tag"
+            ]
+          ]
+        ],
+        "into": "unnamed"
+      },
+      {
+        "let": "result",
+        "value": {
+          "main": [
+            "count",
+            [
+              "filter",
+              "$nodes",
+              "n",
+              [
+                "eq",
+                "$n.tag",
+                "main"
+              ]
+            ]
+          ],
+          "h1": [
+            "count",
+            [
+              "filter",
+              "$nodes",
+              "n",
+              [
+                "eq",
+                "$n.tag",
+                "h1"
+              ]
+            ]
+          ],
+          "ids": "$ids",
+          "duplicateIds": "$duplicates.repeated",
+          "links": [
+            "map",
+            [
+              "filter",
+              "$nodes",
+              "n",
+              [
+                "and",
+                [
+                  "eq",
+                  "$n.tag",
+                  "a"
+                ],
+                [
+                  "at",
+                  "$n.attrs",
+                  "href"
+                ]
+              ]
+            ],
+            "n",
+            [
+              "at",
+              "$n.attrs",
+              "href"
+            ]
+          ],
+          "unnamed": "$unnamed",
+          "navigation": [
+            "map",
+            [
+              "filter",
+              "$nodes",
+              "n",
+              [
+                "and",
+                [
+                  "eq",
+                  "$n.tag",
+                  "nav"
+                ],
+                [
+                  "eq",
+                  [
+                    "at",
+                    "$n.attrs",
+                    "id"
+                  ],
+                  "site-nav"
+                ]
+              ]
+            ],
+            "nav",
+            [
+              "map",
+              [
+                "filter",
+                "$nodes",
+                "link",
+                [
+                  "and",
+                  [
+                    "eq",
+                    "$link.tag",
+                    "a"
+                  ],
+                  [
+                    "includes",
+                    "$link.parents",
+                    "site-nav"
+                  ]
+                ]
+              ],
+              "link",
+              {
+                "href": [
+                  "at",
+                  "$link.attrs",
+                  "href"
+                ],
+                "label": "$link.text"
+              }
+            ]
+          ]
+        }
+      }
+    ],
+    "html.cssText": [
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$input"
+        },
+        "into": "cssInputKind"
+      },
+      {
+        "assert": "$cssInputKind.array",
+        "message": "Style content must be text children."
+      },
+      {
+        "each": "$input",
+        "as": "cssPart",
+        "steps": [
+          {
+            "port": "value.type",
+            "args": {
+              "value": "$cssPart"
+            },
+            "into": "cssPartType"
+          },
+          {
+            "assert": [
+              "eq",
+              "$cssPartType",
+              "string"
+            ],
+            "message": "Style content must contain text only."
+          }
+        ]
+      },
+      {
+        "port": "text.join",
+        "args": {
+          "values": "$input",
+          "separator": ""
+        },
+        "into": "cssInput"
+      },
+      {
+        "port": "text.replaceAll",
+        "args": {
+          "value": "$cssInput",
+          "search": "<",
+          "replacement": "\\3C "
+        },
+        "into": "result"
+      }
+    ]
+  }
+}

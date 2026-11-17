@@ -1,0 +1,218 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process mw.visualReceipt:
+  let board = $eventInput.board
+  let receipt = $eventInput.receipt
+  port kernel.invoke { query = "cw.inspect"; input = { board = $board; id = $eventInput.id } } → inspection
+  let proposal = $inspection.proposal
+  let change = $proposal.content.change
+  let item = at($change, "item")
+  let origin = at($change, "origin")
+  let matter = at($board.head.document, "matter")
+  let title = if($item, $item.title, $proposal.content.title)
+  let description = if($item, $item.body, "")
+  let disposition = if(eq($proposal.status, "accepted"), "Accepted for inclusion", if(eq($proposal.status, "rejected"), "Rejected", "Open for review"))
+  port json.stringify { value = $receipt; space = 0 } → replayJson
+  port number.calculate { operation = "lessEqual"; values = list(count($replayJson), 20000) } → highlight
+  let events = filter($receipt.body.events, "event", and(eq($event.request.id, $proposal.id), includes(list("propose", "review", "accept", "reject"), $event.request.action)))
+  let proposalEvent = at($events, 0)
+  let proposalPath = concat("/body/events/", $proposalEvent.request.expectedBoardRevision, "/request/change")
+  let reviewEvent = at(filter($events, "event", eq(at($event.request, "contentHash"), $proposal.contentHash)), 0)
+  let contentPath = if($reviewEvent, concat("/body/events/", $reviewEvent.request.expectedBoardRevision, "/request/contentHash"), $proposalPath)
+  fold $events as event; steps starts list():
+    let request = $event.request
+    let action = if(eq($request.action, "propose"), "Proposed", if(eq($request.action, "review"), concat("Reviewed · ", $request.decision), if(eq($request.action, "accept"), "Accepted", "Rejected")))
+    let comment = at($request, "comment")
+    let stepNumber = concat(add(count($steps), 1))
+    let entry = {
+      tag = "li"; attrs = {}; children = list(
+        { tag = "span"; attrs = { class = "step-number" }; children = list(if(eq(count($stepNumber), 1), concat("0", $stepNumber), $stepNumber)) },
+        { tag = "h3"; attrs = {}; children = list($action) },
+        { tag = "p"; attrs = { class = "actor" }; children = list($request.actor) },
+        if($comment, { tag = "p"; attrs = { class = "comment" }; children = list($comment) }, null),
+        { tag = "button"; attrs = { type = "button"; class = "event-inspection inspect-link"; "data-json-pointer" = concat("/body/events/", $request.expectedBoardRevision, "/request/action") }; children = list("Inspect event") }
+      )
+    }
+    yield append($steps, list($entry)) → steps
+  let hashes = list(
+    { label = "Collaboration receipt"; digest = $receipt.sha256; description = "Binds the replay basis, ordered events, and resulting board hash."; target = "/sha256" },
+    { label = "Proposal content"; digest = $proposal.contentHash; description = "Binds the author, title, proposed change, and its starting state. Reviews identify this exact content."; target = $contentPath }
+  )
+  when at($origin, "modelRunHash"):
+    let hashes = append($hashes, list({ label = "Model-run link"; digest = $origin.modelRunHash; description = "Identifies the separate model-run record. In Usewords, select this proposal and supply that record to verify the link."; target = concat($proposalPath, "/origin/modelRunHash") }))
+  let hashRows = map($hashes, "hash", {
+    tag = "div"; attrs = { class = "fingerprint" }; children = list(
+      { tag = "button"; attrs = { type = "button"; class = "inspect-link"; "data-json-pointer" = $hash.target }; children = list(
+        { tag = "strong"; attrs = {}; children = list($hash.label) },
+        { tag = "code"; attrs = {}; children = list($hash.digest) }
+      ) },
+      { tag = "p"; attrs = {}; children = list($hash.description) }
+    )
+  })
+  port json.stringify { value = $receipt; space = 2 } → prettyReceipt
+  port kernel.invoke { query = "mw.receiptJsonTokens"; input = { text = $prettyReceipt; highlight = $highlight } } → receiptTokens
+  let input = {
+    tag = "main"; attrs = { class = "receipt" }; children = list(
+      { tag = "header"; attrs = { class = "mast" }; children = list(
+        { tag = "span"; attrs = { class = "brand" }; children = list("usewords") },
+        { tag = "span"; attrs = { class = "label" }; children = list("Proposal receipt") }
+      ) },
+      { tag = "section"; attrs = { class = "hero" }; children = list(
+        { tag = "p"; attrs = { class = "label kicker" }; children = list(if($matter, $matter.title, "Collaboration workspace")) },
+        { tag = "h1"; attrs = {}; children = list($title) },
+        if($description, { tag = "p"; attrs = { class = "description" }; children = list($description) }, null),
+        { tag = "div"; attrs = { class = "meta" }; children = list(
+          { tag = "span"; attrs = { class = "badge"; "data-status" = $proposal.status }; children = list($disposition) },
+          { tag = "span"; attrs = {}; children = list(concat($proposal.id, " / Board revision ", $receipt.body.revision)) }
+        ) },
+        { tag = "button"; attrs = { type = "button"; class = "proposal-inspection inspect-link"; "data-json-pointer" = $proposalPath }; children = list("Inspect proposal data") }
+      ) },
+      { tag = "section"; attrs = { class = "history" }; children = list(
+        { tag = "h2"; attrs = { class = "label" }; children = list("Decision trail") },
+        { tag = "ol"; attrs = { class = "steps" }; children = $steps },
+        if(and(eq($proposal.status, "accepted"), eq(at($item, "kind"), "option")), {
+          tag = "p"; attrs = { class = "scope" }; children = list("Included as an option for the group to consider. The group can still decide whether to adopt it.")
+        }, null)
+      ) },
+      { tag = "footer"; attrs = { class = "proof" }; children = list(
+        { tag = "h2"; attrs = { class = "label" }; children = list("Record fingerprints · SHA-256") },
+        if($origin, { tag = "p"; attrs = { class = "origin" }; children = list(concat("Origin · ", $origin.label, if(eq($origin.kind, "ai-suggestion"), " (reported provider)", ""))) }, null),
+        { tag = "div"; attrs = { class = "fingerprints" }; children = $hashRows },
+        { tag = "button"; attrs = { type = "button"; class = "json-button"; "data-json-pointer" = ""; commandfor = "receipt-json-viewer"; command = "show-modal" }; children = list("Open JSON viewer") },
+        { tag = "p"; attrs = { class = "note" }; children = list("The full collaboration receipt is embedded below.", if(at($origin, "modelRunHash"), " The model-run record can be verified separately.", "")) }
+      ) },
+      { tag = "details"; attrs = { class = "replay" }; children = list(
+        { tag = "summary"; attrs = {}; children = list("Replayable collaboration JSON") },
+        { tag = "p"; attrs = {}; children = list("Import this HTML file directly in Usewords, or copy all of the JSON below. It contains the full collaboration history for this matter.") },
+        { tag = "label"; attrs = { "for" = "usewords-collaboration-json" }; children = list("Compact replay payload") },
+        { tag = "textarea"; attrs = { id = "usewords-collaboration-json"; readonly = true; rows = 8; spellcheck = "false" }; children = list($replayJson) }
+      ) },
+      { tag = "dialog"; attrs = { id = "receipt-json-viewer"; class = "json-modal"; "aria-labelledby" = "receipt-json-title" }; children = list(
+        { tag = "header"; attrs = { class = "json-modal-header" }; children = list(
+          { tag = "div"; attrs = {}; children = list(
+            { tag = "p"; attrs = { class = "label" }; children = list("Usewords · Inspect receipt") },
+            { tag = "h2"; attrs = { id = "receipt-json-title" }; children = list("Collaboration JSON") },
+            { tag = "p"; attrs = { id = "receipt-json-location"; role = "status" }; children = list("Full receipt") }
+          ) },
+          { tag = "button"; attrs = { type = "button"; class = "json-button"; commandfor = "receipt-json-viewer"; command = "close"; autofocus = true }; children = list("Close") }
+        ) },
+        { tag = "pre"; attrs = { class = "json-code"; tabindex = 0; "aria-label" = "Formatted collaboration receipt" }; children = $receiptTokens }
+      ) }
+    )
+  }
+  call html.serialize
+  let stylesheet = concat(
+    ":root{color-scheme:light;--ink:#232d29;--muted:#58635b;--paper:#fffdf7;--line:#deded0;--accent:#a0402c;--proof:#213c35}",
+    "*{box-sizing:border-box}body{margin:0;padding:clamp(14px,5vw,64px);background:#e8ebe2;color:var(--ink);font:16px/1.55 system-ui,sans-serif}",
+    ".receipt{max-width:900px;margin:auto;background:var(--paper);border-top:5px solid var(--accent);box-shadow:0 16px 56px #213c351c}",
+    ".mast,.hero,.history,.proof,.replay{padding-inline:clamp(20px,5vw,56px)}.mast{padding-block:16px;display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid var(--line)}",
+    ".brand{font:italic 700 27px/1 Georgia,serif;letter-spacing:-.06em}.label{margin:0;font-size:.7rem;font-weight:750;letter-spacing:.17em;text-transform:uppercase}",
+    ".hero{padding-block:clamp(26px,5vw,48px);background:linear-gradient(120deg,#f7f0e5 0%,var(--paper) 84%)}.kicker{color:var(--accent)}",
+    "h1{max-width:20ch;margin:12px 0 14px;font:500 clamp(2.25rem,6vw,4.75rem)/1.02 Georgia,serif;letter-spacing:-.05em;overflow-wrap:anywhere}",
+    ".description{max-width:64ch;margin:0 0 22px;color:var(--muted)}.meta{display:flex;gap:12px;flex-wrap:wrap;align-items:center;font-size:.82rem;color:var(--muted)}",
+    ".badge{display:inline-block;border-radius:100px;padding:4px 11px;background:#ede6d7;color:#493b21;font-weight:720}.badge[data-status=accepted]{background:#dceadf;color:#244f3c}.badge[data-status=rejected]{background:#f6e3df;color:#783325}",
+    ".history{padding-block:25px 28px;border-top:1px solid var(--line)}.steps{margin:13px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:12px;list-style:none}",
+    ".steps li{border-top:2px solid var(--line);padding-top:10px;min-width:0}.step-number{color:var(--accent);font:700 .75rem/1 monospace}.steps h3{margin:6px 0 0;font-size:.95rem}.actor{margin:1px 0 0;color:var(--muted);font-size:.8rem}.comment{margin:6px 0 0;font-size:.82rem;overflow-wrap:anywhere}",
+    ".scope{margin:18px 0 0;padding-left:12px;border-left:2px solid var(--accent);font-size:.86rem;color:var(--muted)}",
+    "summary{cursor:pointer}summary:focus-visible,button:focus-visible,.json-code:focus-visible{outline:2px solid currentColor;outline-offset:4px}.inspect-link{border:0;padding:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;text-decoration:underline;text-underline-offset:3px}.proposal-inspection,.event-inspection{margin-top:10px;font-size:.8rem;color:var(--accent);font-weight:650}.proposal-inspection{margin-top:14px}",
+    ".json-code{max-height:22rem;margin:8px 0 0;padding:12px;border-radius:5px;background:#172722;color:#e0ebe4;white-space:pre-wrap;overflow:auto;overflow-wrap:anywhere;font:12px/1.65 ui-monospace,monospace;tab-size:2}",
+    ".json-property{color:#92daeb}.json-string{color:#f5ce8d}.json-number{color:#c6b7ff}.json-boolean,.json-keyword{color:#f6a9c7}",
+    ".json-button{cursor:pointer;padding:7px 12px;border:1px solid #98b7a8;border-radius:5px;background:#deeadf;color:#1b372e;font:700 .8rem system-ui,sans-serif}.json-button:hover{background:#f5f3e8}",
+    ".json-modal{width:min(96vw,1400px);max-width:none;height:90dvh;max-height:none;margin:auto;padding:0;border:1px solid #507067;border-radius:10px;background:#172722;color:#e0ebe4;box-shadow:0 20px 90px #101c18a8}.json-modal[open]{display:grid;grid-template-rows:auto minmax(0,1fr)}.json-modal::backdrop{background:#10251ed9}",
+    ".json-modal-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px clamp(14px,3vw,30px);border-bottom:1px solid #39574b;background:#244439}.json-modal-header .label{color:#a9d4be}.json-modal-header h2{font:500 clamp(1.4rem,3vw,2rem) Georgia,serif;margin:3px 0 0}.json-modal .json-code{max-height:none;margin:0;padding:clamp(14px,3vw,30px);border-radius:0;font-size:13px}",
+    "#receipt-json-location{margin:5px 0 0;color:#c2ddd0;font:12px/1.4 ui-monospace,monospace;overflow-wrap:anywhere}::highlight(receipt-jump){background:#f7dc8f;color:#14261f}",
+    ".proof{padding-block:22px 24px;background:var(--proof);color:#f4f1e6}.proof .label{color:#d8e8d9}.origin,.note{margin:7px 0 0;font-size:.78rem;color:#deeadf;overflow-wrap:anywhere}",
+    ".fingerprints{display:grid;gap:7px;margin:12px 0}.fingerprint button{max-width:100%;font-size:.78rem}.fingerprint code{display:inline-block;margin-left:8px;overflow-wrap:anywhere}.fingerprint p{margin:3px 0 6px;font-size:.78rem;color:#deeadf}",
+    ".replay{padding-block:15px 18px;background:#f0eee3}.replay summary{cursor:pointer;color:var(--proof);font-size:.88rem;font-weight:720}.replay p{margin:10px 0;color:var(--muted);font-size:.85rem}.replay label{display:block;font-size:.78rem;font-weight:700}.replay textarea{width:100%;margin-top:5px;padding:10px;border:1px solid var(--line);border-radius:4px;background:var(--paper);color:var(--ink);font:12px/1.5 monospace;resize:vertical}",
+    "@media(max-width:480px){.fingerprint code{display:block;margin-left:0}.json-modal{width:96vw;height:94dvh}}@page{size:A4;margin:11mm}@media print{body{padding:0;background:#fff}.receipt{box-shadow:none}.hero{padding-block:26px}.history,.proof{break-inside:avoid}.replay,.proposal-inspection,.event-inspection,.fingerprint p,.json-button,.json-modal[open]{display:none}*{print-color-adjust:exact}}"
+  )
+  let receiptHtml = $result
+  call mw.receiptNavigation
+  let result = concat("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Usewords proposal receipt</title><style>", $stylesheet, "</style></head><body>", $receiptHtml, "<script id=\"receipt-json-navigation\">", $result, "</script></body></html>")
+
+process mw.receiptNavigation:
+  # The process selects JSON pointers. This fixed viewer code locates them in the two-space rendering.
+  let result = concat(
+    "(() => {\n",
+    "  const dialog = document.getElementById('receipt-json-viewer');\n",
+    "  const code = dialog.querySelector('pre');\n",
+    "  const text = code.textContent;\n",
+    "  const location = document.getElementById('receipt-json-location');\n",
+    "  function offsetFor(pointer) {\n",
+    "    let value = JSON.parse(text), offset = 0, start = 0, depth = 0;\n",
+    "    for (const key of pointer.slice(1).split('/')) {\n",
+    "      const array = Array.isArray(value), keys = Object.keys(value), index = keys.indexOf(key);\n",
+    "      if (index === -1) throw new Error('Unknown JSON location');\n",
+    "      const preceding = array ? value.slice(0, index) : Object.fromEntries(keys.slice(0, index).map(k => [k, value[k]]));\n",
+    "      const prefix = index ? JSON.stringify(preceding, null, 2).slice(0, -2) + ',' : array ? '[' : '{';\n",
+    "      start = offset + prefix.replaceAll('\\n', '\\n' + '  '.repeat(depth)).length + 1 + 2 * (depth + 1);\n",
+    "      offset = start + (array ? 0 : JSON.stringify(key).length + 2);\n",
+    "      value = value[key];\n",
+    "      depth += 1;\n",
+    "    }\n",
+    "    return start;\n",
+    "  }\n",
+    "  function lineRange(start) {\n",
+    "    const newline = text.indexOf('\\n', start), end = newline === -1 ? text.length : newline;\n",
+    "    const range = document.createRange(), nodes = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);\n",
+    "    let offset = 0, started = false;\n",
+    "    for (let node; (node = nodes.nextNode());) {\n",
+    "      const next = offset + node.length;\n",
+    "      if (!started && start < next) { range.setStart(node, start - offset); started = true; }\n",
+    "      if (started && end <= next) { range.setEnd(node, end - offset); return range; }\n",
+    "      offset = next;\n",
+    "    }\n",
+    "    throw new Error('Unknown JSON line');\n",
+    "  }\n",
+    "  document.addEventListener('click', event => {\n",
+    "    const button = event.target.closest('button[data-json-pointer]');\n",
+    "    if (!button) return;\n",
+    "    event.preventDefault();\n",
+    "    dialog.showModal();\n",
+    "    const pointer = button.dataset.jsonPointer;\n",
+    "    CSS.highlights?.delete('receipt-jump');\n",
+    "    code.scrollTop = 0;\n",
+    "    location.textContent = pointer || 'Full receipt';\n",
+    "    if (!pointer) return;\n",
+    "    try {\n",
+    "      const range = lineRange(offsetFor(pointer));\n",
+    "      if (CSS.highlights && typeof Highlight === 'function') CSS.highlights.set('receipt-jump', new Highlight(range));\n",
+    "      const line = range.getClientRects()[0];\n",
+    "      if (line) code.scrollTop += line.top - code.getBoundingClientRect().top - Math.min(96, code.clientHeight / 4);\n",
+    "      code.focus({preventScroll:true});\n",
+    "    } catch { location.textContent = 'Entry unavailable · showing the full receipt'; }\n",
+    "  });\n",
+    "})();"
+  )
+
+process mw.receiptJsonTokens:
+  let jsonText = $eventInput.text
+  let result = list($jsonText)
+  # Bound the extra markup across all views. Larger receipts still display the full pretty JSON.
+  when $eventInput.highlight:
+    port kernel.invoke { query = "sp.scan"; input = { text = $jsonText; language = "json" } } → scanned
+    let result = map($scanned.segments, "segment", if(includes(list("property", "string", "number", "boolean", "keyword"), $segment.role), {
+      tag = "span"; attrs = { class = concat("json-", $segment.role) }; children = list($segment.text)
+    }, $segment.text))
+
+process mw.historyJson:
+  let historyText = $eventInput
+  port number.calculate { operation = "lessEqual"; values = list(count($historyText), 3000000) } → bounded
+  assert $bounded
+    otherwise "MW-IMPORT: File exceeds the local import limit."
+  port text.trim { value = $historyText } → trimmed
+  port text.slice { value = $trimmed; start = 0; end = 1 } → first
+  let result = $historyText
+  when eq($first, "<"):
+    port text.split { value = $historyText; pattern = "<textarea\\s+id=\"usewords-collaboration-json\"(?:\\s+[^>]*)?>" } → sections
+    assert eq(count($sections), 2)
+      otherwise "MW-IMPORT: A visual receipt must contain exactly one collaboration JSON field."
+    port text.match { value = at($sections, 1); pattern = "^([^<]*)</textarea>" } → field
+    assert $field
+      otherwise "MW-IMPORT: The collaboration JSON field is incomplete or contains markup."
+    # Reverse the HTML serializer's entities once, with ampersands last.
+    fold list(list("&quot;", "\""), list("&lt;", "<"), list("&gt;", ">"), list("&amp;", "&")) as entity; decoded starts at($field.groups, 0):
+      port text.split { value = $decoded; pattern = at($entity, 0) } → pieces
+      port text.join { values = $pieces; separator = at($entity, 1) } → next
+      yield $next → result

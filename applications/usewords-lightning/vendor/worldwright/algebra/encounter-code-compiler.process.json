@@ -1,0 +1,4173 @@
+{
+  "protocol": "temple/surface-process-module/1",
+  "queries": {
+    "ec.lex": [
+      {
+        "port": "text.replaceAll",
+        "args": {
+          "value": "$text",
+          "search": "\r\n",
+          "replacement": "\n"
+        },
+        "into": "ecLexText"
+      },
+      {
+        "port": "text.split",
+        "args": {
+          "value": "$ecLexText",
+          "pattern": "\n"
+        },
+        "into": "ecLines"
+      },
+      {
+        "fold": "$ecLines",
+        "as": "ecRaw",
+        "accumulator": "ecLex",
+        "initial": {
+          "nodes": [
+            "list"
+          ],
+          "stack": [
+            "list"
+          ],
+          "line": 1,
+          "offset": 0,
+          "literals": {}
+        },
+        "steps": [
+          {
+            "try": [
+              {
+                "port": "text.trim",
+                "args": {
+                  "value": "$ecRaw"
+                },
+                "into": "ecLine"
+              },
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$ecLine",
+                  "pattern": "^(#.*)?$"
+                },
+                "into": "ecSkip"
+              },
+              {
+                "let": "ecLexNext",
+                "value": "$ecLex"
+              },
+              {
+                "when": [
+                  "not",
+                  "$ecSkip"
+                ],
+                "then": [
+                  {
+                    "let": "ecSpan",
+                    "value": {
+                      "file": "$file",
+                      "line": "$ecLex.line",
+                      "column": 1,
+                      "offset": "$ecLex.offset",
+                      "endOffset": [
+                        "add",
+                        "$ecLex.offset",
+                        [
+                          "count",
+                          "$ecRaw"
+                        ]
+                      ]
+                    }
+                  },
+                  {
+                    "port": "text.matches",
+                    "args": {
+                      "value": "$ecRaw",
+                      "pattern": "\t"
+                    },
+                    "into": "ecTabs"
+                  },
+                  {
+                    "assert": [
+                      "not",
+                      "$ecTabs"
+                    ],
+                    "message": "EC-P001: Use spaces for indentation; tabs do not define a second nesting grammar."
+                  },
+                  {
+                    "port": "text.split",
+                    "args": {
+                      "value": "$ecRaw",
+                      "pattern": "^( *)([\\s\\S]*)$"
+                    },
+                    "into": "ecIndentParts"
+                  },
+                  {
+                    "let": "ecIndent",
+                    "value": [
+                      "count",
+                      [
+                        "at",
+                        "$ecIndentParts",
+                        1
+                      ]
+                    ]
+                  },
+                  {
+                    "let": "ecStack",
+                    "value": [
+                      "filter",
+                      "$ecLex.stack",
+                      "ecParent",
+                      [
+                        "includes",
+                        [
+                          "range",
+                          "$ecIndent"
+                        ],
+                        [
+                          "add",
+                          "$ecParent.indent",
+                          1
+                        ]
+                      ]
+                    ]
+                  },
+                  {
+                    "let": "ecParent",
+                    "value": [
+                      "at",
+                      "$ecStack",
+                      [
+                        "add",
+                        [
+                          "count",
+                          "$ecStack"
+                        ],
+                        -1
+                      ]
+                    ]
+                  },
+                  {
+                    "assert": [
+                      "or",
+                      [
+                        "eq",
+                        "$ecIndent",
+                        0
+                      ],
+                      [
+                        "and",
+                        "$ecParent",
+                        [
+                          "eq",
+                          "$ecIndent",
+                          [
+                            "add",
+                            [
+                              "at",
+                              "$ecParent",
+                              "indent"
+                            ],
+                            2
+                          ]
+                        ]
+                      ]
+                    ],
+                    "message": "EC-P002: Indent a child exactly two spaces beyond its parent."
+                  },
+                  {
+                    "let": "ecLexNode",
+                    "value": {
+                      "id": "$ecLex.line",
+                      "line": "$ecLex.line",
+                      "offset": "$ecLex.offset",
+                      "raw": "$ecRaw",
+                      "text": "$ecLine",
+                      "indent": "$ecIndent",
+                      "parent": [
+                        "if",
+                        "$ecParent",
+                        [
+                          "at",
+                          "$ecParent",
+                          "id"
+                        ],
+                        0
+                      ]
+                    }
+                  },
+                  {
+                    "port": "record.put",
+                    "args": {
+                      "record": "$ecLexNext",
+                      "key": "nodes",
+                      "value": [
+                        "append",
+                        "$ecLex.nodes",
+                        [
+                          "list",
+                          "$ecLexNode"
+                        ]
+                      ]
+                    },
+                    "into": "ecLexNext"
+                  },
+                  {
+                    "port": "record.put",
+                    "args": {
+                      "record": "$ecLexNext",
+                      "key": "stack",
+                      "value": [
+                        "append",
+                        "$ecStack",
+                        [
+                          "list",
+                          "$ecLexNode"
+                        ]
+                      ]
+                    },
+                    "into": "ecLexNext"
+                  },
+                  {
+                    "port": "text.matches",
+                    "args": {
+                      "value": "$ecLine",
+                      "pattern": "(?:^|: |^- )(\"(?:\\\\[\\s\\S]|[^\"\\\\])*\")$"
+                    },
+                    "into": "ecHasLiteral"
+                  },
+                  {
+                    "when": "$ecHasLiteral",
+                    "then": [
+                      {
+                        "port": "text.split",
+                        "args": {
+                          "value": "$ecLine",
+                          "pattern": "(?:^|: |^- )(\"(?:\\\\[\\s\\S]|[^\"\\\\])*\")$"
+                        },
+                        "into": "ecLiteralParts"
+                      },
+                      {
+                        "let": "ecLiteralToken",
+                        "value": [
+                          "at",
+                          "$ecLiteralParts",
+                          1
+                        ]
+                      },
+                      {
+                        "port": "json.parse",
+                        "args": {
+                          "text": "$ecLiteralToken"
+                        },
+                        "into": "ecLiteralValue"
+                      },
+                      {
+                        "port": "record.put",
+                        "args": {
+                          "record": "$ecLex.literals",
+                          "key": "$ecLiteralToken",
+                          "value": "$ecLiteralValue"
+                        },
+                        "into": "ecLiteralPool"
+                      },
+                      {
+                        "port": "record.put",
+                        "args": {
+                          "record": "$ecLexNext",
+                          "key": "literals",
+                          "value": "$ecLiteralPool"
+                        },
+                        "into": "ecLexNext"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "port": "record.put",
+                "args": {
+                  "record": "$ecLexNext",
+                  "key": "line",
+                  "value": [
+                    "add",
+                    "$ecLex.line",
+                    1
+                  ]
+                },
+                "into": "ecLexNext"
+              },
+              {
+                "port": "record.put",
+                "args": {
+                  "record": "$ecLexNext",
+                  "key": "offset",
+                  "value": [
+                    "add",
+                    "$ecLex.offset",
+                    [
+                      "add",
+                      [
+                        "count",
+                        "$ecRaw"
+                      ],
+                      1
+                    ]
+                  ]
+                },
+                "into": "ecLexNext"
+              }
+            ],
+            "error": "ecLocatedFault",
+            "catch": [
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$ecLocatedFault.message",
+                  "pattern": "^EC-DIAGNOSTIC:"
+                },
+                "into": "ecAlreadyLocated"
+              },
+              {
+                "when": "$ecAlreadyLocated",
+                "then": [
+                  {
+                    "let": "ecUnreachable",
+                    "value": [
+                      "raise",
+                      "$ecLocatedFault.message"
+                    ]
+                  }
+                ]
+              },
+              {
+                "port": "json.stringify",
+                "args": {
+                  "value": {
+                    "protocol": "encounter/source-diagnostic/1",
+                    "span": "$ecSpan",
+                    "message": "$ecLocatedFault.message"
+                  }
+                },
+                "into": "ecDiagnosticWire"
+              },
+              {
+                "let": "ecUnreachable",
+                "value": [
+                  "raise",
+                  [
+                    "concat",
+                    "EC-DIAGNOSTIC:",
+                    "$ecDiagnosticWire"
+                  ]
+                ]
+              }
+            ]
+          }
+        ],
+        "yield": "$ecLexNext",
+        "into": "ecLex"
+      },
+      {
+        "let": "result",
+        "value": "$ecLex"
+      }
+    ],
+    "ec.header": [
+      {
+        "let": "ecNode",
+        "value": "$eventInput.node"
+      },
+      {
+        "let": "ecHeaderResult",
+        "value": null
+      },
+      {
+        "port": "text.matches",
+        "args": {
+          "value": "$ecNode.text",
+          "pattern": "^module [A-Za-z_][A-Za-z0-9_.-]*$"
+        },
+        "into": "ecModuleHeader"
+      },
+      {
+        "when": "$ecModuleHeader",
+        "then": [
+          {
+            "port": "text.split",
+            "args": {
+              "value": "$ecNode.text",
+              "pattern": "^module ([A-Za-z_][A-Za-z0-9_.-]*)$"
+            },
+            "into": "ecTokens"
+          },
+          {
+            "let": "ecHeaderResult",
+            "value": {
+              "kind": "module",
+              "name": [
+                "at",
+                "$ecTokens",
+                1
+              ],
+              "node": "$ecNode"
+            }
+          }
+        ]
+      },
+      {
+        "port": "text.matches",
+        "args": {
+          "value": "$ecNode.text",
+          "pattern": "^view [A-Za-z_][A-Za-z0-9_.-]* of @[A-Za-z_][A-Za-z0-9_.-]* isa [A-Za-z_][A-Za-z0-9_.-]*:$"
+        },
+        "into": "ecViewHeader"
+      },
+      {
+        "when": "$ecViewHeader",
+        "then": [
+          {
+            "port": "text.split",
+            "args": {
+              "value": "$ecNode.text",
+              "pattern": "^view ([A-Za-z_][A-Za-z0-9_.-]*) of @([A-Za-z_][A-Za-z0-9_.-]*) isa ([A-Za-z_][A-Za-z0-9_.-]*):$"
+            },
+            "into": "ecTokens"
+          },
+          {
+            "let": "ecHeaderResult",
+            "value": {
+              "kind": "view",
+              "id": [
+                "at",
+                "$ecTokens",
+                1
+              ],
+              "source": [
+                "at",
+                "$ecTokens",
+                2
+              ],
+              "type": [
+                "at",
+                "$ecTokens",
+                3
+              ],
+              "node": "$ecNode"
+            }
+          }
+        ]
+      },
+      {
+        "port": "text.matches",
+        "args": {
+          "value": "$ecNode.text",
+          "pattern": "^representation [A-Za-z_][A-Za-z0-9_.-]*:$"
+        },
+        "into": "ecRepresentationHeader"
+      },
+      {
+        "when": "$ecRepresentationHeader",
+        "then": [
+          {
+            "port": "text.split",
+            "args": {
+              "value": "$ecNode.text",
+              "pattern": "^representation ([A-Za-z_][A-Za-z0-9_.-]*):$"
+            },
+            "into": "ecTokens"
+          },
+          {
+            "let": "ecHeaderResult",
+            "value": {
+              "kind": "representation",
+              "id": [
+                "at",
+                "$ecTokens",
+                1
+              ],
+              "node": "$ecNode"
+            }
+          }
+        ]
+      },
+      {
+        "assert": "$ecHeaderResult",
+        "message": "EC-P003: Expected a module, typed view or named representation declaration."
+      },
+      {
+        "let": "result",
+        "value": "$ecHeaderResult"
+      }
+    ],
+    "ec.expression": [
+      {
+        "let": "ecExpr",
+        "value": "$eventInput.text"
+      },
+      {
+        "let": "ecExprScope",
+        "value": "$eventInput.scope"
+      },
+      {
+        "let": "ecExpression",
+        "value": null
+      },
+      {
+        "let": "ecExprType",
+        "value": null
+      },
+      {
+        "let": "ecExprCard",
+        "value": "one"
+      },
+      {
+        "let": "ecExprExpects",
+        "value": null
+      },
+      {
+        "port": "text.matches",
+        "args": {
+          "value": "$ecExpr",
+          "pattern": "^\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"$"
+        },
+        "into": "ecQuoted"
+      },
+      {
+        "when": "$ecQuoted",
+        "then": [
+          {
+            "port": "value.describe",
+            "args": {
+              "value": [
+                "at",
+                "$codePlan.literalValues",
+                "$ecExpr"
+              ]
+            },
+            "into": "ecLiteralKind"
+          },
+          {
+            "assert": [
+              "eq",
+              "$ecLiteralKind.type",
+              "string"
+            ],
+            "message": "EC-P004: The text literal has no parsed source entry."
+          },
+          {
+            "let": "ecExpression",
+            "value": [
+              "list",
+              "at",
+              [
+                "concat",
+                [
+                  "at",
+                  " $",
+                  1
+                ],
+                "codePlan.literalValues"
+              ],
+              "$ecExpr"
+            ]
+          },
+          {
+            "let": "ecExprType",
+            "value": "string"
+          }
+        ]
+      },
+      {
+        "port": "text.matches",
+        "args": {
+          "value": "$ecExpr",
+          "pattern": "^@[A-Za-z_][A-Za-z0-9_.-]*$"
+        },
+        "into": "ecReference"
+      },
+      {
+        "when": "$ecReference",
+        "then": [
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$ecExpr",
+              "start": 1
+            },
+            "into": "ecRefId"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "ec.attempt",
+              "input": {
+                "query": "ec.referenceType",
+                "input": {
+                  "id": "$ecRefId"
+                },
+                "span": "$ecSpan"
+              }
+            },
+            "into": "ecRefType"
+          },
+          {
+            "let": "ecExpression",
+            "value": "$ecRefId"
+          },
+          {
+            "let": "ecExprType",
+            "value": "ref"
+          },
+          {
+            "let": "ecExprExpects",
+            "value": "$ecRefType"
+          }
+        ]
+      },
+      {
+        "port": "text.matches",
+        "args": {
+          "value": "$ecExpr",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_.-]*)?$"
+        },
+        "into": "ecName"
+      },
+      {
+        "when": [
+          "and",
+          "$ecName",
+          [
+            "not",
+            "$ecExprType"
+          ]
+        ],
+        "then": [
+          {
+            "port": "text.split",
+            "args": {
+              "value": "$ecExpr",
+              "pattern": "^([A-Za-z_][A-Za-z0-9_]*)(?:\\.([A-Za-z_][A-Za-z0-9_.-]*))?$"
+            },
+            "into": "ecExprParts"
+          },
+          {
+            "let": "ecBindingName",
+            "value": [
+              "at",
+              "$ecExprParts",
+              1
+            ]
+          },
+          {
+            "let": "ecFieldName",
+            "value": [
+              "or",
+              [
+                "at",
+                "$ecExprParts",
+                2
+              ],
+              null
+            ]
+          },
+          {
+            "let": "ecBinding",
+            "value": [
+              "at",
+              [
+                "filter",
+                "$ecExprScope",
+                "ecB",
+                [
+                  "eq",
+                  "$ecB.name",
+                  "$ecBindingName"
+                ]
+              ],
+              0
+            ]
+          },
+          {
+            "assert": "$ecBinding",
+            "message": "EC-P005: Unknown input name. Declare it with given, or use the view’s explicit source binding."
+          },
+          {
+            "when": "$ecFieldName",
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.attempt",
+                  "input": {
+                    "query": "ec.slot",
+                    "input": {
+                      "type": "$ecBinding.type",
+                      "name": "$ecFieldName"
+                    },
+                    "span": "$ecSpan"
+                  }
+                },
+                "into": "ecExprSlot"
+              },
+              {
+                "let": "ecExpression",
+                "value": [
+                  "list",
+                  "at",
+                  [
+                    "list",
+                    "at",
+                    [
+                      "list",
+                      "at",
+                      [
+                        "concat",
+                        [
+                          "at",
+                          " $",
+                          1
+                        ],
+                        "bindings"
+                      ],
+                      "$ecBindingName"
+                    ],
+                    "values"
+                  ],
+                  "$ecExprSlot.name"
+                ]
+              },
+              {
+                "let": "ecExprType",
+                "value": "$ecExprSlot.kind"
+              },
+              {
+                "let": "ecExprCard",
+                "value": "$ecExprSlot.cardinality"
+              },
+              {
+                "let": "ecExprExpects",
+                "value": "$ecExprSlot.expects"
+              }
+            ]
+          },
+          {
+            "when": [
+              "not",
+              "$ecFieldName"
+            ],
+            "then": [
+              {
+                "when": [
+                  "at",
+                  "$ecBinding",
+                  "expression"
+                ],
+                "then": [
+                  {
+                    "let": "ecExpression",
+                    "value": [
+                      "at",
+                      "$ecBinding",
+                      "expression"
+                    ]
+                  },
+                  {
+                    "let": "ecExprType",
+                    "value": "$ecBinding.kind"
+                  },
+                  {
+                    "let": "ecExprExpects",
+                    "value": "$ecBinding.expects"
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "not",
+                  [
+                    "at",
+                    "$ecBinding",
+                    "expression"
+                  ]
+                ],
+                "then": [
+                  {
+                    "let": "ecExpression",
+                    "value": [
+                      "list",
+                      "at",
+                      [
+                        "list",
+                        "at",
+                        [
+                          "concat",
+                          [
+                            "at",
+                            " $",
+                            1
+                          ],
+                          "bindings"
+                        ],
+                        "$ecBindingName"
+                      ],
+                      [
+                        "if",
+                        [
+                          "eq",
+                          "$ecBinding.type",
+                          "text"
+                        ],
+                        "value",
+                        "id"
+                      ]
+                    ]
+                  },
+                  {
+                    "let": "ecExprType",
+                    "value": [
+                      "if",
+                      [
+                        "eq",
+                        "$ecBinding.type",
+                        "text"
+                      ],
+                      "string",
+                      "ref"
+                    ]
+                  },
+                  {
+                    "let": "ecExprExpects",
+                    "value": [
+                      "if",
+                      [
+                        "eq",
+                        "$ecBinding.type",
+                        "text"
+                      ],
+                      null,
+                      "$ecBinding.type"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "assert": "$ecExprType",
+        "message": "EC-P006: Unsupported expression. Use an explicit reference, quoted text or declared input field."
+      },
+      {
+        "let": "result",
+        "value": {
+          "expression": "$ecExpression",
+          "kind": "$ecExprType",
+          "cardinality": "$ecExprCard",
+          "expects": "$ecExprExpects"
+        }
+      }
+    ],
+    "ec.fields": [
+      {
+        "let": "ecFieldsType",
+        "value": "$eventInput.type"
+      },
+      {
+        "let": "ecFieldsScope",
+        "value": "$eventInput.scope"
+      },
+      {
+        "let": "ecFieldNodes",
+        "value": "$eventInput.nodes"
+      },
+      {
+        "fold": "$ecFieldNodes",
+        "as": "ecFieldNode",
+        "accumulator": "ecFieldState",
+        "initial": {
+          "values": {},
+          "fields": [
+            "list"
+          ]
+        },
+        "steps": [
+          {
+            "let": "ecSpan",
+            "value": {
+              "file": "$file",
+              "line": "$ecFieldNode.line",
+              "column": [
+                "add",
+                "$ecFieldNode.indent",
+                1
+              ],
+              "offset": "$ecFieldNode.offset",
+              "endOffset": [
+                "add",
+                "$ecFieldNode.offset",
+                [
+                  "count",
+                  "$ecFieldNode.raw"
+                ]
+              ]
+            }
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "ec.attempt",
+              "input": {
+                "query": "ec.oneField",
+                "input": {},
+                "span": "$ecSpan"
+              }
+            },
+            "into": "ecFieldState"
+          }
+        ],
+        "yield": "$ecFieldState",
+        "into": "ecFieldState"
+      },
+      {
+        "let": "result",
+        "value": "$ecFieldState"
+      }
+    ],
+    "ec.data": [
+      {
+        "let": "ecDataNode",
+        "value": "$eventInput.node"
+      },
+      {
+        "let": "ecDataScope",
+        "value": "$eventInput.scope"
+      },
+      {
+        "let": "ecDataChildren",
+        "value": [
+          "filter",
+          "$ecNodes",
+          "ecChild",
+          [
+            "eq",
+            "$ecChild.parent",
+            "$ecDataNode.id"
+          ]
+        ]
+      },
+      {
+        "let": "ecDataExpression",
+        "value": null
+      },
+      {
+        "when": [
+          "eq",
+          [
+            "count",
+            "$ecDataChildren"
+          ],
+          0
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "ec.attempt",
+              "input": {
+                "query": "ec.expression",
+                "input": {
+                  "text": "$eventInput.text",
+                  "scope": "$ecDataScope"
+                },
+                "span": "$ecSpan"
+              }
+            },
+            "into": "ecDataValue"
+          },
+          {
+            "let": "ecDataExpression",
+            "value": "$ecDataValue.expression"
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            [
+              "count",
+              "$ecDataChildren"
+            ],
+            0
+          ]
+        ],
+        "then": [
+          {
+            "port": "text.matches",
+            "args": {
+              "value": [
+                "at",
+                [
+                  "at",
+                  "$ecDataChildren",
+                  0
+                ],
+                "text"
+              ],
+              "pattern": "^- "
+            },
+            "into": "ecDataList"
+          },
+          {
+            "when": "$ecDataList",
+            "then": [
+              {
+                "fold": "$ecDataChildren",
+                "as": "ecDataEntry",
+                "accumulator": "ecDataItems",
+                "initial": [
+                  "list",
+                  "list"
+                ],
+                "steps": [
+                  {
+                    "port": "text.matches",
+                    "args": {
+                      "value": "$ecDataEntry.text",
+                      "pattern": "^- each [A-Za-z_][A-Za-z0-9_]* in .+:$"
+                    },
+                    "into": "ecEachEntry"
+                  },
+                  {
+                    "port": "text.slice",
+                    "args": {
+                      "value": "$ecDataEntry.text",
+                      "start": 2
+                    },
+                    "into": "ecEntryText"
+                  },
+                  {
+                    "port": "text.matches",
+                    "args": {
+                      "value": "$ecEntryText",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*:"
+                    },
+                    "into": "ecEntryRecord"
+                  },
+                  {
+                    "when": [
+                      "and",
+                      [
+                        "not",
+                        "$ecEachEntry"
+                      ],
+                      "$ecEntryRecord"
+                    ],
+                    "then": [
+                      {
+                        "port": "kernel.invoke",
+                        "args": {
+                          "query": "ec.attempt",
+                          "input": {
+                            "query": "ec.record",
+                            "input": {
+                              "nodes": [
+                                "append",
+                                [
+                                  "list",
+                                  {
+                                    "id": [
+                                      "concat",
+                                      "inline:",
+                                      "$ecDataEntry.id"
+                                    ],
+                                    "parent": "$ecDataEntry.parent",
+                                    "line": "$ecDataEntry.line",
+                                    "offset": "$ecDataEntry.offset",
+                                    "raw": "$ecDataEntry.raw",
+                                    "indent": "$ecDataEntry.indent",
+                                    "text": "$ecEntryText"
+                                  }
+                                ],
+                                [
+                                  "filter",
+                                  "$ecNodes",
+                                  "ecChild",
+                                  [
+                                    "eq",
+                                    "$ecChild.parent",
+                                    "$ecDataEntry.id"
+                                  ]
+                                ]
+                              ],
+                              "scope": "$ecDataScope"
+                            },
+                            "span": "$ecSpan"
+                          }
+                        },
+                        "into": "ecDataItem"
+                      }
+                    ]
+                  },
+                  {
+                    "when": [
+                      "and",
+                      [
+                        "not",
+                        "$ecEachEntry"
+                      ],
+                      [
+                        "not",
+                        "$ecEntryRecord"
+                      ]
+                    ],
+                    "then": [
+                      {
+                        "port": "kernel.invoke",
+                        "args": {
+                          "query": "ec.attempt",
+                          "input": {
+                            "query": "ec.expression",
+                            "input": {
+                              "text": "$ecEntryText",
+                              "scope": "$ecDataScope"
+                            },
+                            "span": "$ecSpan"
+                          }
+                        },
+                        "into": "ecDataAtom"
+                      },
+                      {
+                        "let": "ecDataItem",
+                        "value": "$ecDataAtom.expression"
+                      }
+                    ]
+                  },
+                  {
+                    "when": "$ecEachEntry",
+                    "then": [
+                      {
+                        "port": "text.split",
+                        "args": {
+                          "value": "$ecDataEntry.text",
+                          "pattern": "^- each ([A-Za-z_][A-Za-z0-9_]*) in (.+):$"
+                        },
+                        "into": "ecEachTokens"
+                      },
+                      {
+                        "port": "kernel.invoke",
+                        "args": {
+                          "query": "ec.attempt",
+                          "input": {
+                            "query": "ec.expression",
+                            "input": {
+                              "text": [
+                                "at",
+                                "$ecEachTokens",
+                                2
+                              ],
+                              "scope": "$ecDataScope"
+                            },
+                            "span": "$ecSpan"
+                          }
+                        },
+                        "into": "ecEachCollection"
+                      },
+                      {
+                        "assert": [
+                          "eq",
+                          "$ecEachCollection.cardinality",
+                          "many"
+                        ],
+                        "message": "EC-P021: Each needs an ordered collection."
+                      },
+                      {
+                        "let": "ecIteratorName",
+                        "value": [
+                          "concat",
+                          "ecItem",
+                          "$ecDataEntry.line"
+                        ]
+                      },
+                      {
+                        "let": "ecIteratorRef",
+                        "value": [
+                          "concat",
+                          [
+                            "at",
+                            " $",
+                            1
+                          ],
+                          "$ecIteratorName"
+                        ]
+                      },
+                      {
+                        "port": "kernel.invoke",
+                        "args": {
+                          "query": "ec.attempt",
+                          "input": {
+                            "query": "ec.record",
+                            "input": {
+                              "nodes": [
+                                "filter",
+                                "$ecNodes",
+                                "ecChild",
+                                [
+                                  "eq",
+                                  "$ecChild.parent",
+                                  "$ecDataEntry.id"
+                                ]
+                              ],
+                              "scope": [
+                                "append",
+                                "$ecDataScope",
+                                [
+                                  "list",
+                                  {
+                                    "name": [
+                                      "at",
+                                      "$ecEachTokens",
+                                      1
+                                    ],
+                                    "type": "text",
+                                    "expression": "$ecIteratorRef",
+                                    "kind": "$ecEachCollection.kind",
+                                    "expects": "$ecEachCollection.expects"
+                                  }
+                                ]
+                              ]
+                            },
+                            "span": "$ecSpan"
+                          }
+                        },
+                        "into": "ecEachBody"
+                      },
+                      {
+                        "let": "ecDataItem",
+                        "value": [
+                          "list",
+                          "map",
+                          "$ecEachCollection.expression",
+                          "$ecIteratorName",
+                          "$ecEachBody"
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "yield": [
+                  "list",
+                  "append",
+                  "$ecDataItems",
+                  [
+                    "if",
+                    "$ecEachEntry",
+                    "$ecDataItem",
+                    [
+                      "list",
+                      "list",
+                      "$ecDataItem"
+                    ]
+                  ]
+                ],
+                "into": "ecDataItems"
+              },
+              {
+                "let": "ecDataExpression",
+                "value": "$ecDataItems"
+              }
+            ]
+          },
+          {
+            "when": [
+              "not",
+              "$ecDataList"
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.attempt",
+                  "input": {
+                    "query": "ec.record",
+                    "input": {
+                      "nodes": "$ecDataChildren",
+                      "scope": "$ecDataScope"
+                    },
+                    "span": "$ecSpan"
+                  }
+                },
+                "into": "ecDataExpression"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": "$ecDataExpression"
+      }
+    ],
+    "ec.record": [
+      {
+        "let": "ecRecordNodes",
+        "value": "$eventInput.nodes"
+      },
+      {
+        "let": "ecRecordScope",
+        "value": "$eventInput.scope"
+      },
+      {
+        "fold": "$ecRecordNodes",
+        "as": "ecRecordNode",
+        "accumulator": "ecRecord",
+        "initial": {},
+        "steps": [
+          {
+            "let": "ecSpan",
+            "value": {
+              "file": "$file",
+              "line": "$ecRecordNode.line",
+              "column": [
+                "add",
+                "$ecRecordNode.indent",
+                1
+              ],
+              "offset": "$ecRecordNode.offset",
+              "endOffset": [
+                "add",
+                "$ecRecordNode.offset",
+                [
+                  "count",
+                  "$ecRecordNode.raw"
+                ]
+              ]
+            }
+          },
+          {
+            "port": "text.split",
+            "args": {
+              "value": "$ecRecordNode.text",
+              "pattern": "^([A-Za-z_][A-Za-z0-9_.-]*):(?: (.*))?$"
+            },
+            "into": "ecRecordTokens"
+          },
+          {
+            "assert": [
+              "eq",
+              [
+                "count",
+                "$ecRecordTokens"
+              ],
+              4
+            ],
+            "message": "EC-P009: Expected a named data field."
+          },
+          {
+            "let": "ecRecordKey",
+            "value": [
+              "at",
+              "$ecRecordTokens",
+              1
+            ]
+          },
+          {
+            "assert": [
+              "not",
+              [
+                "includes",
+                [
+                  "list",
+                  "__proto__",
+                  "prototype",
+                  "constructor"
+                ],
+                "$ecRecordKey"
+              ]
+            ],
+            "message": "EC-P010: This field name is reserved by the execution boundary."
+          },
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$ecRecord"
+            },
+            "into": "ecExistingRecordFields"
+          },
+          {
+            "assert": [
+              "not",
+              [
+                "some",
+                "$ecExistingRecordFields",
+                "ecF",
+                [
+                  "eq",
+                  [
+                    "at",
+                    "$ecF",
+                    0
+                  ],
+                  "$ecRecordKey"
+                ]
+              ]
+            ],
+            "message": "EC-P008: A data field appears twice."
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "ec.attempt",
+              "input": {
+                "query": "ec.data",
+                "input": {
+                  "node": "$ecRecordNode",
+                  "text": [
+                    "or",
+                    [
+                      "at",
+                      "$ecRecordTokens",
+                      2
+                    ],
+                    ""
+                  ],
+                  "scope": "$ecRecordScope"
+                },
+                "span": "$ecSpan"
+              }
+            },
+            "into": "ecRecordValue"
+          },
+          {
+            "port": "record.put",
+            "args": {
+              "record": "$ecRecord",
+              "key": "$ecRecordKey",
+              "value": "$ecRecordValue"
+            },
+            "into": "ecRecord"
+          }
+        ],
+        "yield": "$ecRecord",
+        "into": "ecRecord"
+      },
+      {
+        "let": "result",
+        "value": "$ecRecord"
+      }
+    ],
+    "ec.representation": [
+      {
+        "let": "ecRep",
+        "value": "$eventInput.declaration"
+      },
+      {
+        "let": "ecRepNodes",
+        "value": [
+          "filter",
+          "$ecNodes",
+          "ecChild",
+          [
+            "eq",
+            "$ecChild.parent",
+            "$ecRep.node.id"
+          ]
+        ]
+      },
+      {
+        "let": "ecRepScope",
+        "value": [
+          "list"
+        ]
+      },
+      {
+        "fold": "$ecRepNodes",
+        "as": "ecRepNode",
+        "accumulator": "ecGiven",
+        "initial": [
+          "list"
+        ],
+        "steps": [
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$ecRepNode.text",
+              "pattern": "^given [A-Za-z_][A-Za-z0-9_.-]* as [A-Za-z_][A-Za-z0-9_.-]*$"
+            },
+            "into": "ecGivenLine"
+          },
+          {
+            "let": "ecGivenNext",
+            "value": "$ecGiven"
+          },
+          {
+            "when": "$ecGivenLine",
+            "then": [
+              {
+                "port": "text.split",
+                "args": {
+                  "value": "$ecRepNode.text",
+                  "pattern": "^given ([A-Za-z_][A-Za-z0-9_.-]*) as ([A-Za-z_][A-Za-z0-9_.-]*)$"
+                },
+                "into": "ecGivenTokens"
+              },
+              {
+                "let": "ecGivenName",
+                "value": [
+                  "at",
+                  "$ecGivenTokens",
+                  1
+                ]
+              },
+              {
+                "assert": [
+                  "not",
+                  [
+                    "includes",
+                    [
+                      "list",
+                      "result",
+                      "model"
+                    ],
+                    "$ecGivenName"
+                  ]
+                ],
+                "message": "EC-P023: This input name is reserved by the language boundary."
+              },
+              {
+                "assert": [
+                  "not",
+                  [
+                    "some",
+                    "$ecGiven",
+                    "ecB",
+                    [
+                      "eq",
+                      "$ecB.name",
+                      "$ecGivenName"
+                    ]
+                  ]
+                ],
+                "message": "EC-P011: An input name is declared twice."
+              },
+              {
+                "let": "ecGivenNext",
+                "value": [
+                  "append",
+                  "$ecGiven",
+                  [
+                    "list",
+                    {
+                      "name": "$ecGivenName",
+                      "type": [
+                        "at",
+                        "$ecGivenTokens",
+                        2
+                      ],
+                      "node": "$ecRepNode"
+                    }
+                  ]
+                ]
+              }
+            ]
+          }
+        ],
+        "yield": "$ecGivenNext",
+        "into": "ecGiven"
+      },
+      {
+        "let": "ecReturnNodes",
+        "value": [
+          "filter",
+          "$ecRepNodes",
+          "ecN",
+          [
+            "includes",
+            "$ecN.text",
+            "return "
+          ]
+        ]
+      },
+      {
+        "assert": [
+          "eq",
+          [
+            "count",
+            "$ecReturnNodes"
+          ],
+          1
+        ],
+        "message": "EC-P012: A representation requires one typed return block."
+      },
+      {
+        "let": "ecReturnNode",
+        "value": [
+          "at",
+          "$ecReturnNodes",
+          0
+        ]
+      },
+      {
+        "port": "text.split",
+        "args": {
+          "value": "$ecReturnNode.text",
+          "pattern": "^return ([A-Za-z_][A-Za-z0-9_.-]*):$"
+        },
+        "into": "ecReturnTokens"
+      },
+      {
+        "let": "ecReturnType",
+        "value": [
+          "at",
+          "$ecReturnTokens",
+          1
+        ]
+      },
+      {
+        "assert": "$ecReturnType",
+        "message": "EC-P013: Declare the type returned by this representation."
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.attempt",
+          "input": {
+            "query": "ec.fields",
+            "input": {
+              "type": "$ecReturnType",
+              "scope": "$ecGiven",
+              "nodes": [
+                "filter",
+                "$ecNodes",
+                "ecChild",
+                [
+                  "eq",
+                  "$ecChild.parent",
+                  "$ecReturnNode.id"
+                ]
+              ]
+            },
+            "span": "$ecSpan"
+          }
+        },
+        "into": "ecReturnFields"
+      },
+      {
+        "let": "ecRepScope",
+        "value": [
+          "append",
+          "$ecGiven",
+          [
+            "list",
+            {
+              "name": "result",
+              "type": "$ecReturnType"
+            }
+          ]
+        ]
+      },
+      {
+        "let": "ecRenderNodes",
+        "value": [
+          "filter",
+          "$ecRepNodes",
+          "ecN",
+          [
+            "eq",
+            "$ecN.text",
+            "render:"
+          ]
+        ]
+      },
+      {
+        "assert": [
+          "eq",
+          [
+            "count",
+            "$ecRenderNodes"
+          ],
+          1
+        ],
+        "message": "EC-P014: A representation requires one explicit render block."
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.attempt",
+          "input": {
+            "query": "ec.record",
+            "input": {
+              "nodes": [
+                "filter",
+                "$ecNodes",
+                "ecChild",
+                [
+                  "eq",
+                  "$ecChild.parent",
+                  [
+                    "at",
+                    [
+                      "at",
+                      "$ecRenderNodes",
+                      0
+                    ],
+                    "id"
+                  ]
+                ]
+              ],
+              "scope": "$ecRepScope"
+            },
+            "span": "$ecSpan"
+          }
+        },
+        "into": "ecRenderExpression"
+      },
+      {
+        "let": "ecEventNodes",
+        "value": [
+          "filter",
+          "$ecRepNodes",
+          "ecN",
+          [
+            "eq",
+            "$ecN.text",
+            "events:"
+          ]
+        ]
+      },
+      {
+        "assert": [
+          "includes",
+          [
+            "list",
+            0,
+            1
+          ],
+          [
+            "count",
+            "$ecEventNodes"
+          ]
+        ],
+        "message": "EC-P028: Events has two authors. Declare one event list."
+      },
+      {
+        "let": "ecEventsExpression",
+        "value": [
+          "list"
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          [
+            "count",
+            "$ecEventNodes"
+          ],
+          1
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "ec.attempt",
+              "input": {
+                "query": "ec.data",
+                "input": {
+                  "node": [
+                    "at",
+                    "$ecEventNodes",
+                    0
+                  ],
+                  "text": "",
+                  "scope": "$ecRepScope"
+                },
+                "span": "$ecSpan"
+              }
+            },
+            "into": "ecEventsExpression"
+          }
+        ]
+      },
+      {
+        "fold": "$ecRepNodes",
+        "as": "ecRequireNode",
+        "accumulator": "ecGuards",
+        "initial": [
+          "list"
+        ],
+        "steps": [
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$ecRequireNode.text",
+              "pattern": "^require (.+) equals (.+)$"
+            },
+            "into": "ecIsGuard"
+          },
+          {
+            "let": "ecGuardsNext",
+            "value": "$ecGuards"
+          },
+          {
+            "when": "$ecIsGuard",
+            "then": [
+              {
+                "port": "text.split",
+                "args": {
+                  "value": "$ecRequireNode.text",
+                  "pattern": "^require (.+) equals (.+)$"
+                },
+                "into": "ecGuardTokens"
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.attempt",
+                  "input": {
+                    "query": "ec.expression",
+                    "input": {
+                      "text": [
+                        "at",
+                        "$ecGuardTokens",
+                        1
+                      ],
+                      "scope": "$ecGiven"
+                    },
+                    "span": "$ecSpan"
+                  }
+                },
+                "into": "ecGuardLeft"
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.attempt",
+                  "input": {
+                    "query": "ec.expression",
+                    "input": {
+                      "text": [
+                        "at",
+                        "$ecGuardTokens",
+                        2
+                      ],
+                      "scope": "$ecGiven"
+                    },
+                    "span": "$ecSpan"
+                  }
+                },
+                "into": "ecGuardRight"
+              },
+              {
+                "assert": [
+                  "and",
+                  [
+                    "eq",
+                    "$ecGuardLeft.kind",
+                    "$ecGuardRight.kind"
+                  ],
+                  [
+                    "eq",
+                    "$ecGuardLeft.cardinality",
+                    "$ecGuardRight.cardinality"
+                  ]
+                ],
+                "message": "EC-T025: Equality operands have incompatible kinds."
+              },
+              {
+                "let": "ecGuardsNext",
+                "value": [
+                  "append",
+                  "$ecGuards",
+                  [
+                    "list",
+                    {
+                      "expression": [
+                        "list",
+                        "eq",
+                        "$ecGuardLeft.expression",
+                        "$ecGuardRight.expression"
+                      ],
+                      "node": "$ecRequireNode"
+                    }
+                  ]
+                ]
+              }
+            ]
+          }
+        ],
+        "yield": "$ecGuardsNext",
+        "into": "ecGuards"
+      },
+      {
+        "each": "$ecRepNodes",
+        "as": "ecRepNode",
+        "steps": [
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$ecRepNode.text",
+              "pattern": "^(given .+ as .+|require .+ equals .+|return .+:|render:|events:)$"
+            },
+            "into": "ecKnownLine"
+          },
+          {
+            "assert": "$ecKnownLine",
+            "message": "EC-P015: Unsupported representation statement; no host-code escape is available."
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "id": "$ecRep.id",
+          "type": "$ecReturnType",
+          "given": "$ecGiven",
+          "fields": "$ecReturnFields.fields",
+          "values": "$ecReturnFields.values",
+          "render": "$ecRenderExpression",
+          "events": "$ecEventsExpression",
+          "guards": "$ecGuards",
+          "node": "$ecRep.node",
+          "entry": [
+            "concat",
+            "code.",
+            "$ecModule",
+            ".representation.",
+            "$ecRep.id"
+          ]
+        }
+      }
+    ],
+    "ec.view": [
+      {
+        "let": "ecView",
+        "value": "$eventInput.declaration"
+      },
+      {
+        "let": "ecViewNodes",
+        "value": [
+          "filter",
+          "$ecNodes",
+          "ecChild",
+          [
+            "eq",
+            "$ecChild.parent",
+            "$ecView.node.id"
+          ]
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.attempt",
+          "input": {
+            "query": "ec.referenceType",
+            "input": {
+              "id": "$ecView.source"
+            },
+            "span": "$ecSpan"
+          }
+        },
+        "into": "ecSourceType"
+      },
+      {
+        "let": "ecViewScope",
+        "value": [
+          "list",
+          {
+            "name": "source",
+            "type": "$ecSourceType"
+          }
+        ]
+      },
+      {
+        "fold": "$ecViewNodes",
+        "as": "ecViewNode",
+        "accumulator": "ecBaseFieldNodes",
+        "initial": [
+          "list"
+        ],
+        "steps": [
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$ecViewNode.text",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*: "
+            },
+            "into": "ecIsField"
+          }
+        ],
+        "yield": [
+          "if",
+          "$ecIsField",
+          [
+            "append",
+            "$ecBaseFieldNodes",
+            [
+              "list",
+              "$ecViewNode"
+            ]
+          ],
+          "$ecBaseFieldNodes"
+        ],
+        "into": "ecBaseFieldNodes"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.attempt",
+          "input": {
+            "query": "ec.fields",
+            "input": {
+              "type": "$ecView.type",
+              "scope": "$ecViewScope",
+              "nodes": "$ecBaseFieldNodes"
+            },
+            "span": "$ecSpan"
+          }
+        },
+        "into": "ecBaseFields"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.attempt",
+          "input": {
+            "query": "ec.edits",
+            "input": {
+              "nodes": "$ecViewNodes",
+              "fields": "$ecBaseFields.fields",
+              "scope": "$ecViewScope",
+              "type": "$ecView.type"
+            },
+            "span": "$ecSpan"
+          }
+        },
+        "into": "ecBaseEdits"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.attempt",
+          "input": {
+            "query": "ec.show",
+            "input": {
+              "nodes": "$ecViewNodes",
+              "scope": "$ecViewScope"
+            },
+            "span": "$ecSpan"
+          }
+        },
+        "into": "ecBaseShow"
+      },
+      {
+        "fold": "$ecViewNodes",
+        "as": "ecContextNode",
+        "accumulator": "ecContexts",
+        "initial": [
+          "list"
+        ],
+        "steps": [
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$ecContextNode.text",
+              "pattern": "^in @[A-Za-z_][A-Za-z0-9_.-]*:$"
+            },
+            "into": "ecIsContext"
+          },
+          {
+            "let": "ecContextsNext",
+            "value": "$ecContexts"
+          },
+          {
+            "when": "$ecIsContext",
+            "then": [
+              {
+                "port": "text.split",
+                "args": {
+                  "value": "$ecContextNode.text",
+                  "pattern": "^in @([A-Za-z_][A-Za-z0-9_.-]*):$"
+                },
+                "into": "ecContextTokens"
+              },
+              {
+                "let": "ecContextId",
+                "value": [
+                  "at",
+                  "$ecContextTokens",
+                  1
+                ]
+              },
+              {
+                "assert": [
+                  "not",
+                  [
+                    "some",
+                    "$ecContexts",
+                    "ecC",
+                    [
+                      "eq",
+                      "$ecC.id",
+                      "$ecContextId"
+                    ]
+                  ]
+                ],
+                "message": "EC-C001: A context has two contributions for this view. Resolve the conflict explicitly."
+              },
+              {
+                "let": "ecContextChildren",
+                "value": [
+                  "filter",
+                  "$ecNodes",
+                  "ecChild",
+                  [
+                    "eq",
+                    "$ecChild.parent",
+                    "$ecContextNode.id"
+                  ]
+                ]
+              },
+              {
+                "fold": "$ecContextChildren",
+                "as": "ecContextField",
+                "accumulator": "ecContextFields",
+                "initial": [
+                  "list"
+                ],
+                "steps": [
+                  {
+                    "port": "text.matches",
+                    "args": {
+                      "value": "$ecContextField.text",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*: "
+                    },
+                    "into": "ecIsContextField"
+                  }
+                ],
+                "yield": [
+                  "if",
+                  "$ecIsContextField",
+                  [
+                    "append",
+                    "$ecContextFields",
+                    [
+                      "list",
+                      "$ecContextField"
+                    ]
+                  ],
+                  "$ecContextFields"
+                ],
+                "into": "ecContextFields"
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.attempt",
+                  "input": {
+                    "query": "ec.fields",
+                    "input": {
+                      "type": "$ecView.type",
+                      "scope": "$ecViewScope",
+                      "nodes": "$ecContextFields"
+                    },
+                    "span": "$ecSpan"
+                  }
+                },
+                "into": "ecOverlayFields"
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.attempt",
+                  "input": {
+                    "query": "ec.edits",
+                    "input": {
+                      "nodes": "$ecContextChildren",
+                      "fields": "$ecOverlayFields.fields",
+                      "scope": "$ecViewScope",
+                      "type": "$ecView.type"
+                    },
+                    "span": "$ecSpan"
+                  }
+                },
+                "into": "ecOverlayEdits"
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.attempt",
+                  "input": {
+                    "query": "ec.show",
+                    "input": {
+                      "nodes": "$ecContextChildren",
+                      "scope": "$ecViewScope"
+                    },
+                    "span": "$ecSpan"
+                  }
+                },
+                "into": "ecContextShow"
+              },
+              {
+                "assert": "$ecContextShow",
+                "message": "EC-C002: A contextual appearance requires an explicit named representation."
+              },
+              {
+                "let": "ecContextsNext",
+                "value": [
+                  "append",
+                  "$ecContexts",
+                  [
+                    "list",
+                    {
+                      "id": "$ecContextId",
+                      "fields": "$ecOverlayFields",
+                      "edits": "$ecOverlayEdits",
+                      "show": "$ecContextShow",
+                      "node": "$ecContextNode"
+                    }
+                  ]
+                ]
+              },
+              {
+                "each": "$ecContextChildren",
+                "as": "ecContextLine",
+                "steps": [
+                  {
+                    "port": "text.matches",
+                    "args": {
+                      "value": "$ecContextLine.text",
+                      "pattern": "^(?:[A-Za-z_][A-Za-z0-9_.-]*: .+|edit .+ (?:here|through .+)|show as [A-Za-z_][A-Za-z0-9_.-]*:?)$"
+                    },
+                    "into": "ecContextKnown"
+                  },
+                  {
+                    "assert": "$ecContextKnown",
+                    "message": "EC-P022: Unsupported contextual statement. Nothing is silently ignored."
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "yield": "$ecContextsNext",
+        "into": "ecContexts"
+      },
+      {
+        "each": "$ecViewNodes",
+        "as": "ecViewNode",
+        "steps": [
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$ecViewNode.text",
+              "pattern": "^(?:[A-Za-z_][A-Za-z0-9_.-]*: .+|edit .+ (?:here|through .+)|in @.+:|show as [A-Za-z_][A-Za-z0-9_.-]*:?)$"
+            },
+            "into": "ecViewKnown"
+          },
+          {
+            "assert": "$ecViewKnown",
+            "message": "EC-P016: Unsupported view statement. Use a typed field, edit route, context or representation."
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "id": "$ecView.id",
+          "source": "$ecView.source",
+          "sourceType": "$ecSourceType",
+          "type": "$ecView.type",
+          "fields": "$ecBaseFields",
+          "edits": "$ecBaseEdits",
+          "show": "$ecBaseShow",
+          "contexts": "$ecContexts",
+          "node": "$ecView.node",
+          "entry": [
+            "concat",
+            "code.",
+            "$ecModule",
+            ".view.",
+            "$ecView.id"
+          ]
+        }
+      }
+    ],
+    "ec.edits": [
+      {
+        "let": "ecEditFields",
+        "value": "$eventInput.fields"
+      },
+      {
+        "let": "ecEditScope",
+        "value": "$eventInput.scope"
+      },
+      {
+        "let": "ecEditType",
+        "value": "$eventInput.type"
+      },
+      {
+        "fold": "$eventInput.nodes",
+        "as": "ecEditNode",
+        "accumulator": "ecEdits",
+        "initial": [
+          "list"
+        ],
+        "steps": [
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$ecEditNode.text",
+              "pattern": "^edit (.+) (here|through .+)$"
+            },
+            "into": "ecIsEdit"
+          },
+          {
+            "let": "ecEditsNext",
+            "value": "$ecEdits"
+          },
+          {
+            "when": "$ecIsEdit",
+            "then": [
+              {
+                "port": "text.split",
+                "args": {
+                  "value": "$ecEditNode.text",
+                  "pattern": "^edit (.+) (here|through .+)$"
+                },
+                "into": "ecEditTokens"
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.attempt",
+                  "input": {
+                    "query": "ec.slot",
+                    "input": {
+                      "type": "$ecEditType",
+                      "name": [
+                        "at",
+                        "$ecEditTokens",
+                        1
+                      ]
+                    },
+                    "span": "$ecSpan"
+                  }
+                },
+                "into": "ecEditSlot"
+              },
+              {
+                "let": "ecEditedField",
+                "value": [
+                  "at",
+                  [
+                    "filter",
+                    "$ecEditFields",
+                    "ecF",
+                    [
+                      "eq",
+                      "$ecF.name",
+                      "$ecEditSlot.name"
+                    ]
+                  ],
+                  0
+                ]
+              },
+              {
+                "assert": "$ecEditedField",
+                "message": "EC-E001: An edit route must accompany a value mapping in the same contribution."
+              },
+              {
+                "assert": [
+                  "not",
+                  [
+                    "some",
+                    "$ecEdits",
+                    "ecE",
+                    [
+                      "eq",
+                      "$ecE.field",
+                      "$ecEditSlot.name"
+                    ]
+                  ]
+                ],
+                "message": "EC-E002: A field has two edit routes."
+              },
+              {
+                "let": "ecEditMode",
+                "value": [
+                  "at",
+                  "$ecEditTokens",
+                  2
+                ]
+              },
+              {
+                "let": "ecEditDestination",
+                "value": null
+              },
+              {
+                "when": [
+                  "eq",
+                  "$ecEditMode",
+                  "here"
+                ],
+                "then": [
+                  {
+                    "assert": [
+                      "eq",
+                      "$ecEditedField.expression.kind",
+                      "string"
+                    ],
+                    "message": "EC-E003: This experiment edits only text mappings."
+                  },
+                  {
+                    "port": "text.matches",
+                    "args": {
+                      "value": "$ecEditedField.text",
+                      "pattern": "^\""
+                    },
+                    "into": "ecConstantEdit"
+                  },
+                  {
+                    "assert": "$ecConstantEdit",
+                    "message": "EC-E004: Edit here requires an authored text literal."
+                  },
+                  {
+                    "let": "ecEditDestination",
+                    "value": {
+                      "kind": "literal",
+                      "node": "$ecEditedField.node",
+                      "token": "$ecEditedField.text"
+                    }
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "not",
+                  [
+                    "eq",
+                    "$ecEditMode",
+                    "here"
+                  ]
+                ],
+                "then": [
+                  {
+                    "port": "text.slice",
+                    "args": {
+                      "value": "$ecEditMode",
+                      "start": 8
+                    },
+                    "into": "ecEditPath"
+                  },
+                  {
+                    "assert": [
+                      "eq",
+                      "$ecEditPath",
+                      "$ecEditedField.text"
+                    ],
+                    "message": "EC-E005: Only an exact direct field mapping has a reverse route in this slice."
+                  },
+                  {
+                    "port": "text.split",
+                    "args": {
+                      "value": "$ecEditPath",
+                      "pattern": "^source\\.(.+)$"
+                    },
+                    "into": "ecEditPathParts"
+                  },
+                  {
+                    "let": "ecSourceField",
+                    "value": [
+                      "at",
+                      "$ecEditPathParts",
+                      1
+                    ]
+                  },
+                  {
+                    "assert": "$ecSourceField",
+                    "message": "EC-E006: This reverse route must name an explicit source field."
+                  },
+                  {
+                    "let": "ecSourceBinding",
+                    "value": [
+                      "at",
+                      [
+                        "filter",
+                        "$ecEditScope",
+                        "ecB",
+                        [
+                          "eq",
+                          "$ecB.name",
+                          "source"
+                        ]
+                      ],
+                      0
+                    ]
+                  },
+                  {
+                    "port": "kernel.invoke",
+                    "args": {
+                      "query": "ec.attempt",
+                      "input": {
+                        "query": "ec.slot",
+                        "input": {
+                          "type": "$ecSourceBinding.type",
+                          "name": "$ecSourceField"
+                        },
+                        "span": "$ecSpan"
+                      }
+                    },
+                    "into": "ecSourceEditSlot"
+                  },
+                  {
+                    "assert": [
+                      "and",
+                      [
+                        "eq",
+                        "$ecSourceEditSlot.kind",
+                        "string"
+                      ],
+                      [
+                        "eq",
+                        "$ecSourceEditSlot.cardinality",
+                        "one"
+                      ]
+                    ],
+                    "message": "EC-E007: The source edit route must be one text field."
+                  },
+                  {
+                    "let": "ecEditDestination",
+                    "value": {
+                      "kind": "source",
+                      "field": "$ecSourceEditSlot.name",
+                      "node": "$ecEditedField.node"
+                    }
+                  }
+                ]
+              },
+              {
+                "let": "ecEditsNext",
+                "value": [
+                  "append",
+                  "$ecEdits",
+                  [
+                    "list",
+                    {
+                      "field": "$ecEditSlot.name",
+                      "destination": "$ecEditDestination",
+                      "node": "$ecEditNode"
+                    }
+                  ]
+                ]
+              }
+            ]
+          }
+        ],
+        "yield": "$ecEditsNext",
+        "into": "ecEdits"
+      },
+      {
+        "let": "result",
+        "value": "$ecEdits"
+      }
+    ],
+    "ec.show": [
+      {
+        "let": "ecShowScope",
+        "value": "$eventInput.scope"
+      },
+      {
+        "fold": "$eventInput.nodes",
+        "as": "ecShowNode",
+        "accumulator": "ecShow",
+        "initial": null,
+        "steps": [
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$ecShowNode.text",
+              "pattern": "^show as [A-Za-z_][A-Za-z0-9_.-]*:?$"
+            },
+            "into": "ecIsShow"
+          },
+          {
+            "let": "ecShowNext",
+            "value": "$ecShow"
+          },
+          {
+            "when": "$ecIsShow",
+            "then": [
+              {
+                "assert": [
+                  "not",
+                  "$ecShow"
+                ],
+                "message": "EC-C003: Select one representation per contribution."
+              },
+              {
+                "port": "text.split",
+                "args": {
+                  "value": "$ecShowNode.text",
+                  "pattern": "^show as ([A-Za-z_][A-Za-z0-9_.-]*):?$"
+                },
+                "into": "ecShowTokens"
+              },
+              {
+                "fold": [
+                  "filter",
+                  "$ecNodes",
+                  "ecChild",
+                  [
+                    "eq",
+                    "$ecChild.parent",
+                    "$ecShowNode.id"
+                  ]
+                ],
+                "as": "ecParameter",
+                "accumulator": "ecShowParameters",
+                "initial": [
+                  "list"
+                ],
+                "steps": [
+                  {
+                    "port": "text.split",
+                    "args": {
+                      "value": "$ecParameter.text",
+                      "pattern": "^([A-Za-z_][A-Za-z0-9_.-]*): (.+)$"
+                    },
+                    "into": "ecParamTokens"
+                  },
+                  {
+                    "assert": [
+                      "eq",
+                      [
+                        "count",
+                        "$ecParamTokens"
+                      ],
+                      4
+                    ],
+                    "message": "EC-P017: A representation argument needs a name and expression."
+                  },
+                  {
+                    "port": "kernel.invoke",
+                    "args": {
+                      "query": "ec.attempt",
+                      "input": {
+                        "query": "ec.expression",
+                        "input": {
+                          "text": [
+                            "at",
+                            "$ecParamTokens",
+                            2
+                          ],
+                          "scope": "$ecShowScope"
+                        },
+                        "span": "$ecSpan"
+                      }
+                    },
+                    "into": "ecParameterExpression"
+                  }
+                ],
+                "yield": [
+                  "append",
+                  "$ecShowParameters",
+                  [
+                    "list",
+                    {
+                      "name": [
+                        "at",
+                        "$ecParamTokens",
+                        1
+                      ],
+                      "expression": "$ecParameterExpression",
+                      "node": "$ecParameter"
+                    }
+                  ]
+                ],
+                "into": "ecShowParameters"
+              },
+              {
+                "let": "ecShowNext",
+                "value": {
+                  "representation": [
+                    "at",
+                    "$ecShowTokens",
+                    1
+                  ],
+                  "parameters": "$ecShowParameters",
+                  "node": "$ecShowNode"
+                }
+              }
+            ]
+          }
+        ],
+        "yield": "$ecShowNext",
+        "into": "ecShow"
+      },
+      {
+        "let": "result",
+        "value": "$ecShow"
+      }
+    ],
+    "ec.emitView": [
+      {
+        "let": "ecEmitView",
+        "value": "$eventInput.view"
+      },
+      {
+        "let": "result",
+        "value": [
+          "list",
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "ec.argument",
+              "input": {
+                "type": "$ecEmitView.sourceType",
+                "value": "$ecEmitView.source"
+              }
+            },
+            "into": "ecSourceCarrier"
+          },
+          {
+            "let": "bindings",
+            "value": {
+              "source": [
+                "concat",
+                [
+                  "at",
+                  " $",
+                  1
+                ],
+                "ecSourceCarrier"
+              ]
+            }
+          },
+          {
+            "let": "ecViewValues",
+            "value": "$ecEmitView.fields.values"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "ec.check",
+              "input": {
+                "type": "$ecEmitView.type",
+                "values": [
+                  "concat",
+                  [
+                    "at",
+                    " $",
+                    1
+                  ],
+                  "ecViewValues"
+                ]
+              }
+            },
+            "into": "ecChecked"
+          },
+          {
+            "let": "result",
+            "value": {
+              "id": "$ecEmitView.id",
+              "type": "$ecEmitView.type",
+              "values": [
+                "concat",
+                [
+                  "at",
+                  " $",
+                  1
+                ],
+                "ecViewValues"
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "ec.emitRepresentation": [
+      {
+        "let": "ecEmitRep",
+        "value": "$eventInput.representation"
+      },
+      {
+        "fold": "$ecEmitRep.given",
+        "as": "ecEmitGiven",
+        "accumulator": "ecStatements",
+        "initial": [
+          "list",
+          {
+            "let": "bindings",
+            "value": {}
+          }
+        ],
+        "steps": [
+          {
+            "let": "ecArgSteps",
+            "value": [
+              "list",
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.argument",
+                  "input": {
+                    "type": "$ecEmitGiven.type",
+                    "value": [
+                      "list",
+                      "at",
+                      [
+                        "concat",
+                        [
+                          "at",
+                          " $",
+                          1
+                        ],
+                        "eventInput"
+                      ],
+                      "$ecEmitGiven.name"
+                    ]
+                  }
+                },
+                "into": "ecGivenValue"
+              },
+              {
+                "port": "record.put",
+                "args": {
+                  "record": [
+                    "concat",
+                    [
+                      "at",
+                      " $",
+                      1
+                    ],
+                    "bindings"
+                  ],
+                  "key": "$ecEmitGiven.name",
+                  "value": [
+                    "concat",
+                    [
+                      "at",
+                      " $",
+                      1
+                    ],
+                    "ecGivenValue"
+                  ]
+                },
+                "into": "bindings"
+              }
+            ]
+          }
+        ],
+        "yield": [
+          "append",
+          "$ecStatements",
+          "$ecArgSteps"
+        ],
+        "into": "ecStatements"
+      },
+      {
+        "fold": "$ecEmitRep.guards",
+        "as": "ecEmitGuard",
+        "accumulator": "ecStatements",
+        "initial": "$ecStatements",
+        "steps": [],
+        "yield": [
+          "append",
+          "$ecStatements",
+          [
+            "list",
+            {
+              "assert": "$ecEmitGuard.expression",
+              "message": "EC-R001: Representation requirement failed. Check the configured page, target and source mapping."
+            }
+          ]
+        ],
+        "into": "ecStatements"
+      },
+      {
+        "let": "ecStatements",
+        "value": [
+          "append",
+          "$ecStatements",
+          [
+            "list",
+            {
+              "let": "ecOutputValues",
+              "value": "$ecEmitRep.values"
+            },
+            {
+              "port": "kernel.invoke",
+              "args": {
+                "query": "ec.check",
+                "input": {
+                  "type": "$ecEmitRep.type",
+                  "values": [
+                    "concat",
+                    [
+                      "at",
+                      " $",
+                      1
+                    ],
+                    "ecOutputValues"
+                  ]
+                }
+              },
+              "into": "ecChecked"
+            },
+            {
+              "let": "ecOutputCarrier",
+              "value": {
+                "id": "representation",
+                "type": "$ecEmitRep.type",
+                "values": [
+                  "concat",
+                  [
+                    "at",
+                    " $",
+                    1
+                  ],
+                  "ecOutputValues"
+                ]
+              }
+            },
+            {
+              "port": "record.put",
+              "args": {
+                "record": [
+                  "concat",
+                  [
+                    "at",
+                    " $",
+                    1
+                  ],
+                  "bindings"
+                ],
+                "key": "result",
+                "value": [
+                  "concat",
+                  [
+                    "at",
+                    " $",
+                    1
+                  ],
+                  "ecOutputCarrier"
+                ]
+              },
+              "into": "bindings"
+            },
+            {
+              "let": "result",
+              "value": {
+                "id": "representation",
+                "type": "$ecEmitRep.type",
+                "values": [
+                  "concat",
+                  [
+                    "at",
+                    " $",
+                    1
+                  ],
+                  "ecOutputValues"
+                ],
+                "tree": "$ecEmitRep.render",
+                "events": "$ecEmitRep.events"
+              }
+            }
+          ]
+        ]
+      },
+      {
+        "let": "result",
+        "value": "$ecStatements"
+      }
+    ],
+    "ec.compile": [
+      {
+        "let": "ecSpan",
+        "value": {
+          "file": "$file",
+          "line": 1,
+          "column": 1,
+          "offset": 0,
+          "endOffset": 0
+        }
+      },
+      {
+        "try": [
+          {
+            "call": "ec.lex"
+          },
+          {
+            "let": "ecNodes",
+            "value": "$result.nodes"
+          },
+          {
+            "let": "ecLiterals",
+            "value": "$result.literals"
+          },
+          {
+            "fold": [
+              "filter",
+              "$ecNodes",
+              "ecChild",
+              [
+                "eq",
+                "$ecChild.parent",
+                0
+              ]
+            ],
+            "as": "ecRoot",
+            "accumulator": "ecDeclarations",
+            "initial": [
+              "list"
+            ],
+            "steps": [
+              {
+                "let": "ecSpan",
+                "value": {
+                  "file": "$file",
+                  "line": "$ecRoot.line",
+                  "column": [
+                    "add",
+                    "$ecRoot.indent",
+                    1
+                  ],
+                  "offset": "$ecRoot.offset",
+                  "endOffset": [
+                    "add",
+                    "$ecRoot.offset",
+                    [
+                      "count",
+                      "$ecRoot.raw"
+                    ]
+                  ]
+                }
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.attempt",
+                  "input": {
+                    "query": "ec.header",
+                    "input": {
+                      "node": "$ecRoot"
+                    },
+                    "span": "$ecSpan"
+                  }
+                },
+                "into": "ecDeclaration"
+              }
+            ],
+            "yield": [
+              "append",
+              "$ecDeclarations",
+              [
+                "list",
+                "$ecDeclaration"
+              ]
+            ],
+            "into": "ecDeclarations"
+          },
+          {
+            "let": "ecModuleDeclarations",
+            "value": [
+              "filter",
+              "$ecDeclarations",
+              "ecD",
+              [
+                "eq",
+                "$ecD.kind",
+                "module"
+              ]
+            ]
+          },
+          {
+            "assert": [
+              "eq",
+              [
+                "count",
+                "$ecModuleDeclarations"
+              ],
+              1
+            ],
+            "message": "EC-P018: Declare exactly one module."
+          },
+          {
+            "let": "ecModule",
+            "value": [
+              "at",
+              [
+                "at",
+                "$ecModuleDeclarations",
+                0
+              ],
+              "name"
+            ]
+          },
+          {
+            "let": "ecViewDeclarations",
+            "value": [
+              "filter",
+              "$ecDeclarations",
+              "ecD",
+              [
+                "eq",
+                "$ecD.kind",
+                "view"
+              ]
+            ]
+          },
+          {
+            "let": "ecRepDeclarations",
+            "value": [
+              "filter",
+              "$ecDeclarations",
+              "ecD",
+              [
+                "eq",
+                "$ecD.kind",
+                "representation"
+              ]
+            ]
+          },
+          {
+            "assert": [
+              "and",
+              [
+                "not",
+                [
+                  "eq",
+                  [
+                    "count",
+                    "$ecViewDeclarations"
+                  ],
+                  0
+                ]
+              ],
+              [
+                "not",
+                [
+                  "eq",
+                  [
+                    "count",
+                    "$ecRepDeclarations"
+                  ],
+                  0
+                ]
+              ]
+            ],
+            "message": "EC-P019: This profile requires typed views and reusable representations."
+          },
+          {
+            "let": "ecViewNames",
+            "value": [
+              "map",
+              "$ecViewDeclarations",
+              "ecD",
+              "$ecD.id"
+            ]
+          },
+          {
+            "let": "ecRepNames",
+            "value": [
+              "map",
+              "$ecRepDeclarations",
+              "ecD",
+              "$ecD.id"
+            ]
+          },
+          {
+            "assert": [
+              "and",
+              [
+                "eq",
+                [
+                  "count",
+                  "$ecViewNames"
+                ],
+                [
+                  "count",
+                  [
+                    "distinct",
+                    "$ecViewNames"
+                  ]
+                ]
+              ],
+              [
+                "eq",
+                [
+                  "count",
+                  "$ecRepNames"
+                ],
+                [
+                  "count",
+                  [
+                    "distinct",
+                    "$ecRepNames"
+                  ]
+                ]
+              ]
+            ],
+            "message": "EC-P020: A definition name is declared twice."
+          },
+          {
+            "assert": [
+              "eq",
+              [
+                "count",
+                [
+                  "filter",
+                  "$ecNodes",
+                  "ecN",
+                  [
+                    "eq",
+                    "$ecN.parent",
+                    [
+                      "at",
+                      [
+                        "at",
+                        [
+                          "at",
+                          "$ecModuleDeclarations",
+                          0
+                        ],
+                        "node"
+                      ],
+                      "id"
+                    ]
+                  ]
+                ]
+              ],
+              0
+            ],
+            "message": "EC-P025: The module name has no nested body; declare views and representations alongside it."
+          },
+          {
+            "assert": [
+              "eq",
+              [
+                "count",
+                [
+                  "distinct",
+                  [
+                    "map",
+                    "$ecViewDeclarations",
+                    "ecD",
+                    "$ecD.id"
+                  ]
+                ]
+              ],
+              [
+                "count",
+                "$ecViewDeclarations"
+              ]
+            ],
+            "message": "EC-P026: A view identity is declared twice; choose one owner."
+          },
+          {
+            "assert": [
+              "eq",
+              [
+                "count",
+                [
+                  "distinct",
+                  [
+                    "map",
+                    "$ecRepDeclarations",
+                    "ecD",
+                    "$ecD.id"
+                  ]
+                ]
+              ],
+              [
+                "count",
+                "$ecRepDeclarations"
+              ]
+            ],
+            "message": "EC-P027: A representation name is declared twice; choose one owner."
+          },
+          {
+            "let": "codePlan",
+            "value": {
+              "module": "$ecModule",
+              "literalValues": "$ecLiterals",
+              "views": "$ecViewDeclarations",
+              "representations": [
+                "list"
+              ],
+              "sourceText": "$ecLexText",
+              "file": "$file",
+              "protocol": "encounter/typed-projection-plan/1"
+            }
+          },
+          {
+            "fold": "$ecRepDeclarations",
+            "as": "ecD",
+            "accumulator": "ecRepresentations",
+            "initial": [
+              "list"
+            ],
+            "steps": [
+              {
+                "let": "ecSpan",
+                "value": {
+                  "file": "$file",
+                  "line": "$ecD.node.line",
+                  "column": [
+                    "add",
+                    "$ecD.node.indent",
+                    1
+                  ],
+                  "offset": "$ecD.node.offset",
+                  "endOffset": [
+                    "add",
+                    "$ecD.node.offset",
+                    [
+                      "count",
+                      "$ecD.node.raw"
+                    ]
+                  ]
+                }
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.attempt",
+                  "input": {
+                    "query": "ec.representation",
+                    "input": {
+                      "declaration": "$ecD"
+                    },
+                    "span": "$ecSpan"
+                  }
+                },
+                "into": "ecRepresentation"
+              }
+            ],
+            "yield": [
+              "append",
+              "$ecRepresentations",
+              [
+                "list",
+                "$ecRepresentation"
+              ]
+            ],
+            "into": "ecRepresentations"
+          },
+          {
+            "port": "record.put",
+            "args": {
+              "record": "$codePlan",
+              "key": "representations",
+              "value": "$ecRepresentations"
+            },
+            "into": "codePlan"
+          },
+          {
+            "fold": "$ecViewDeclarations",
+            "as": "ecD",
+            "accumulator": "ecViews",
+            "initial": [
+              "list"
+            ],
+            "steps": [
+              {
+                "let": "ecSpan",
+                "value": {
+                  "file": "$file",
+                  "line": "$ecD.node.line",
+                  "column": [
+                    "add",
+                    "$ecD.node.indent",
+                    1
+                  ],
+                  "offset": "$ecD.node.offset",
+                  "endOffset": [
+                    "add",
+                    "$ecD.node.offset",
+                    [
+                      "count",
+                      "$ecD.node.raw"
+                    ]
+                  ]
+                }
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.attempt",
+                  "input": {
+                    "query": "ec.view",
+                    "input": {
+                      "declaration": "$ecD"
+                    },
+                    "span": "$ecSpan"
+                  }
+                },
+                "into": "ecView"
+              }
+            ],
+            "yield": [
+              "append",
+              "$ecViews",
+              [
+                "list",
+                "$ecView"
+              ]
+            ],
+            "into": "ecViews"
+          },
+          {
+            "port": "record.put",
+            "args": {
+              "record": "$codePlan",
+              "key": "views",
+              "value": "$ecViews"
+            },
+            "into": "codePlan"
+          },
+          {
+            "call": "ec.verify"
+          },
+          {
+            "fold": "$ecViews",
+            "as": "ecEmit",
+            "accumulator": "ecQueries",
+            "initial": {},
+            "steps": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.attempt",
+                  "input": {
+                    "query": "ec.emitView",
+                    "input": {
+                      "view": "$ecEmit"
+                    },
+                    "span": "$ecSpan"
+                  }
+                },
+                "into": "ecProgramme"
+              },
+              {
+                "port": "record.put",
+                "args": {
+                  "record": "$ecQueries",
+                  "key": "$ecEmit.entry",
+                  "value": "$ecProgramme"
+                },
+                "into": "ecQueries"
+              }
+            ],
+            "yield": "$ecQueries",
+            "into": "ecQueries"
+          },
+          {
+            "fold": "$ecRepresentations",
+            "as": "ecEmit",
+            "accumulator": "ecQueries",
+            "initial": "$ecQueries",
+            "steps": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.attempt",
+                  "input": {
+                    "query": "ec.emitRepresentation",
+                    "input": {
+                      "representation": "$ecEmit"
+                    },
+                    "span": "$ecSpan"
+                  }
+                },
+                "into": "ecProgramme"
+              },
+              {
+                "port": "record.put",
+                "args": {
+                  "record": "$ecQueries",
+                  "key": "$ecEmit.entry",
+                  "value": "$ecProgramme"
+                },
+                "into": "ecQueries"
+              }
+            ],
+            "yield": "$ecQueries",
+            "into": "ecQueries"
+          },
+          {
+            "let": "result",
+            "value": {
+              "ok": true,
+              "plan": "$codePlan",
+              "module": {
+                "protocol": "temple/surface-process-module/1",
+                "queries": "$ecQueries"
+              },
+              "diagnostic": null
+            }
+          }
+        ],
+        "error": "ecCompileFault",
+        "catch": [
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$ecCompileFault.message",
+              "pattern": "^EC-DIAGNOSTIC:"
+            },
+            "into": "ecLocated"
+          },
+          {
+            "when": "$ecLocated",
+            "then": [
+              {
+                "port": "text.slice",
+                "args": {
+                  "value": "$ecCompileFault.message",
+                  "start": 14
+                },
+                "into": "ecWire"
+              },
+              {
+                "port": "json.parse",
+                "args": {
+                  "text": "$ecWire"
+                },
+                "into": "ecLocatedDiagnostic"
+              },
+              {
+                "let": "ecSpan",
+                "value": "$ecLocatedDiagnostic.span"
+              },
+              {
+                "let": "ecCompileFault",
+                "value": {
+                  "message": "$ecLocatedDiagnostic.message"
+                }
+              }
+            ]
+          },
+          {
+            "let": "result",
+            "value": {
+              "ok": false,
+              "plan": null,
+              "module": null,
+              "diagnostic": {
+                "file": "$file",
+                "span": "$ecSpan",
+                "message": "$ecCompileFault.message",
+                "correction": "Correct the named Encounter declaration or its REL contract. No fallback programme was activated."
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "ec.attempt": [
+      {
+        "let": "ecSpan",
+        "value": "$eventInput.span"
+      },
+      {
+        "try": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "$eventInput.query",
+              "input": "$eventInput.input"
+            },
+            "into": "result"
+          }
+        ],
+        "error": "ecLocatedFault",
+        "catch": [
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$ecLocatedFault.message",
+              "pattern": "^EC-DIAGNOSTIC:"
+            },
+            "into": "ecAlreadyLocated"
+          },
+          {
+            "when": "$ecAlreadyLocated",
+            "then": [
+              {
+                "let": "ecUnreachable",
+                "value": [
+                  "raise",
+                  "$ecLocatedFault.message"
+                ]
+              }
+            ]
+          },
+          {
+            "port": "json.stringify",
+            "args": {
+              "value": {
+                "protocol": "encounter/source-diagnostic/1",
+                "span": "$ecSpan",
+                "message": "$ecLocatedFault.message"
+              }
+            },
+            "into": "ecDiagnosticWire"
+          },
+          {
+            "let": "ecUnreachable",
+            "value": [
+              "raise",
+              [
+                "concat",
+                "EC-DIAGNOSTIC:",
+                "$ecDiagnosticWire"
+              ]
+            ]
+          }
+        ]
+      }
+    ],
+    "ec.complete": [
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.schema",
+          "input": {
+            "type": "$eventInput.type"
+          }
+        },
+        "into": "ecCompleteSchema"
+      },
+      {
+        "assert": [
+          "every",
+          "$ecCompleteSchema.slots",
+          "ecS",
+          [
+            "or",
+            [
+              "eq",
+              "$ecS.cardinality",
+              "optional"
+            ],
+            [
+              "some",
+              "$eventInput.fields",
+              "ecF",
+              [
+                "eq",
+                "$ecF.name",
+                "$ecS.name"
+              ]
+            ]
+          ]
+        ],
+        "message": "EC-T026: The definition does not supply every required field of its declared type."
+      },
+      {
+        "let": "result",
+        "value": true
+      }
+    ],
+    "ec.verifyShow": [
+      {
+        "let": "ecShowVerify",
+        "value": "$eventInput.show"
+      },
+      {
+        "let": "ecShowType",
+        "value": "$eventInput.type"
+      },
+      {
+        "let": "ecReps",
+        "value": [
+          "filter",
+          "$codePlan.representations",
+          "ecR",
+          [
+            "eq",
+            "$ecR.id",
+            "$ecShowVerify.representation"
+          ]
+        ]
+      },
+      {
+        "assert": [
+          "eq",
+          [
+            "count",
+            "$ecReps"
+          ],
+          1
+        ],
+        "message": "EC-C004: Select a representation declared by this Encounter module."
+      },
+      {
+        "let": "ecRepSignature",
+        "value": [
+          "at",
+          "$ecReps",
+          0
+        ]
+      },
+      {
+        "assert": [
+          "and",
+          [
+            "not",
+            [
+              "eq",
+              [
+                "count",
+                "$ecRepSignature.given"
+              ],
+              0
+            ]
+          ],
+          [
+            "eq",
+            [
+              "at",
+              [
+                "at",
+                "$ecRepSignature.given",
+                0
+              ],
+              "type"
+            ],
+            "$ecShowType"
+          ]
+        ],
+        "message": "EC-C005: The representation’s primary input does not match the resolved view type."
+      },
+      {
+        "let": "ecOtherInputs",
+        "value": [
+          "filter",
+          "$ecRepSignature.given",
+          "ecG",
+          [
+            "not",
+            [
+              "eq",
+              "$ecG.name",
+              [
+                "at",
+                [
+                  "at",
+                  "$ecRepSignature.given",
+                  0
+                ],
+                "name"
+              ]
+            ]
+          ]
+        ]
+      },
+      {
+        "assert": [
+          "eq",
+          [
+            "count",
+            "$ecOtherInputs"
+          ],
+          [
+            "count",
+            "$ecShowVerify.parameters"
+          ]
+        ],
+        "message": "EC-C006: Supply exactly the representation’s declared configuration inputs."
+      },
+      {
+        "each": "$ecOtherInputs",
+        "as": "ecRequired",
+        "steps": [
+          {
+            "let": "ecSupplied",
+            "value": [
+              "filter",
+              "$ecShowVerify.parameters",
+              "ecP",
+              [
+                "eq",
+                "$ecP.name",
+                "$ecRequired.name"
+              ]
+            ]
+          },
+          {
+            "assert": [
+              "eq",
+              [
+                "count",
+                "$ecSupplied"
+              ],
+              1
+            ],
+            "message": "EC-C007: A required representation input is missing or duplicated."
+          },
+          {
+            "let": "ecSuppliedExpression",
+            "value": [
+              "at",
+              [
+                "at",
+                "$ecSupplied",
+                0
+              ],
+              "expression"
+            ]
+          },
+          {
+            "assert": [
+              "if",
+              [
+                "eq",
+                "$ecRequired.type",
+                "text"
+              ],
+              [
+                "and",
+                [
+                  "eq",
+                  "$ecSuppliedExpression.kind",
+                  "string"
+                ],
+                [
+                  "eq",
+                  "$ecSuppliedExpression.cardinality",
+                  "one"
+                ]
+              ],
+              [
+                "and",
+                [
+                  "eq",
+                  "$ecSuppliedExpression.kind",
+                  "ref"
+                ],
+                [
+                  "eq",
+                  "$ecSuppliedExpression.expects",
+                  "$ecRequired.type"
+                ]
+              ]
+            ],
+            "message": "EC-C008: A representation argument has the wrong value or reference type."
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": true
+      }
+    ],
+    "ec.verify": [
+      {
+        "each": "$codePlan.representations",
+        "as": "ecR",
+        "steps": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "ec.complete",
+              "input": {
+                "type": "$ecR.type",
+                "fields": "$ecR.fields"
+              }
+            },
+            "into": "_"
+          }
+        ]
+      },
+      {
+        "each": "$codePlan.views",
+        "as": "ecV",
+        "steps": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "ec.complete",
+              "input": {
+                "type": "$ecV.type",
+                "fields": "$ecV.fields.fields"
+              }
+            },
+            "into": "_"
+          },
+          {
+            "assert": [
+              "eq",
+              [
+                "count",
+                [
+                  "filter",
+                  "$codePlan.views",
+                  "ecOther",
+                  [
+                    "eq",
+                    "$ecOther.id",
+                    "$ecV.source"
+                  ]
+                ]
+              ],
+              0
+            ],
+            "message": "EC-C009: View-to-view source dependencies are not supported by this initial profile; use an explicitly typed fact source."
+          },
+          {
+            "when": "$ecV.show",
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.verifyShow",
+                  "input": {
+                    "show": "$ecV.show",
+                    "type": "$ecV.type"
+                  }
+                },
+                "into": "_"
+              }
+            ]
+          },
+          {
+            "each": "$ecV.contexts",
+            "as": "ecC",
+            "steps": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.fact",
+                  "input": {
+                    "id": "$ecC.id",
+                    "type": "Context"
+                  }
+                },
+                "into": "ecContextFact"
+              },
+              {
+                "assert": [
+                  "eq",
+                  [
+                    "at",
+                    "$ecContextFact.values",
+                    "C.view"
+                  ],
+                  "$ecV.id"
+                ],
+                "message": "EC-C010: This context does not explicitly contain the requested view."
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "ec.verifyShow",
+                  "input": {
+                    "show": "$ecC.show",
+                    "type": "$ecV.type"
+                  }
+                },
+                "into": "_"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": true
+      }
+    ],
+    "ec.oneField": [
+      {
+        "let": "ecSpan",
+        "value": {
+          "file": "$file",
+          "line": "$ecFieldNode.line",
+          "column": [
+            "add",
+            "$ecFieldNode.indent",
+            1
+          ],
+          "offset": "$ecFieldNode.offset",
+          "endOffset": [
+            "add",
+            "$ecFieldNode.offset",
+            [
+              "count",
+              "$ecFieldNode.raw"
+            ]
+          ]
+        }
+      },
+      {
+        "assert": [
+          "eq",
+          [
+            "count",
+            [
+              "filter",
+              "$ecNodes",
+              "ecN",
+              [
+                "eq",
+                "$ecN.parent",
+                "$ecFieldNode.id"
+              ]
+            ]
+          ],
+          0
+        ],
+        "message": "EC-P024: A value mapping cannot hide nested statements. Put each statement at its declared level."
+      },
+      {
+        "port": "text.split",
+        "args": {
+          "value": "$ecFieldNode.text",
+          "pattern": "^([A-Za-z_][A-Za-z0-9_.-]*): (.+)$"
+        },
+        "into": "ecFieldTokens"
+      },
+      {
+        "assert": [
+          "eq",
+          [
+            "count",
+            "$ecFieldTokens"
+          ],
+          4
+        ],
+        "message": "EC-P007: Write a field as name: expression."
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.attempt",
+          "input": {
+            "query": "ec.slot",
+            "input": {
+              "type": "$ecFieldsType",
+              "name": [
+                "at",
+                "$ecFieldTokens",
+                1
+              ]
+            },
+            "span": "$ecSpan"
+          }
+        },
+        "into": "ecOutputSlot"
+      },
+      {
+        "assert": [
+          "not",
+          [
+            "some",
+            "$ecFieldState.fields",
+            "ecF",
+            [
+              "eq",
+              "$ecF.name",
+              "$ecOutputSlot.name"
+            ]
+          ]
+        ],
+        "message": "EC-P008: A field has two authors in the same contribution. Write it once."
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "ec.attempt",
+          "input": {
+            "query": "ec.expression",
+            "input": {
+              "text": [
+                "at",
+                "$ecFieldTokens",
+                2
+              ],
+              "scope": "$ecFieldsScope"
+            },
+            "span": "$ecSpan"
+          }
+        },
+        "into": "ecFieldExpr"
+      },
+      {
+        "assert": [
+          "and",
+          [
+            "eq",
+            "$ecFieldExpr.kind",
+            "$ecOutputSlot.kind"
+          ],
+          [
+            "eq",
+            "$ecFieldExpr.cardinality",
+            "$ecOutputSlot.cardinality"
+          ]
+        ],
+        "message": "EC-T023: The expression’s value kind or collection shape does not match this field."
+      },
+      {
+        "when": [
+          "eq",
+          "$ecOutputSlot.kind",
+          "ref"
+        ],
+        "then": [
+          {
+            "assert": [
+              "eq",
+              "$ecFieldExpr.expects",
+              "$ecOutputSlot.expects"
+            ],
+            "message": "EC-T024: This reference expression targets a different type than the field requires."
+          }
+        ]
+      },
+      {
+        "port": "record.put",
+        "args": {
+          "record": "$ecFieldState.values",
+          "key": "$ecOutputSlot.name",
+          "value": "$ecFieldExpr.expression"
+        },
+        "into": "ecOutputValues"
+      },
+      {
+        "let": "ecFieldState",
+        "value": {
+          "values": "$ecOutputValues",
+          "fields": [
+            "append",
+            "$ecFieldState.fields",
+            [
+              "list",
+              {
+                "name": "$ecOutputSlot.name",
+                "node": "$ecFieldNode",
+                "expression": "$ecFieldExpr",
+                "text": [
+                  "at",
+                  "$ecFieldTokens",
+                  2
+                ]
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "let": "result",
+        "value": "$ecFieldState"
+      }
+    ]
+  }
+}

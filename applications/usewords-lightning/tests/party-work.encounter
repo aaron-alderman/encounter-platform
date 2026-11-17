@@ -1,0 +1,442 @@
+process-module "temple/surface-process-module/1"
+
+process fixture.party-work.position:
+  let id = at($eventInput, 0)
+  let title = at($eventInput, 1)
+  let result = { id = $id; kind = "position"; title = $title; body = concat("A possible priority: ", $title, ". No collective agreement is implied."); issue = "balance"; voice = "A participant perspective, subject to confirmation" }
+
+process fixture.party-work.command:
+  let board = at($eventInput, 0)
+  let request = at($eventInput, 1)
+  port test.merge { records = list({ expectedBoardRevision = at($board, "revision") }, $request) } → observedRecord1
+  port test.invoke { entry = "cw.apply"; input = { board = $board; request = $observedRecord1 } } → observedRun2
+  let result = at($observedRun2, "value")
+
+process fixture.party-work.change:
+  let board = at($eventInput, 0)
+  let item = at($eventInput, 1)
+  let actor = at($eventInput, 2)
+  let result = { kind = "matter-item"; matterId = "workshop"; item = $item; origin = { kind = "participant"; label = $actor; briefHash = null; sourceHash = null }; baseRevision = at(at($board, "head"), "revision") }
+
+process fixture.party-work.incorporate:
+  let board = at($eventInput, 0)
+  let item = at($eventInput, 1)
+  let author = if(eq(at($eventInput, 2), at({}, "absent")), "alice", at($eventInput, 2))
+  let id = concat("proposal_", add(count(at($board, "proposals")), 1))
+  let reviewer = if(eq($author, "alice"), "bob", "alice")
+  port kernel.invoke { query = "fixture.party-work.change"; input = list($board, $item, $author) } → observedResult3
+  port kernel.invoke { query = "fixture.party-work.command"; input = list($board, { action = "propose"; actor = $author; id = $id; title = "Include this framing"; change = $observedResult3 }) } → observedResult4
+  let board = $observedResult4
+  let contentHash = at(at(at($board, "proposals"), add(count(at($board, "proposals")), -1)), "contentHash")
+  port kernel.invoke { query = "fixture.party-work.command"; input = list($board, { action = "review"; actor = $reviewer; id = $id; contentHash = $contentHash; decision = "approve"; comment = "Include this framing without endorsing it." }) } → observedResult5
+  let board = $observedResult5
+  port kernel.invoke { query = "fixture.party-work.command"; input = list($board, { action = "accept"; actor = $reviewer; id = $id; contentHash = $contentHash }) } → observedResult6
+  let result = $observedResult6
+
+process fixture.party-work.room:
+  let actor = at($eventInput, 0)
+  let id = if(eq(at($eventInput, 1), at({}, "absent")), "workshop", at($eventInput, 1))
+  port test.invoke { entry = "pc.room"; input = { actor = $actor; matterId = $id } } → observedRun7
+  let result = at($observedRun7, "value")
+
+process fixture.party-work.save:
+  let room = at($eventInput, 0)
+  let item = at($eventInput, 1)
+  let privateNote = if(eq(at($eventInput, 2), at({}, "absent")), "", at($eventInput, 2))
+  port test.invoke { entry = "pc.saveDraft"; input = { room = $room; actor = at($room, "actor"); matterId = at($room, "matterId"); expectedRevision = at($room, "revision"); draft = { item = $item; privateNote = $privateNote } } } → observedRun8
+  let result = at($observedRun8, "value")
+
+process fixture.party-work.attest:
+  let board = at($eventInput, 0)
+  let actor = at($eventInput, 1)
+  let meaning = at($eventInput, 2)
+  let itemId = if(eq(at($eventInput, 3), at({}, "absent")), null, at($eventInput, 3))
+  let comment = if(eq(at($eventInput, 4), at({}, "absent")), "This is my explicit statement.", at($eventInput, 4))
+  let target = { kind = if($itemId, "item", "record"); id = $itemId }
+  port test.invoke { entry = "pc.binding"; input = { board = $board; target = $target } } → observedRun9
+  let binding = at($observedRun9, "value")
+  port kernel.invoke { query = "fixture.party-work.command"; input = list($board, { action = "attest"; actor = $actor; id = concat("statement_", add(count(at($board, "assertions")), 1)); meaning = $meaning; target = $target; bindingHash = at($binding, "hash"); comment = $comment }) } → observedResult10
+  let result = $observedResult10
+
+process fixture.party-work.harness:
+  port test.open { fallback = ""; elements = list("#mw-root"); values = list(list("#cw-actor", "alice"), list("#ws-object-type", "Encounter"), list("#ws-edit-scope", "shared"), list("#ws-inspect-choice", "definitions"), list("#mw-title", "A shared workshop"), list("#mw-description", "Explore the priorities and evidence gaps."), list("#pc-kind", "issue")); selectors = list("#mw-select", "#cw-selection", "#ws-object-type", "#ws-compose-object", "#ws-edit-object", "#ws-compose-journey", "#ws-edit-entry", "#ws-edit-field", "#mw-issue", "#mw-suggestion", "#pc-drafts", "#pc-target", "#pc-withdraw-id") } → observedHost11
+  let result = $observedHost11
+
+process fixture.party-work.setup:
+  port test.runtime {} → observedRuntime12
+  let runtime = $observedRuntime12
+  port test.invoke { entry = "mw.create"; input = { id = "workshop"; title = "A shared workshop"; description = "Explore affordable access and dependable staffing without requiring resolution." } } → observedRun13
+  let initial = at($observedRun13, "value")
+  let issue = { id = "balance"; kind = "issue"; title = "How should access and staffing be balanced?"; body = "Costs and usage are still unknown."; issue = null; voice = null }
+  let option = { id = "pilot"; kind = "option"; title = "Explore a pilot"; body = "A possible trial; no action has been authorized."; issue = "balance"; voice = null }
+  port kernel.invoke { query = "fixture.party-work.incorporate"; input = list($initial, $issue) } → observedResult14
+  let withIssue = $observedResult14
+
+# two parties prepare separately and explicit sharing excludes notes and preparation metadata
+process test.party-work.two-parties-prepare-separately-and-explicit-sharing-excludes-notes-and-preparation-metadata:
+  call fixture.party-work.setup
+  port kernel.invoke { query = "fixture.party-work.room"; input = list("alice") } → observedResult15
+  port kernel.invoke { query = "fixture.party-work.position"; input = list("access", "Keep fees affordable") } → observedResult16
+  port kernel.invoke { query = "fixture.party-work.save"; input = list($observedResult15, $observedResult16, "ALICE PRIVATE RESERVATION") } → observedResult17
+  let alice = $observedResult17
+  port kernel.invoke { query = "fixture.party-work.room"; input = list("bob") } → observedResult18
+  port kernel.invoke { query = "fixture.party-work.position"; input = list("staffing", "Make opening hours reliable") } → observedResult19
+  port kernel.invoke { query = "fixture.party-work.save"; input = list($observedResult18, $observedResult19, "BOB PRIVATE RESERVATION") } → observedResult20
+  let bob = $observedResult20
+  port test.invoke { entry = "pc.share"; input = { board = $withIssue; room = $alice; actor = "alice"; id = "access" } } → observedRun21
+  let shared = at($observedRun21, "value")
+  assert eq(at(at($shared, "item"), "title"), "Keep fees affordable")
+    otherwise "Expected equal(shared.item.title,'Keep fees affordable')"
+  port test.stringify { value = $shared } → observedJson22
+  assert eq(includes($observedJson22, "PRIVATE"), false)
+    otherwise "Expected equal(JSON.stringify(shared).includes('PRIVATE'),false)"
+  assert eq(not(eq(at($shared, "privateNote"), at({}, "absent"))), false)
+    otherwise "Expected equal(Object.hasOwn(shared,'privateNote'),false)"
+  let observedRefused23 = false
+  try:
+    port test.invoke { entry = "pc.share"; input = { board = $withIssue; room = $alice; actor = "bob"; id = "access" } } → observedRun24
+  catch observedFault25:
+    port test.match { text = $observedFault25.message; pattern = "PC-SCOPE"; flags = "" } → observedDiagnostic26
+    let observedRefused23 = $observedDiagnostic26
+  assert $observedRefused23
+    otherwise "Expected rejects(run('pc.share',{board:withIssue,room:alice,actor:'bob',id:'access'}),/PC-SCOPE/)"
+  let observedRefused27 = false
+  port kernel.invoke { query = "fixture.party-work.room"; input = list("alice", "another") } → observedResult28
+  try:
+    port test.invoke { entry = "pc.share"; input = { board = $initial; room = $observedResult28; actor = "alice"; id = "access" } } → observedRun29
+  catch observedFault30:
+    port test.match { text = $observedFault30.message; pattern = "PC-SCOPE"; flags = "" } → observedDiagnostic31
+    let observedRefused27 = $observedDiagnostic31
+  assert $observedRefused27
+    otherwise "Expected rejects(run('pc.share',{board:initial,room:await room('alice','another'),actor:'alice',id:'access'}),/PC-SCOPE/)"
+  let observedRefused32 = false
+  try:
+    port test.invoke { entry = "pc.saveDraft"; input = { room = $alice; actor = "alice"; matterId = "workshop"; expectedRevision = 0; draft = { item = $issue; privateNote = "" } } } → observedRun33
+  catch observedFault34:
+    port test.match { text = $observedFault34.message; pattern = "PC-CONFLICT"; flags = "" } → observedDiagnostic35
+    let observedRefused32 = $observedDiagnostic35
+  assert $observedRefused32
+    otherwise "Expected rejects(run('pc.saveDraft',{room:alice,actor:'alice',matterId:'workshop',expectedRevision:0,draft:{item:issue,privateNote:''}}),/PC-CONFLICT/)"
+  port kernel.invoke { query = "fixture.party-work.incorporate"; input = list($withIssue, at($shared, "item")) } → observedResult36
+  port kernel.invoke { query = "fixture.party-work.incorporate"; input = list($observedResult36, at(at(at($bob, "drafts"), 0), "item"), "bob") } → observedResult37
+  let board = $observedResult37
+  port test.invoke { entry = "pc.packet"; input = $board } → observedRun38
+  let packet = at($observedRun38, "value")
+  port test.stringify { value = $packet } → observedJson39
+  assert eq(includes($observedJson39, "PRIVATE"), false)
+    otherwise "Expected equal(JSON.stringify(packet).includes('PRIVATE'),false)"
+  assert eq(at(at(at(at(at(at($board, "head"), "document"), "matter"), "items"), 1), "standing"), "unconfirmed position")
+    otherwise "Expected equal(board.head.document.matter.items[1].standing,'unconfirmed position')"
+  assert eq(count(at($board, "assertions")), 0)
+    otherwise "Expected equal(board.assertions.length,0)"
+  assert eq(at(at($packet, "body"), "mutualRecordAcceptance"), false)
+    otherwise "Expected equal(packet.body.mutualRecordAcceptance,false)"
+
+# record accuracy, position ownership, proposal agreement and dispute have separate exact meanings
+process test.party-work.record-accuracy-position-ownership-proposal-agreement-and-dispute-have-separate-exact-meanings:
+  call fixture.party-work.setup
+  port kernel.invoke { query = "fixture.party-work.position"; input = list("access", "Keep fees affordable") } → observedResult40
+  port kernel.invoke { query = "fixture.party-work.incorporate"; input = list($withIssue, $observedResult40) } → observedResult41
+  port kernel.invoke { query = "fixture.party-work.position"; input = list("staffing", "Make opening hours reliable") } → observedResult42
+  port kernel.invoke { query = "fixture.party-work.incorporate"; input = list($observedResult41, $observedResult42, "bob") } → observedResult43
+  port kernel.invoke { query = "fixture.party-work.incorporate"; input = list($observedResult43, $option) } → observedResult44
+  let board = $observedResult44
+  port kernel.invoke { query = "fixture.party-work.attest"; input = list($board, "alice", "represents-me", "access") } → observedResult45
+  let board = $observedResult45
+  port kernel.invoke { query = "fixture.party-work.attest"; input = list($board, "bob", "represents-me", "staffing") } → observedResult46
+  let board = $observedResult46
+  port kernel.invoke { query = "fixture.party-work.attest"; input = list($board, "alice", "dispute", "staffing") } → observedResult47
+  let board = $observedResult47
+  port kernel.invoke { query = "fixture.party-work.attest"; input = list($board, "bob", "dispute", "access") } → observedResult48
+  let board = $observedResult48
+  port kernel.invoke { query = "fixture.party-work.attest"; input = list($board, "alice", "record-accuracy") } → observedResult49
+  let board = $observedResult49
+  port kernel.invoke { query = "fixture.party-work.attest"; input = list($board, "bob", "record-accuracy") } → observedResult50
+  let board = $observedResult50
+  port test.invoke { entry = "pc.packet"; input = $board } → observedRun51
+  let packet = at($observedRun51, "value")
+  assert eq(at(at($packet, "body"), "mutualRecordAcceptance"), true)
+    otherwise "Expected equal(packet.body.mutualRecordAcceptance,true)"
+  assert eq(count(at(at($packet, "body"), "disputes")), 2)
+    otherwise "Expected equal(packet.body.disputes.length,2)"
+  assert eq(some(at(at($packet, "body"), "assertions"), "a", eq(at($a, "meaning"), "agree-to-proposal")), false)
+    otherwise "Expected equal(packet.body.assertions.some(a=>a.meaning==='agree-to-proposal'),false)"
+  assert eq(at(at(at($packet, "body"), "matter"), "status"), "open")
+    otherwise "Expected equal(packet.body.matter.status,'open')"
+  assert eq(count(at(at($packet, "body"), "unresolvedQuestions")), 1)
+    otherwise "Expected equal(packet.body.unresolvedQuestions.length,1)"
+  assert eq(at(at(at(at(at($packet, "body"), "matter"), "items"), add(count(at(at(at($packet, "body"), "matter"), "items")), -1)), "standing"), "unaccepted approach")
+    otherwise "Expected equal(packet.body.matter.items.at(-1).standing,'unaccepted approach')"
+  port test.invoke { entry = "pc.checkPacket"; input = $packet } → observedRun52
+  assert eq(at(at($observedRun52, "value"), "ok"), true)
+    otherwise "Expected equal((await run('pc.checkPacket',packet)).ok,true)"
+  port test.invoke { entry = "cw.receipt"; input = $board } → observedRun53
+  port test.invoke { entry = "cw.reconstruct"; input = at($observedRun53, "value") } → observedRun54
+  assert eq(at($observedRun54, "value"), $board)
+    otherwise "Expected deepEqual(await run('cw.reconstruct',await run('cw.receipt',board)),board)"
+  port kernel.invoke { query = "fixture.party-work.attest"; input = list($board, "alice", "agree-to-proposal", "pilot") } → observedResult55
+  let board = $observedResult55
+  port test.invoke { entry = "pc.packet"; input = $board } → observedRun56
+  let packet = at($observedRun56, "value")
+  assert eq(map(filter(at(at($packet, "body"), "assertions"), "a", eq(at($a, "meaning"), "agree-to-proposal")), "a", at($a, "actor")), list("alice"))
+    otherwise "Expected deepEqual(packet.body.assertions.filter(a=>a.meaning==='agree-to-proposal').map(a=>a.actor),['alice'])"
+  assert eq(at(at($packet, "body"), "mutualRecordAcceptance"), true)
+    otherwise "Expected equal(packet.body.mutualRecordAcceptance,true)"
+
+# personal statements refuse wrong kinds, impersonated origins, stale hashes and withdrawal by others
+process test.party-work.personal-statements-refuse-wrong-kinds-impersonated-origins-stale-hashes-and-withdrawal-by-others:
+  call fixture.party-work.setup
+  port kernel.invoke { query = "fixture.party-work.position"; input = list("access", "Keep fees affordable") } → observedResult57
+  port kernel.invoke { query = "fixture.party-work.incorporate"; input = list($withIssue, $observedResult57) } → observedResult58
+  let board = $observedResult58
+  let observedRefused59 = false
+  try:
+    port kernel.invoke { query = "fixture.party-work.attest"; input = list($board, "alice", "agree-to-proposal", "access") } → observedResult60
+  catch observedFault61:
+    port test.match { text = $observedFault61.message; pattern = "PC-MEANING"; flags = "" } → observedDiagnostic62
+    let observedRefused59 = $observedDiagnostic62
+  assert $observedRefused59
+    otherwise "Expected rejects(attest(board,'alice','agree-to-proposal','access'),/PC-MEANING/)"
+  let observedRefused63 = false
+  try:
+    port kernel.invoke { query = "fixture.party-work.attest"; input = list($board, "alice", "represents-me", "balance") } → observedResult64
+  catch observedFault65:
+    port test.match { text = $observedFault65.message; pattern = "PC-MEANING"; flags = "" } → observedDiagnostic66
+    let observedRefused63 = $observedDiagnostic66
+  assert $observedRefused63
+    otherwise "Expected rejects(attest(board,'alice','represents-me','balance'),/PC-MEANING/)"
+  let observedRefused67 = false
+  port kernel.invoke { query = "fixture.party-work.change"; input = list($board, $option, "alice") } → observedResult68
+  try:
+    port kernel.invoke { query = "fixture.party-work.command"; input = list($board, { action = "propose"; actor = "bob"; id = "impersonation"; title = "Speak as Alice"; change = $observedResult68 }) } → observedResult69
+  catch observedFault70:
+    port test.match { text = $observedFault70.message; pattern = "PC-AUTHORITY"; flags = "" } → observedDiagnostic71
+    let observedRefused67 = $observedDiagnostic71
+  assert $observedRefused67
+    otherwise "Expected rejects(command(board,{action:'propose',actor:'bob',id:'impersonation',title:'Speak as Alice',change:change(board,option,'alice')}),/PC-AUTHORITY/)"
+  let target = { kind = "item"; id = "access" }
+  let observedRefused72 = false
+  port test.repeat { text = "0"; count = 64 } → observedRepeated73
+  try:
+    port kernel.invoke { query = "fixture.party-work.command"; input = list($board, { action = "attest"; actor = "alice"; id = "stale"; meaning = "represents-me"; target = $target; bindingHash = $observedRepeated73; comment = "Wrong exact target." }) } → observedResult74
+  catch observedFault75:
+    port test.match { text = $observedFault75.message; pattern = "PC-STALE"; flags = "" } → observedDiagnostic76
+    let observedRefused72 = $observedDiagnostic76
+  assert $observedRefused72
+    otherwise "Expected rejects(command(board,{action:'attest',actor:'alice',id:'stale',meaning:'represents-me',target,bindingHash:'0'.repeat(64),comment:'Wrong exact target.'}),/PC-STALE/)"
+  port kernel.invoke { query = "fixture.party-work.attest"; input = list($board, "alice", "represents-me", "access") } → observedResult77
+  let board = $observedResult77
+  let observedRefused78 = false
+  try:
+    port kernel.invoke { query = "fixture.party-work.command"; input = list($board, { action = "withdraw-attestation"; actor = "bob"; id = "statement_1"; comment = "Cannot withdraw Alice’s statement." }) } → observedResult79
+  catch observedFault80:
+    port test.match { text = $observedFault80.message; pattern = "PC-AUTHORITY"; flags = "" } → observedDiagnostic81
+    let observedRefused78 = $observedDiagnostic81
+  assert $observedRefused78
+    otherwise "Expected rejects(command(board,{action:'withdraw-attestation',actor:'bob',id:'statement_1',comment:'Cannot withdraw Alice’s statement.'}),/PC-AUTHORITY/)"
+  port kernel.invoke { query = "fixture.party-work.command"; input = list($board, { action = "withdraw-attestation"; actor = "alice"; id = "statement_1"; comment = "I no longer identify with this framing." }) } → observedResult82
+  let board = $observedResult82
+  port test.invoke { entry = "pc.packet"; input = $board } → observedRun83
+  let packet = at($observedRun83, "value")
+  assert eq(at(at(at(at($packet, "body"), "assertions"), 0), "active"), false)
+    otherwise "Expected equal(packet.body.assertions[0].active,false)"
+  assert eq(at(at(at(at($packet, "body"), "assertions"), 0), "current"), false)
+    otherwise "Expected equal(packet.body.assertions[0].current,false)"
+  port test.match { text = at(at(at(at($packet, "body"), "assertions"), 0), "withdrawn"); pattern = "no longer"; flags = "" } → observedMatch84
+  assert $observedMatch84
+    otherwise "Expected match(packet.body.assertions[0].withdrawn,/no longer/)"
+  port test.invoke { entry = "pc.checkPacket"; input = $packet } → observedRun85
+  assert eq(at(at($observedRun85, "value"), "ok"), true)
+    otherwise "Expected equal((await run('pc.checkPacket',packet)).ok,true)"
+
+# a changed record invalidates prior record accuracy without erasing it, and packet forgery refuses
+process test.party-work.a-changed-record-invalidates-prior-record-accuracy-without-erasing-it-and-packet-forgery-refuses:
+  call fixture.party-work.setup
+  port kernel.invoke { query = "fixture.party-work.attest"; input = list($withIssue, "alice", "record-accuracy") } → observedResult86
+  port kernel.invoke { query = "fixture.party-work.attest"; input = list($observedResult86, "bob", "record-accuracy") } → observedResult87
+  let board = $observedResult87
+  port test.invoke { entry = "pc.packet"; input = $board } → observedRun88
+  assert eq(at(at(at($observedRun88, "value"), "body"), "mutualRecordAcceptance"), true)
+    otherwise "Expected equal((await run('pc.packet',board)).body.mutualRecordAcceptance,true)"
+  port kernel.invoke { query = "fixture.party-work.position"; input = list("access", "Keep fees affordable") } → observedResult89
+  port kernel.invoke { query = "fixture.party-work.incorporate"; input = list($board, $observedResult89) } → observedResult90
+  let board = $observedResult90
+  port test.invoke { entry = "pc.packet"; input = $board } → observedRun91
+  let packet = at($observedRun91, "value")
+  assert eq(at(at($packet, "body"), "mutualRecordAcceptance"), false)
+    otherwise "Expected equal(packet.body.mutualRecordAcceptance,false)"
+  assert eq(count(at(at($packet, "body"), "assertions")), 2)
+    otherwise "Expected equal(packet.body.assertions.length,2)"
+  assert every(at(at($packet, "body"), "assertions"), "a", if(at($a, "active"), not(at($a, "current")), at($a, "active")))
+    otherwise "Expected ok(packet.body.assertions.every(a=>a.active&&!a.current))"
+  port test.stringify { value = $packet } → observedJson92
+  port test.parse { text = $observedJson92 } → observedJson93
+  let tampered = $observedJson93
+  port test.put { value = at($tampered, "body"); key = "mutualRecordAcceptance"; replacement = true } → observedUpdated94
+  port test.put { value = $tampered; key = "body"; replacement = $observedUpdated94 } → observedUpdated95
+  let tampered = $observedUpdated95
+  let observedRefused96 = false
+  try:
+    port test.invoke { entry = "pc.checkPacket"; input = $tampered } → observedRun97
+  catch observedFault98:
+    port test.match { text = $observedFault98.message; pattern = "PC-PACKET"; flags = "" } → observedDiagnostic99
+    let observedRefused96 = $observedDiagnostic99
+  assert $observedRefused96
+    otherwise "Expected rejects(run('pc.checkPacket',tampered),/PC-PACKET/)"
+  port test.stringify { value = $packet } → observedJson100
+  port test.parse { text = $observedJson100 } → observedJson101
+  let hidden = $observedJson101
+  port test.put { value = $hidden; key = "privateNote"; replacement = "Sneaked in" } → observedUpdated102
+  let hidden = $observedUpdated102
+  let observedRefused103 = false
+  try:
+    port test.invoke { entry = "pc.checkPacket"; input = $hidden } → observedRun104
+  catch observedFault105:
+    port test.match { text = $observedFault105.message; pattern = "PC-PACKET"; flags = "" } → observedDiagnostic106
+    let observedRefused103 = $observedDiagnostic106
+  assert $observedRefused103
+    otherwise "Expected rejects(run('pc.checkPacket',hidden),/PC-PACKET/)"
+
+# preparation UI switches scope, requires preview, preserves failed saves and never leaks notes into shared history or AI
+process test.party-work.preparation-ui-switches-scope-requires-preview-preserves-failed-saves-and-never-leaks-notes-into-shared-history-or-ai:
+  call fixture.party-work.setup
+  port kernel.invoke { query = "fixture.party-work.harness"; input = list() } → observedResult107
+  let h = $observedResult107
+  port test.invoke { entry = "ws.boot"; input = null; host = $h } → observedRun108
+  port test.invoke { entry = "mw.createUI"; input = null; host = $h } → observedRun109
+  port test.entries { value = { "#pc-id" = "balance"; "#pc-title" = at($issue, "title"); "#pc-body" = at($issue, "body"); "#pc-note" = "PREPARATION ONLY" } } → observedEntries110
+  each $observedEntries110 as observedItem111:
+    let id = at($observedItem111, 0)
+    let value = at($observedItem111, 1)
+    port test.set { host = $h; store = "values"; key = $id; value = $value } → observedHostValue113
+  port test.invoke { entry = "pc.saveUI"; input = null; host = $h } → observedRun114
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue115
+  assert eq(count(at($observedHostValue115, "proposals")), 0)
+    otherwise "Expected equal(h.state.get('collaboration').proposals.length,0)"
+  port test.invoke { entry = "pc.shareUI"; input = null; host = $h } → observedRun116
+  port test.get { host = $h; store = "content"; key = "#ws-notice" } → observedHostValue117
+  port test.match { text = $observedHostValue117; pattern = "Preview"; flags = "" } → observedMatch118
+  assert $observedMatch118
+    otherwise "Expected match(h.content.get('#ws-notice'),/Preview/)"
+  port test.invoke { entry = "pc.previewUI"; input = null; host = $h } → observedRun119
+  port test.get { host = $h; store = "values"; key = "#pc-disclosure" } → observedHostValue120
+  assert eq(includes($observedHostValue120, "PREPARATION ONLY"), false)
+    otherwise "Expected equal(h.values.get('#pc-disclosure').includes('PREPARATION ONLY'),false)"
+  port test.invoke { entry = "pc.shareUI"; input = null; host = $h } → observedRun121
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue122
+  assert eq(count(at($observedHostValue122, "proposals")), 1)
+    otherwise "Expected equal(h.state.get('collaboration').proposals.length,1)"
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue123
+  port test.stringify { value = $observedHostValue123 } → observedJson124
+  assert eq(includes($observedJson124, "PREPARATION ONLY"), false)
+    otherwise "Expected equal(JSON.stringify(h.state.get('collaboration')).includes('PREPARATION ONLY'),false)"
+  port test.invoke { entry = "mw.briefUI"; input = null; host = $h } → observedRun125
+  port test.get { host = $h; store = "state"; key = "matterBrief" } → observedHostValue126
+  port test.stringify { value = at($observedHostValue126, "request") } → observedJson127
+  assert eq(includes($observedJson127, "PREPARATION ONLY"), false)
+    otherwise "Expected equal(JSON.stringify(h.state.get('matterBrief').request).includes('PREPARATION ONLY'),false)"
+  port test.set { host = $h; store = "values"; key = "#cw-actor"; value = "bob" } → observedHostValue128
+  port test.invoke { entry = "mm.refreshUI"; input = null; host = $h } → observedRun129
+  port test.get { host = $h; store = "values"; key = "#pc-note" } → observedHostValue130
+  assert eq($observedHostValue130, "")
+    otherwise "Expected equal(h.values.get('#pc-note'),'')"
+  port test.get { host = $h; store = "state"; key = "preparation" } → observedHostValue131
+  assert eq(at($observedHostValue131, "drafts"), list())
+    otherwise "Expected deepEqual(h.state.get('preparation').drafts,[])"
+  port test.set { host = $h; store = "values"; key = "#cw-actor"; value = "alice" } → observedHostValue132
+  port test.invoke { entry = "mm.refreshUI"; input = null; host = $h } → observedRun133
+  port test.invoke { entry = "pc.loadDraftUI"; input = null; host = $h } → observedRun134
+  port test.get { host = $h; store = "values"; key = "#pc-note" } → observedHostValue135
+  assert eq($observedHostValue135, "PREPARATION ONLY")
+    otherwise "Expected equal(h.values.get('#pc-note'),'PREPARATION ONLY')"
+  port test.get { host = $h; store = "state"; key = "preparation" } → observedHostValue136
+  let before = $observedHostValue136
+  port test.failWrites { host = $h } → observedWrites137
+  port test.set { host = $h; store = "values"; key = "#pc-note"; value = "Unsaved replacement" } → observedHostValue138
+  port test.invoke { entry = "pc.saveUI"; input = null; host = $h } → observedRun139
+  port test.get { host = $h; store = "state"; key = "preparation" } → observedHostValue140
+  port test.sameReference { left = $observedHostValue140; right = $before } → sameState140
+  assert $sameState140
+    otherwise "Expected the previous preparation object to remain in state"
+  port test.get { host = $h; store = "content"; key = "#ws-notice" } → observedHostValue141
+  port test.match { text = $observedHostValue141; pattern = "prior draft remains"; flags = "" } → observedMatch142
+  assert $observedMatch142
+    otherwise "Expected match(h.content.get('#ws-notice'),/prior draft remains/)"
+  port test.invoke { entry = "pc.downloadUI"; input = { format = "html" }; host = $h } → observedRun143
+  port test.effects { host = $h; field = "downloads" } → observedEffects144
+  let downloads = $observedEffects144
+  assert eq(count($downloads), 1)
+    otherwise "Expected equal(downloads.length,1)"
+  port test.match { text = at(at($downloads, 0), "name"); pattern = "\\.html$"; flags = "" } → observedMatch145
+  assert $observedMatch145
+    otherwise "Expected match(downloads[0].name,/\\.html$/)"
+  port test.match { text = at(at($downloads, 0), "text"); pattern = "Evidence needs and outstanding responses"; flags = "" } → observedMatch146
+  assert $observedMatch146
+    otherwise "Expected match(downloads[0].text,/Evidence needs and outstanding responses/)"
+  assert eq(includes(at(at($downloads, 0), "text"), "PREPARATION ONLY"), false)
+    otherwise "Expected equal(downloads[0].text.includes('PREPARATION ONLY'),false)"
+  assert eq(includes(at(at($downloads, 0), "text"), "Unsaved replacement"), false)
+    otherwise "Expected equal(downloads[0].text.includes('Unsaved replacement'),false)"
+  port test.get { host = $h; store = "values"; key = "#pc-packet" } → observedHostValue147
+  port test.parse { text = $observedHostValue147 } → observedJson148
+  let packet = $observedJson148
+  port test.put { value = at(at($packet, "body"), "matter"); key = "title"; replacement = "<script>bad()</script>" } → observedUpdated149
+  port test.put { value = at($packet, "body"); key = "matter"; replacement = $observedUpdated149 } → observedUpdated150
+  port test.put { value = $packet; key = "body"; replacement = $observedUpdated150 } → observedUpdated151
+  let packet = $observedUpdated151
+  port test.invoke { entry = "pc.packetView"; input = $packet } → observedRun152
+  let rendered = at($observedRun152, "value")
+  port test.match { text = $rendered; pattern = "&lt;script&gt;"; flags = "" } → observedMatch153
+  assert $observedMatch153
+    otherwise "Expected match(rendered,/&lt;script&gt;/)"
+  assert eq(includes($rendered, "<script>"), false)
+    otherwise "Expected equal(rendered.includes('<script>'),false)"
+
+# local competing-tab heads refuse before overwriting saved preparation or shared boards
+process test.party-work.local-competing-tab-heads-refuse-before-overwriting-saved-preparation-or-shared-boards:
+  call fixture.party-work.setup
+  port kernel.invoke { query = "fixture.party-work.harness"; input = list() } → observedResult154
+  let h = $observedResult154
+  port test.invoke { entry = "ws.boot"; input = null; host = $h } → observedRun155
+  port test.invoke { entry = "mw.createUI"; input = null; host = $h } → observedRun156
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue157
+  let before = $observedHostValue157
+  port test.get { host = $h; store = "state"; key = "workspace" } → workspace
+  let matterId = at(at(at($workspace, "document"), "matter"), "id")
+  port kernel.invoke { query = "fixture.party-work.change"; input = list($before, $issue, "alice") } → observedResult158
+  port test.merge { records = list($observedResult158, { matterId = $matterId }) } → observedRecord159
+  port kernel.invoke { query = "fixture.party-work.command"; input = list($before, { action = "propose"; actor = "alice"; id = "other_tab"; title = "From another tab"; change = $observedRecord159 }) } → observedResult160
+  let newer = $observedResult160
+  let key = concat("usewords.matter-board.v1.", at($runtime, "identity"), ".", $matterId)
+  port test.invoke { entry = "cw.receipt"; input = $newer } → observedRun161
+  port test.stringify { value = at($observedRun161, "value") } → observedJson162
+  port test.set { host = $h; store = "storage"; key = $key; value = $observedJson162 } → observedHostValue163
+  port test.set { host = $h; store = "values"; key = "#mm-purpose-input"; value = "An outdated scope" } → observedHostValue164
+  port test.set { host = $h; store = "values"; key = "#mm-scope-input"; value = "Stale tab" } → observedHostValue165
+  port test.invoke { entry = "mm.orientUI"; input = null; host = $h } → observedRun166
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue167
+  port test.sameReference { left = $observedHostValue167; right = $before } → sameState167
+  assert $sameState167
+    otherwise "Expected the previous collaboration object to remain in state"
+  port test.get { host = $h; store = "content"; key = "#ws-notice" } → observedHostValue168
+  port test.match { text = $observedHostValue168; pattern = "Another tab"; flags = "" } → observedMatch169
+  assert $observedMatch169
+    otherwise "Expected match(h.content.get('#ws-notice'),/Another tab/)"
+  port test.get { host = $h; store = "state"; key = "preparation" } → observedHostValue170
+  let room = $observedHostValue170
+  port test.invoke { entry = "pc.saveDraft"; input = { room = $room; actor = "alice"; matterId = $matterId; expectedRevision = 0; draft = { item = $issue; privateNote = "Newer private preparation" } } } → observedRun171
+  let otherRoom = at($observedRun171, "value")
+  port test.stringify { value = $otherRoom } → observedJson172
+  port test.set { host = $h; store = "storage"; key = concat("usewords.preparation.v1.", at($runtime, "identity"), ".", $matterId, ".alice"); value = $observedJson172 } → observedHostValue173
+  port test.set { host = $h; store = "values"; key = "#pc-id"; value = at($issue, "id") } → observedHostValue174
+  port test.set { host = $h; store = "values"; key = "#pc-title"; value = at($issue, "title") } → observedHostValue175
+  port test.set { host = $h; store = "values"; key = "#pc-body"; value = at($issue, "body") } → observedHostValue176
+  port test.invoke { entry = "pc.saveUI"; input = null; host = $h } → observedRun177
+  port test.get { host = $h; store = "state"; key = "preparation" } → observedHostValue178
+  port test.sameReference { left = $observedHostValue178; right = $room } → sameState178
+  assert $sameState178
+    otherwise "Expected the previous preparation object to remain in state"
+  port test.get { host = $h; store = "content"; key = "#ws-notice" } → observedHostValue179
+  port test.match { text = $observedHostValue179; pattern = "another tab"; flags = "" } → observedMatch180
+  assert $observedMatch180
+    otherwise "Expected match(h.content.get('#ws-notice'),/another tab/)"

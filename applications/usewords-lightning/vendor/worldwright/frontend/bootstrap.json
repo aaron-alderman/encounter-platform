@@ -1,0 +1,6370 @@
+{
+  "protocol": "temple/surface-process-module/1",
+  "queries": {
+    "sp.role": [
+      {
+        "let": "v",
+        "value": [
+          "at",
+          "$eventInput",
+          "text"
+        ]
+      },
+      {
+        "let": "language",
+        "value": [
+          "at",
+          "$eventInput",
+          "language"
+        ]
+      },
+      {
+        "let": "role",
+        "value": "plain"
+      },
+      {
+        "when": [
+          "eq",
+          "$language",
+          "javascript"
+        ],
+        "then": [
+          {
+            "when": [
+              "eq",
+              [
+                "at",
+                "$eventInput",
+                "category"
+              ],
+              "comment"
+            ],
+            "then": [
+              {
+                "let": "role",
+                "value": "comment"
+              }
+            ]
+          },
+          {
+            "port": "value.describe",
+            "args": {
+              "value": [
+                "at",
+                "$eventInput",
+                "keyword"
+              ]
+            },
+            "into": "keywordType"
+          },
+          {
+            "when": [
+              "and",
+              [
+                "eq",
+                [
+                  "at",
+                  "$keywordType",
+                  "type"
+                ],
+                "string"
+              ],
+              [
+                "not",
+                [
+                  "eq",
+                  [
+                    "at",
+                    "$eventInput",
+                    "keyword"
+                  ],
+                  ""
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "let": "role",
+                "value": "keyword"
+              }
+            ]
+          },
+          {
+            "fold": [
+              "at",
+              "$spPolicy",
+              "javascriptRoles"
+            ],
+            "as": "rule",
+            "accumulator": "role",
+            "initial": "$role",
+            "steps": [
+              {
+                "when": [
+                  "includes",
+                  [
+                    "at",
+                    "$rule",
+                    "kinds"
+                  ],
+                  [
+                    "at",
+                    "$eventInput",
+                    "kind"
+                  ]
+                ],
+                "then": [
+                  {
+                    "let": "role",
+                    "value": [
+                      "at",
+                      "$rule",
+                      "role"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "yield": "$role",
+            "into": "role"
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            "$language",
+            "javascript"
+          ]
+        ],
+        "then": [
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$v",
+              "start": 0,
+              "end": 1
+            },
+            "into": "first"
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$v",
+              "pattern": "^\\s*$"
+            },
+            "into": "white"
+          },
+          {
+            "when": [
+              "not",
+              "$white"
+            ],
+            "then": [
+              {
+                "when": [
+                  "eq",
+                  "$first",
+                  "\""
+                ],
+                "then": [
+                  {
+                    "let": "role",
+                    "value": "string"
+                  },
+                  {
+                    "when": [
+                      "eq",
+                      "$language",
+                      "json"
+                    ],
+                    "then": [
+                      {
+                        "port": "text.matches",
+                        "args": {
+                          "value": [
+                            "at",
+                            "$eventInput",
+                            "tail"
+                          ],
+                          "pattern": "^\\s*:"
+                        },
+                        "into": "key"
+                      },
+                      {
+                        "when": "$key",
+                        "then": [
+                          {
+                            "let": "role",
+                            "value": "property"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "when": [
+                      "eq",
+                      "$language",
+                      "rel"
+                    ],
+                    "then": [
+                      {
+                        "when": [
+                          "eq",
+                          [
+                            "at",
+                            "$eventInput",
+                            "atom"
+                          ],
+                          0
+                        ],
+                        "then": [
+                          {
+                            "let": "role",
+                            "value": "identity"
+                          }
+                        ]
+                      },
+                      {
+                        "when": [
+                          "eq",
+                          [
+                            "at",
+                            "$eventInput",
+                            "atom"
+                          ],
+                          1
+                        ],
+                        "then": [
+                          {
+                            "let": "role",
+                            "value": "predicate"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "and",
+                  [
+                    "not",
+                    [
+                      "eq",
+                      "$first",
+                      "\""
+                    ]
+                  ],
+                  [
+                    "includes",
+                    [
+                      "list",
+                      "true",
+                      "false"
+                    ],
+                    "$v"
+                  ]
+                ],
+                "then": [
+                  {
+                    "let": "role",
+                    "value": "boolean"
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "eq",
+                  "$v",
+                  "null"
+                ],
+                "then": [
+                  {
+                    "let": "role",
+                    "value": "keyword"
+                  }
+                ]
+              },
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$v",
+                  "pattern": "^-?[0-9]"
+                },
+                "into": "number"
+              },
+              {
+                "when": "$number",
+                "then": [
+                  {
+                    "let": "role",
+                    "value": "number"
+                  }
+                ]
+              },
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$v",
+                  "pattern": "^(?://|#)"
+                },
+                "into": "comment"
+              },
+              {
+                "when": "$comment",
+                "then": [
+                  {
+                    "let": "role",
+                    "value": "comment"
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "and",
+                  [
+                    "includes",
+                    [
+                      "list",
+                      "encounter",
+                      "temple",
+                      "process"
+                    ],
+                    "$language"
+                  ],
+                  [
+                    "not",
+                    [
+                      "or",
+                      "$comment",
+                      [
+                        "eq",
+                        "$first",
+                        "\""
+                      ],
+                      "$number"
+                    ]
+                  ]
+                ],
+                "then": [
+                  {
+                    "port": "text.matches",
+                    "args": {
+                      "value": "$v",
+                      "pattern": "^[A-Za-z_]"
+                    },
+                    "into": "name"
+                  },
+                  {
+                    "when": [
+                      "and",
+                      "$name",
+                      [
+                        "eq",
+                        "$role",
+                        "plain"
+                      ]
+                    ],
+                    "then": [
+                      {
+                        "let": "role",
+                        "value": [
+                          "if",
+                          [
+                            "includes",
+                            [
+                              "at",
+                              "$spPolicy",
+                              "keywords"
+                            ],
+                            "$v"
+                          ],
+                          "keyword",
+                          "identifier"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "when": [
+                      "includes",
+                      [
+                        "list",
+                        "@",
+                        [
+                          "at",
+                          "$spPolicy",
+                          "referenceSigil"
+                        ]
+                      ],
+                      "$first"
+                    ],
+                    "then": [
+                      {
+                        "let": "role",
+                        "value": "reference"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "includes",
+                  [
+                    "at",
+                    "$spPolicy",
+                    "punctuation"
+                  ],
+                  "$v"
+                ],
+                "then": [
+                  {
+                    "let": "role",
+                    "value": "punctuation"
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "includes",
+                  [
+                    "at",
+                    "$spPolicy",
+                    "operators"
+                  ],
+                  "$v"
+                ],
+                "then": [
+                  {
+                    "let": "role",
+                    "value": "operator"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "when": [
+          "or",
+          [
+            "and",
+            [
+              "eq",
+              "$language",
+              "rel"
+            ],
+            [
+              "eq",
+              [
+                "at",
+                "$eventInput",
+                "atom"
+              ],
+              2
+            ],
+            [
+              "includes",
+              [
+                "at",
+                "$spPolicy",
+                "typePredicates"
+              ],
+              [
+                "at",
+                "$eventInput",
+                "predicate"
+              ]
+            ],
+            [
+              "eq",
+              "$role",
+              "string"
+            ]
+          ],
+          [
+            "and",
+            [
+              "includes",
+              [
+                "list",
+                "encounter",
+                "temple"
+              ],
+              "$language"
+            ],
+            [
+              "at",
+              "$eventInput",
+              "typeExpected"
+            ],
+            [
+              "includes",
+              [
+                "list",
+                "string",
+                "identifier"
+              ],
+              "$role"
+            ]
+          ]
+        ],
+        "then": [
+          {
+            "let": "role",
+            "value": "type"
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$language",
+          "markdown"
+        ],
+        "then": [
+          {
+            "let": "role",
+            "value": "plain"
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$v",
+              "pattern": "^(?:#{1,6}|\\*\\*)"
+            },
+            "into": "mdHeading"
+          },
+          {
+            "when": "$mdHeading",
+            "then": [
+              {
+                "let": "role",
+                "value": "keyword"
+              }
+            ]
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$v",
+              "pattern": "^`|^~~~"
+            },
+            "into": "mdCode"
+          },
+          {
+            "when": "$mdCode",
+            "then": [
+              {
+                "let": "role",
+                "value": "string"
+              }
+            ]
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$v",
+              "pattern": "^\\["
+            },
+            "into": "mdLink"
+          },
+          {
+            "when": "$mdLink",
+            "then": [
+              {
+                "let": "role",
+                "value": "reference"
+              }
+            ]
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$v",
+              "pattern": "^(?:\\||[-+>] |\\*)"
+            },
+            "into": "mdPunctuation"
+          },
+          {
+            "when": "$mdPunctuation",
+            "then": [
+              {
+                "let": "role",
+                "value": "operator"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": "$role"
+      }
+    ],
+    "sp.scan": [
+      {
+        "let": "text",
+        "value": [
+          "at",
+          "$eventInput",
+          "text"
+        ]
+      },
+      {
+        "let": "language",
+        "value": [
+          "at",
+          "$eventInput",
+          "language"
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "source.split",
+          "input": {
+            "text": "$text",
+            "language": "$language"
+          }
+        },
+        "into": "lexed"
+      },
+      {
+        "let": "parts",
+        "value": [
+          "at",
+          "$lexed",
+          "parts"
+        ]
+      },
+      {
+        "let": "withinLimit",
+        "value": [
+          "at",
+          "$lexed",
+          "withinLimit"
+        ]
+      },
+      {
+        "let": "segments",
+        "value": [
+          "list",
+          {
+            "start": 0,
+            "end": [
+              "count",
+              "$text"
+            ],
+            "text": "$text",
+            "role": "plain"
+          }
+        ]
+      },
+      {
+        "when": "$withinLimit",
+        "then": [
+          {
+            "fold": "$parts",
+            "as": "part",
+            "accumulator": "scan",
+            "initial": {
+              "offset": 0,
+              "segments": [
+                "list"
+              ],
+              "atom": 0,
+              "predicate": null,
+              "typeNext": false,
+              "previous": null,
+              "declaration": null
+            },
+            "steps": [
+              {
+                "let": "start",
+                "value": [
+                  "at",
+                  "$scan",
+                  "offset"
+                ]
+              },
+              {
+                "let": "end",
+                "value": [
+                  "add",
+                  "$start",
+                  [
+                    "count",
+                    "$part"
+                  ]
+                ]
+              },
+              {
+                "let": "segments",
+                "value": [
+                  "at",
+                  "$scan",
+                  "segments"
+                ]
+              },
+              {
+                "let": "atom",
+                "value": [
+                  "at",
+                  "$scan",
+                  "atom"
+                ]
+              },
+              {
+                "when": [
+                  "eq",
+                  "$part",
+                  "("
+                ],
+                "then": [
+                  {
+                    "let": "atom",
+                    "value": 0
+                  }
+                ]
+              },
+              {
+                "port": "text.slice",
+                "args": {
+                  "value": "$text",
+                  "start": "$end",
+                  "end": [
+                    "count",
+                    "$text"
+                  ]
+                },
+                "into": "tail"
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "sp.role",
+                  "input": {
+                    "text": "$part",
+                    "language": "$language",
+                    "tail": "$tail",
+                    "atom": "$atom",
+                    "predicate": [
+                      "at",
+                      "$scan",
+                      "predicate"
+                    ],
+                    "typeExpected": [
+                      "at",
+                      "$scan",
+                      "typeNext"
+                    ]
+                  }
+                },
+                "into": "role"
+              },
+              {
+                "when": [
+                  "not",
+                  [
+                    "eq",
+                    [
+                      "count",
+                      "$part"
+                    ],
+                    0
+                  ]
+                ],
+                "then": [
+                  {
+                    "let": "segments",
+                    "value": [
+                      "append",
+                      "$segments",
+                      [
+                        "list",
+                        {
+                          "start": "$start",
+                          "end": "$end",
+                          "text": "$part",
+                          "role": "$role"
+                        }
+                      ]
+                    ]
+                  }
+                ]
+              },
+              {
+                "port": "text.slice",
+                "args": {
+                  "value": "$part",
+                  "start": 0,
+                  "end": 1
+                },
+                "into": "first"
+              },
+              {
+                "when": [
+                  "eq",
+                  "$first",
+                  "\""
+                ],
+                "then": [
+                  {
+                    "let": "atom",
+                    "value": [
+                      "add",
+                      "$atom",
+                      1
+                    ]
+                  }
+                ]
+              },
+              {
+                "let": "predicate",
+                "value": [
+                  "at",
+                  "$scan",
+                  "predicate"
+                ]
+              },
+              {
+                "let": "typeNext",
+                "value": [
+                  "at",
+                  "$scan",
+                  "typeNext"
+                ]
+              },
+              {
+                "let": "previous",
+                "value": [
+                  "at",
+                  "$scan",
+                  "previous"
+                ]
+              },
+              {
+                "let": "declaration",
+                "value": [
+                  "at",
+                  "$scan",
+                  "declaration"
+                ]
+              },
+              {
+                "when": [
+                  "and",
+                  [
+                    "eq",
+                    "$language",
+                    "rel"
+                  ],
+                  [
+                    "eq",
+                    [
+                      "at",
+                      "$scan",
+                      "atom"
+                    ],
+                    1
+                  ],
+                  [
+                    "eq",
+                    "$first",
+                    "\""
+                  ]
+                ],
+                "then": [
+                  {
+                    "try": [
+                      {
+                        "port": "json.parse",
+                        "args": {
+                          "text": "$part"
+                        },
+                        "into": "predicate"
+                      }
+                    ],
+                    "error": "predicateFault",
+                    "catch": [
+                      {
+                        "let": "predicate",
+                        "value": null
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$part",
+                  "pattern": "[\\r\\n]"
+                },
+                "into": "lineBreak"
+              },
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$part",
+                  "pattern": "^\\s*$"
+                },
+                "into": "space"
+              },
+              {
+                "when": "$lineBreak",
+                "then": [
+                  {
+                    "let": "typeNext",
+                    "value": false
+                  },
+                  {
+                    "let": "previous",
+                    "value": null
+                  },
+                  {
+                    "let": "declaration",
+                    "value": null
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "and",
+                  [
+                    "not",
+                    "$space"
+                  ],
+                  [
+                    "not",
+                    [
+                      "eq",
+                      "$role",
+                      "comment"
+                    ]
+                  ]
+                ],
+                "then": [
+                  {
+                    "when": [
+                      "and",
+                      [
+                        "eq",
+                        "$previous",
+                        null
+                      ],
+                      [
+                        "eq",
+                        "$role",
+                        "keyword"
+                      ],
+                      [
+                        "eq",
+                        "$part",
+                        "given"
+                      ]
+                    ],
+                    "then": [
+                      {
+                        "let": "declaration",
+                        "value": "given"
+                      }
+                    ]
+                  },
+                  {
+                    "let": "typeNext",
+                    "value": [
+                      "and",
+                      [
+                        "includes",
+                        [
+                          "list",
+                          "encounter",
+                          "temple"
+                        ],
+                        "$language"
+                      ],
+                      [
+                        "eq",
+                        "$role",
+                        "keyword"
+                      ],
+                      [
+                        "or",
+                        [
+                          "includes",
+                          [
+                            "at",
+                            [
+                              "at",
+                              "$spPolicy",
+                              "typeIntroducers"
+                            ],
+                            "$language"
+                          ],
+                          "$part"
+                        ],
+                        [
+                          "and",
+                          [
+                            "eq",
+                            "$part",
+                            "as"
+                          ],
+                          [
+                            "or",
+                            [
+                              "eq",
+                              "$previous",
+                              "show"
+                            ],
+                            [
+                              "eq",
+                              "$declaration",
+                              "given"
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  },
+                  {
+                    "let": "previous",
+                    "value": "$part"
+                  }
+                ]
+              }
+            ],
+            "yield": {
+              "offset": "$end",
+              "segments": "$segments",
+              "atom": "$atom",
+              "predicate": "$predicate",
+              "typeNext": "$typeNext",
+              "previous": "$previous",
+              "declaration": "$declaration"
+            },
+            "into": "scan"
+          },
+          {
+            "let": "segments",
+            "value": [
+              "at",
+              "$scan",
+              "segments"
+            ]
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "segments": "$segments",
+          "diagnostic": [
+            "if",
+            "$withinLimit",
+            null,
+            "SP-LIMIT: Exact text retained without token decoration."
+          ]
+        }
+      }
+    ],
+    "sp.observed": [
+      {
+        "let": "text",
+        "value": [
+          "at",
+          "$eventInput",
+          "text"
+        ]
+      },
+      {
+        "let": "observed",
+        "value": [
+          "at",
+          "$eventInput",
+          "observed"
+        ]
+      },
+      {
+        "assert": [
+          "and",
+          [
+            "eq",
+            [
+              "at",
+              "$observed",
+              "units"
+            ],
+            "utf16"
+          ],
+          [
+            "eq",
+            [
+              "at",
+              "$observed",
+              "sha256"
+            ],
+            [
+              "at",
+              "$eventInput",
+              "sha256"
+            ]
+          ],
+          [
+            "isArray",
+            [
+              "at",
+              "$observed",
+              "tokens"
+            ]
+          ]
+        ],
+        "message": "SP-OBSERVATION: Token observations belong to a different source basis."
+      },
+      {
+        "assert": [
+          "includes",
+          [
+            "range",
+            [
+              "add",
+              [
+                "at",
+                "$spPolicy",
+                "maxParts"
+              ],
+              1
+            ]
+          ],
+          [
+            "add",
+            [
+              "count",
+              [
+                "at",
+                "$observed",
+                "tokens"
+              ]
+            ],
+            1
+          ]
+        ],
+        "message": "SP-LIMIT: Too many observed tokens."
+      },
+      {
+        "fold": [
+          "at",
+          "$observed",
+          "tokens"
+        ],
+        "as": "token",
+        "accumulator": "scan",
+        "initial": {
+          "offset": 0,
+          "segments": [
+            "list"
+          ]
+        },
+        "steps": [
+          {
+            "let": "start",
+            "value": [
+              "at",
+              "$token",
+              "start"
+            ]
+          },
+          {
+            "let": "end",
+            "value": [
+              "at",
+              "$token",
+              "end"
+            ]
+          },
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$text",
+              "start": 0,
+              "end": "$start"
+            },
+            "into": "prefix"
+          },
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$text",
+              "start": 0,
+              "end": "$end"
+            },
+            "into": "endPrefix"
+          },
+          {
+            "assert": [
+              "and",
+              [
+                "eq",
+                [
+                  "count",
+                  "$prefix"
+                ],
+                "$start"
+              ],
+              [
+                "eq",
+                [
+                  "count",
+                  "$endPrefix"
+                ],
+                "$end"
+              ]
+            ],
+            "message": "SP-RANGE: Token endpoint is outside the exact UTF-16 source."
+          },
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$text",
+              "start": [
+                "at",
+                "$scan",
+                "offset"
+              ],
+              "end": "$start"
+            },
+            "into": "gap"
+          },
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$text",
+              "start": "$start",
+              "end": "$end"
+            },
+            "into": "raw"
+          },
+          {
+            "assert": [
+              "and",
+              [
+                "eq",
+                [
+                  "add",
+                  [
+                    "at",
+                    "$scan",
+                    "offset"
+                  ],
+                  [
+                    "count",
+                    "$gap"
+                  ]
+                ],
+                "$start"
+              ],
+              [
+                "eq",
+                [
+                  "add",
+                  "$start",
+                  [
+                    "count",
+                    "$raw"
+                  ]
+                ],
+                "$end"
+              ]
+            ],
+            "message": "SP-OVERLAP: Token observations are reversed or overlap."
+          },
+          {
+            "let": "segments",
+            "value": [
+              "at",
+              "$scan",
+              "segments"
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "count",
+                  "$gap"
+                ],
+                0
+              ]
+            ],
+            "then": [
+              {
+                "let": "segments",
+                "value": [
+                  "append",
+                  "$segments",
+                  [
+                    "list",
+                    {
+                      "start": [
+                        "at",
+                        "$scan",
+                        "offset"
+                      ],
+                      "end": "$start",
+                      "text": "$gap",
+                      "role": "plain"
+                    }
+                  ]
+                ]
+              }
+            ]
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.role",
+              "input": {
+                "text": "$raw",
+                "language": "javascript",
+                "category": [
+                  "at",
+                  "$token",
+                  "category"
+                ],
+                "kind": [
+                  "at",
+                  "$token",
+                  "kind"
+                ],
+                "keyword": [
+                  "at",
+                  "$token",
+                  "keyword"
+                ]
+              }
+            },
+            "into": "role"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "count",
+                  "$raw"
+                ],
+                0
+              ]
+            ],
+            "then": [
+              {
+                "let": "segments",
+                "value": [
+                  "append",
+                  "$segments",
+                  [
+                    "list",
+                    {
+                      "start": "$start",
+                      "end": "$end",
+                      "text": "$raw",
+                      "role": "$role"
+                    }
+                  ]
+                ]
+              }
+            ]
+          }
+        ],
+        "yield": {
+          "offset": "$end",
+          "segments": "$segments"
+        },
+        "into": "scan"
+      },
+      {
+        "port": "text.slice",
+        "args": {
+          "value": "$text",
+          "start": [
+            "at",
+            "$scan",
+            "offset"
+          ],
+          "end": [
+            "count",
+            "$text"
+          ]
+        },
+        "into": "tail"
+      },
+      {
+        "let": "result",
+        "value": [
+          "at",
+          "$scan",
+          "segments"
+        ]
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            [
+              "count",
+              "$tail"
+            ],
+            0
+          ]
+        ],
+        "then": [
+          {
+            "let": "result",
+            "value": [
+              "append",
+              "$result",
+              [
+                "list",
+                {
+                  "start": [
+                    "at",
+                    "$scan",
+                    "offset"
+                  ],
+                  "end": [
+                    "count",
+                    "$text"
+                  ],
+                  "text": "$tail",
+                  "role": "plain"
+                }
+              ]
+            ]
+          }
+        ]
+      }
+    ],
+    "sp.clip": [
+      {
+        "let": "text",
+        "value": [
+          "at",
+          "$eventInput",
+          "text"
+        ]
+      },
+      {
+        "let": "clipStart",
+        "value": [
+          "at",
+          [
+            "at",
+            "$eventInput",
+            "clip"
+          ],
+          "start"
+        ]
+      },
+      {
+        "let": "clipEnd",
+        "value": [
+          "at",
+          [
+            "at",
+            "$eventInput",
+            "clip"
+          ],
+          "end"
+        ]
+      },
+      {
+        "port": "text.slice",
+        "args": {
+          "value": "$text",
+          "start": 0,
+          "end": "$clipStart"
+        },
+        "into": "startPrefix"
+      },
+      {
+        "port": "text.slice",
+        "args": {
+          "value": "$text",
+          "start": 0,
+          "end": "$clipEnd"
+        },
+        "into": "endPrefix"
+      },
+      {
+        "port": "text.slice",
+        "args": {
+          "value": "$text",
+          "start": "$clipStart",
+          "end": "$clipEnd"
+        },
+        "into": "expected"
+      },
+      {
+        "assert": [
+          "and",
+          [
+            "eq",
+            [
+              "count",
+              "$startPrefix"
+            ],
+            "$clipStart"
+          ],
+          [
+            "eq",
+            [
+              "count",
+              "$endPrefix"
+            ],
+            "$clipEnd"
+          ],
+          [
+            "eq",
+            [
+              "add",
+              "$clipStart",
+              [
+                "count",
+                "$expected"
+              ]
+            ],
+            "$clipEnd"
+          ]
+        ],
+        "message": "SP-CLIP: Invalid source fragment coordinates."
+      },
+      {
+        "fold": [
+          "at",
+          "$eventInput",
+          "segments"
+        ],
+        "as": "segment",
+        "accumulator": "clipped",
+        "initial": [
+          "list"
+        ],
+        "steps": [
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$startPrefix",
+              "start": 0,
+              "end": [
+                "at",
+                "$segment",
+                "start"
+              ]
+            },
+            "into": "commonStart"
+          },
+          {
+            "let": "start",
+            "value": [
+              "add",
+              [
+                "add",
+                "$clipStart",
+                [
+                  "at",
+                  "$segment",
+                  "start"
+                ]
+              ],
+              [
+                "concat",
+                "-",
+                [
+                  "count",
+                  "$commonStart"
+                ]
+              ]
+            ]
+          },
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$endPrefix",
+              "start": 0,
+              "end": [
+                "at",
+                "$segment",
+                "end"
+              ]
+            },
+            "into": "commonEnd"
+          },
+          {
+            "let": "end",
+            "value": [
+              "count",
+              "$commonEnd"
+            ]
+          },
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$text",
+              "start": "$start",
+              "end": "$end"
+            },
+            "into": "piece"
+          },
+          {
+            "let": "next",
+            "value": "$clipped"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "count",
+                  "$piece"
+                ],
+                0
+              ]
+            ],
+            "then": [
+              {
+                "let": "next",
+                "value": [
+                  "append",
+                  "$clipped",
+                  [
+                    "list",
+                    {
+                      "start": "$start",
+                      "end": "$end",
+                      "text": "$piece",
+                      "role": [
+                        "at",
+                        "$segment",
+                        "role"
+                      ]
+                    }
+                  ]
+                ]
+              }
+            ]
+          }
+        ],
+        "yield": "$next",
+        "into": "clipped"
+      },
+      {
+        "let": "joined",
+        "value": [
+          "fold",
+          "$clipped",
+          "segment",
+          "joined",
+          "",
+          [
+            "concat",
+            "$joined",
+            [
+              "at",
+              "$segment",
+              "text"
+            ]
+          ]
+        ]
+      },
+      {
+        "assert": [
+          "eq",
+          "$joined",
+          "$expected"
+        ],
+        "message": "SP-COVERAGE: Presentation must preserve the exact source fragment."
+      },
+      {
+        "port": "text.split",
+        "args": {
+          "value": "$startPrefix",
+          "pattern": "\\r\\n|\\r|\\n"
+        },
+        "into": "prefixLines"
+      },
+      {
+        "let": "result",
+        "value": {
+          "segments": "$clipped",
+          "text": "$expected",
+          "firstLine": [
+            "count",
+            "$prefixLines"
+          ]
+        }
+      }
+    ],
+    "sp.line": [
+      {
+        "let": "result",
+        "value": {
+          "tag": "span",
+          "attrs": {
+            "class": [
+              "concat",
+              "sp-line",
+              [
+                "if",
+                [
+                  "eq",
+                  [
+                    "at",
+                    "$eventInput",
+                    "number"
+                  ],
+                  [
+                    "at",
+                    "$eventInput",
+                    "selectedLine"
+                  ]
+                ],
+                " highlight",
+                ""
+              ]
+            ],
+            "data-line": [
+              "concat",
+              [
+                "at",
+                "$eventInput",
+                "number"
+              ]
+            ]
+          },
+          "children": [
+            "at",
+            "$eventInput",
+            "children"
+          ]
+        }
+      }
+    ],
+    "sp.render": [
+      {
+        "let": "selectedLine",
+        "value": [
+          "at",
+          "$eventInput",
+          "selectedLine"
+        ]
+      },
+      {
+        "fold": [
+          "at",
+          "$eventInput",
+          "segments"
+        ],
+        "as": "segment",
+        "accumulator": "layout",
+        "initial": {
+          "number": [
+            "at",
+            "$eventInput",
+            "firstLine"
+          ],
+          "lines": [
+            "list"
+          ],
+          "pending": [
+            "list"
+          ]
+        },
+        "steps": [
+          {
+            "assert": [
+              "includes",
+              [
+                "at",
+                "$spPolicy",
+                "roles"
+              ],
+              [
+                "at",
+                "$segment",
+                "role"
+              ]
+            ],
+            "message": "SP-ROLE: Unknown presentation role."
+          },
+          {
+            "port": "text.split",
+            "args": {
+              "value": [
+                "at",
+                "$segment",
+                "text"
+              ],
+              "pattern": "(\\r\\n|\\n|\\r)"
+            },
+            "into": "pieces"
+          },
+          {
+            "fold": "$pieces",
+            "as": "piece",
+            "accumulator": "line",
+            "initial": "$layout",
+            "steps": [
+              {
+                "let": "number",
+                "value": [
+                  "at",
+                  "$line",
+                  "number"
+                ]
+              },
+              {
+                "let": "lines",
+                "value": [
+                  "at",
+                  "$line",
+                  "lines"
+                ]
+              },
+              {
+                "let": "pending",
+                "value": [
+                  "at",
+                  "$line",
+                  "pending"
+                ]
+              },
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$piece",
+                  "pattern": "^(?:\\r\\n|\\n|\\r)$"
+                },
+                "into": "newline"
+              },
+              {
+                "when": "$newline",
+                "then": [
+                  {
+                    "port": "kernel.invoke",
+                    "args": {
+                      "query": "sp.line",
+                      "input": {
+                        "number": "$number",
+                        "selectedLine": "$selectedLine",
+                        "children": "$pending"
+                      }
+                    },
+                    "into": "lineTree"
+                  },
+                  {
+                    "let": "lines",
+                    "value": [
+                      "append",
+                      "$lines",
+                      [
+                        "list",
+                        "$lineTree",
+                        "$piece"
+                      ]
+                    ]
+                  },
+                  {
+                    "let": "number",
+                    "value": [
+                      "add",
+                      "$number",
+                      1
+                    ]
+                  },
+                  {
+                    "let": "pending",
+                    "value": [
+                      "list"
+                    ]
+                  }
+                ]
+              },
+              {
+                "when": [
+                  "and",
+                  [
+                    "not",
+                    "$newline"
+                  ],
+                  [
+                    "not",
+                    [
+                      "eq",
+                      "$piece",
+                      ""
+                    ]
+                  ]
+                ],
+                "then": [
+                  {
+                    "let": "pending",
+                    "value": [
+                      "append",
+                      "$pending",
+                      [
+                        "list",
+                        {
+                          "tag": "span",
+                          "attrs": {
+                            "class": [
+                              "concat",
+                              "sp-token sp-",
+                              [
+                                "at",
+                                "$segment",
+                                "role"
+                              ]
+                            ]
+                          },
+                          "children": [
+                            "list",
+                            "$piece"
+                          ]
+                        }
+                      ]
+                    ]
+                  }
+                ]
+              }
+            ],
+            "yield": {
+              "number": "$number",
+              "lines": "$lines",
+              "pending": "$pending"
+            },
+            "into": "nextLayout"
+          }
+        ],
+        "yield": "$nextLayout",
+        "into": "layout"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "sp.line",
+          "input": {
+            "number": [
+              "at",
+              "$layout",
+              "number"
+            ],
+            "selectedLine": "$selectedLine",
+            "children": [
+              "at",
+              "$layout",
+              "pending"
+            ]
+          }
+        },
+        "into": "lastLine"
+      },
+      {
+        "let": "result",
+        "value": {
+          "tag": "code",
+          "attrs": {
+            "class": "sp-code",
+            "data-theme": [
+              "at",
+              "$eventInput",
+              "theme"
+            ],
+            "data-numbered": [
+              "if",
+              [
+                "at",
+                "$eventInput",
+                "lineNumbers"
+              ],
+              "true",
+              "false"
+            ],
+            "tabindex": "0"
+          },
+          "children": [
+            "append",
+            [
+              "at",
+              "$layout",
+              "lines"
+            ],
+            [
+              "list",
+              "$lastLine"
+            ]
+          ]
+        }
+      }
+    ],
+    "sp.present": [
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "s01.portable",
+          "input": {
+            "value": "$eventInput",
+            "ancestors": [
+              "list"
+            ]
+          }
+        },
+        "into": "portable"
+      },
+      {
+        "assert": "$portable",
+        "message": "SP-INPUT: Presentation requires finite own-data."
+      },
+      {
+        "let": "text",
+        "value": [
+          "at",
+          "$eventInput",
+          "text"
+        ]
+      },
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$text"
+        },
+        "into": "type"
+      },
+      {
+        "assert": [
+          "eq",
+          [
+            "at",
+            "$type",
+            "type"
+          ],
+          "string"
+        ],
+        "message": "SP-INPUT: Exact source text is required."
+      },
+      {
+        "port": "digest.sha256",
+        "args": {
+          "text": "$text"
+        },
+        "into": "hash"
+      },
+      {
+        "assert": [
+          "eq",
+          "$hash",
+          [
+            "at",
+            "$eventInput",
+            "expectedHash"
+          ]
+        ],
+        "message": "SP-BASIS: Source hash mismatch."
+      },
+      {
+        "let": "file",
+        "value": [
+          "at",
+          "$eventInput",
+          "file"
+        ]
+      },
+      {
+        "let": "fileAlias",
+        "value": [
+          "at",
+          [
+            "at",
+            "$spPolicy",
+            "fileAliases"
+          ],
+          "$file"
+        ]
+      },
+      {
+        "when": "$fileAlias",
+        "then": [
+          {
+            "let": "file",
+            "value": "$fileAlias"
+          }
+        ]
+      },
+      {
+        "let": "language",
+        "value": [
+          "at",
+          "$eventInput",
+          "language"
+        ]
+      },
+      {
+        "let": "theme",
+        "value": [
+          "at",
+          "$eventInput",
+          "theme"
+        ]
+      },
+      {
+        "assert": [
+          "includes",
+          [
+            "at",
+            "$spPolicy",
+            "themesAllowed"
+          ],
+          "$theme"
+        ],
+        "message": "SP-THEME: Unknown theme."
+      },
+      {
+        "when": [
+          "eq",
+          "$language",
+          "auto"
+        ],
+        "then": [
+          {
+            "let": "language",
+            "value": "plain"
+          },
+          {
+            "fold": [
+              "at",
+              "$spPolicy",
+              "fileProfiles"
+            ],
+            "as": "profile",
+            "accumulator": "language",
+            "initial": "$language",
+            "steps": [
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$file",
+                  "pattern": [
+                    "at",
+                    "$profile",
+                    "pattern"
+                  ]
+                },
+                "into": "matches"
+              },
+              {
+                "when": "$matches",
+                "then": [
+                  {
+                    "let": "language",
+                    "value": [
+                      "at",
+                      "$profile",
+                      "language"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "yield": "$language",
+            "into": "language"
+          }
+        ]
+      },
+      {
+        "let": "reason",
+        "value": null
+      },
+      {
+        "let": "segments",
+        "value": [
+          "list",
+          {
+            "start": 0,
+            "end": [
+              "count",
+              "$text"
+            ],
+            "text": "$text",
+            "role": "plain"
+          }
+        ]
+      },
+      {
+        "port": "text.slice",
+        "args": {
+          "value": "$text",
+          "start": 0,
+          "end": [
+            "at",
+            "$spPolicy",
+            "maxCodeUnits"
+          ]
+        },
+        "into": "bounded"
+      },
+      {
+        "let": "bounded",
+        "value": [
+          "eq",
+          [
+            "count",
+            "$bounded"
+          ],
+          [
+            "count",
+            "$text"
+          ]
+        ]
+      },
+      {
+        "when": [
+          "not",
+          "$bounded"
+        ],
+        "then": [
+          {
+            "let": "reason",
+            "value": "SP-LIMIT: Source retained as plain text at this presentation bound."
+          }
+        ]
+      },
+      {
+        "when": [
+          "and",
+          "$bounded",
+          [
+            "includes",
+            [
+              "list",
+              "json",
+              "rel",
+              "encounter",
+              "temple",
+              "process",
+              "markdown"
+            ],
+            "$language"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.scan",
+              "input": {
+                "text": "$text",
+                "language": "$language"
+              }
+            },
+            "into": "scanned"
+          },
+          {
+            "let": "segments",
+            "value": [
+              "at",
+              "$scanned",
+              "segments"
+            ]
+          },
+          {
+            "let": "reason",
+            "value": [
+              "at",
+              "$scanned",
+              "diagnostic"
+            ]
+          }
+        ]
+      },
+      {
+        "when": [
+          "and",
+          "$bounded",
+          [
+            "eq",
+            "$language",
+            "javascript"
+          ]
+        ],
+        "then": [
+          {
+            "when": [
+              "at",
+              "$eventInput",
+              "observed"
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "sp.observed",
+                  "input": {
+                    "text": "$text",
+                    "sha256": "$hash",
+                    "observed": [
+                      "at",
+                      "$eventInput",
+                      "observed"
+                    ]
+                  }
+                },
+                "into": "segments"
+              }
+            ]
+          },
+          {
+            "when": [
+              "not",
+              [
+                "at",
+                "$eventInput",
+                "observed"
+              ]
+            ],
+            "then": [
+              {
+                "let": "reason",
+                "value": "SP-UNBOUND: JavaScript token observations are unavailable; exact text retained."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "let": "clip",
+        "value": [
+          "at",
+          "$eventInput",
+          "clip"
+        ]
+      },
+      {
+        "when": [
+          "not",
+          "$clip"
+        ],
+        "then": [
+          {
+            "let": "clip",
+            "value": {
+              "start": 0,
+              "end": [
+                "count",
+                "$text"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "sp.clip",
+          "input": {
+            "text": "$text",
+            "clip": "$clip",
+            "segments": "$segments"
+          }
+        },
+        "into": "clipped"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "sp.render",
+          "input": {
+            "segments": [
+              "at",
+              "$clipped",
+              "segments"
+            ],
+            "theme": "$theme",
+            "lineNumbers": [
+              "at",
+              "$eventInput",
+              "lineNumbers"
+            ],
+            "selectedLine": [
+              "at",
+              "$eventInput",
+              "selectedLine"
+            ],
+            "firstLine": [
+              "at",
+              "$clipped",
+              "firstLine"
+            ]
+          }
+        },
+        "into": "tree"
+      },
+      {
+        "let": "result",
+        "value": {
+          "protocol": "encounter/source-presentation/1",
+          "ok": true,
+          "sourceHash": "$hash",
+          "units": "utf16",
+          "language": "$language",
+          "assurance": "lexical-presentation-only",
+          "diagnostic": "$reason",
+          "text": [
+            "at",
+            "$clipped",
+            "text"
+          ],
+          "segments": [
+            "at",
+            "$clipped",
+            "segments"
+          ],
+          "tree": "$tree",
+          "origin": [
+            "at",
+            "$eventInput",
+            "origin"
+          ],
+          "profile": [
+            "at",
+            "$spPolicy",
+            "protocol"
+          ]
+        }
+      }
+    ],
+    "sp.expression": [
+      {
+        "let": "value",
+        "value": [
+          "at",
+          "$eventInput",
+          "value"
+        ]
+      },
+      {
+        "let": "depth",
+        "value": [
+          "at",
+          "$eventInput",
+          "depth"
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$depth",
+          null
+        ],
+        "then": [
+          {
+            "let": "depth",
+            "value": 0
+          }
+        ]
+      },
+      {
+        "assert": [
+          "includes",
+          [
+            "range",
+            65
+          ],
+          [
+            "add",
+            "$depth",
+            1
+          ]
+        ],
+        "message": "SP-DEPTH: Expression presentation exceeds its declared bound."
+      },
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$value"
+        },
+        "into": "type"
+      },
+      {
+        "let": "indent",
+        "value": [
+          "fold",
+          [
+            "range",
+            "$depth"
+          ],
+          "unused",
+          "indent",
+          "",
+          [
+            "concat",
+            "$indent",
+            "  "
+          ]
+        ]
+      },
+      {
+        "let": "childIndent",
+        "value": [
+          "concat",
+          "$indent",
+          "  "
+        ]
+      },
+      {
+        "let": "text",
+        "value": ""
+      },
+      {
+        "when": [
+          "at",
+          "$type",
+          "array"
+        ],
+        "then": [
+          {
+            "let": "op",
+            "value": [
+              "at",
+              "$value",
+              0
+            ]
+          },
+          {
+            "fold": [
+              "range",
+              [
+                "count",
+                "$value"
+              ]
+            ],
+            "as": "oneIndex",
+            "accumulator": "args",
+            "initial": [
+              "list"
+            ],
+            "steps": [
+              {
+                "when": [
+                  "not",
+                  [
+                    "eq",
+                    "$oneIndex",
+                    1
+                  ]
+                ],
+                "then": [
+                  {
+                    "port": "kernel.invoke",
+                    "args": {
+                      "query": "sp.expression",
+                      "input": {
+                        "value": [
+                          "at",
+                          "$value",
+                          [
+                            "add",
+                            "$oneIndex",
+                            -1
+                          ]
+                        ],
+                        "depth": [
+                          "add",
+                          "$depth",
+                          1
+                        ]
+                      }
+                    },
+                    "into": "arg"
+                  },
+                  {
+                    "let": "args",
+                    "value": [
+                      "append",
+                      "$args",
+                      [
+                        "list",
+                        "$arg"
+                      ]
+                    ]
+                  }
+                ]
+              }
+            ],
+            "yield": "$args",
+            "into": "args"
+          },
+          {
+            "port": "text.join",
+            "args": {
+              "values": "$args",
+              "separator": ", "
+            },
+            "into": "inlineArgs"
+          },
+          {
+            "let": "text",
+            "value": [
+              "concat",
+              "$op",
+              "(",
+              "$inlineArgs",
+              ")"
+            ]
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$text",
+              "pattern": "[\\s\\S]{89}|\\n"
+            },
+            "into": "wide"
+          },
+          {
+            "when": "$wide",
+            "then": [
+              {
+                "port": "text.join",
+                "args": {
+                  "values": "$args",
+                  "separator": [
+                    "concat",
+                    ",\n",
+                    "$childIndent"
+                  ]
+                },
+                "into": "multilineArgs"
+              },
+              {
+                "let": "text",
+                "value": [
+                  "concat",
+                  "$op",
+                  "(\n",
+                  "$childIndent",
+                  "$multilineArgs",
+                  "\n",
+                  "$indent",
+                  ")"
+                ]
+              }
+            ]
+          },
+          {
+            "when": [
+              "eq",
+              [
+                "count",
+                "$value"
+              ],
+              0
+            ],
+            "then": [
+              {
+                "let": "text",
+                "value": "[]"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "when": [
+          "and",
+          [
+            "eq",
+            [
+              "at",
+              "$type",
+              "type"
+            ],
+            "object"
+          ],
+          [
+            "not",
+            [
+              "at",
+              "$type",
+              "null"
+            ]
+          ],
+          [
+            "not",
+            [
+              "at",
+              "$type",
+              "array"
+            ]
+          ]
+        ],
+        "then": [
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$value"
+            },
+            "into": "entries"
+          },
+          {
+            "fold": "$entries",
+            "as": "entry",
+            "accumulator": "fields",
+            "initial": [
+              "list"
+            ],
+            "steps": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "sp.expression",
+                  "input": {
+                    "value": [
+                      "at",
+                      "$entry",
+                      1
+                    ],
+                    "depth": [
+                      "add",
+                      "$depth",
+                      1
+                    ]
+                  }
+                },
+                "into": "field"
+              },
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": [
+                    "at",
+                    "$entry",
+                    0
+                  ],
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                },
+                "into": "plainKey"
+              },
+              {
+                "let": "fieldKey",
+                "value": [
+                  "at",
+                  "$entry",
+                  0
+                ]
+              },
+              {
+                "when": [
+                  "not",
+                  "$plainKey"
+                ],
+                "then": [
+                  {
+                    "port": "json.stringify",
+                    "args": {
+                      "value": [
+                        "at",
+                        "$entry",
+                        0
+                      ]
+                    },
+                    "into": "fieldKey"
+                  }
+                ]
+              },
+              {
+                "let": "fields",
+                "value": [
+                  "append",
+                  "$fields",
+                  [
+                    "list",
+                    [
+                      "concat",
+                      "$fieldKey",
+                      " = ",
+                      "$field"
+                    ]
+                  ]
+                ]
+              }
+            ],
+            "yield": "$fields",
+            "into": "fields"
+          },
+          {
+            "port": "text.join",
+            "args": {
+              "values": "$fields",
+              "separator": "; "
+            },
+            "into": "inlineFields"
+          },
+          {
+            "let": "text",
+            "value": [
+              "concat",
+              "{ ",
+              "$inlineFields",
+              " }"
+            ]
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$text",
+              "pattern": "[\\s\\S]{89}|\\n"
+            },
+            "into": "wide"
+          },
+          {
+            "when": "$wide",
+            "then": [
+              {
+                "port": "text.join",
+                "args": {
+                  "values": "$fields",
+                  "separator": [
+                    "concat",
+                    ";\n",
+                    "$childIndent"
+                  ]
+                },
+                "into": "multilineFields"
+              },
+              {
+                "let": "text",
+                "value": [
+                  "concat",
+                  "{\n",
+                  "$childIndent",
+                  "$multilineFields",
+                  "\n",
+                  "$indent",
+                  "}"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          [
+            "at",
+            "$type",
+            "type"
+          ],
+          "string"
+        ],
+        "then": [
+          {
+            "port": "text.slice",
+            "args": {
+              "value": "$value",
+              "start": 0,
+              "end": 1
+            },
+            "into": "first"
+          },
+          {
+            "let": "text",
+            "value": "$value"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                "$first",
+                [
+                  "at",
+                  "$spPolicy",
+                  "referenceSigil"
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "json.stringify",
+                "args": {
+                  "value": "$value"
+                },
+                "into": "text"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "when": [
+          "or",
+          [
+            "at",
+            "$type",
+            "null"
+          ],
+          [
+            "includes",
+            [
+              "list",
+              "number",
+              "boolean"
+            ],
+            [
+              "at",
+              "$type",
+              "type"
+            ]
+          ]
+        ],
+        "then": [
+          {
+            "port": "value.string",
+            "args": {
+              "value": "$value"
+            },
+            "into": "text"
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": "$text"
+      }
+    ],
+    "sp.programme": [
+      {
+        "let": "programme",
+        "value": [
+          "at",
+          "$eventInput",
+          "programme"
+        ]
+      },
+      {
+        "let": "depth",
+        "value": [
+          "at",
+          "$eventInput",
+          "depth"
+        ]
+      },
+      {
+        "assert": [
+          "and",
+          [
+            "isArray",
+            "$programme"
+          ],
+          [
+            "includes",
+            [
+              "range",
+              65
+            ],
+            [
+              "add",
+              "$depth",
+              1
+            ]
+          ]
+        ],
+        "message": "SP-PROGRAMME: A bounded process array is required."
+      },
+      {
+        "let": "indent",
+        "value": [
+          "fold",
+          [
+            "range",
+            "$depth"
+          ],
+          "unused",
+          "indent",
+          "",
+          [
+            "concat",
+            "$indent",
+            "  "
+          ]
+        ]
+      },
+      {
+        "fold": "$programme",
+        "as": "statement",
+        "accumulator": "listing",
+        "initial": "",
+        "steps": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.statement",
+              "input": {
+                "statement": "$statement",
+                "indent": "$indent",
+                "depth": "$depth"
+              }
+            },
+            "into": "line"
+          },
+          {
+            "let": "listing",
+            "value": [
+              "concat",
+              "$listing",
+              [
+                "if",
+                [
+                  "eq",
+                  "$listing",
+                  ""
+                ],
+                "",
+                "\n"
+              ],
+              "$line"
+            ]
+          }
+        ],
+        "yield": "$listing",
+        "into": "listing"
+      },
+      {
+        "let": "result",
+        "value": "$listing"
+      }
+    ],
+    "sp.statement": [
+      {
+        "let": "st",
+        "value": [
+          "at",
+          "$eventInput",
+          "statement"
+        ]
+      },
+      {
+        "let": "indent",
+        "value": [
+          "at",
+          "$eventInput",
+          "indent"
+        ]
+      },
+      {
+        "let": "depth",
+        "value": [
+          "at",
+          "$eventInput",
+          "depth"
+        ]
+      },
+      {
+        "port": "record.entries",
+        "args": {
+          "value": "$st"
+        },
+        "into": "fields"
+      },
+      {
+        "let": "keys",
+        "value": [
+          "map",
+          "$fields",
+          "field",
+          [
+            "at",
+            "$field",
+            0
+          ]
+        ]
+      },
+      {
+        "let": "done",
+        "value": false
+      },
+      {
+        "let": "text",
+        "value": ""
+      },
+      {
+        "when": [
+          "includes",
+          "$keys",
+          "let"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.expression",
+              "input": {
+                "value": [
+                  "at",
+                  "$st",
+                  "value"
+                ],
+                "depth": "$depth"
+              }
+            },
+            "into": "v"
+          },
+          {
+            "let": "text",
+            "value": [
+              "concat",
+              "$indent",
+              "let ",
+              [
+                "at",
+                "$st",
+                "let"
+              ],
+              " = ",
+              "$v"
+            ]
+          },
+          {
+            "let": "done",
+            "value": true
+          }
+        ]
+      },
+      {
+        "when": [
+          "and",
+          [
+            "not",
+            "$done"
+          ],
+          [
+            "includes",
+            "$keys",
+            "assert"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.expression",
+              "input": {
+                "value": [
+                  "at",
+                  "$st",
+                  "assert"
+                ],
+                "depth": "$depth"
+              }
+            },
+            "into": "v"
+          },
+          {
+            "port": "json.stringify",
+            "args": {
+              "value": [
+                "at",
+                "$st",
+                "message"
+              ]
+            },
+            "into": "message"
+          },
+          {
+            "let": "text",
+            "value": [
+              "concat",
+              "$indent",
+              "assert ",
+              "$v",
+              "\n",
+              "$indent",
+              "  otherwise ",
+              "$message"
+            ]
+          },
+          {
+            "let": "done",
+            "value": true
+          }
+        ]
+      },
+      {
+        "when": [
+          "and",
+          [
+            "not",
+            "$done"
+          ],
+          [
+            "includes",
+            "$keys",
+            "port"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.expression",
+              "input": {
+                "value": [
+                  "at",
+                  "$st",
+                  "args"
+                ],
+                "depth": "$depth"
+              }
+            },
+            "into": "v"
+          },
+          {
+            "let": "text",
+            "value": [
+              "concat",
+              "$indent",
+              "port ",
+              [
+                "at",
+                "$st",
+                "port"
+              ],
+              " ",
+              "$v",
+              " → ",
+              [
+                "at",
+                "$st",
+                "into"
+              ]
+            ]
+          },
+          {
+            "let": "done",
+            "value": true
+          }
+        ]
+      },
+      {
+        "when": [
+          "and",
+          [
+            "not",
+            "$done"
+          ],
+          [
+            "includes",
+            "$keys",
+            "call"
+          ]
+        ],
+        "then": [
+          {
+            "let": "text",
+            "value": [
+              "concat",
+              "$indent",
+              "call ",
+              [
+                "at",
+                "$st",
+                "call"
+              ]
+            ]
+          },
+          {
+            "let": "done",
+            "value": true
+          }
+        ]
+      },
+      {
+        "when": [
+          "and",
+          [
+            "not",
+            "$done"
+          ],
+          [
+            "includes",
+            "$keys",
+            "when"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.expression",
+              "input": {
+                "value": [
+                  "at",
+                  "$st",
+                  "when"
+                ],
+                "depth": "$depth"
+              }
+            },
+            "into": "v"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.programme",
+              "input": {
+                "programme": [
+                  "at",
+                  "$st",
+                  "then"
+                ],
+                "depth": [
+                  "add",
+                  "$depth",
+                  1
+                ]
+              }
+            },
+            "into": "body"
+          },
+          {
+            "let": "text",
+            "value": [
+              "concat",
+              "$indent",
+              "when ",
+              "$v",
+              ":\n",
+              "$body"
+            ]
+          },
+          {
+            "let": "done",
+            "value": true
+          }
+        ]
+      },
+      {
+        "when": [
+          "and",
+          [
+            "not",
+            "$done"
+          ],
+          [
+            "includes",
+            "$keys",
+            "fold"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.expression",
+              "input": {
+                "value": [
+                  "at",
+                  "$st",
+                  "fold"
+                ],
+                "depth": "$depth"
+              }
+            },
+            "into": "v"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.expression",
+              "input": {
+                "value": [
+                  "at",
+                  "$st",
+                  "initial"
+                ],
+                "depth": "$depth"
+              }
+            },
+            "into": "initial"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.expression",
+              "input": {
+                "value": [
+                  "at",
+                  "$st",
+                  "yield"
+                ],
+                "depth": "$depth"
+              }
+            },
+            "into": "yield"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.programme",
+              "input": {
+                "programme": [
+                  "at",
+                  "$st",
+                  "steps"
+                ],
+                "depth": [
+                  "add",
+                  "$depth",
+                  1
+                ]
+              }
+            },
+            "into": "body"
+          },
+          {
+            "let": "text",
+            "value": [
+              "concat",
+              "$indent",
+              "fold ",
+              "$v",
+              " as ",
+              [
+                "at",
+                "$st",
+                "as"
+              ],
+              "; ",
+              [
+                "at",
+                "$st",
+                "accumulator"
+              ],
+              " starts ",
+              "$initial",
+              ":\n",
+              [
+                "if",
+                [
+                  "eq",
+                  "$body",
+                  ""
+                ],
+                "",
+                [
+                  "concat",
+                  "$body",
+                  "\n"
+                ]
+              ],
+              "$indent",
+              "  yield ",
+              "$yield",
+              " → ",
+              [
+                "at",
+                "$st",
+                "into"
+              ]
+            ]
+          },
+          {
+            "let": "done",
+            "value": true
+          }
+        ]
+      },
+      {
+        "when": [
+          "and",
+          [
+            "not",
+            "$done"
+          ],
+          [
+            "includes",
+            "$keys",
+            "each"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.expression",
+              "input": {
+                "value": [
+                  "at",
+                  "$st",
+                  "each"
+                ],
+                "depth": "$depth"
+              }
+            },
+            "into": "v"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.programme",
+              "input": {
+                "programme": [
+                  "at",
+                  "$st",
+                  "steps"
+                ],
+                "depth": [
+                  "add",
+                  "$depth",
+                  1
+                ]
+              }
+            },
+            "into": "body"
+          },
+          {
+            "let": "text",
+            "value": [
+              "concat",
+              "$indent",
+              "each ",
+              "$v",
+              " as ",
+              [
+                "at",
+                "$st",
+                "as"
+              ],
+              ":\n",
+              "$body"
+            ]
+          },
+          {
+            "let": "done",
+            "value": true
+          }
+        ]
+      },
+      {
+        "when": [
+          "and",
+          [
+            "not",
+            "$done"
+          ],
+          [
+            "includes",
+            "$keys",
+            "try"
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.programme",
+              "input": {
+                "programme": [
+                  "at",
+                  "$st",
+                  "try"
+                ],
+                "depth": [
+                  "add",
+                  "$depth",
+                  1
+                ]
+              }
+            },
+            "into": "tryBody"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.programme",
+              "input": {
+                "programme": [
+                  "at",
+                  "$st",
+                  "catch"
+                ],
+                "depth": [
+                  "add",
+                  "$depth",
+                  1
+                ]
+              }
+            },
+            "into": "catchBody"
+          },
+          {
+            "let": "text",
+            "value": [
+              "concat",
+              "$indent",
+              "try:\n",
+              "$tryBody",
+              "\n",
+              "$indent",
+              "catch ",
+              [
+                "at",
+                "$st",
+                "error"
+              ],
+              ":\n",
+              "$catchBody"
+            ]
+          },
+          {
+            "let": "done",
+            "value": true
+          }
+        ]
+      },
+      {
+        "when": [
+          "not",
+          "$done"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.expression",
+              "input": {
+                "value": "$st",
+                "depth": "$depth"
+              }
+            },
+            "into": "v"
+          },
+          {
+            "let": "text",
+            "value": [
+              "concat",
+              "$indent",
+              "$v"
+            ]
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": "$text"
+      }
+    ],
+    "sp.listing": [
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "sp.programme",
+          "input": {
+            "programme": [
+              "at",
+              "$eventInput",
+              "programme"
+            ],
+            "depth": 0
+          }
+        },
+        "into": "text"
+      },
+      {
+        "let": "result",
+        "value": {
+          "text": "$text",
+          "scope": "generated-process-definition",
+          "origin": [
+            "at",
+            "$eventInput",
+            "origin"
+          ],
+          "limitations": [
+            "list",
+            "Generated notation, not original source characters.",
+            "No branch is marked executed; no change authority is created."
+          ]
+        }
+      }
+    ],
+    "sp.style": [
+      {
+        "call": "sp.stylePlan"
+      },
+      {
+        "let": "cssPlan",
+        "value": "$result"
+      },
+      {
+        "call": "css.renderPlan"
+      }
+    ],
+    "sp.outline": [
+      {
+        "fold": [
+          "at",
+          "$eventInput",
+          "nodes"
+        ],
+        "as": "node",
+        "accumulator": "text",
+        "initial": "",
+        "steps": [],
+        "yield": [
+          "concat",
+          "$text",
+          [
+            "if",
+            [
+              "eq",
+              "$text",
+              ""
+            ],
+            "",
+            "\n\n"
+          ],
+          [
+            "at",
+            "$node",
+            "order"
+          ],
+          ". ",
+          [
+            "at",
+            "$node",
+            "kind"
+          ],
+          " · ",
+          [
+            "at",
+            "$node",
+            "label"
+          ],
+          "\n",
+          [
+            "at",
+            "$node",
+            "pointer"
+          ],
+          "\n",
+          [
+            "at",
+            "$node",
+            "detail"
+          ]
+        ],
+        "into": "text"
+      },
+      {
+        "let": "result",
+        "value": {
+          "text": "$text",
+          "language": "process",
+          "scope": "generated-process-outline",
+          "origin": [
+            "at",
+            "$eventInput",
+            "origin"
+          ]
+        }
+      }
+    ],
+    "sp.metadata": [
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "s01.portable",
+          "input": {
+            "value": "$eventInput",
+            "ancestors": [
+              "list"
+            ]
+          }
+        },
+        "into": "portable"
+      },
+      {
+        "assert": "$portable",
+        "message": "SP-INPUT: Metadata requires finite own-data."
+      },
+      {
+        "let": "subject",
+        "value": [
+          "at",
+          "$eventInput",
+          "subject"
+        ]
+      },
+      {
+        "port": "value.describe",
+        "args": {
+          "value": [
+            "at",
+            "$eventInput",
+            "record"
+          ]
+        },
+        "into": "recordType"
+      },
+      {
+        "assert": [
+          "and",
+          [
+            "at",
+            "$recordType",
+            "plain"
+          ],
+          [
+            "not",
+            [
+              "at",
+              "$recordType",
+              "array"
+            ]
+          ]
+        ],
+        "message": "SP-METADATA: A typed record is required."
+      },
+      {
+        "port": "value.describe",
+        "args": {
+          "value": "$subject"
+        },
+        "into": "subjectType"
+      },
+      {
+        "assert": [
+          "and",
+          [
+            "eq",
+            [
+              "at",
+              "$subjectType",
+              "type"
+            ],
+            "string"
+          ],
+          [
+            "not",
+            [
+              "eq",
+              "$subject",
+              ""
+            ]
+          ]
+        ],
+        "message": "SP-METADATA: An explicit subject identity is required."
+      },
+      {
+        "port": "record.entries",
+        "args": {
+          "value": [
+            "at",
+            "$eventInput",
+            "record"
+          ]
+        },
+        "into": "entries"
+      },
+      {
+        "fold": "$entries",
+        "as": "entry",
+        "accumulator": "facts",
+        "initial": [
+          "list"
+        ],
+        "steps": [
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                [
+                  "at",
+                  "$entry",
+                  0
+                ],
+                "text"
+              ]
+            ],
+            "then": [
+              {
+                "let": "values",
+                "value": [
+                  "if",
+                  [
+                    "isArray",
+                    [
+                      "at",
+                      "$entry",
+                      1
+                    ]
+                  ],
+                  [
+                    "at",
+                    "$entry",
+                    1
+                  ],
+                  [
+                    "list",
+                    [
+                      "at",
+                      "$entry",
+                      1
+                    ]
+                  ]
+                ]
+              },
+              {
+                "fold": "$values",
+                "as": "value",
+                "accumulator": "facts",
+                "initial": "$facts",
+                "steps": [
+                  {
+                    "let": "facts",
+                    "value": [
+                      "append",
+                      "$facts",
+                      [
+                        "list",
+                        {
+                          "s": "$subject",
+                          "p": [
+                            "at",
+                            "$entry",
+                            0
+                          ],
+                          "o": "$value",
+                          "pol": "is"
+                        }
+                      ]
+                    ]
+                  }
+                ],
+                "yield": "$facts",
+                "into": "facts"
+              }
+            ]
+          }
+        ],
+        "yield": "$facts",
+        "into": "facts"
+      },
+      {
+        "let": "sourceFacts",
+        "value": "$facts"
+      },
+      {
+        "let": "format",
+        "value": "rel"
+      },
+      {
+        "call": "source.encode"
+      },
+      {
+        "let": "text",
+        "value": "$result"
+      },
+      {
+        "port": "digest.sha256",
+        "args": {
+          "text": "$text"
+        },
+        "into": "hash"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "sp.present",
+          "input": {
+            "text": "$text",
+            "file": "generated-typed-projection.rel",
+            "language": "rel",
+            "expectedHash": "$hash",
+            "theme": [
+              "at",
+              "$eventInput",
+              "theme"
+            ],
+            "lineNumbers": false,
+            "selectedLine": null,
+            "origin": [
+              "at",
+              "$eventInput",
+              "origin"
+            ]
+          }
+        },
+        "into": "presentation"
+      },
+      {
+        "let": "result",
+        "value": {
+          "scope": "generated-typed-projection",
+          "facts": "$facts",
+          "presentation": "$presentation"
+        }
+      }
+    ],
+    "sp.stylePlan": [
+      {
+        "let": "tokens",
+        "value": [
+          "list"
+        ]
+      },
+      {
+        "let": "rules",
+        "value": [
+          "at",
+          "$spPolicy",
+          "layoutRules"
+        ]
+      },
+      {
+        "fold": [
+          "at",
+          "$spPolicy",
+          "themes"
+        ],
+        "as": "theme",
+        "accumulator": "palette",
+        "initial": {
+          "tokens": "$tokens",
+          "rules": "$rules"
+        },
+        "steps": [
+          {
+            "port": "record.entries",
+            "args": {
+              "value": [
+                "at",
+                "$theme",
+                "roles"
+              ]
+            },
+            "into": "roles"
+          },
+          {
+            "let": "tokens",
+            "value": [
+              "at",
+              "$palette",
+              "tokens"
+            ]
+          },
+          {
+            "let": "rules",
+            "value": [
+              "at",
+              "$palette",
+              "rules"
+            ]
+          },
+          {
+            "fold": "$roles",
+            "as": "role",
+            "accumulator": "themeState",
+            "initial": {
+              "tokens": "$tokens",
+              "rules": "$rules"
+            },
+            "steps": [
+              {
+                "let": "name",
+                "value": [
+                  "concat",
+                  "sp-",
+                  [
+                    "at",
+                    "$theme",
+                    "id"
+                  ],
+                  "-",
+                  [
+                    "at",
+                    "$role",
+                    0
+                  ]
+                ]
+              },
+              {
+                "let": "tokens",
+                "value": [
+                  "append",
+                  [
+                    "at",
+                    "$themeState",
+                    "tokens"
+                  ],
+                  [
+                    "list",
+                    {
+                      "id": "$name",
+                      "name": "$name",
+                      "value": [
+                        "at",
+                        "$role",
+                        1
+                      ]
+                    }
+                  ]
+                ]
+              },
+              {
+                "let": "rules",
+                "value": [
+                  "append",
+                  [
+                    "at",
+                    "$themeState",
+                    "rules"
+                  ],
+                  [
+                    "list",
+                    {
+                      "selector": [
+                        "concat",
+                        ".sp-code[data-theme=\"",
+                        [
+                          "at",
+                          "$theme",
+                          "id"
+                        ],
+                        "\"] .sp-",
+                        [
+                          "at",
+                          "$role",
+                          0
+                        ]
+                      ],
+                      "context": null,
+                      "declarations": [
+                        "list",
+                        {
+                          "property": "color",
+                          "value": [
+                            "concat",
+                            "var(--",
+                            "$name",
+                            ")"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                ]
+              }
+            ],
+            "yield": {
+              "tokens": "$tokens",
+              "rules": "$rules"
+            },
+            "into": "themeState"
+          }
+        ],
+        "yield": "$themeState",
+        "into": "palette"
+      },
+      {
+        "let": "cssPlan",
+        "value": {
+          "imports": [
+            "list"
+          ],
+          "tokens": [
+            "at",
+            "$palette",
+            "tokens"
+          ],
+          "rules": [
+            "at",
+            "$palette",
+            "rules"
+          ]
+        }
+      },
+      {
+        "let": "result",
+        "value": "$cssPlan"
+      }
+    ],
+    "source.split": [
+      {
+        "let": "text",
+        "value": [
+          "at",
+          "$eventInput",
+          "text"
+        ]
+      },
+      {
+        "let": "language",
+        "value": [
+          "at",
+          "$eventInput",
+          "language"
+        ]
+      },
+      {
+        "let": "jsonPattern",
+        "value": [
+          "fold",
+          [
+            "at",
+            "$lexPolicy",
+            "jsonPatternPath"
+          ],
+          "pathPart",
+          "owner",
+          "$lexGrammar",
+          [
+            "at",
+            "$owner",
+            "$pathPart"
+          ]
+        ]
+      },
+      {
+        "port": "text.slice",
+        "args": {
+          "value": "$jsonPattern",
+          "start": 1,
+          "end": [
+            "add",
+            [
+              "count",
+              "$jsonPattern"
+            ],
+            -1
+          ]
+        },
+        "into": "jsonInner"
+      },
+      {
+        "let": "pattern",
+        "value": "$jsonPattern"
+      },
+      {
+        "when": [
+          "eq",
+          "$language",
+          "rel"
+        ],
+        "then": [
+          {
+            "let": "pattern",
+            "value": [
+              "concat",
+              "(",
+              "$jsonInner",
+              "|[()]|//[^\\r\\n]*)"
+            ]
+          }
+        ]
+      },
+      {
+        "when": [
+          "includes",
+          [
+            "list",
+            "encounter",
+            "temple",
+            "process"
+          ],
+          "$language"
+        ],
+        "then": [
+          {
+            "let": "pattern",
+            "value": [
+              "concat",
+              "(",
+              [
+                "at",
+                "$lexPolicy",
+                "identifierPattern"
+              ],
+              "|",
+              "$jsonInner",
+              "|#[^\\r\\n]*|[()=;]|→|[^\\S\\r\\n]+)"
+            ]
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$language",
+          "markdown"
+        ],
+        "then": [
+          {
+            "let": "pattern",
+            "value": "$lexPolicy.markdownPattern"
+          }
+        ]
+      },
+      {
+        "port": "text.split",
+        "args": {
+          "value": "$text",
+          "pattern": "$pattern"
+        },
+        "into": "parts"
+      },
+      {
+        "let": "withinLimit",
+        "value": [
+          "includes",
+          [
+            "range",
+            [
+              "add",
+              [
+                "at",
+                "$lexPolicy",
+                "maxParts"
+              ],
+              1
+            ]
+          ],
+          [
+            "add",
+            [
+              "count",
+              "$parts"
+            ],
+            1
+          ]
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "parts": "$parts",
+          "withinLimit": "$withinLimit"
+        }
+      }
+    ],
+    "source.lex": [
+      {
+        "let": "text",
+        "value": [
+          "at",
+          "$eventInput",
+          "text"
+        ]
+      },
+      {
+        "port": "text.slice",
+        "args": {
+          "value": "$text",
+          "start": 0,
+          "end": [
+            "at",
+            "$lexPolicy",
+            "maxCodeUnits"
+          ]
+        },
+        "into": "bounded"
+      },
+      {
+        "let": "sizeOk",
+        "value": [
+          "eq",
+          [
+            "count",
+            "$bounded"
+          ],
+          [
+            "count",
+            "$text"
+          ]
+        ]
+      },
+      {
+        "let": "tokens",
+        "value": [
+          "list"
+        ]
+      },
+      {
+        "let": "withinLimit",
+        "value": false
+      },
+      {
+        "when": "$sizeOk",
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "source.split",
+              "input": {
+                "text": "$text",
+                "language": [
+                  "at",
+                  "$eventInput",
+                  "language"
+                ]
+              }
+            },
+            "into": "split"
+          },
+          {
+            "let": "withinLimit",
+            "value": [
+              "at",
+              "$split",
+              "withinLimit"
+            ]
+          },
+          {
+            "when": "$withinLimit",
+            "then": [
+              {
+                "fold": [
+                  "at",
+                  "$split",
+                  "parts"
+                ],
+                "as": "part",
+                "accumulator": "state",
+                "initial": {
+                  "offset": 0,
+                  "tokens": [
+                    "list"
+                  ]
+                },
+                "steps": [
+                  {
+                    "port": "text.split",
+                    "args": {
+                      "value": "$part",
+                      "pattern": "(\\r\\n|\\n|\\r)"
+                    },
+                    "into": "pieces"
+                  },
+                  {
+                    "fold": "$pieces",
+                    "as": "piece",
+                    "accumulator": "inner",
+                    "initial": "$state",
+                    "steps": [
+                      {
+                        "let": "offset",
+                        "value": [
+                          "at",
+                          "$inner",
+                          "offset"
+                        ]
+                      },
+                      {
+                        "let": "end",
+                        "value": [
+                          "add",
+                          "$offset",
+                          [
+                            "count",
+                            "$piece"
+                          ]
+                        ]
+                      },
+                      {
+                        "let": "tokens",
+                        "value": [
+                          "at",
+                          "$inner",
+                          "tokens"
+                        ]
+                      },
+                      {
+                        "when": [
+                          "not",
+                          [
+                            "eq",
+                            "$piece",
+                            ""
+                          ]
+                        ],
+                        "then": [
+                          {
+                            "let": "tokens",
+                            "value": [
+                              "append",
+                              "$tokens",
+                              [
+                                "list",
+                                {
+                                  "text": "$piece",
+                                  "start": "$offset",
+                                  "end": "$end"
+                                }
+                              ]
+                            ]
+                          }
+                        ]
+                      }
+                    ],
+                    "yield": {
+                      "offset": "$end",
+                      "tokens": "$tokens"
+                    },
+                    "into": "state"
+                  }
+                ],
+                "yield": "$state",
+                "into": "state"
+              },
+              {
+                "let": "tokens",
+                "value": [
+                  "at",
+                  "$state",
+                  "tokens"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "let": "countOk",
+        "value": [
+          "includes",
+          [
+            "range",
+            [
+              "add",
+              [
+                "at",
+                "$lexPolicy",
+                "maxParts"
+              ],
+              1
+            ]
+          ],
+          [
+            "add",
+            [
+              "count",
+              "$tokens"
+            ],
+            1
+          ]
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "tokens": "$tokens",
+          "withinLimit": [
+            "and",
+            "$sizeOk",
+            "$withinLimit",
+            "$countOk"
+          ],
+          "diagnostic": [
+            "if",
+            [
+              "and",
+              "$sizeOk",
+              "$withinLimit",
+              "$countOk"
+            ],
+            null,
+            "SP-LIMIT: Exact lexical source exceeds its bound."
+          ]
+        }
+      }
+    ],
+    "s01.portable": [
+      {
+        "port": "value.describe",
+        "args": {
+          "value": [
+            "at",
+            "$eventInput",
+            "value"
+          ]
+        },
+        "into": "d"
+      },
+      {
+        "let": "yes",
+        "value": [
+          "or",
+          [
+            "at",
+            "$d",
+            "null"
+          ],
+          [
+            "eq",
+            [
+              "at",
+              "$d",
+              "type"
+            ],
+            "string"
+          ],
+          [
+            "eq",
+            [
+              "at",
+              "$d",
+              "type"
+            ],
+            "boolean"
+          ],
+          [
+            "at",
+            "$d",
+            "finite"
+          ]
+        ]
+      },
+      {
+        "when": [
+          "and",
+          [
+            "not",
+            "$yes"
+          ],
+          [
+            "at",
+            "$d",
+            "dataOnly"
+          ],
+          [
+            "or",
+            [
+              "at",
+              "$d",
+              "plain"
+            ],
+            [
+              "and",
+              [
+                "at",
+                "$d",
+                "array"
+              ],
+              [
+                "at",
+                "$d",
+                "dense"
+              ]
+            ]
+          ],
+          [
+            "not",
+            [
+              "includes",
+              [
+                "if",
+                [
+                  "isArray",
+                  [
+                    "at",
+                    "$eventInput",
+                    "ancestors"
+                  ]
+                ],
+                [
+                  "at",
+                  "$eventInput",
+                  "ancestors"
+                ],
+                [
+                  "list"
+                ]
+              ],
+              [
+                "at",
+                "$eventInput",
+                "value"
+              ]
+            ]
+          ]
+        ],
+        "then": [
+          {
+            "port": "record.entries",
+            "args": {
+              "value": [
+                "at",
+                "$eventInput",
+                "value"
+              ]
+            },
+            "into": "es"
+          },
+          {
+            "fold": "$es",
+            "as": "e",
+            "accumulator": "ok",
+            "initial": true,
+            "steps": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "s01.portable",
+                  "input": {
+                    "value": [
+                      "at",
+                      "$e",
+                      1
+                    ],
+                    "ancestors": [
+                      "append",
+                      [
+                        "at",
+                        "$eventInput",
+                        "ancestors"
+                      ],
+                      [
+                        "list",
+                        [
+                          "at",
+                          "$eventInput",
+                          "value"
+                        ]
+                      ]
+                    ]
+                  }
+                },
+                "into": "child"
+              }
+            ],
+            "yield": [
+              "and",
+              "$ok",
+              "$child"
+            ],
+            "into": "yes"
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": "$yes"
+      }
+    ],
+    "md.inline": [
+      {
+        "port": "text.split",
+        "args": {
+          "value": "$eventInput.text",
+          "pattern": "$lexPolicy.markdownPattern"
+        },
+        "into": "mdTokens"
+      },
+      {
+        "fold": "$mdTokens",
+        "as": "mdToken",
+        "accumulator": "mdNodes",
+        "initial": [
+          "list"
+        ],
+        "steps": [
+          {
+            "let": "mdNode",
+            "value": "$mdToken"
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$mdToken",
+              "pattern": "^\\*\\*[^*]+\\*\\*$"
+            },
+            "into": "mdStrong"
+          },
+          {
+            "when": "$mdStrong",
+            "then": [
+              {
+                "port": "text.slice",
+                "args": {
+                  "value": "$mdToken",
+                  "start": 2,
+                  "end": [
+                    "add",
+                    [
+                      "count",
+                      "$mdToken"
+                    ],
+                    -2
+                  ]
+                },
+                "into": "mdLabel"
+              },
+              {
+                "let": "mdNode",
+                "value": {
+                  "tag": "strong",
+                  "attrs": {},
+                  "children": [
+                    "list",
+                    "$mdLabel"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$mdToken",
+              "pattern": "^\\*[^*]+\\*$"
+            },
+            "into": "mdEm"
+          },
+          {
+            "when": "$mdEm",
+            "then": [
+              {
+                "port": "text.slice",
+                "args": {
+                  "value": "$mdToken",
+                  "start": 1,
+                  "end": [
+                    "add",
+                    [
+                      "count",
+                      "$mdToken"
+                    ],
+                    -1
+                  ]
+                },
+                "into": "mdLabel"
+              },
+              {
+                "let": "mdNode",
+                "value": {
+                  "tag": "em",
+                  "attrs": {},
+                  "children": [
+                    "list",
+                    "$mdLabel"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$mdToken",
+              "pattern": "^`[^`]+`$"
+            },
+            "into": "mdCode"
+          },
+          {
+            "when": "$mdCode",
+            "then": [
+              {
+                "port": "text.slice",
+                "args": {
+                  "value": "$mdToken",
+                  "start": 1,
+                  "end": [
+                    "add",
+                    [
+                      "count",
+                      "$mdToken"
+                    ],
+                    -1
+                  ]
+                },
+                "into": "mdLabel"
+              },
+              {
+                "let": "mdNode",
+                "value": {
+                  "tag": "code",
+                  "attrs": {},
+                  "children": [
+                    "list",
+                    "$mdLabel"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$mdToken",
+              "pattern": "^\\[[^\\]]+\\]\\([^)]+\\)$"
+            },
+            "into": "mdLink"
+          },
+          {
+            "when": "$mdLink",
+            "then": [
+              {
+                "port": "text.indexOf",
+                "args": {
+                  "value": "$mdToken",
+                  "search": "]("
+                },
+                "into": "mdAt"
+              },
+              {
+                "port": "text.slice",
+                "args": {
+                  "value": "$mdToken",
+                  "start": 1,
+                  "end": "$mdAt"
+                },
+                "into": "mdLabel"
+              },
+              {
+                "port": "text.slice",
+                "args": {
+                  "value": "$mdToken",
+                  "start": [
+                    "add",
+                    "$mdAt",
+                    2
+                  ],
+                  "end": [
+                    "add",
+                    [
+                      "count",
+                      "$mdToken"
+                    ],
+                    -1
+                  ]
+                },
+                "into": "mdTarget"
+              },
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$mdTarget",
+                  "pattern": "^https?://[^\\s<>]+$"
+                },
+                "into": "mdSafe"
+              },
+              {
+                "let": "mdNode",
+                "value": [
+                  "if",
+                  "$mdSafe",
+                  {
+                    "tag": "a",
+                    "attrs": {
+                      "href": "$mdTarget",
+                      "rel": "noreferrer"
+                    },
+                    "children": [
+                      "list",
+                      "$mdLabel"
+                    ]
+                  },
+                  {
+                    "tag": "span",
+                    "attrs": {
+                      "class": "md-source-link",
+                      "title": [
+                        "concat",
+                        "Source-relative link; target is not bundled: ",
+                        "$mdTarget"
+                      ]
+                    },
+                    "children": [
+                      "list",
+                      "$mdLabel",
+                      {
+                        "tag": "small",
+                        "attrs": {},
+                        "children": [
+                          "list",
+                          [
+                            "concat",
+                            " [source: ",
+                            "$mdTarget",
+                            "]"
+                          ]
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$mdToken",
+              "pattern": "^  \\r?\\n$"
+            },
+            "into": "mdBreak"
+          },
+          {
+            "when": "$mdBreak",
+            "then": [
+              {
+                "let": "mdNode",
+                "value": {
+                  "tag": "br",
+                  "attrs": {},
+                  "children": [
+                    "list"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "let": "mdNodes",
+            "value": [
+              "append",
+              "$mdNodes",
+              [
+                "list",
+                "$mdNode"
+              ]
+            ]
+          }
+        ],
+        "yield": "$mdNodes",
+        "into": "mdNodes"
+      },
+      {
+        "let": "result",
+        "value": "$mdNodes"
+      }
+    ],
+    "md.block": [
+      {
+        "let": "mdLines",
+        "value": "$eventInput.lines"
+      },
+      {
+        "let": "mdKind",
+        "value": "$eventInput.kind"
+      },
+      {
+        "let": "mdTree",
+        "value": null
+      },
+      {
+        "port": "text.join",
+        "args": {
+          "values": "$mdLines",
+          "separator": "\n"
+        },
+        "into": "mdText"
+      },
+      {
+        "when": [
+          "eq",
+          "$mdKind",
+          "paragraph"
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "md.inline",
+              "input": {
+                "text": "$mdText"
+              }
+            },
+            "into": "mdInline"
+          },
+          {
+            "let": "mdTree",
+            "value": {
+              "tag": "p",
+              "attrs": {},
+              "children": "$mdInline"
+            }
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$mdKind",
+          "heading"
+        ],
+        "then": [
+          {
+            "port": "text.split",
+            "args": {
+              "value": "$mdText",
+              "pattern": "^(#{1,6}) +"
+            },
+            "into": "mdHeadingParts"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "md.inline",
+              "input": {
+                "text": [
+                  "at",
+                  "$mdHeadingParts",
+                  2
+                ]
+              }
+            },
+            "into": "mdInline"
+          },
+          {
+            "let": "mdTree",
+            "value": {
+              "tag": [
+                "concat",
+                "h",
+                [
+                  "count",
+                  [
+                    "at",
+                    "$mdHeadingParts",
+                    1
+                  ]
+                ]
+              ],
+              "attrs": {},
+              "children": "$mdInline"
+            }
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$mdKind",
+          "code"
+        ],
+        "then": [
+          {
+            "port": "digest.sha256",
+            "args": {
+              "text": "$mdText"
+            },
+            "into": "mdHash"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "sp.present",
+              "input": {
+                "text": "$mdText",
+                "language": [
+                  "if",
+                  [
+                    "includes",
+                    [
+                      "list",
+                      "json",
+                      "rel",
+                      "process",
+                      "encounter",
+                      "temple"
+                    ],
+                    "$eventInput.language"
+                  ],
+                  "$eventInput.language",
+                  "text"
+                ],
+                "file": "markdown-fence",
+                "theme": "dark",
+                "expectedHash": "$mdHash",
+                "lineNumbers": false,
+                "selectedLine": null,
+                "origin": {
+                  "scope": "Markdown fenced code projection"
+                }
+              }
+            },
+            "into": "mdCodeView"
+          },
+          {
+            "let": "mdTree",
+            "value": {
+              "tag": "pre",
+              "attrs": {
+                "class": "md-code"
+              },
+              "children": [
+                "list",
+                "$mdCodeView.tree"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$mdKind",
+          "quote"
+        ],
+        "then": [
+          {
+            "port": "text.replaceAll",
+            "args": {
+              "value": "$mdText",
+              "search": "> ",
+              "replacement": ""
+            },
+            "into": "mdText"
+          },
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "md.inline",
+              "input": {
+                "text": "$mdText"
+              }
+            },
+            "into": "mdInline"
+          },
+          {
+            "let": "mdTree",
+            "value": {
+              "tag": "blockquote",
+              "attrs": {},
+              "children": "$mdInline"
+            }
+          }
+        ]
+      },
+      {
+        "when": [
+          "includes",
+          [
+            "list",
+            "ul",
+            "ol"
+          ],
+          "$mdKind"
+        ],
+        "then": [
+          {
+            "fold": "$mdLines",
+            "as": "mdLine",
+            "accumulator": "mdItems",
+            "initial": [
+              "list"
+            ],
+            "steps": [
+              {
+                "port": "text.split",
+                "args": {
+                  "value": "$mdLine",
+                  "pattern": "^\\s*(?:[-+*]|[0-9]+\\.) +"
+                },
+                "into": "mdListParts"
+              },
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "md.inline",
+                  "input": {
+                    "text": [
+                      "at",
+                      "$mdListParts",
+                      1
+                    ]
+                  }
+                },
+                "into": "mdInline"
+              },
+              {
+                "let": "mdItems",
+                "value": [
+                  "append",
+                  "$mdItems",
+                  [
+                    "list",
+                    {
+                      "tag": "li",
+                      "attrs": {},
+                      "children": "$mdInline"
+                    }
+                  ]
+                ]
+              }
+            ],
+            "yield": "$mdItems",
+            "into": "mdItems"
+          },
+          {
+            "let": "mdTree",
+            "value": {
+              "tag": "$mdKind",
+              "attrs": {},
+              "children": "$mdItems"
+            }
+          }
+        ]
+      },
+      {
+        "when": [
+          "eq",
+          "$mdKind",
+          "table"
+        ],
+        "then": [
+          {
+            "fold": [
+              "range",
+              [
+                "count",
+                "$mdLines"
+              ]
+            ],
+            "as": "mdI",
+            "accumulator": "mdRows",
+            "initial": [
+              "list"
+            ],
+            "steps": [
+              {
+                "let": "mdLine",
+                "value": [
+                  "at",
+                  "$mdLines",
+                  [
+                    "add",
+                    "$mdI",
+                    -1
+                  ]
+                ]
+              },
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$mdLine",
+                  "pattern": "^\\s*\\|?[: \\-|]+\\|[: \\-|]*$"
+                },
+                "into": "mdSeparator"
+              },
+              {
+                "when": [
+                  "not",
+                  "$mdSeparator"
+                ],
+                "then": [
+                  {
+                    "port": "text.trim",
+                    "args": {
+                      "value": "$mdLine"
+                    },
+                    "into": "mdLine"
+                  },
+                  {
+                    "port": "text.slice",
+                    "args": {
+                      "value": "$mdLine",
+                      "start": 1,
+                      "end": [
+                        "add",
+                        [
+                          "count",
+                          "$mdLine"
+                        ],
+                        -1
+                      ]
+                    },
+                    "into": "mdLine"
+                  },
+                  {
+                    "port": "text.split",
+                    "args": {
+                      "value": "$mdLine",
+                      "pattern": "\\|"
+                    },
+                    "into": "mdCells"
+                  },
+                  {
+                    "fold": "$mdCells",
+                    "as": "mdCell",
+                    "accumulator": "mdCellViews",
+                    "initial": [
+                      "list"
+                    ],
+                    "steps": [
+                      {
+                        "port": "text.trim",
+                        "args": {
+                          "value": "$mdCell"
+                        },
+                        "into": "mdCell"
+                      },
+                      {
+                        "port": "kernel.invoke",
+                        "args": {
+                          "query": "md.inline",
+                          "input": {
+                            "text": "$mdCell"
+                          }
+                        },
+                        "into": "mdInline"
+                      },
+                      {
+                        "let": "mdCellViews",
+                        "value": [
+                          "append",
+                          "$mdCellViews",
+                          [
+                            "list",
+                            {
+                              "tag": [
+                                "if",
+                                [
+                                  "eq",
+                                  "$mdI",
+                                  1
+                                ],
+                                "th",
+                                "td"
+                              ],
+                              "attrs": [
+                                "if",
+                                [
+                                  "eq",
+                                  "$mdI",
+                                  1
+                                ],
+                                {
+                                  "scope": "col"
+                                },
+                                {}
+                              ],
+                              "children": "$mdInline"
+                            }
+                          ]
+                        ]
+                      }
+                    ],
+                    "yield": "$mdCellViews",
+                    "into": "mdCellViews"
+                  },
+                  {
+                    "let": "mdRows",
+                    "value": [
+                      "append",
+                      "$mdRows",
+                      [
+                        "list",
+                        {
+                          "tag": "tr",
+                          "attrs": {},
+                          "children": "$mdCellViews"
+                        }
+                      ]
+                    ]
+                  }
+                ]
+              }
+            ],
+            "yield": "$mdRows",
+            "into": "mdRows"
+          },
+          {
+            "let": "mdTree",
+            "value": {
+              "tag": "div",
+              "attrs": {
+                "class": "md-table-wrap"
+              },
+              "children": [
+                "list",
+                {
+                  "tag": "table",
+                  "attrs": {},
+                  "children": [
+                    "list",
+                    {
+                      "tag": "tbody",
+                      "attrs": {},
+                      "children": "$mdRows"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": "$mdTree"
+      }
+    ],
+    "md.preview": [
+      {
+        "let": "mdInput",
+        "value": "$eventInput.text"
+      },
+      {
+        "assert": [
+          "includes",
+          [
+            "range",
+            160001
+          ],
+          [
+            "add",
+            [
+              "count",
+              "$mdInput"
+            ],
+            1
+          ]
+        ],
+        "message": "MD-BOUND: Document exceeds the shared source bound."
+      },
+      {
+        "port": "text.split",
+        "args": {
+          "value": "$mdInput",
+          "pattern": "\\r?\\n"
+        },
+        "into": "mdLines"
+      },
+      {
+        "assert": [
+          "includes",
+          [
+            "range",
+            2001
+          ],
+          [
+            "add",
+            [
+              "count",
+              "$mdLines"
+            ],
+            1
+          ]
+        ],
+        "message": "MD-LINES: Preview exceeds 2000 lines."
+      },
+      {
+        "fold": [
+          "append",
+          "$mdLines",
+          [
+            "list",
+            ""
+          ]
+        ],
+        "as": "mdLine",
+        "accumulator": "mdState",
+        "initial": {
+          "nodes": [
+            "list"
+          ],
+          "lines": [
+            "list"
+          ],
+          "kind": "",
+          "fence": "",
+          "language": ""
+        },
+        "steps": [
+          {
+            "let": "mdNodes",
+            "value": "$mdState.nodes"
+          },
+          {
+            "let": "mdPending",
+            "value": "$mdState.lines"
+          },
+          {
+            "let": "mdKind",
+            "value": "$mdState.kind"
+          },
+          {
+            "let": "mdFence",
+            "value": "$mdState.fence"
+          },
+          {
+            "let": "mdWasFence",
+            "value": [
+              "not",
+              [
+                "eq",
+                "$mdFence",
+                ""
+              ]
+            ]
+          },
+          {
+            "let": "mdLanguage",
+            "value": "$mdState.language"
+          },
+          {
+            "let": "mdNext",
+            "value": "paragraph"
+          },
+          {
+            "let": "mdSkip",
+            "value": false
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$mdLine",
+              "pattern": "^\\s*$"
+            },
+            "into": "mdBlank"
+          },
+          {
+            "when": "$mdBlank",
+            "then": [
+              {
+                "let": "mdNext",
+                "value": ""
+              }
+            ]
+          },
+          {
+            "when": true,
+            "then": [
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$mdLine",
+                  "pattern": "^#{1,6} +"
+                },
+                "into": "mdMatch"
+              },
+              {
+                "when": "$mdMatch",
+                "then": [
+                  {
+                    "let": "mdNext",
+                    "value": "heading"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "when": true,
+            "then": [
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$mdLine",
+                  "pattern": "^\\s*\\|.*\\|\\s*$"
+                },
+                "into": "mdMatch"
+              },
+              {
+                "when": "$mdMatch",
+                "then": [
+                  {
+                    "let": "mdNext",
+                    "value": "table"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "when": true,
+            "then": [
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$mdLine",
+                  "pattern": "^\\s*[-+*] +"
+                },
+                "into": "mdMatch"
+              },
+              {
+                "when": "$mdMatch",
+                "then": [
+                  {
+                    "let": "mdNext",
+                    "value": "ul"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "when": true,
+            "then": [
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$mdLine",
+                  "pattern": "^\\s*[0-9]+\\. +"
+                },
+                "into": "mdMatch"
+              },
+              {
+                "when": "$mdMatch",
+                "then": [
+                  {
+                    "let": "mdNext",
+                    "value": "ol"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "when": true,
+            "then": [
+              {
+                "port": "text.matches",
+                "args": {
+                  "value": "$mdLine",
+                  "pattern": "^> ?"
+                },
+                "into": "mdMatch"
+              },
+              {
+                "when": "$mdMatch",
+                "then": [
+                  {
+                    "let": "mdNext",
+                    "value": "quote"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "port": "text.matches",
+            "args": {
+              "value": "$mdLine",
+              "pattern": "^(?:```|~~~)"
+            },
+            "into": "mdMarker"
+          },
+          {
+            "when": [
+              "not",
+              [
+                "eq",
+                "$mdFence",
+                ""
+              ]
+            ],
+            "then": [
+              {
+                "let": "mdNext",
+                "value": "code"
+              },
+              {
+                "port": "text.slice",
+                "args": {
+                  "value": "$mdLine",
+                  "start": 0,
+                  "end": 3
+                },
+                "into": "mdPrefix"
+              },
+              {
+                "when": [
+                  "eq",
+                  "$mdPrefix",
+                  "$mdFence"
+                ],
+                "then": [
+                  {
+                    "let": "mdNext",
+                    "value": ""
+                  },
+                  {
+                    "let": "mdFence",
+                    "value": ""
+                  },
+                  {
+                    "let": "mdSkip",
+                    "value": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "when": [
+              "and",
+              "$mdMarker",
+              [
+                "not",
+                "$mdWasFence"
+              ]
+            ],
+            "then": [
+              {
+                "port": "text.slice",
+                "args": {
+                  "value": "$mdLine",
+                  "start": 0,
+                  "end": 3
+                },
+                "into": "mdFence"
+              },
+              {
+                "port": "text.slice",
+                "args": {
+                  "value": "$mdLine",
+                  "start": 3,
+                  "end": [
+                    "count",
+                    "$mdLine"
+                  ]
+                },
+                "into": "mdLanguage"
+              },
+              {
+                "port": "text.trim",
+                "args": {
+                  "value": "$mdLanguage"
+                },
+                "into": "mdLanguage"
+              },
+              {
+                "let": "mdNext",
+                "value": "code"
+              },
+              {
+                "let": "mdSkip",
+                "value": true
+              }
+            ]
+          },
+          {
+            "when": [
+              "and",
+              [
+                "not",
+                [
+                  "eq",
+                  "$mdNext",
+                  "$mdKind"
+                ]
+              ],
+              [
+                "not",
+                [
+                  "eq",
+                  "$mdKind",
+                  ""
+                ]
+              ]
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "md.block",
+                  "input": {
+                    "lines": "$mdPending",
+                    "kind": "$mdKind",
+                    "language": "$mdLanguage"
+                  }
+                },
+                "into": "mdBlock"
+              },
+              {
+                "let": "mdNodes",
+                "value": [
+                  "append",
+                  "$mdNodes",
+                  [
+                    "list",
+                    "$mdBlock"
+                  ]
+                ]
+              },
+              {
+                "let": "mdPending",
+                "value": [
+                  "list"
+                ]
+              }
+            ]
+          },
+          {
+            "when": [
+              "and",
+              [
+                "not",
+                [
+                  "eq",
+                  "$mdNext",
+                  ""
+                ]
+              ],
+              [
+                "not",
+                "$mdSkip"
+              ]
+            ],
+            "then": [
+              {
+                "let": "mdPending",
+                "value": [
+                  "append",
+                  "$mdPending",
+                  [
+                    "list",
+                    "$mdLine"
+                  ]
+                ]
+              }
+            ]
+          },
+          {
+            "when": [
+              "eq",
+              "$mdNext",
+              "heading"
+            ],
+            "then": [
+              {
+                "port": "kernel.invoke",
+                "args": {
+                  "query": "md.block",
+                  "input": {
+                    "lines": "$mdPending",
+                    "kind": "heading"
+                  }
+                },
+                "into": "mdBlock"
+              },
+              {
+                "let": "mdNodes",
+                "value": [
+                  "append",
+                  "$mdNodes",
+                  [
+                    "list",
+                    "$mdBlock"
+                  ]
+                ]
+              },
+              {
+                "let": "mdPending",
+                "value": [
+                  "list"
+                ]
+              },
+              {
+                "let": "mdNext",
+                "value": ""
+              }
+            ]
+          }
+        ],
+        "yield": {
+          "nodes": "$mdNodes",
+          "lines": "$mdPending",
+          "kind": "$mdNext",
+          "fence": "$mdFence",
+          "language": "$mdLanguage"
+        },
+        "into": "mdState"
+      },
+      {
+        "when": [
+          "not",
+          [
+            "eq",
+            "$mdState.kind",
+            ""
+          ]
+        ],
+        "then": [
+          {
+            "port": "kernel.invoke",
+            "args": {
+              "query": "md.block",
+              "input": {
+                "lines": "$mdState.lines",
+                "kind": "$mdState.kind",
+                "language": "$mdState.language"
+              }
+            },
+            "into": "mdBlock"
+          },
+          {
+            "let": "mdState",
+            "value": {
+              "nodes": [
+                "append",
+                "$mdState.nodes",
+                [
+                  "list",
+                  "$mdBlock"
+                ]
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "let": "result",
+        "value": {
+          "tag": "article",
+          "attrs": {
+            "class": "markdown-preview"
+          },
+          "children": "$mdState.nodes"
+        }
+      }
+    ],
+    "sp.structure": [
+      {
+        "let": "structureDepth",
+        "value": "$eventInput.depth"
+      },
+      {
+        "assert": [
+          "includes",
+          [
+            "range",
+            65
+          ],
+          [
+            "add",
+            "$structureDepth",
+            1
+          ]
+        ],
+        "message": "SP-STRUCTURE: Programme nesting exceeds its declared bound."
+      },
+      {
+        "fold": [
+          "range",
+          [
+            "count",
+            "$eventInput.programme"
+          ]
+        ],
+        "as": "structureI",
+        "accumulator": "structureRows",
+        "initial": [
+          "list"
+        ],
+        "steps": [
+          {
+            "let": "structureStatement",
+            "value": [
+              "at",
+              "$eventInput.programme",
+              [
+                "add",
+                "$structureI",
+                -1
+              ]
+            ]
+          },
+          {
+            "port": "record.entries",
+            "args": {
+              "value": "$structureStatement"
+            },
+            "into": "structureFields"
+          },
+          {
+            "let": "structureKeys",
+            "value": [
+              "map",
+              "$structureFields",
+              "structureField",
+              [
+                "at",
+                "$structureField",
+                0
+              ]
+            ]
+          },
+          {
+            "let": "structureForms",
+            "value": [
+              "filter",
+              [
+                "list",
+                "let",
+                "assert",
+                "port",
+                "call",
+                "when",
+                "fold",
+                "each",
+                "try"
+              ],
+              "structureForm",
+              [
+                "includes",
+                "$structureKeys",
+                "$structureForm"
+              ]
+            ]
+          },
+          {
+            "assert": [
+              "eq",
+              [
+                "count",
+                "$structureForms"
+              ],
+              1
+            ],
+            "message": "SP-STRUCTURE: Exactly one supported statement form is required."
+          },
+          {
+            "let": "structurePointer",
+            "value": [
+              "concat",
+              "$eventInput.pointer",
+              "/",
+              [
+                "add",
+                "$structureI",
+                -1
+              ]
+            ]
+          },
+          {
+            "let": "structureRows",
+            "value": [
+              "append",
+              "$structureRows",
+              [
+                "list",
+                {
+                  "form": [
+                    "at",
+                    "$structureForms",
+                    0
+                  ],
+                  "pointer": "$structurePointer"
+                }
+              ]
+            ]
+          },
+          {
+            "fold": [
+              "list",
+              "then",
+              "steps",
+              "try",
+              "catch"
+            ],
+            "as": "structureChild",
+            "accumulator": "structureChildren",
+            "initial": "$structureRows",
+            "steps": [
+              {
+                "when": [
+                  "includes",
+                  "$structureKeys",
+                  "$structureChild"
+                ],
+                "then": [
+                  {
+                    "port": "kernel.invoke",
+                    "args": {
+                      "query": "sp.structure",
+                      "input": {
+                        "programme": [
+                          "at",
+                          "$structureStatement",
+                          "$structureChild"
+                        ],
+                        "pointer": [
+                          "concat",
+                          "$structurePointer",
+                          "/",
+                          "$structureChild"
+                        ],
+                        "depth": [
+                          "add",
+                          "$structureDepth",
+                          1
+                        ]
+                      }
+                    },
+                    "into": "structureNested"
+                  },
+                  {
+                    "let": "structureChildren",
+                    "value": [
+                      "append",
+                      "$structureChildren",
+                      "$structureNested"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "yield": "$structureChildren",
+            "into": "structureRows"
+          }
+        ],
+        "yield": "$structureRows",
+        "into": "structureRows"
+      },
+      {
+        "let": "result",
+        "value": "$structureRows"
+      }
+    ],
+    "sp.moduleView": [
+      {
+        "let": "moduleValue",
+        "value": "$eventInput.module"
+      },
+      {
+        "assert": [
+          "eq",
+          "$moduleValue.protocol",
+          "temple/surface-process-module/1"
+        ],
+        "message": "SP-MODULE: A surface-process module is required."
+      },
+      {
+        "port": "record.entries",
+        "args": {
+          "value": "$moduleValue.queries"
+        },
+        "into": "moduleEntries"
+      },
+      {
+        "let": "moduleMatches",
+        "value": [
+          "filter",
+          "$moduleEntries",
+          "moduleEntry",
+          [
+            "eq",
+            [
+              "at",
+              "$moduleEntry",
+              0
+            ],
+            "$eventInput.name"
+          ]
+        ]
+      },
+      {
+        "assert": [
+          "eq",
+          [
+            "count",
+            "$moduleMatches"
+          ],
+          1
+        ],
+        "message": "SP-MODULE: The selected query does not exist."
+      },
+      {
+        "let": "moduleName",
+        "value": "$eventInput.name"
+      },
+      {
+        "let": "moduleProgramme",
+        "value": [
+          "at",
+          [
+            "at",
+            "$moduleMatches",
+            0
+          ],
+          1
+        ]
+      },
+      {
+        "let": "modulePointer",
+        "value": [
+          "concat",
+          "/queries/",
+          "$moduleName"
+        ]
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "sp.programme",
+          "input": {
+            "programme": "$moduleProgramme",
+            "depth": 1
+          }
+        },
+        "into": "moduleText"
+      },
+      {
+        "port": "kernel.invoke",
+        "args": {
+          "query": "sp.structure",
+          "input": {
+            "programme": "$moduleProgramme",
+            "pointer": "$modulePointer",
+            "depth": 0
+          }
+        },
+        "into": "moduleStatements"
+      },
+      {
+        "let": "result",
+        "value": {
+          "name": "$moduleName",
+          "text": [
+            "concat",
+            "process ",
+            "$moduleName",
+            ":\n",
+            "$moduleText"
+          ],
+          "pointer": "$modulePointer",
+          "statements": "$moduleStatements",
+          "forms": [
+            "distinct",
+            [
+              "map",
+              "$moduleStatements",
+              "moduleStatement",
+              "$moduleStatement.form"
+            ]
+          ],
+          "scope": "generated-readable-projection; JSON remains authoritative"
+        }
+      }
+    ]
+  }
+}

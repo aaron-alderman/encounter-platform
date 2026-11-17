@@ -1,0 +1,282 @@
+process-module "temple/surface-process-module/1"
+
+process fixture.workspace.initial:
+  port test.invoke { entry = "ws.initial"; input = {} } → observedRun1
+  let result = at($observedRun1, "value")
+
+process fixture.workspace.apply:
+  let state = at($eventInput, 0)
+  let request = at($eventInput, 1)
+  port test.merge { records = list($request, { baseRevision = at($state, "revision") }) } → observedRecord2
+  port test.invoke { entry = "ws.apply"; input = { state = $state; request = $observedRecord2 } } → observedRun3
+  let result = at($observedRun3, "value")
+
+process fixture.workspace.inJourney:
+  let s = at($eventInput, 0)
+  let id = at($eventInput, 1)
+  let entry = at($eventInput, 2)
+  let result = at(filter(at($s, "projections"), "p", eq(at(at($p, "contribution"), "id"), concat("journey.", $id, ".", $entry))), 0)
+
+process fixture.workspace.copy:
+  let result = at($eventInput, 0)
+
+process fixture.workspace.setup:
+  port test.runtime {} → observedRuntime4
+  let runtime = $observedRuntime4
+  let definition = "construct Question\nfield prompt text shared required max 240\nfield invitation text local optional max 600\nheading prompt\nparagraph invitation"
+
+# a user-defined construct becomes checked Encounter/REL, an object and a journey entry
+process test.workspace.a-user-defined-construct-becomes-checked-encounter-rel-an-object-and-a-journey-entry:
+  call fixture.workspace.setup
+  port kernel.invoke { query = "fixture.workspace.initial"; input = list() } → observedResult5
+  let state = $observedResult5
+  port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "define"; source = $definition }) } → observedResult6
+  let state = $observedResult6
+  assert eq(at(at(at($state, "schemas"), add(count(at($state, "schemas")), -1)), "name"), "Question")
+    otherwise "Expected equal(state.schemas.at(-1).name,'Question')"
+  port test.match { text = at(at($state, "inputs"), "contractText"); pattern = "CQuestion"; flags = "" } → observedMatch7
+  assert $observedMatch7
+    otherwise "Expected match(state.inputs.contractText,/CQuestion/)"
+  port test.match { text = at(at($state, "inputs"), "codeText"); pattern = "representation RepQuestion"; flags = "" } → observedMatch8
+  assert $observedMatch8
+    otherwise "Expected match(state.inputs.codeText,/representation RepQuestion/)"
+  port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "object"; id = "question"; type = "Question"; values = { prompt = "What changed?"; invitation = "Pause here." } }) } → observedResult9
+  let state = $observedResult9
+  port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "journey"; id = "discovery"; name = "A journey of discovery" }) } → observedResult10
+  let state = $observedResult10
+  port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "compose"; journey = "discovery"; entry = "question"; object = "question" }) } → observedResult11
+  let state = $observedResult11
+  port kernel.invoke { query = "fixture.workspace.inJourney"; input = list($state, "discovery", "question") } → observedResult12
+  assert eq(at(at($observedResult12, "values"), "F.prompt"), "What changed?")
+    otherwise "Expected equal(inJourney(state,'discovery','question').values['F.prompt'],'What changed?')"
+  assert eq(count(at($state, "journal")), 4)
+    otherwise "Expected equal(state.journal.length,4)"
+  assert eq(at(at(at($state, "document"), "definitions"), add(count(at(at($state, "document"), "definitions")), -1)), $definition)
+    otherwise "Expected deepEqual(state.document.definitions.at(-1),definition)"
+
+# workspace shared/local edits use ec.patch and preserve the regeneration correspondence
+process test.workspace.workspace-shared-local-edits-use-ec-patch-and-preserve-the-regeneration-correspondence:
+  call fixture.workspace.setup
+  port kernel.invoke { query = "fixture.workspace.initial"; input = list() } → observedResult13
+  let base = $observedResult13
+  port kernel.invoke { query = "fixture.workspace.apply"; input = list($base, { kind = "edit"; scope = "shared"; object = "water"; field = "title"; value = "A question at the water" }) } → observedResult14
+  let shared = $observedResult14
+  port kernel.invoke { query = "fixture.workspace.inJourney"; input = list($shared, "listening", "water") } → observedResult15
+  assert eq(at(at($observedResult15, "values"), "F.title"), "A question at the water")
+    otherwise "Expected equal(inJourney(shared,'listening','water').values['F.title'],'A question at the water')"
+  port kernel.invoke { query = "fixture.workspace.inJourney"; input = list($shared, "making", "water") } → observedResult16
+  assert eq(at(at($observedResult16, "values"), "F.title"), "A question at the water")
+    otherwise "Expected equal(inJourney(shared,'making','water').values['F.title'],'A question at the water')"
+  assert eq(at(at(at(at($shared, "journal"), 0), "destination"), "kind"), "source")
+    otherwise "Expected equal(shared.journal[0].destination.kind,'source')"
+  port kernel.invoke { query = "fixture.workspace.apply"; input = list($shared, { kind = "edit"; scope = "local"; object = "water"; journey = "listening"; entry = "water"; field = "introduction"; value = "Listen before explaining." }) } → observedResult17
+  let local = $observedResult17
+  assert eq(at(at(at(at($local, "journal"), 1), "destination"), "kind"), "literal")
+    otherwise "Expected equal(local.journal[1].destination.kind,'literal')"
+  port kernel.invoke { query = "fixture.workspace.inJourney"; input = list($local, "listening", "water") } → observedResult18
+  assert eq(at(at($observedResult18, "values"), "F.introduction"), "Listen before explaining.")
+    otherwise "Expected equal(inJourney(local,'listening','water').values['F.introduction'],'Listen before explaining.')"
+  port kernel.invoke { query = "fixture.workspace.inJourney"; input = list($local, "making", "water") } → observedResult19
+  port kernel.invoke { query = "fixture.workspace.inJourney"; input = list($shared, "making", "water") } → observedResult20
+  assert eq(at($observedResult19, "output"), at($observedResult20, "output"))
+    otherwise "Expected deepEqual(inJourney(local,'making','water').output,inJourney(shared,'making','water').output)"
+
+# invalid or incompatible declarations, missing references, scope mistakes and stale requests refuse
+process test.workspace.invalid-or-incompatible-declarations-missing-references-scope-mistakes-and-stale-requests-refuse:
+  call fixture.workspace.setup
+  port kernel.invoke { query = "fixture.workspace.initial"; input = list() } → observedResult21
+  let state = $observedResult21
+  port test.stringify { value = $state } → observedJson22
+  let before = $observedJson22
+  each list("construct bad-name", "construct Question\nfield x number shared required\nheading x", "construct Question\nfield x text shared required\nheading missing", "construct Question\nfield x text global required\nheading x") as source:
+    let observedRefused24 = false
+    try:
+      port test.invoke { entry = "ws.definition"; input = $source } → observedRun25
+    catch observedFault26:
+      port test.match { text = $observedFault26.message; pattern = "WS-LANGUAGE"; flags = "" } → observedDiagnostic27
+      let observedRefused24 = $observedDiagnostic27
+    assert $observedRefused24
+      otherwise "Expected rejects(run('ws.definition',source),/WS-LANGUAGE/)"
+  let observedRefused28 = false
+  try:
+    port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "define"; source = "construct Encounter\nfield changed text shared required\nheading changed" }) } → observedResult29
+  catch observedFault30:
+    port test.match { text = $observedFault30.message; pattern = "WS-TYPE"; flags = "" } → observedDiagnostic31
+    let observedRefused28 = $observedDiagnostic31
+  assert $observedRefused28
+    otherwise "Expected rejects(apply(state,{kind:'define',source:'construct Encounter\\nfield changed text shared required\\nheading changed'}),/WS-TYPE/)"
+  let observedRefused32 = false
+  try:
+    port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "compose"; journey = "listening"; entry = "missing"; object = "does_not_exist" }) } → observedResult33
+  catch observedFault34:
+    port test.match { text = $observedFault34.message; pattern = "WS-REFERENCE"; flags = "" } → observedDiagnostic35
+    let observedRefused32 = $observedDiagnostic35
+  assert $observedRefused32
+    otherwise "Expected rejects(apply(state,{kind:'compose',journey:'listening',entry:'missing',object:'does_not_exist'}),/WS-REFERENCE/)"
+  let observedRefused36 = false
+  try:
+    port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "edit"; scope = "local"; object = "water"; journey = "listening"; entry = "water"; field = "title"; value = "Wrong scope" }) } → observedResult37
+  catch observedFault38:
+    port test.match { text = $observedFault38.message; pattern = "WS-SCOPE"; flags = "" } → observedDiagnostic39
+    let observedRefused36 = $observedDiagnostic39
+  assert $observedRefused36
+    otherwise "Expected rejects(apply(state,{kind:'edit',scope:'local',object:'water',journey:'listening',entry:'water',field:'title',value:'Wrong scope'}),/WS-SCOPE/)"
+  let observedRefused40 = false
+  try:
+    port test.invoke { entry = "ws.apply"; input = { state = $state; request = { kind = "journey"; id = "another"; name = "Another"; baseRevision = 99 } } } → observedRun41
+  catch observedFault42:
+    port test.match { text = $observedFault42.message; pattern = "WS-STALE"; flags = "" } → observedDiagnostic43
+    let observedRefused40 = $observedDiagnostic43
+  assert $observedRefused40
+    otherwise "Expected rejects(run('ws.apply',{state,request:{kind:'journey',id:'another',name:'Another',baseRevision:99}}),/WS-STALE/)"
+  let observedRefused44 = false
+  try:
+    port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "object"; id = "new"; type = "Encounter"; values = { title = "T"; body = "B"; unknown = "data" } }) } → observedResult45
+  catch observedFault46:
+    port test.match { text = $observedFault46.message; pattern = "WS-FIELD"; flags = "" } → observedDiagnostic47
+    let observedRefused44 = $observedDiagnostic47
+  assert $observedRefused44
+    otherwise "Expected rejects(apply(state,{kind:'object',id:'new',type:'Encounter',values:{title:'T',body:'B',unknown:'data'}}),/WS-FIELD/)"
+  let observedRefused48 = false
+  try:
+    port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "object"; id = "new"; type = "Encounter"; values = { title = "T"; body = "B"; introduction = null } }) } → observedResult49
+  catch observedFault50:
+    port test.match { text = $observedFault50.message; pattern = "WS-TEXT"; flags = "" } → observedDiagnostic51
+    let observedRefused48 = $observedDiagnostic51
+  assert $observedRefused48
+    otherwise "Expected rejects(apply(state,{kind:'object',id:'new',type:'Encounter',values:{title:'T',body:'B',introduction:null}}),/WS-TEXT/)"
+  port test.stringify { value = $state } → observedJson52
+  assert eq($observedJson52, $before)
+    otherwise "Expected equal(JSON.stringify(state),before)"
+
+# required and maximum constraints are user-defined and values never become host code
+process test.workspace.required-and-maximum-constraints-are-user-defined-and-values-never-become-host-code:
+  call fixture.workspace.setup
+  port kernel.invoke { query = "fixture.workspace.initial"; input = list() } → observedResult53
+  port kernel.invoke { query = "fixture.workspace.apply"; input = list($observedResult53, { kind = "define"; source = "construct Note\nfield text text shared required max 30\nheading text" }) } → observedResult54
+  let state = $observedResult54
+  let observedRefused55 = false
+  try:
+    port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "object"; id = "empty"; type = "Note"; values = { text = "" } }) } → observedResult56
+  catch observedFault57:
+    port test.match { text = $observedFault57.message; pattern = "WS-REQUIRED"; flags = "" } → observedDiagnostic58
+    let observedRefused55 = $observedDiagnostic58
+  assert $observedRefused55
+    otherwise "Expected rejects(apply(state,{kind:'object',id:'empty',type:'Note',values:{text:''}}),/WS-REQUIRED/)"
+  let observedRefused59 = false
+  port test.repeat { text = "x"; count = 31 } → observedRepeated60
+  try:
+    port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "object"; id = "long"; type = "Note"; values = { text = $observedRepeated60 } }) } → observedResult61
+  catch observedFault62:
+    port test.match { text = $observedFault62.message; pattern = "WS-LIMIT"; flags = "" } → observedDiagnostic63
+    let observedRefused59 = $observedDiagnostic63
+  assert $observedRefused59
+    otherwise "Expected rejects(apply(state,{kind:'object',id:'long',type:'Note',values:{text:'x'.repeat(31)}}),/WS-LIMIT/)"
+  port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "object"; id = "literal"; type = "Note"; values = { text = "<script>$model</script>" } }) } → observedResult64
+  let state = $observedResult64
+  let p = at(filter(at($state, "projections"), "p", eq(at($p, "source"), "literal")), 0)
+  assert eq(at(at($p, "values"), "F.text"), "<script>$model</script>")
+    otherwise "Expected equal(p.values['F.text'],'<script>$model</script>')"
+  assert eq(at(at(at(at(at(at($p, "output"), "tree"), "children"), 0), "children"), 0), "<script>$model</script>")
+    otherwise "Expected equal(p.output.tree.children[0].children[0],'<script>$model</script>')"
+
+# workspace acceptance replays the source segment, detects forgery and supports an explicit new basis
+process test.workspace.workspace-acceptance-replays-the-source-segment-detects-forgery-and-supports-an-explicit-new-basis:
+  call fixture.workspace.setup
+  port kernel.invoke { query = "fixture.workspace.initial"; input = list() } → observedResult65
+  port kernel.invoke { query = "fixture.workspace.apply"; input = list($observedResult65, { kind = "define"; source = $definition }) } → observedResult66
+  let state = $observedResult66
+  port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "object"; id = "question"; type = "Question"; values = { prompt = "What changed?"; invitation = "Pause here." } }) } → observedResult67
+  let state = $observedResult67
+  port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "compose"; journey = "listening"; entry = "question"; object = "question" }) } → observedResult68
+  let state = $observedResult68
+  let args = { state = $state; expectedRevision = at($state, "revision"); expectedHash = at($state, "documentHash") }
+  port test.invoke { entry = "ws.accept"; input = $args } → observedRun69
+  let receipt = at($observedRun69, "value")
+  port test.invoke { entry = "ws.reconstruct"; input = $receipt } → observedRun70
+  let restored = at($observedRun70, "value")
+  assert eq(at($restored, "document"), at($state, "document"))
+    otherwise "Expected deepEqual(restored.document,state.document)"
+  assert eq(at($restored, "projections"), at($state, "projections"))
+    otherwise "Expected deepEqual(restored.projections,state.projections)"
+  port test.invoke { entry = "ws.accept"; input = $args } → observedRun71
+  assert eq(at($observedRun71, "value"), $receipt)
+    otherwise "Expected deepEqual(await run('ws.accept',args),receipt)"
+  port kernel.invoke { query = "fixture.workspace.copy"; input = list($receipt) } → observedResult72
+  let bad = $observedResult72
+  port test.put { value = at(at(at(at(at($bad, "body"), "journal"), 1), "request"), "values"); key = "prompt"; replacement = "Tampered" } → observedUpdated73
+  port test.put { value = at(at(at(at($bad, "body"), "journal"), 1), "request"); key = "values"; replacement = $observedUpdated73 } → observedUpdated74
+  port test.put { value = at(at(at($bad, "body"), "journal"), 1); key = "request"; replacement = $observedUpdated74 } → observedUpdated75
+  port test.put { value = at(at($bad, "body"), "journal"); key = 1; replacement = $observedUpdated75 } → observedUpdated76
+  port test.put { value = at($bad, "body"); key = "journal"; replacement = $observedUpdated76 } → observedUpdated77
+  port test.put { value = $bad; key = "body"; replacement = $observedUpdated77 } → observedUpdated78
+  let bad = $observedUpdated78
+  port test.stringify { value = at($bad, "body") } → observedJson79
+  port test.digest { text = $observedJson79 } → observedHash80
+  port test.put { value = $bad; key = "sha256"; replacement = $observedHash80 } → observedUpdated81
+  let bad = $observedUpdated81
+  let observedRefused82 = false
+  try:
+    port test.invoke { entry = "ws.reconstruct"; input = $bad } → observedRun83
+  catch observedFault84:
+    port test.match { text = $observedFault84.message; pattern = "Operation or inverse destination differs"; flags = "" } → observedDiagnostic85
+    let observedRefused82 = $observedDiagnostic85
+  assert $observedRefused82
+    otherwise "Expected rejects(run('ws.reconstruct',bad),/Operation or inverse destination differs/)"
+  port kernel.invoke { query = "fixture.workspace.copy"; input = list($state) } → observedResult86
+  let forged = $observedResult86
+  port test.put { value = at(at(at(at($forged, "document"), "objects"), add(count(at(at($forged, "document"), "objects")), -1)), "values"); key = "prompt"; replacement = "Unrecorded" } → observedUpdated87
+  port test.put { value = at(at(at($forged, "document"), "objects"), add(count(at(at($forged, "document"), "objects")), -1)); key = "values"; replacement = $observedUpdated87 } → observedUpdated88
+  port test.put { value = at(at($forged, "document"), "objects"); key = add(count(at(at($forged, "document"), "objects")), -1); replacement = $observedUpdated88 } → observedUpdated89
+  port test.put { value = at($forged, "document"); key = "objects"; replacement = $observedUpdated89 } → observedUpdated90
+  port test.put { value = $forged; key = "document"; replacement = $observedUpdated90 } → observedUpdated91
+  let forged = $observedUpdated91
+  let observedRefused92 = false
+  port test.merge { records = list($args, { state = $forged }) } → observedRecord93
+  try:
+    port test.invoke { entry = "ws.accept"; input = $observedRecord93 } → observedRun94
+  catch observedFault95:
+    port test.match { text = $observedFault95.message; pattern = "Source was not reproduced"; flags = "" } → observedDiagnostic96
+    let observedRefused92 = $observedDiagnostic96
+  assert $observedRefused92
+    otherwise "Expected rejects(run('ws.accept',{...args,state:forged}),/Source was not reproduced/)"
+  port test.invoke { entry = "ws.initial"; input = { basis = at($state, "document"); predecessor = at($receipt, "sha256") } } → observedRun97
+  let checkpoint = at($observedRun97, "value")
+  assert eq(at($checkpoint, "revision"), 0)
+    otherwise "Expected equal(checkpoint.revision,0)"
+  assert eq(count(at($checkpoint, "journal")), 0)
+    otherwise "Expected equal(checkpoint.journal.length,0)"
+  assert eq(at($checkpoint, "predecessor"), at($receipt, "sha256"))
+    otherwise "Expected equal(checkpoint.predecessor,receipt.sha256)"
+  assert eq(at($checkpoint, "document"), at($state, "document"))
+    otherwise "Expected deepEqual(checkpoint.document,state.document)"
+
+# incomplete definition drafts are saved independently of adoption
+process test.workspace.incomplete-definition-drafts-are-saved-independently-of-adoption:
+  call fixture.workspace.setup
+  port test.open { values = list(list("#ws-definition", "construct Incomplete\nfield")) } → observedHost98
+  let h = $observedHost98
+  port test.invoke { entry = "ws.saveDefinition"; input = {}; host = $h } → observedRun99
+  port test.effects { host = $h; field = "writes" } → observedEffects100
+  let effects = $observedEffects100
+  assert some($effects, "x", if(eq(at($x, "key"), "usewords.workspace.definition-draft.v1"), includes(at($x, "value"), "Incomplete"), eq(at($x, "key"), "usewords.workspace.definition-draft.v1")))
+    otherwise "Expected ok(effects.some(x=>x.key==='usewords.workspace.definition-draft.v1'&&x.value.includes('Incomplete')))"
+  port test.get { host = $h; store = "state"; key = "workspace" } → observedHostValue101
+  assert eq($observedHostValue101, at({}, "absent"))
+    otherwise "Expected equal(h.state.get('workspace'),undefined)"
+
+# an empty authoring workspace can adopt a construct before its first executable object exists
+process test.workspace.an-empty-authoring-workspace-can-adopt-a-construct-before-its-first-executable-object-exists:
+  call fixture.workspace.setup
+  port test.invoke { entry = "ws.initial"; input = { basis = { protocol = "usewords/workspace/1"; definitions = list(); objects = list(); journeys = list() } } } → observedRun102
+  let state = at($observedRun102, "value")
+  assert eq(at($state, "projections"), list())
+    otherwise "Expected deepEqual(state.projections,[])"
+  port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "define"; source = $definition }) } → observedResult103
+  let state = $observedResult103
+  assert eq(at($state, "projections"), list())
+    otherwise "Expected deepEqual(state.projections,[])"
+  port kernel.invoke { query = "fixture.workspace.apply"; input = list($state, { kind = "object"; id = "first"; type = "Question"; values = { prompt = "Where do we begin?"; invitation = "" } }) } → observedResult104
+  let state = $observedResult104
+  assert eq(count(at($state, "projections")), 1)
+    otherwise "Expected equal(state.projections.length,1)"

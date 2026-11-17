@@ -1,0 +1,721 @@
+{
+  "protocol": "usewords/matter-packet/1",
+  "body": {
+    "programHash": "faf47e0d22057c9d1c2e3b9a1ffe2da71c91aa0900a9ef09c610edecd894345c",
+    "matter": {
+      "id": "matter_1",
+      "title": "A shared workshop space",
+      "description": "A community group wants to open a shared workshop. Some members prioritise low fees; others want enough paid staff to make opening hours reliable. We do not yet know likely usage or operating costs. We want to understand the different priorities and possibilities before making a decision.",
+      "status": "open",
+      "items": [
+        {
+          "item": {
+            "id": "balance",
+            "kind": "issue",
+            "title": "How should affordable access and reliable staffing be balanced?",
+            "body": "Costs, usage and staffing needs remain unknown. We can record different priorities without choosing an arrangement.",
+            "issue": null,
+            "voice": null
+          },
+          "origin": {
+            "kind": "participant",
+            "label": "alice",
+            "briefHash": null,
+            "sourceHash": null
+          },
+          "standing": "open question"
+        },
+        {
+          "item": {
+            "id": "affordable_access",
+            "kind": "position",
+            "title": "Prioritise low fees and broad participation",
+            "body": "My priority is keeping participation affordable. I do not yet accept that paid staffing should take priority over low fees.",
+            "issue": "balance",
+            "voice": "Alice’s proposed access position"
+          },
+          "origin": {
+            "kind": "participant",
+            "label": "alice",
+            "briefHash": null,
+            "sourceHash": null
+          },
+          "standing": "unconfirmed position"
+        },
+        {
+          "item": {
+            "id": "reliable_hours",
+            "kind": "position",
+            "title": "Prioritise dependable opening hours",
+            "body": "My priority is predictable access supported by reliable staffing. I do not yet accept that very low fees can sustain it.",
+            "issue": "balance",
+            "voice": "Bob’s proposed reliability position"
+          },
+          "origin": {
+            "kind": "participant",
+            "label": "bob",
+            "briefHash": null,
+            "sourceHash": null
+          },
+          "standing": "unconfirmed position"
+        },
+        {
+          "item": {
+            "id": "pilot",
+            "kind": "option",
+            "title": "Consider a limited trial before a long-term commitment",
+            "body": "One possible approach is a bounded trial comparing fee and staffing arrangements. Neither party has agreed to run it.",
+            "issue": "balance",
+            "voice": null
+          },
+          "origin": {
+            "kind": "participant",
+            "label": "alice",
+            "briefHash": null,
+            "sourceHash": null
+          },
+          "standing": "unaccepted approach"
+        }
+      ],
+      "management": {
+        "purpose": "",
+        "scope": "",
+        "reason": "",
+        "outcome": null,
+        "participants": [
+          {
+            "id": "alice",
+            "role": "coordinator",
+            "capacity": "Initial coordinator (simulated)"
+          },
+          {
+            "id": "bob",
+            "role": "contributor",
+            "capacity": "Participant (simulated)"
+          },
+          {
+            "id": "casey",
+            "role": "observer",
+            "capacity": "Observer (simulated)"
+          }
+        ],
+        "requests": [
+          {
+            "id": "cost_evidence",
+            "title": "Which operating costs and usage assumptions still need evidence?",
+            "assignee": "bob",
+            "status": "open",
+            "response": ""
+          }
+        ],
+        "links": []
+      }
+    },
+    "recordHash": "0c6cd80a862955f62e42ead2d75061e95ac0daca087a0f0e584d5ede25d9c0cc",
+    "boardRevision": 21,
+    "assertions": [
+      {
+        "id": "statement_1",
+        "actor": "alice",
+        "meaning": "represents-me",
+        "target": {
+          "kind": "item",
+          "id": "affordable_access"
+        },
+        "bindingHash": "7a9bcbb7fdc31dda7afe2d3ea60957bcc113c67a35191a2cee897ff674b74bf5",
+        "comment": "This accurately describes my current priority, with feasibility still uncertain.",
+        "active": true,
+        "withdrawn": null,
+        "current": true
+      },
+      {
+        "id": "statement_2",
+        "actor": "bob",
+        "meaning": "represents-me",
+        "target": {
+          "kind": "item",
+          "id": "reliable_hours"
+        },
+        "bindingHash": "bd8b9cec025cb2722151f5a10dd2fd764170f106860f531bef56982205fb1cbe",
+        "comment": "This describes my current priority; it is not an agreed staffing plan.",
+        "active": true,
+        "withdrawn": null,
+        "current": true
+      },
+      {
+        "id": "statement_3",
+        "actor": "alice",
+        "meaning": "dispute",
+        "target": {
+          "kind": "item",
+          "id": "reliable_hours"
+        },
+        "bindingHash": "bd8b9cec025cb2722151f5a10dd2fd764170f106860f531bef56982205fb1cbe",
+        "comment": "I dispute giving paid staffing priority over affordability before we have cost evidence.",
+        "active": true,
+        "withdrawn": null,
+        "current": true
+      },
+      {
+        "id": "statement_4",
+        "actor": "bob",
+        "meaning": "dispute",
+        "target": {
+          "kind": "item",
+          "id": "affordable_access"
+        },
+        "bindingHash": "7a9bcbb7fdc31dda7afe2d3ea60957bcc113c67a35191a2cee897ff674b74bf5",
+        "comment": "I dispute treating very low fees as the priority before we know whether opening hours can be sustained.",
+        "active": true,
+        "withdrawn": null,
+        "current": true
+      },
+      {
+        "id": "statement_5",
+        "actor": "alice",
+        "meaning": "record-accuracy",
+        "target": {
+          "kind": "record",
+          "id": null
+        },
+        "bindingHash": "0c6cd80a862955f62e42ead2d75061e95ac0daca087a0f0e584d5ede25d9c0cc",
+        "comment": "This record accurately includes our differences and outstanding evidence needs. I have not agreed to Bob’s priority or to run the pilot.",
+        "active": true,
+        "withdrawn": null,
+        "current": true
+      },
+      {
+        "id": "statement_6",
+        "actor": "bob",
+        "meaning": "record-accuracy",
+        "target": {
+          "kind": "record",
+          "id": null
+        },
+        "bindingHash": "0c6cd80a862955f62e42ead2d75061e95ac0daca087a0f0e584d5ede25d9c0cc",
+        "comment": "This record accurately includes our differences. I have not agreed to Alice’s priority or to run the pilot.",
+        "active": true,
+        "withdrawn": null,
+        "current": true
+      }
+    ],
+    "recordAcceptedBy": [
+      "alice",
+      "bob"
+    ],
+    "mutualRecordAcceptance": true,
+    "disputes": [
+      {
+        "id": "statement_3",
+        "actor": "alice",
+        "meaning": "dispute",
+        "target": {
+          "kind": "item",
+          "id": "reliable_hours"
+        },
+        "bindingHash": "bd8b9cec025cb2722151f5a10dd2fd764170f106860f531bef56982205fb1cbe",
+        "comment": "I dispute giving paid staffing priority over affordability before we have cost evidence.",
+        "active": true,
+        "withdrawn": null,
+        "current": true
+      },
+      {
+        "id": "statement_4",
+        "actor": "bob",
+        "meaning": "dispute",
+        "target": {
+          "kind": "item",
+          "id": "affordable_access"
+        },
+        "bindingHash": "7a9bcbb7fdc31dda7afe2d3ea60957bcc113c67a35191a2cee897ff674b74bf5",
+        "comment": "I dispute treating very low fees as the priority before we know whether opening hours can be sustained.",
+        "active": true,
+        "withdrawn": null,
+        "current": true
+      }
+    ],
+    "unresolvedQuestions": [
+      {
+        "item": {
+          "id": "balance",
+          "kind": "issue",
+          "title": "How should affordable access and reliable staffing be balanced?",
+          "body": "Costs, usage and staffing needs remain unknown. We can record different priorities without choosing an arrangement.",
+          "issue": null,
+          "voice": null
+        },
+        "origin": {
+          "kind": "participant",
+          "label": "alice",
+          "briefHash": null,
+          "sourceHash": null
+        },
+        "standing": "open question"
+      }
+    ],
+    "evidenceNeeds": [
+      {
+        "id": "cost_evidence",
+        "title": "Which operating costs and usage assumptions still need evidence?",
+        "assignee": "bob",
+        "status": "open",
+        "response": ""
+      }
+    ],
+    "sharedProposals": [
+      {
+        "id": "proposal_1",
+        "author": "alice",
+        "title": "Frame issue: How should affordable access and reliable staffing be balanced?",
+        "status": "accepted",
+        "contentHash": "2da5f50c116c3996a86a3f14de83fbb674a3576d7fc62653943516e9ed67ac33"
+      },
+      {
+        "id": "proposal_2",
+        "author": "alice",
+        "title": "Frame position: Prioritise low fees and broad participation",
+        "status": "accepted",
+        "contentHash": "cfbd980e918adb0ce0e36dd911a1ae450202736cc4820f09aa4955336dad9022"
+      },
+      {
+        "id": "proposal_3",
+        "author": "bob",
+        "title": "Frame position: Prioritise dependable opening hours",
+        "status": "accepted",
+        "contentHash": "5aaf894b476a29af27368c04d524f10f02b6d918ec5e62980bb07573377c4312"
+      },
+      {
+        "id": "proposal_4",
+        "author": "alice",
+        "title": "Frame option: Consider a limited trial before a long-term commitment",
+        "status": "accepted",
+        "contentHash": "759e66f025b741cef45cc97026ab88bea7aa4c00e0df01ba8d02f45689012e65"
+      },
+      {
+        "id": "proposal_5",
+        "author": "alice",
+        "title": "Manage matter: request",
+        "status": "accepted",
+        "contentHash": "c58bae7152703daa4a8575b2fe30f5d2713f93c9908ceb3d7f930ace1fa97126"
+      }
+    ],
+    "history": {
+      "protocol": "usewords/collaboration/1",
+      "body": {
+        "programHash": "faf47e0d22057c9d1c2e3b9a1ffe2da71c91aa0900a9ef09c610edecd894345c",
+        "basis": {
+          "protocol": "usewords/workspace-acceptance/1",
+          "body": {
+            "programHash": "faf47e0d22057c9d1c2e3b9a1ffe2da71c91aa0900a9ef09c610edecd894345c",
+            "basis": {
+              "protocol": "usewords/workspace/1",
+              "definitions": [
+                "construct Encounter\nfield title text shared required max 160\nfield body text shared required max 4000\nfield introduction text local optional max 600\nheading title\nparagraph introduction\nparagraph body"
+              ],
+              "objects": [],
+              "journeys": [],
+              "matter": {
+                "id": "matter_1",
+                "title": "A shared workshop space",
+                "description": "A community group wants to open a shared workshop. Some members prioritise low fees; others want enough paid staff to make opening hours reliable. We do not yet know likely usage or operating costs. We want to understand the different priorities and possibilities before making a decision.",
+                "status": "open",
+                "items": [],
+                "management": {
+                  "purpose": "",
+                  "scope": "",
+                  "reason": "",
+                  "outcome": null,
+                  "participants": [
+                    {
+                      "id": "alice",
+                      "role": "coordinator",
+                      "capacity": "Initial coordinator (simulated)"
+                    },
+                    {
+                      "id": "bob",
+                      "role": "contributor",
+                      "capacity": "Participant (simulated)"
+                    },
+                    {
+                      "id": "casey",
+                      "role": "observer",
+                      "capacity": "Observer (simulated)"
+                    }
+                  ],
+                  "requests": [],
+                  "links": []
+                }
+              }
+            },
+            "predecessor": null,
+            "journal": [],
+            "revision": 0,
+            "documentHash": "13c1c37185cebf6e77a3f1f88a14d093cc329416a6f5e28c204c6ea34bdf002b",
+            "projectionHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "sha256": "4021d14e0e938251741fcc748803cb20a933d99fd6876f9c39173e4b5808cf5d"
+        },
+        "events": [
+          {
+            "request": {
+              "action": "propose",
+              "actor": "alice",
+              "expectedBoardRevision": 0,
+              "id": "proposal_1",
+              "title": "Frame issue: How should affordable access and reliable staffing be balanced?",
+              "change": {
+                "kind": "matter-item",
+                "matterId": "matter_1",
+                "item": {
+                  "id": "balance",
+                  "kind": "issue",
+                  "title": "How should affordable access and reliable staffing be balanced?",
+                  "body": "Costs, usage and staffing needs remain unknown. We can record different priorities without choosing an arrangement.",
+                  "issue": null,
+                  "voice": null
+                },
+                "origin": {
+                  "kind": "participant",
+                  "label": "alice",
+                  "briefHash": null,
+                  "sourceHash": null
+                },
+                "baseRevision": 0
+              }
+            },
+            "headHash": "13c1c37185cebf6e77a3f1f88a14d093cc329416a6f5e28c204c6ea34bdf002b"
+          },
+          {
+            "request": {
+              "action": "review",
+              "actor": "bob",
+              "expectedBoardRevision": 1,
+              "id": "proposal_1",
+              "contentHash": "2da5f50c116c3996a86a3f14de83fbb674a3576d7fc62653943516e9ed67ac33",
+              "decision": "approve",
+              "comment": "Include this framing accurately without endorsing its substantive claims."
+            },
+            "headHash": "13c1c37185cebf6e77a3f1f88a14d093cc329416a6f5e28c204c6ea34bdf002b"
+          },
+          {
+            "request": {
+              "action": "accept",
+              "actor": "bob",
+              "expectedBoardRevision": 2,
+              "id": "proposal_1",
+              "contentHash": "2da5f50c116c3996a86a3f14de83fbb674a3576d7fc62653943516e9ed67ac33",
+              "decision": "approve",
+              "comment": "Include this framing accurately without endorsing its substantive claims."
+            },
+            "headHash": "0079656b77a3921af2630450fa65a8bd5c7e631338cfeaddbf03a9a03772d1b9"
+          },
+          {
+            "request": {
+              "action": "propose",
+              "actor": "alice",
+              "expectedBoardRevision": 3,
+              "id": "proposal_2",
+              "title": "Frame position: Prioritise low fees and broad participation",
+              "change": {
+                "kind": "matter-item",
+                "matterId": "matter_1",
+                "item": {
+                  "id": "affordable_access",
+                  "kind": "position",
+                  "title": "Prioritise low fees and broad participation",
+                  "body": "My priority is keeping participation affordable. I do not yet accept that paid staffing should take priority over low fees.",
+                  "issue": "balance",
+                  "voice": "Alice’s proposed access position"
+                },
+                "origin": {
+                  "kind": "participant",
+                  "label": "alice",
+                  "briefHash": null,
+                  "sourceHash": null
+                },
+                "baseRevision": 1
+              }
+            },
+            "headHash": "0079656b77a3921af2630450fa65a8bd5c7e631338cfeaddbf03a9a03772d1b9"
+          },
+          {
+            "request": {
+              "action": "review",
+              "actor": "bob",
+              "expectedBoardRevision": 4,
+              "id": "proposal_2",
+              "contentHash": "cfbd980e918adb0ce0e36dd911a1ae450202736cc4820f09aa4955336dad9022",
+              "decision": "approve",
+              "comment": "Include this framing accurately without endorsing its substantive claims."
+            },
+            "headHash": "0079656b77a3921af2630450fa65a8bd5c7e631338cfeaddbf03a9a03772d1b9"
+          },
+          {
+            "request": {
+              "action": "accept",
+              "actor": "bob",
+              "expectedBoardRevision": 5,
+              "id": "proposal_2",
+              "contentHash": "cfbd980e918adb0ce0e36dd911a1ae450202736cc4820f09aa4955336dad9022",
+              "decision": "approve",
+              "comment": "Include this framing accurately without endorsing its substantive claims."
+            },
+            "headHash": "734cd32a71623c76b4e823669a4de03388bab5d840467736ae3621c9fc52fc13"
+          },
+          {
+            "request": {
+              "action": "propose",
+              "actor": "bob",
+              "expectedBoardRevision": 6,
+              "id": "proposal_3",
+              "title": "Frame position: Prioritise dependable opening hours",
+              "change": {
+                "kind": "matter-item",
+                "matterId": "matter_1",
+                "item": {
+                  "id": "reliable_hours",
+                  "kind": "position",
+                  "title": "Prioritise dependable opening hours",
+                  "body": "My priority is predictable access supported by reliable staffing. I do not yet accept that very low fees can sustain it.",
+                  "issue": "balance",
+                  "voice": "Bob’s proposed reliability position"
+                },
+                "origin": {
+                  "kind": "participant",
+                  "label": "bob",
+                  "briefHash": null,
+                  "sourceHash": null
+                },
+                "baseRevision": 2
+              }
+            },
+            "headHash": "734cd32a71623c76b4e823669a4de03388bab5d840467736ae3621c9fc52fc13"
+          },
+          {
+            "request": {
+              "action": "review",
+              "actor": "alice",
+              "expectedBoardRevision": 7,
+              "id": "proposal_3",
+              "contentHash": "5aaf894b476a29af27368c04d524f10f02b6d918ec5e62980bb07573377c4312",
+              "decision": "approve",
+              "comment": "Include this framing accurately without endorsing its substantive claims."
+            },
+            "headHash": "734cd32a71623c76b4e823669a4de03388bab5d840467736ae3621c9fc52fc13"
+          },
+          {
+            "request": {
+              "action": "accept",
+              "actor": "alice",
+              "expectedBoardRevision": 8,
+              "id": "proposal_3",
+              "contentHash": "5aaf894b476a29af27368c04d524f10f02b6d918ec5e62980bb07573377c4312",
+              "decision": "approve",
+              "comment": "Include this framing accurately without endorsing its substantive claims."
+            },
+            "headHash": "f52125a5cd49284d3159d6bcf72a9ae95ea5fc7a7ed5de92df34dcffe5d14206"
+          },
+          {
+            "request": {
+              "action": "propose",
+              "actor": "alice",
+              "expectedBoardRevision": 9,
+              "id": "proposal_4",
+              "title": "Frame option: Consider a limited trial before a long-term commitment",
+              "change": {
+                "kind": "matter-item",
+                "matterId": "matter_1",
+                "item": {
+                  "id": "pilot",
+                  "kind": "option",
+                  "title": "Consider a limited trial before a long-term commitment",
+                  "body": "One possible approach is a bounded trial comparing fee and staffing arrangements. Neither party has agreed to run it.",
+                  "issue": "balance",
+                  "voice": null
+                },
+                "origin": {
+                  "kind": "participant",
+                  "label": "alice",
+                  "briefHash": null,
+                  "sourceHash": null
+                },
+                "baseRevision": 3
+              }
+            },
+            "headHash": "f52125a5cd49284d3159d6bcf72a9ae95ea5fc7a7ed5de92df34dcffe5d14206"
+          },
+          {
+            "request": {
+              "action": "review",
+              "actor": "bob",
+              "expectedBoardRevision": 10,
+              "id": "proposal_4",
+              "contentHash": "759e66f025b741cef45cc97026ab88bea7aa4c00e0df01ba8d02f45689012e65",
+              "decision": "approve",
+              "comment": "Include this framing accurately without endorsing its substantive claims."
+            },
+            "headHash": "f52125a5cd49284d3159d6bcf72a9ae95ea5fc7a7ed5de92df34dcffe5d14206"
+          },
+          {
+            "request": {
+              "action": "accept",
+              "actor": "bob",
+              "expectedBoardRevision": 11,
+              "id": "proposal_4",
+              "contentHash": "759e66f025b741cef45cc97026ab88bea7aa4c00e0df01ba8d02f45689012e65",
+              "decision": "approve",
+              "comment": "Include this framing accurately without endorsing its substantive claims."
+            },
+            "headHash": "3ac6216b8691591e000cce2d2fce23b596dc76b2b4be796ecaa536b18f12c011"
+          },
+          {
+            "request": {
+              "action": "propose",
+              "actor": "alice",
+              "expectedBoardRevision": 12,
+              "id": "proposal_5",
+              "title": "Manage matter: request",
+              "change": {
+                "kind": "matter-manage",
+                "matterId": "matter_1",
+                "operation": "request",
+                "payload": {
+                  "id": "cost_evidence",
+                  "title": "Which operating costs and usage assumptions still need evidence?",
+                  "assignee": "bob"
+                },
+                "baseRevision": 4
+              }
+            },
+            "headHash": "3ac6216b8691591e000cce2d2fce23b596dc76b2b4be796ecaa536b18f12c011"
+          },
+          {
+            "request": {
+              "action": "review",
+              "actor": "bob",
+              "expectedBoardRevision": 13,
+              "id": "proposal_5",
+              "contentHash": "c58bae7152703daa4a8575b2fe30f5d2713f93c9908ceb3d7f930ace1fa97126",
+              "decision": "approve",
+              "comment": "Include this framing accurately without endorsing its substantive claims."
+            },
+            "headHash": "3ac6216b8691591e000cce2d2fce23b596dc76b2b4be796ecaa536b18f12c011"
+          },
+          {
+            "request": {
+              "action": "accept",
+              "actor": "bob",
+              "expectedBoardRevision": 14,
+              "id": "proposal_5",
+              "contentHash": "c58bae7152703daa4a8575b2fe30f5d2713f93c9908ceb3d7f930ace1fa97126",
+              "decision": "approve",
+              "comment": "Include this framing accurately without endorsing its substantive claims."
+            },
+            "headHash": "3297d40278a0af069efe4665fb1b1f7e3a76cab25f3aa1e1aca3835fbdaa596e"
+          },
+          {
+            "request": {
+              "action": "attest",
+              "actor": "alice",
+              "expectedBoardRevision": 15,
+              "id": "statement_1",
+              "meaning": "represents-me",
+              "target": {
+                "kind": "item",
+                "id": "affordable_access"
+              },
+              "bindingHash": "7a9bcbb7fdc31dda7afe2d3ea60957bcc113c67a35191a2cee897ff674b74bf5",
+              "comment": "This accurately describes my current priority, with feasibility still uncertain."
+            },
+            "headHash": "3297d40278a0af069efe4665fb1b1f7e3a76cab25f3aa1e1aca3835fbdaa596e"
+          },
+          {
+            "request": {
+              "action": "attest",
+              "actor": "bob",
+              "expectedBoardRevision": 16,
+              "id": "statement_2",
+              "meaning": "represents-me",
+              "target": {
+                "kind": "item",
+                "id": "reliable_hours"
+              },
+              "bindingHash": "bd8b9cec025cb2722151f5a10dd2fd764170f106860f531bef56982205fb1cbe",
+              "comment": "This describes my current priority; it is not an agreed staffing plan."
+            },
+            "headHash": "3297d40278a0af069efe4665fb1b1f7e3a76cab25f3aa1e1aca3835fbdaa596e"
+          },
+          {
+            "request": {
+              "action": "attest",
+              "actor": "alice",
+              "expectedBoardRevision": 17,
+              "id": "statement_3",
+              "meaning": "dispute",
+              "target": {
+                "kind": "item",
+                "id": "reliable_hours"
+              },
+              "bindingHash": "bd8b9cec025cb2722151f5a10dd2fd764170f106860f531bef56982205fb1cbe",
+              "comment": "I dispute giving paid staffing priority over affordability before we have cost evidence."
+            },
+            "headHash": "3297d40278a0af069efe4665fb1b1f7e3a76cab25f3aa1e1aca3835fbdaa596e"
+          },
+          {
+            "request": {
+              "action": "attest",
+              "actor": "bob",
+              "expectedBoardRevision": 18,
+              "id": "statement_4",
+              "meaning": "dispute",
+              "target": {
+                "kind": "item",
+                "id": "affordable_access"
+              },
+              "bindingHash": "7a9bcbb7fdc31dda7afe2d3ea60957bcc113c67a35191a2cee897ff674b74bf5",
+              "comment": "I dispute treating very low fees as the priority before we know whether opening hours can be sustained."
+            },
+            "headHash": "3297d40278a0af069efe4665fb1b1f7e3a76cab25f3aa1e1aca3835fbdaa596e"
+          },
+          {
+            "request": {
+              "action": "attest",
+              "actor": "alice",
+              "expectedBoardRevision": 19,
+              "id": "statement_5",
+              "meaning": "record-accuracy",
+              "target": {
+                "kind": "record",
+                "id": null
+              },
+              "bindingHash": "0c6cd80a862955f62e42ead2d75061e95ac0daca087a0f0e584d5ede25d9c0cc",
+              "comment": "This record accurately includes our differences and outstanding evidence needs. I have not agreed to Bob’s priority or to run the pilot."
+            },
+            "headHash": "3297d40278a0af069efe4665fb1b1f7e3a76cab25f3aa1e1aca3835fbdaa596e"
+          },
+          {
+            "request": {
+              "action": "attest",
+              "actor": "bob",
+              "expectedBoardRevision": 20,
+              "id": "statement_6",
+              "meaning": "record-accuracy",
+              "target": {
+                "kind": "record",
+                "id": null
+              },
+              "bindingHash": "0c6cd80a862955f62e42ead2d75061e95ac0daca087a0f0e584d5ede25d9c0cc",
+              "comment": "This record accurately includes our differences. I have not agreed to Alice’s priority or to run the pilot."
+            },
+            "headHash": "3297d40278a0af069efe4665fb1b1f7e3a76cab25f3aa1e1aca3835fbdaa596e"
+          }
+        ],
+        "revision": 21,
+        "stateHash": "5a153df7ea07c48d15c3c9288d5545dbf261c224cad0e021aac2d1d305e455c7"
+      },
+      "sha256": "e89d9224403baa41c0592bb704f9cfe9973bd70c8297123ce236f444e77de3a8"
+    },
+    "interpretation": "Record accuracy does not endorse positions, accept proposals, prove claims, attest real identities or establish legal execution. Evidence requests and answers remain unverified. No private preparation is included. Silence is not agreement."
+  },
+  "sha256": "537031e2f254403f5e2375df3789279165f6fce22ee06ccfbe627cf802e459c5"
+}

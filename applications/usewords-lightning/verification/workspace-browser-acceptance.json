@@ -1,0 +1,159 @@
+{
+  "protocol": "usewords/workspace-acceptance/1",
+  "body": {
+    "programHash": "a372eaa837310fd67cc9cf9d68d275a1390f98c34aa06b26d75f16958878e798",
+    "basis": {
+      "protocol": "usewords/workspace/1",
+      "definitions": [
+        "construct Encounter\nfield title text shared required max 160\nfield body text shared required max 4000\nfield introduction text local optional max 600\nheading title\nparagraph introduction\nparagraph body",
+        "construct Question\nfield prompt text shared required max 240\nfield invitation text local optional max 600\nheading prompt\nparagraph invitation"
+      ],
+      "objects": [
+        {
+          "id": "water",
+          "type": "Encounter",
+          "values": {
+            "title": "The horse has a few questions.",
+            "body": "The guide points at the water. The horse looks down. There is already a horse in there, and it seems to have strong opinions about the guide. Nobody mentioned a committee.\n\nPerhaps the next explanation can wait. What is the horse being invited into? The guide can look at the reflection too. You can read the little fable your own way—or just enjoy a horse declining a well-prepared presentation.",
+            "introduction": "An encounter at the water’s edge."
+          },
+          "origin": {
+            "subject": "place.water",
+            "snapshot": "source/reference/water.rel"
+          }
+        },
+        {
+          "id": "first_light",
+          "type": "Encounter",
+          "values": {
+            "title": "An unexpected beginning",
+            "body": "An encounter starts when the visitor can answer back.",
+            "introduction": "Begin here."
+          }
+        },
+        {
+          "id": "question1",
+          "type": "Question",
+          "values": {
+            "prompt": "What happens when the visitor can answer back?",
+            "invitation": "Pause before explaining."
+          }
+        }
+      ],
+      "journeys": [
+        {
+          "id": "listening",
+          "name": "Listening well",
+          "entries": [
+            {
+              "id": "water",
+              "object": "water",
+              "overrides": {
+                "introduction": "Start by noticing what the other person is encountering, before offering your explanation."
+              }
+            },
+            {
+              "id": "question1",
+              "object": "question1",
+              "overrides": {}
+            }
+          ]
+        },
+        {
+          "id": "making",
+          "name": "Making with care",
+          "entries": [
+            {
+              "id": "water",
+              "object": "water",
+              "overrides": {
+                "introduction": "Begin with the invitation you are making. What room does your design leave for another response?"
+              }
+            }
+          ]
+        },
+        {
+          "id": "discovery",
+          "name": "A journey of discovery",
+          "entries": [
+            {
+              "id": "first_light",
+              "object": "first_light",
+              "overrides": {}
+            },
+            {
+              "id": "question1",
+              "object": "question1",
+              "overrides": {
+                "invitation": "Keep this invitation in the discovery journey."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "predecessor": null,
+    "journal": [
+      {
+        "request": {
+          "kind": "edit",
+          "scope": "shared",
+          "object": "question1",
+          "journey": "listening",
+          "entry": "water",
+          "field": "prompt",
+          "value": "What changes when we make room for an answer?",
+          "baseRevision": 0
+        },
+        "before": "4822411f7d45b40e57c37e1d45c7831997d1a6028d4ad2d26b9dd3d6051f5738",
+        "after": "414651533584a417efc8967d47a7c0307875d6186cfc8bd00638ce7ced535e0f",
+        "projectionHash": "80c945bcaa17ce32ec28cb2e177d9fd7011b1658f4ef553cabb9ab3a5f1c6147",
+        "destination": {
+          "kind": "source",
+          "field": "F.prompt",
+          "node": {
+            "id": 35,
+            "line": 35,
+            "offset": 1072,
+            "raw": "  F.prompt: source.F.prompt",
+            "text": "F.prompt: source.F.prompt",
+            "indent": 2,
+            "parent": 34
+          }
+        }
+      },
+      {
+        "request": {
+          "kind": "edit",
+          "scope": "local",
+          "object": "question1",
+          "journey": "discovery",
+          "entry": "question1",
+          "field": "invitation",
+          "value": "This invitation belongs to discovery alone.",
+          "baseRevision": 1
+        },
+        "before": "414651533584a417efc8967d47a7c0307875d6186cfc8bd00638ce7ced535e0f",
+        "after": "d874a1f90dc285f6235a81df7a06ebea6e8f80134d85b4bb05e779d4c7e8ef66",
+        "projectionHash": "86ed93b81ded5de07598204d9849bf252904ca02a9c7a9c66c359870864044ff",
+        "destination": {
+          "kind": "literal",
+          "node": {
+            "id": 46,
+            "line": 46,
+            "offset": 1366,
+            "raw": "    F.invitation: \"Keep this invitation in the discovery journey.\"",
+            "text": "F.invitation: \"Keep this invitation in the discovery journey.\"",
+            "indent": 4,
+            "parent": 45
+          },
+          "token": "\"Keep this invitation in the discovery journey.\""
+        }
+      }
+    ],
+    "revision": 2,
+    "documentHash": "d874a1f90dc285f6235a81df7a06ebea6e8f80134d85b4bb05e779d4c7e8ef66",
+    "projectionHash": "86ed93b81ded5de07598204d9849bf252904ca02a9c7a9c66c359870864044ff"
+  },
+  "sha256": "dc79d394d72832def6bb125b13a8c86413348106fb2866a2f9409dcc8896d096"
+}

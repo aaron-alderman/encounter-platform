@@ -1,0 +1,457 @@
+process-module "temple/surface-process-module/1"
+
+process fixture.collaboration.apply:
+  let board = at($eventInput, 0)
+  let request = at($eventInput, 1)
+  port test.merge { records = list({ expectedBoardRevision = at($board, "revision") }, $request) } → observedRecord1
+  port test.invoke { entry = "cw.apply"; input = { board = $board; request = $observedRecord1 } } → observedRun2
+  let result = at($observedRun2, "value")
+
+process fixture.collaboration.edit:
+  let value = at($eventInput, 0)
+  let baseRevision = if(eq(at($eventInput, 1), at({}, "absent")), 0, at($eventInput, 1))
+  let result = { kind = "edit"; scope = "shared"; object = "water"; field = "title"; value = $value; baseRevision = $baseRevision }
+
+process fixture.collaboration.propose:
+  let board = at($eventInput, 0)
+  let id = if(eq(at($eventInput, 1), at({}, "absent")), "one", at($eventInput, 1))
+  port kernel.invoke { query = "fixture.collaboration.edit"; input = list("A question shared by both journeys") } → observedResult3
+  let change = if(eq(at($eventInput, 2), at({}, "absent")), $observedResult3, at($eventInput, 2))
+  let actor = if(eq(at($eventInput, 3), at({}, "absent")), "alice", at($eventInput, 3))
+  port kernel.invoke { query = "fixture.collaboration.apply"; input = list($board, { action = "propose"; actor = $actor; id = $id; title = "Listen together"; change = $change }) } → observedResult4
+  let result = $observedResult4
+
+process fixture.collaboration.review:
+  let board = at($eventInput, 0)
+  let id = if(eq(at($eventInput, 1), at({}, "absent")), "one", at($eventInput, 1))
+  let decision = if(eq(at($eventInput, 2), at({}, "absent")), "approve", at($eventInput, 2))
+  let actor = if(eq(at($eventInput, 3), at({}, "absent")), "bob", at($eventInput, 3))
+  port kernel.invoke { query = "fixture.collaboration.apply"; input = list($board, { action = "review"; actor = $actor; id = $id; contentHash = at(at(filter(at($board, "proposals"), "p", eq(at($p, "id"), $id)), 0), "contentHash"); decision = $decision; comment = "Checked the intended scope." }) } → observedResult5
+  let result = $observedResult5
+
+process fixture.collaboration.accept:
+  let board = at($eventInput, 0)
+  let id = if(eq(at($eventInput, 1), at({}, "absent")), "one", at($eventInput, 1))
+  let actor = if(eq(at($eventInput, 2), at({}, "absent")), "bob", at($eventInput, 2))
+  port kernel.invoke { query = "fixture.collaboration.apply"; input = list($board, { action = "accept"; actor = $actor; id = $id; contentHash = at(at(filter(at($board, "proposals"), "p", eq(at($p, "id"), $id)), 0), "contentHash") }) } → observedResult6
+  let result = $observedResult6
+
+process fixture.collaboration.title:
+  let board = at($eventInput, 0)
+  let journey = at($eventInput, 1)
+  let result = at(at(at(filter(at(at($board, "head"), "projections"), "p", eq(at(at($p, "contribution"), "id"), concat("journey.", $journey, ".water"))), 0), "values"), "F.title")
+
+process fixture.collaboration.setup:
+  port test.runtime {} → observedRuntime7
+  let runtime = $observedRuntime7
+  port test.invoke { entry = "ws.initial"; input = {} } → observedRun8
+  let workspace = at($observedRun8, "value")
+  port test.invoke { entry = "ws.accept"; input = { state = $workspace; expectedRevision = 0; expectedHash = at($workspace, "documentHash") } } → observedRun9
+  let basis = at($observedRun9, "value")
+  port test.invoke { entry = "cw.initial"; input = $basis } → observedRun10
+  let initial = at($observedRun10, "value")
+
+# encounter proposals keep material unchanged until an independently reviewed exact result is accepted
+process test.collaboration.encounter-proposals-keep-material-unchanged-until-an-independently-reviewed-exact-result-is-accepted:
+  call fixture.collaboration.setup
+  port kernel.invoke { query = "fixture.collaboration.propose"; input = list($initial) } → observedResult11
+  let proposed = $observedResult11
+  assert eq(at(at($proposed, "head"), "documentHash"), at(at($initial, "head"), "documentHash"))
+    otherwise "Expected equal(proposed.head.documentHash,initial.head.documentHash)"
+  port test.invoke { entry = "cw.inspect"; input = { board = $proposed; id = "one" } } → observedRun12
+  let inspected = at($observedRun12, "value")
+  assert eq(at($inspected, "before"), "The horse has a few questions.")
+    otherwise "Expected equal(inspected.before,'The horse has a few questions.')"
+  assert eq(at($inspected, "after"), "A question shared by both journeys")
+    otherwise "Expected equal(inspected.after,'A question shared by both journeys')"
+  assert eq(at(at($inspected, "destination"), "kind"), "source")
+    otherwise "Expected equal(inspected.destination.kind,'source')"
+  let observedRefused13 = false
+  try:
+    port kernel.invoke { query = "fixture.collaboration.accept"; input = list($proposed) } → observedResult14
+  catch observedFault15:
+    port test.match { text = $observedFault15.message; pattern = "CW-APPROVAL"; flags = "" } → observedDiagnostic16
+    let observedRefused13 = $observedDiagnostic16
+  assert $observedRefused13
+    otherwise "Expected rejects(accept(proposed),/CW-APPROVAL/)"
+  port kernel.invoke { query = "fixture.collaboration.review"; input = list($proposed) } → observedResult17
+  let reviewed = $observedResult17
+  assert eq(at(at($reviewed, "head"), "documentHash"), at(at($initial, "head"), "documentHash"))
+    otherwise "Expected equal(reviewed.head.documentHash,initial.head.documentHash)"
+  port kernel.invoke { query = "fixture.collaboration.accept"; input = list($reviewed) } → observedResult18
+  let accepted = $observedResult18
+  port kernel.invoke { query = "fixture.collaboration.title"; input = list($accepted, "listening") } → observedResult19
+  assert eq($observedResult19, "A question shared by both journeys")
+    otherwise "Expected equal(title(accepted,'listening'),'A question shared by both journeys')"
+  port kernel.invoke { query = "fixture.collaboration.title"; input = list($accepted, "making") } → observedResult20
+  assert eq($observedResult20, "A question shared by both journeys")
+    otherwise "Expected equal(title(accepted,'making'),'A question shared by both journeys')"
+  assert eq(at(at(at($accepted, "proposals"), 0), "acceptedBy"), "bob")
+    otherwise "Expected equal(accepted.proposals[0].acceptedBy,'bob')"
+  let observedRefused21 = false
+  try:
+    port kernel.invoke { query = "fixture.collaboration.accept"; input = list($accepted) } → observedResult22
+  catch observedFault23:
+    port test.match { text = $observedFault23.message; pattern = "CW-CLOSED"; flags = "" } → observedDiagnostic24
+    let observedRefused21 = $observedDiagnostic24
+  assert $observedRefused21
+    otherwise "Expected rejects(accept(accepted),/CW-CLOSED/)"
+
+# construct definitions and new encounter instances follow the same proposal/review/accept process
+process test.collaboration.construct-definitions-and-new-encounter-instances-follow-the-same-proposal-review-accept-process:
+  call fixture.collaboration.setup
+  let source = "construct Invitation\nfield prompt text shared required max 240\nfield introduction text local optional max 600\nheading prompt\nparagraph introduction"
+  port kernel.invoke { query = "fixture.collaboration.propose"; input = list($initial, "language", { kind = "define"; source = $source; baseRevision = 0 }) } → observedResult25
+  let board = $observedResult25
+  assert eq(some(at(at($board, "head"), "schemas"), "s", eq(at($s, "name"), "Invitation")), false)
+    otherwise "Expected equal(board.head.schemas.some(s=>s.name==='Invitation'),false)"
+  port test.invoke { entry = "cw.inspect"; input = { board = $board; id = "language" } } → observedRun26
+  let inspection = at($observedRun26, "value")
+  assert eq(at($inspection, "before"), null)
+    otherwise "Expected equal(inspection.before,null)"
+  assert eq(at($inspection, "after"), $source)
+    otherwise "Expected equal(inspection.after,source)"
+  port kernel.invoke { query = "fixture.collaboration.review"; input = list($board, "language") } → observedResult27
+  port kernel.invoke { query = "fixture.collaboration.accept"; input = list($observedResult27, "language") } → observedResult28
+  let board = $observedResult28
+  assert eq(at(at(at(at($board, "head"), "schemas"), add(count(at(at($board, "head"), "schemas")), -1)), "name"), "Invitation")
+    otherwise "Expected equal(board.head.schemas.at(-1).name,'Invitation')"
+  port kernel.invoke { query = "fixture.collaboration.propose"; input = list($board, "encounter", { kind = "object"; id = "invitation"; type = "Invitation"; values = { prompt = "What would you like to add?"; introduction = "Take your time." }; baseRevision = 1 }) } → observedResult29
+  let board = $observedResult29
+  port kernel.invoke { query = "fixture.collaboration.review"; input = list($board, "encounter") } → observedResult30
+  port kernel.invoke { query = "fixture.collaboration.accept"; input = list($observedResult30, "encounter") } → observedResult31
+  let board = $observedResult31
+  assert eq(at(at(at(at(at($board, "head"), "document"), "objects"), add(count(at(at(at($board, "head"), "document"), "objects")), -1)), "type"), "Invitation")
+    otherwise "Expected equal(board.head.document.objects.at(-1).type,'Invitation')"
+  let observedRefused32 = false
+  try:
+    port kernel.invoke { query = "fixture.collaboration.propose"; input = list($board, "incompatible", { kind = "define"; source = "construct Encounter\nfield missing text shared required\nheading missing"; baseRevision = 2 }) } → observedResult33
+  catch observedFault34:
+    port test.match { text = $observedFault34.message; pattern = "WS-TYPE"; flags = "" } → observedDiagnostic35
+    let observedRefused32 = $observedDiagnostic35
+  assert $observedRefused32
+    otherwise "Expected rejects(propose(board,'incompatible',{kind:'define',source:'construct Encounter\\nfield missing text shared required\\nheading missing',baseRevision:2}),/WS-TYPE/)"
+
+# self-review, observer mutation, wrong content and stale board revisions refuse without changing history
+process test.collaboration.self-review-observer-mutation-wrong-content-and-stale-board-revisions-refuse-without-changing-history:
+  call fixture.collaboration.setup
+  port kernel.invoke { query = "fixture.collaboration.propose"; input = list($initial) } → observedResult36
+  let board = $observedResult36
+  port test.stringify { value = $board } → observedJson37
+  let before = $observedJson37
+  let observedRefused38 = false
+  try:
+    port kernel.invoke { query = "fixture.collaboration.review"; input = list($board, "one", "approve", "alice") } → observedResult39
+  catch observedFault40:
+    port test.match { text = $observedFault40.message; pattern = "CW-REVIEW"; flags = "" } → observedDiagnostic41
+    let observedRefused38 = $observedDiagnostic41
+  assert $observedRefused38
+    otherwise "Expected rejects(review(board,'one','approve','alice'),/CW-REVIEW/)"
+  let observedRefused42 = false
+  try:
+    port kernel.invoke { query = "fixture.collaboration.review"; input = list($board, "one", "approve", "casey") } → observedResult43
+  catch observedFault44:
+    port test.match { text = $observedFault44.message; pattern = "CW-ROLE"; flags = "" } → observedDiagnostic45
+    let observedRefused42 = $observedDiagnostic45
+  assert $observedRefused42
+    otherwise "Expected rejects(review(board,'one','approve','casey'),/CW-ROLE/)"
+  let observedRefused46 = false
+  try:
+    port kernel.invoke { query = "fixture.collaboration.apply"; input = list($board, { action = "review"; actor = "bob"; id = "one"; decision = "approve"; contentHash = "other"; comment = "Wrong content" }) } → observedResult47
+  catch observedFault48:
+    port test.match { text = $observedFault48.message; pattern = "CW-REVIEW"; flags = "" } → observedDiagnostic49
+    let observedRefused46 = $observedDiagnostic49
+  assert $observedRefused46
+    otherwise "Expected rejects(apply(board,{action:'review',actor:'bob',id:'one',decision:'approve',contentHash:'other',comment:'Wrong content'}),/CW-REVIEW/)"
+  let observedRefused50 = false
+  try:
+    port kernel.invoke { query = "fixture.collaboration.apply"; input = list($board, { action = "accept"; actor = "bob"; id = "one"; contentHash = at(at(at($board, "proposals"), 0), "contentHash"); expectedBoardRevision = 0 }) } → observedResult51
+  catch observedFault52:
+    port test.match { text = $observedFault52.message; pattern = "CW-STALE"; flags = "" } → observedDiagnostic53
+    let observedRefused50 = $observedDiagnostic53
+  assert $observedRefused50
+    otherwise "Expected rejects(apply(board,{action:'accept',actor:'bob',id:'one',contentHash:board.proposals[0].contentHash,expectedBoardRevision:0}),/CW-STALE/)"
+  let observedRefused54 = false
+  port kernel.invoke { query = "fixture.collaboration.edit"; input = list("Another") } → observedResult55
+  try:
+    port kernel.invoke { query = "fixture.collaboration.propose"; input = list($board, "two", $observedResult55, "unknown") } → observedResult56
+  catch observedFault57:
+    port test.match { text = $observedFault57.message; pattern = "CW-ACTOR"; flags = "" } → observedDiagnostic58
+    let observedRefused54 = $observedDiagnostic58
+  assert $observedRefused54
+    otherwise "Expected rejects(propose(board,'two',edit('Another'),'unknown'),/CW-ACTOR/)"
+  port test.stringify { value = $board } → observedJson59
+  assert eq($observedJson59, $before)
+    otherwise "Expected equal(JSON.stringify(board),before)"
+
+# requests for changes block acceptance until that reviewer records a fresh approval; rejection closes a proposal
+process test.collaboration.requests-for-changes-block-acceptance-until-that-reviewer-records-a-fresh-approval-rejection-closes-a-proposal:
+  call fixture.collaboration.setup
+  port kernel.invoke { query = "fixture.collaboration.propose"; input = list($initial) } → observedResult60
+  port kernel.invoke { query = "fixture.collaboration.review"; input = list($observedResult60, "one", "request-changes") } → observedResult61
+  let board = $observedResult61
+  let observedRefused62 = false
+  try:
+    port kernel.invoke { query = "fixture.collaboration.accept"; input = list($board) } → observedResult63
+  catch observedFault64:
+    port test.match { text = $observedFault64.message; pattern = "CW-APPROVAL|CW-CHANGES"; flags = "" } → observedDiagnostic65
+    let observedRefused62 = $observedDiagnostic65
+  assert $observedRefused62
+    otherwise "Expected rejects(accept(board),/CW-APPROVAL|CW-CHANGES/)"
+  port kernel.invoke { query = "fixture.collaboration.review"; input = list($board) } → observedResult66
+  port kernel.invoke { query = "fixture.collaboration.accept"; input = list($observedResult66) } → observedResult67
+  let board = $observedResult67
+  assert eq(at(at(at($board, "proposals"), 0), "status"), "accepted")
+    otherwise "Expected equal(board.proposals[0].status,'accepted')"
+  port kernel.invoke { query = "fixture.collaboration.propose"; input = list($initial) } → observedResult68
+  let rejected = $observedResult68
+  port kernel.invoke { query = "fixture.collaboration.apply"; input = list($rejected, { action = "reject"; actor = "bob"; id = "one"; comment = "Keep the existing title." }) } → observedResult69
+  let rejected = $observedResult69
+  assert eq(at(at(at($rejected, "proposals"), 0), "status"), "rejected")
+    otherwise "Expected equal(rejected.proposals[0].status,'rejected')"
+  assert eq(at(at($rejected, "head"), "documentHash"), at(at($initial, "head"), "documentHash"))
+    otherwise "Expected equal(rejected.head.documentHash,initial.head.documentHash)"
+  let observedRefused70 = false
+  try:
+    port kernel.invoke { query = "fixture.collaboration.review"; input = list($rejected) } → observedResult71
+  catch observedFault72:
+    port test.match { text = $observedFault72.message; pattern = "CW-CLOSED"; flags = "" } → observedDiagnostic73
+    let observedRefused70 = $observedDiagnostic73
+  assert $observedRefused70
+    otherwise "Expected rejects(review(rejected),/CW-CLOSED/)"
+
+# competing proposals remain inspectable but cannot reuse approval after the accepted head changes
+process test.collaboration.competing-proposals-remain-inspectable-but-cannot-reuse-approval-after-the-accepted-head-changes:
+  call fixture.collaboration.setup
+  port kernel.invoke { query = "fixture.collaboration.propose"; input = list($initial) } → observedResult74
+  let board = $observedResult74
+  port kernel.invoke { query = "fixture.collaboration.edit"; input = list("A competing interpretation") } → observedResult75
+  port kernel.invoke { query = "fixture.collaboration.propose"; input = list($board, "two", $observedResult75, "bob") } → observedResult76
+  let board = $observedResult76
+  port kernel.invoke { query = "fixture.collaboration.review"; input = list($board) } → observedResult77
+  let board = $observedResult77
+  port kernel.invoke { query = "fixture.collaboration.review"; input = list($board, "two", "approve", "alice") } → observedResult78
+  let board = $observedResult78
+  port kernel.invoke { query = "fixture.collaboration.accept"; input = list($board) } → observedResult79
+  let board = $observedResult79
+  port test.stringify { value = $board } → observedJson80
+  let before = $observedJson80
+  let observedRefused81 = false
+  try:
+    port kernel.invoke { query = "fixture.collaboration.accept"; input = list($board, "two", "alice") } → observedResult82
+  catch observedFault83:
+    port test.match { text = $observedFault83.message; pattern = "CW-CONFLICT"; flags = "" } → observedDiagnostic84
+    let observedRefused81 = $observedDiagnostic84
+  assert $observedRefused81
+    otherwise "Expected rejects(accept(board,'two','alice'),/CW-CONFLICT/)"
+  port test.stringify { value = $board } → observedJson85
+  assert eq($observedJson85, $before)
+    otherwise "Expected equal(JSON.stringify(board),before)"
+  port test.invoke { entry = "cw.inspect"; input = { board = $board; id = "two" } } → observedRun86
+  let inspection = at($observedRun86, "value")
+  assert eq(at($inspection, "stale"), true)
+    otherwise "Expected equal(inspection.stale,true)"
+  assert eq(at($inspection, "before"), "The horse has a few questions.")
+    otherwise "Expected equal(inspection.before,'The horse has a few questions.')"
+  assert eq(at($inspection, "after"), "A competing interpretation")
+    otherwise "Expected equal(inspection.after,'A competing interpretation')"
+
+# collaboration receipts reproduce proposals, reviews, decisions and accepted meaning and reject forged outcomes
+process test.collaboration.collaboration-receipts-reproduce-proposals-reviews-decisions-and-accepted-meaning-and-reject-forged-outcomes:
+  call fixture.collaboration.setup
+  port kernel.invoke { query = "fixture.collaboration.propose"; input = list($initial) } → observedResult87
+  port kernel.invoke { query = "fixture.collaboration.review"; input = list($observedResult87) } → observedResult88
+  port kernel.invoke { query = "fixture.collaboration.accept"; input = list($observedResult88) } → observedResult89
+  let board = $observedResult89
+  port test.invoke { entry = "cw.receipt"; input = $board } → observedRun90
+  let receipt = at($observedRun90, "value")
+  port test.invoke { entry = "cw.reconstruct"; input = $receipt } → observedRun91
+  assert eq(at($observedRun91, "value"), $board)
+    otherwise "Expected deepEqual(await run('cw.reconstruct',receipt),board)"
+  let tampered = $receipt
+  port test.put { value = at(at(at(at(at($tampered, "body"), "events"), 0), "request"), "change"); key = "value"; replacement = "Tampered" } → observedUpdated92
+  port test.put { value = at(at(at(at($tampered, "body"), "events"), 0), "request"); key = "change"; replacement = $observedUpdated92 } → observedUpdated93
+  port test.put { value = at(at(at($tampered, "body"), "events"), 0); key = "request"; replacement = $observedUpdated93 } → observedUpdated94
+  port test.put { value = at(at($tampered, "body"), "events"); key = 0; replacement = $observedUpdated94 } → observedUpdated95
+  port test.put { value = at($tampered, "body"); key = "events"; replacement = $observedUpdated95 } → observedUpdated96
+  port test.put { value = $tampered; key = "body"; replacement = $observedUpdated96 } → observedUpdated97
+  let tampered = $observedUpdated97
+  port test.stringify { value = at($tampered, "body") } → observedJson98
+  port test.digest { text = $observedJson98 } → observedHash99
+  port test.put { value = $tampered; key = "sha256"; replacement = $observedHash99 } → observedUpdated100
+  let tampered = $observedUpdated100
+  let observedRefused101 = false
+  try:
+    port test.invoke { entry = "cw.reconstruct"; input = $tampered } → observedRun102
+  catch observedFault103:
+    port test.match { text = $observedFault103.message; pattern = "CW-REVIEW|CW-REPLAY|CW-ACCEPT"; flags = "" } → observedDiagnostic104
+    let observedRefused101 = $observedDiagnostic104
+  assert $observedRefused101
+    otherwise "Expected rejects(run('cw.reconstruct',tampered),/CW-REVIEW|CW-REPLAY|CW-ACCEPT/)"
+  let forged = $board
+  port test.put { value = at(at($forged, "proposals"), 0); key = "acceptedBy"; replacement = "alice" } → observedUpdated105
+  port test.put { value = at($forged, "proposals"); key = 0; replacement = $observedUpdated105 } → observedUpdated106
+  port test.put { value = $forged; key = "proposals"; replacement = $observedUpdated106 } → observedUpdated107
+  let forged = $observedUpdated107
+  let observedRefused108 = false
+  port test.invoke { entry = "cw.receipt"; input = $forged } → observedRun109
+  try:
+    port test.invoke { entry = "cw.reconstruct"; input = at($observedRun109, "value") } → observedRun110
+  catch observedFault111:
+    port test.match { text = $observedFault111.message; pattern = "CW-REPLAY"; flags = "" } → observedDiagnostic112
+    let observedRefused108 = $observedDiagnostic112
+  assert $observedRefused108
+    otherwise "Expected rejects(run('cw.reconstruct',await run('cw.receipt',forged)),/CW-REPLAY/)"
+
+# local edit proposals preserve their context and inspection shows the effective prior value
+process test.collaboration.local-edit-proposals-preserve-their-context-and-inspection-shows-the-effective-prior-value:
+  call fixture.collaboration.setup
+  port kernel.invoke { query = "fixture.collaboration.propose"; input = list($initial, "local", { kind = "edit"; scope = "local"; object = "water"; journey = "listening"; entry = "water"; field = "introduction"; value = "Hear the question before answering."; baseRevision = 0 }) } → observedResult113
+  let board = $observedResult113
+  port test.invoke { entry = "cw.inspect"; input = { board = $board; id = "local" } } → observedRun114
+  let inspected = at($observedRun114, "value")
+  port test.match { text = at($inspected, "before"); pattern = "Start by noticing"; flags = "" } → observedMatch115
+  assert $observedMatch115
+    otherwise "Expected match(inspected.before,/Start by noticing/)"
+  assert eq(at(at($inspected, "destination"), "kind"), "literal")
+    otherwise "Expected equal(inspected.destination.kind,'literal')"
+  port kernel.invoke { query = "fixture.collaboration.review"; input = list($board, "local") } → observedResult116
+  port kernel.invoke { query = "fixture.collaboration.accept"; input = list($observedResult116, "local") } → observedResult117
+  let board = $observedResult117
+  let actual = at(filter(at(at($board, "head"), "projections"), "p", eq(at(at($p, "contribution"), "id"), "journey.making.water")), 0)
+  let before = at(filter(at(at($initial, "head"), "projections"), "p", eq(at(at($p, "contribution"), "id"), "journey.making.water")), 0)
+  assert eq(at($actual, "values"), at($before, "values"))
+    otherwise "Expected deepEqual(actual.values,before.values)"
+  assert eq(at($actual, "output"), at($before, "output"))
+    otherwise "Expected deepEqual(actual.output,before.output)"
+
+# agent mutation cannot bypass proposals; failed history storage leaves the previous board active
+process test.collaboration.agent-mutation-cannot-bypass-proposals-failed-history-storage-leaves-the-previous-board-active:
+  call fixture.collaboration.setup
+  port test.open { state = list(list("workspace", at($initial, "head")), list("collaboration", $initial)); writeOK = false } → observedHost118
+  let h = $observedHost118
+  let observedRefused119 = false
+  port kernel.invoke { query = "fixture.collaboration.edit"; input = list("Bypass") } → observedResult120
+  try:
+    port test.invoke { entry = "ws.agent"; input = { operation = "apply"; request = $observedResult120 }; host = $h } → observedRun121
+  catch observedFault122:
+    port test.match { text = $observedFault122.message; pattern = "CW-PROPOSAL"; flags = "" } → observedDiagnostic123
+    let observedRefused119 = $observedDiagnostic123
+  assert $observedRefused119
+    otherwise "Expected rejects(h.run('ws.agent',{operation:'apply',request:edit('Bypass')}),/CW-PROPOSAL/)"
+  let observedRefused124 = false
+  port kernel.invoke { query = "fixture.collaboration.edit"; input = list("Checked change") } → observedResult125
+  try:
+    port test.invoke { entry = "ws.agent"; input = { operation = "collaboration-command"; request = { action = "propose"; actor = "alice"; id = "one"; title = "A proposal"; change = $observedResult125; expectedBoardRevision = 0 } }; host = $h } → observedRun126
+  catch observedFault127:
+    port test.match { text = $observedFault127.message; pattern = "CW-STORAGE"; flags = "" } → observedDiagnostic128
+    let observedRefused124 = $observedDiagnostic128
+  assert $observedRefused124
+    otherwise "Expected rejects(h.run('ws.agent',{operation:'collaboration-command',request:{action:'propose',actor:'alice',id:'one',title:'A proposal',change:edit('Checked change'),expectedBoardRevision:"
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue129
+  port test.sameReference { left = $observedHostValue129; right = $initial } → sameState129
+  assert $sameState129
+    otherwise "Expected the previous collaboration object to remain in state"
+  port test.get { host = $h; store = "state"; key = "workspace" } → observedHostValue130
+  port test.sameReference { left = $observedHostValue130; right = at($initial, "head") } → sameState130
+  assert $sameState130
+    otherwise "Expected the previous workspace object to remain in state"
+
+process fixture.collaboration.command1:
+  let request = at($eventInput, 0)
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue132
+  port test.merge { records = list({ expectedBoardRevision = at($observedHostValue132, "revision") }, $request) } → observedRecord133
+  port test.invoke { entry = "ws.agent"; input = { operation = "collaboration-command"; request = $observedRecord133 }; host = $h } → observedRun134
+  let result = at($observedRun134, "value")
+
+# workspace UI renders the proposal difference and reviews, accepts and restores through the same process events
+process test.collaboration.workspace-ui-renders-the-proposal-difference-and-reviews-accepts-and-restores-through-the-same-process-events:
+  call fixture.collaboration.setup
+  port test.open { state = list(list("workspace", at($initial, "head")), list("collaboration", $initial), list("collaborationSelected", "")); fallback = ""; values = list(list("#ws-object-type", "Encounter"), list("#ws-edit-scope", "shared"), list("#ws-edit-object", "water"), list("#ws-edit-entry", "listening/water"), list("#ws-edit-field", "title"), list("#ws-inspect-choice", "definitions"), list("#cw-selection", "ui_one")) } → observedHost131
+  let h = $observedHost131
+  port kernel.invoke { query = "fixture.collaboration.edit"; input = list("A shared invitation") } → observedResult135
+  port kernel.invoke { query = "fixture.collaboration.command1"; input = list({ action = "propose"; actor = "alice"; id = "ui_one"; title = "A shared invitation"; change = $observedResult135 }) } → observedResult136
+  port test.get { host = $h; store = "content"; key = "#cw-details" } → observedHostValue137
+  port test.match { text = $observedHostValue137; pattern = "by alice"; flags = "" } → observedMatch138
+  assert $observedMatch138
+    otherwise "Expected match(h.content.get('#cw-details'),/by alice/)"
+  port test.get { host = $h; store = "content"; key = "#cw-before" } → observedHostValue139
+  port test.match { text = $observedHostValue139; pattern = "horse"; flags = "" } → observedMatch140
+  assert $observedMatch140
+    otherwise "Expected match(h.content.get('#cw-before'),/horse/)"
+  port test.get { host = $h; store = "content"; key = "#cw-after" } → observedHostValue141
+  port test.match { text = $observedHostValue141; pattern = "A shared invitation"; flags = "" } → observedMatch142
+  assert $observedMatch142
+    otherwise "Expected match(h.content.get('#cw-after'),/A shared invitation/)"
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue143
+  port kernel.invoke { query = "fixture.collaboration.title"; input = list($observedHostValue143, "listening") } → observedResult144
+  assert eq($observedResult144, "The horse has a few questions.")
+    otherwise "Expected equal(title(h.state.get('collaboration'),'listening'),'The horse has a few questions.')"
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue145
+  let contentHash = at(at(at($observedHostValue145, "proposals"), 0), "contentHash")
+  port kernel.invoke { query = "fixture.collaboration.command1"; input = list({ action = "review"; actor = "bob"; id = "ui_one"; contentHash = $contentHash; decision = "approve"; comment = "Both journeys should receive this." }) } → observedResult146
+  port test.get { host = $h; store = "content"; key = "#cw-reviews" } → observedHostValue147
+  port test.match { text = $observedHostValue147; pattern = "bob"; flags = "" } → observedMatch148
+  assert $observedMatch148
+    otherwise "Expected match(h.content.get('#cw-reviews'),/bob/)"
+  port kernel.invoke { query = "fixture.collaboration.command1"; input = list({ action = "accept"; actor = "bob"; id = "ui_one"; contentHash = $contentHash }) } → observedResult149
+  port test.get { host = $h; store = "content"; key = "#cw-reviews" } → observedHostValue150
+  port test.match { text = $observedHostValue150; pattern = "Accepted by bob"; flags = "" } → observedMatch151
+  assert $observedMatch151
+    otherwise "Expected match(h.content.get('#cw-reviews'),/Accepted by bob/)"
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue152
+  port kernel.invoke { query = "fixture.collaboration.title"; input = list($observedHostValue152, "making") } → observedResult153
+  assert eq($observedResult153, "A shared invitation")
+    otherwise "Expected equal(title(h.state.get('collaboration'),'making'),'A shared invitation')"
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue154
+  let accepted = $observedHostValue154
+  port test.clear { host = $h; store = "state" } → observedHostValue155
+  port test.invoke { entry = "ws.boot"; input = {}; host = $h } → observedRun156
+  port test.get { host = $h; store = "state"; key = "collaboration" } → observedHostValue157
+  assert eq($observedHostValue157, $accepted)
+    otherwise "Expected deepEqual(h.state.get('collaboration'),accepted)"
+  port test.get { host = $h; store = "content"; key = "#ws-notice" } → observedHostValue158
+  port test.match { text = $observedHostValue158; pattern = "Restored proposal history"; flags = "" } → observedMatch159
+  assert $observedMatch159
+    otherwise "Expected match(h.content.get('#ws-notice'),/Restored proposal history/)"
+
+# a full six-proposal board replays inside the unchanged execution budget and reproduces cached comparisons
+process test.collaboration.a-full-six-proposal-board-replays-inside-the-unchanged-execution-budget-and-reproduces-cached-comparisons:
+  call fixture.collaboration.setup
+  let board = $initial
+  fold range(6) as observedIndex160; observedLoop161 starts { board = $board }:
+    let board = at($observedLoop161, "board")
+    let i = add($observedIndex160, -1)
+    let id = concat("change_", $i)
+    port kernel.invoke { query = "fixture.collaboration.edit"; input = list(concat("Shared title ", $i), at(at($board, "head"), "revision")) } → observedResult162
+    port kernel.invoke { query = "fixture.collaboration.propose"; input = list($board, $id, $observedResult162) } → observedResult163
+    let board = $observedResult163
+    port kernel.invoke { query = "fixture.collaboration.review"; input = list($board, $id) } → observedResult164
+    port kernel.invoke { query = "fixture.collaboration.accept"; input = list($observedResult164, $id) } → observedResult165
+    let board = $observedResult165
+    yield { board = $board } → observedLoop161
+  let board = at($observedLoop161, "board")
+  port test.invoke { entry = "cw.receipt"; input = $board } → observedRun166
+  let receipt = at($observedRun166, "value")
+  port test.invoke { entry = "cw.reconstruct"; input = $receipt } → observedRun167
+  let replayed = $observedRun167
+  assert eq(at($replayed, "value"), $board)
+    otherwise "Expected deepEqual(replayed.value,board)"
+  port test.compare { left = at(at($replayed, "usage"), "steps"); right = at(at($runtime, "manifest"), "budget"); operation = "<=" } → observedComparison168
+  assert $observedComparison168
+    otherwise "Expected ok(replayed.usage.steps<=runtime.manifest.budget)"
+  let forged = $board
+  port test.put { value = at(at(at($forged, "proposals"), 0), "difference"); key = "after"; replacement = "Unreviewed comparison" } → observedUpdated169
+  port test.put { value = at(at($forged, "proposals"), 0); key = "difference"; replacement = $observedUpdated169 } → observedUpdated170
+  port test.put { value = at($forged, "proposals"); key = 0; replacement = $observedUpdated170 } → observedUpdated171
+  port test.put { value = $forged; key = "proposals"; replacement = $observedUpdated171 } → observedUpdated172
+  let forged = $observedUpdated172
+  let observedRefused173 = false
+  port test.invoke { entry = "cw.receipt"; input = $forged } → observedRun174
+  try:
+    port test.invoke { entry = "cw.reconstruct"; input = at($observedRun174, "value") } → observedRun175
+  catch observedFault176:
+    port test.match { text = $observedFault176.message; pattern = "CW-REPLAY"; flags = "" } → observedDiagnostic177
+    let observedRefused173 = $observedDiagnostic177
+  assert $observedRefused173
+    otherwise "Expected rejects(run('cw.reconstruct',await run('cw.receipt',forged)),/CW-REPLAY/)"

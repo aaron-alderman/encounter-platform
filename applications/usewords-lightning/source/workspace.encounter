@@ -1,0 +1,117 @@
+# Authoritative Usewords workspace processes.
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+# Workspace authoring and construct definitions.
+
+process ws.validate:
+  let doc = $eventInput
+  port kernel.invoke { query = "s01.portable"; input = { value = $doc; ancestors = list() } } → portable
+  assert $portable
+    otherwise "WS-DOCUMENT: Finite own-data is required."
+  port json.stringify { value = $doc; space = 0 } → encodedDocument
+  port number.calculate { operation = "lessEqual"; values = list(count($encodedDocument), 140000) } → bounded
+  assert $bounded
+    otherwise "WS-DOCUMENT: This workspace source exceeds the first profile’s size limit."
+  assert eq($doc.protocol, "usewords/workspace/1")
+    otherwise "WS-DOCUMENT: Unsupported workspace document."
+  each list($doc.definitions, $doc.objects, $doc.journeys) as items:
+    assert isArray($items)
+      otherwise "WS-DOCUMENT: Definitions, objects and journeys must be lists."
+  port number.calculate { operation = "lessEqual"; values = list(count($doc.definitions), 6) } → bounded
+  assert $bounded
+    otherwise "WS-LIMIT: At most six constructs."
+  port number.calculate { operation = "lessEqual"; values = list(count($doc.objects), 8) } → bounded
+  assert $bounded
+    otherwise "WS-LIMIT: At most eight objects in this first workspace profile."
+  port number.calculate { operation = "lessEqual"; values = list(count($doc.journeys), 4) } → bounded
+  assert $bounded
+    otherwise "WS-LIMIT: At most four journeys."
+  fold $doc.definitions as source; schemas starts list():
+    port kernel.invoke { query = "ws.definition"; input = $source } → schema
+    assert eq(count(filter($schemas, "s", eq($s.name, $schema.name))), 0)
+      otherwise "WS-LANGUAGE: Construct names must be unique."
+    yield append($schemas, list($schema)) → schemas
+  each $doc.objects as object:
+    port kernel.invoke { query = "ws.id"; input = $object.id } → valid
+    assert eq(count(filter($doc.objects, "o", eq($o.id, $object.id))), 1)
+      otherwise "WS-OBJECT: Object identifiers must be unique."
+    let matches = filter($schemas, "s", eq($s.name, $object.type))
+    assert eq(count($matches), 1)
+      otherwise "WS-TYPE: The object’s construct is not defined."
+    let schema = at($matches, 0)
+    port record.entries { value = $object.values } → values
+    assert eq(count($values), count($schema.fields))
+      otherwise "WS-TYPE: Supply exactly the construct’s declared fields."
+    each $schema.fields as field:
+      port kernel.invoke { query = "ws.fieldCheck"; input = { field = $field; value = at($object.values, $field.name) } } → valid
+  each $doc.journeys as journey:
+    port kernel.invoke { query = "ws.id"; input = $journey.id } → valid
+    port value.describe { value = $journey.name } → valueKind
+    assert eq($valueKind.type, "string")
+      otherwise "WS-TEXT: A text value is required."
+    port number.calculate { operation = "lessEqual"; values = list(count($journey.name), 100) } → bounded
+    assert $bounded
+      otherwise "WS-LIMIT: Text exceeds this field’s limit."
+    port text.trim { value = $journey.name } → trimmed
+    assert not(eq($trimmed, ""))
+      otherwise "WS-REQUIRED: This field cannot be empty."
+    assert eq(count(filter($doc.journeys, "j", eq($j.id, $journey.id))), 1)
+      otherwise "WS-JOURNEY: Journey identifiers must be unique."
+    assert isArray($journey.entries)
+      otherwise "WS-JOURNEY: Entries must be a list."
+    port number.calculate { operation = "lessEqual"; values = list(count($journey.entries), 6) } → bounded
+    assert $bounded
+      otherwise "WS-LIMIT: At most six entries in each journey."
+    each $journey.entries as entry:
+      port kernel.invoke { query = "ws.id"; input = $entry.id } → valid
+      assert eq(count(filter($journey.entries, "e", eq($e.id, $entry.id))), 1)
+        otherwise "WS-JOURNEY: Entry identifiers must be unique within their journey."
+      let objects = filter($doc.objects, "o", eq($o.id, $entry.object))
+      assert eq(count($objects), 1)
+        otherwise "WS-REFERENCE: The journey entry must refer to one existing object."
+      let object = at($objects, 0)
+      let schema = at(filter($schemas, "s", eq($s.name, $object.type)), 0)
+      port record.entries { value = $entry.overrides } → overrides
+      each $overrides as override:
+        let fields = filter($schema.fields, "f", eq($f.name, at($override, 0)))
+        assert eq(count($fields), 1)
+          otherwise "WS-FIELD: Unknown local field."
+        let field = at($fields, 0)
+        assert eq($field.scope, "local")
+          otherwise "WS-SCOPE: Shared fields cannot be overridden in a journey."
+        port kernel.invoke { query = "ws.fieldCheck"; input = { field = $field; value = at($override, 1) } } → valid
+  port record.entries { value = $doc } → documentFields
+  when not(eq(count(filter($documentFields, "pair", eq(at($pair, 0), "matter"))), 0)):
+    port kernel.invoke { query = "mw.validate"; input = $doc.matter } → valid
+  let result = $schemas
+
+process uw.cli:
+  let request = $eventInput
+  assert includes(list("replay", "propose", "workspace-replay", "workspace-propose", "collaboration-replay", "matter-brief", "matter-check-suggestions", "matter-verify-model-run", "matter-packet-check"), $request.action)
+    otherwise "WS-CLI: Choose replay, propose, workspace-replay or workspace-propose."
+  when eq($request.action, "replay"):
+    port kernel.invoke { query = "uw.replay"; input = $request.input } → result
+  when eq($request.action, "propose"):
+    port kernel.invoke { query = "uw.propose"; input = $request.input } → result
+  when eq($request.action, "workspace-replay"):
+    port kernel.invoke { query = "ws.reconstruct"; input = $request.input } → state
+    let result = { ok = true; revision = $state.revision; documentHash = $state.documentHash; projectionHash = $state.projectionHash; document = $state.document }
+  when eq($request.action, "workspace-propose"):
+    port kernel.invoke { query = "ws.propose"; input = $request.input } → result
+  when eq($request.action, "matter-brief"):
+    port kernel.invoke { query = "mw.cliBrief"; input = $request.input } → result
+  when eq($request.action, "matter-packet-check"):
+    port kernel.invoke { query = "pc.checkPacket"; input = $request.input } → result
+  when eq($request.action, "matter-check-suggestions"):
+    port kernel.invoke { query = "mw.checkSuggestions"; input = $request.input } → result
+  when eq($request.action, "matter-verify-model-run"):
+    port kernel.invoke { query = "mw.verifyModelRun"; input = $request.input } → result
+  when eq($request.action, "collaboration-replay"):
+    port kernel.invoke { query = "cw.reconstruct"; input = $request.input } → board
+    let result = { ok = true; revision = $board.revision; documentHash = $board.head.documentHash; proposals = $board.proposals; document = $board.head.document }
+
+# Local collaborative proposal protocol. Actors are illustrative personas, not
+# authenticated identities. All state changes are replayable process events.
+
+# Derived during proposal checking and reproduced during history replay.

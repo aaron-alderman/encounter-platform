@@ -1,0 +1,117 @@
+{
+  "protocol": "usewords/workspace/1",
+  "definitions": [
+    "construct Encounter\nfield title text shared required max 160\nfield body text shared required max 4000\nfield introduction text local optional max 600\nheading title\nparagraph introduction\nparagraph body"
+  ],
+  "objects": [],
+  "journeys": [],
+  "matter": {
+    "id": "matter_1",
+    "title": "A shared workshop space",
+    "description": "A community group wants to open a shared workshop. Some members prioritise low fees; others want enough paid staff to make opening hours reliable. We do not yet know likely usage or operating costs. We want to understand the different priorities and possibilities before making a decision.",
+    "status": "open",
+    "items": [
+      {
+        "item": {
+          "id": "balance",
+          "kind": "issue",
+          "title": "How should affordable access and reliable staffing be balanced?",
+          "body": "Costs, usage and staffing needs remain unknown. We can record different priorities without choosing an arrangement.",
+          "issue": null,
+          "voice": null
+        },
+        "origin": {
+          "kind": "participant",
+          "label": "alice",
+          "briefHash": null,
+          "sourceHash": null
+        },
+        "standing": "open question"
+      },
+      {
+        "item": {
+          "id": "affordable_access",
+          "kind": "position",
+          "title": "Prioritise low fees and broad participation",
+          "body": "My priority is keeping participation affordable. I do not yet accept that paid staffing should take priority over low fees.",
+          "issue": "balance",
+          "voice": "Alice’s proposed access position"
+        },
+        "origin": {
+          "kind": "participant",
+          "label": "alice",
+          "briefHash": null,
+          "sourceHash": null
+        },
+        "standing": "unconfirmed position"
+      },
+      {
+        "item": {
+          "id": "reliable_hours",
+          "kind": "position",
+          "title": "Prioritise dependable opening hours",
+          "body": "My priority is predictable access supported by reliable staffing. I do not yet accept that very low fees can sustain it.",
+          "issue": "balance",
+          "voice": "Bob’s proposed reliability position"
+        },
+        "origin": {
+          "kind": "participant",
+          "label": "bob",
+          "briefHash": null,
+          "sourceHash": null
+        },
+        "standing": "unconfirmed position"
+      },
+      {
+        "item": {
+          "id": "pilot",
+          "kind": "option",
+          "title": "Consider a limited trial before a long-term commitment",
+          "body": "One possible approach is a bounded trial comparing fee and staffing arrangements. Neither party has agreed to run it.",
+          "issue": "balance",
+          "voice": null
+        },
+        "origin": {
+          "kind": "participant",
+          "label": "alice",
+          "briefHash": null,
+          "sourceHash": null
+        },
+        "standing": "unaccepted approach"
+      }
+    ],
+    "management": {
+      "purpose": "",
+      "scope": "",
+      "reason": "",
+      "outcome": null,
+      "participants": [
+        {
+          "id": "alice",
+          "role": "coordinator",
+          "capacity": "Initial coordinator (simulated)"
+        },
+        {
+          "id": "bob",
+          "role": "contributor",
+          "capacity": "Participant (simulated)"
+        },
+        {
+          "id": "casey",
+          "role": "observer",
+          "capacity": "Observer (simulated)"
+        }
+      ],
+      "requests": [
+        {
+          "id": "cost_evidence",
+          "title": "Which operating costs and usage assumptions still need evidence?",
+          "assignee": "bob",
+          "status": "open",
+          "response": ""
+        }
+      ],
+      "links": []
+    }
+  }
+}

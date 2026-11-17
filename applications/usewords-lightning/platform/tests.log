@@ -1,0 +1,41 @@
+✔ one real encounter is source-bound once and appears in two journeys with different introductions (863.9452ms)
+✔ one shared edit propagates to both journeys while preserving both local introductions and paragraphs (3378.3032ms)
+✔ local edits in either journey change only that introduction, through its declared literal inverse (6883.0068ms)
+✔ shared and journey-local edits commute for final meaning, with different attributable histories (8788.5577ms)
+✔ words carry an explicit journey target; absent, unknown, stale and invalid local requests refuse (1969.5715ms)
+✔ two-journey acceptance replays both destinations; tampering with the local target is detected (41632.3724ms)
+✔ Usewords has one authoritative Encounter owner and a generated JSON representation (22.1334ms)
+✔ compiler origins identify exact authored UTF-16 ranges, including every statement and process definition (263.4362ms)
+✔ shared Worldwright presentation preserves exact source text, roles, line numbers and hash binding (7783.3135ms)
+✔ unknown syntax, unsupported operators and unresolved process links refuse through the retained compiler (1068.1206ms)
+✔ language catalogue declares distinct dialects without granting new execution authority (0.7858ms)
+✔ canonical reconstruction retains the real Encounter identity, paragraphs and three representations (672.8611ms)
+✔ words select explicit semantic edit kinds and refuse ambiguity or unsupported requests (4.9794ms)
+✔ shared and local edits use the retained inverse routes and preserve their distinct source owners (4644.4585ms)
+✔ shared and local edit order commutes for final inputs and projections in this declared slice (6635.6171ms)
+✔ stale, unsupported, empty, mistyped, oversized and no-op edits refuse without changing the predecessor (2966.5501ms)
+✔ inspection hashes the exact current text, retaining compiler virtual filenames and edit destinations (2090.0209ms)
+✔ acceptance reproduces on a fresh runtime and CLI; repeat acceptance produces identical bytes (38179.4294ms)
+✔ tampering, changed process identity, invalid destinations and forged draft acceptance are refused (9029.2478ms)
+✔ UI executes words, source inspection, acceptance, export and restore through the same algebra (17522.6058ms)
+✔ failed storage and corrupted restore do not claim durable acceptance or replace accepted state (2504.4577ms)
+✔ native mechanisms are byte-pinned and publication reproducibly derives from the owned source closure (14998.0402ms)
+✔ proposed platform policy prepares owner-scoped replayed acceptance without claiming an effect (805.1765ms)
+✔ proposed platform policy denies missing identity, cross-owner scope and stale heads (5.0335ms)
+✔ proposed publication derives only the selected accepted journey and excludes later drafts (673.2643ms)
+✔ saving a checked draft preserves the accepted pointer and does not prepare publication (367.9595ms)
+✔ a user-defined construct becomes checked Encounter/REL, an object and a journey entry (2272.2004ms)
+✔ workspace shared/local edits use ec.patch and preserve the regeneration correspondence (2843.5691ms)
+✔ invalid or incompatible declarations, missing references, scope mistakes and stale requests refuse (361.2099ms)
+✔ required and maximum constraints are user-defined and values never become host code (1022.3296ms)
+✔ workspace acceptance replays the source segment, detects forgery and supports an explicit new basis (8467.4879ms)
+✔ incomplete definition drafts are saved independently of adoption (1.1996ms)
+✔ an empty authoring workspace can adopt a construct before its first executable object exists (366.8113ms)
+ℹ tests 33
+ℹ suites 0
+ℹ pass 33
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 115792.5039

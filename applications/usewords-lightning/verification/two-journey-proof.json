@@ -1,0 +1,158 @@
+{
+  "protocol": "usewords/two-journey-proof/1",
+  "programHash": "0eb5534137cb04bf5dd591e02ba1d9e0779fa6a910dfd64a8c06084ce9671de9",
+  "source": {
+    "repository": "aaron-alderman/aaronalderman-com",
+    "file": "source/expedition.rel",
+    "selectedPredicates": [
+      "title",
+      "paragraph"
+    ],
+    "originalTitle": "The horse has a few questions.",
+    "publicRoute": "https://aaronalderman.com/places/water.html",
+    "snapshot": "source/reference/water.rel",
+    "sha256": "695b4067e51ffdc265de7f72c9c5b653ab2f40b4762d896b325e2e5f3663fe86",
+    "scope": "Source-bounded reconstruction of the two short encounter paragraphs. The two journey compositions and introductions are new Usewords authored material.",
+    "upstreamGitBlob": "ae83e248c3e53e1ccfa46c9c9f2cf936dd810233",
+    "upstreamObservedLines": {
+      "start": 405,
+      "end": 430
+    }
+  },
+  "before": [
+    {
+      "journey": "journey.Listening",
+      "subject": "place.water",
+      "values": {
+        "J.subject": "place.water",
+        "J.title": "The horse has a few questions.",
+        "J.paragraphs": [
+          "The guide points at the water. The horse looks down. There is already a horse in there, and it seems to have strong opinions about the guide. Nobody mentioned a committee.",
+          "Perhaps the next explanation can wait. What is the horse being invited into? The guide can look at the reflection too. You can read the little fable your own way—or just enjoy a horse declining a well-prepared presentation."
+        ],
+        "J.introduction": "Start by noticing what the other person is encountering, before offering your explanation.",
+        "J.route": "encounter-story.html"
+      }
+    },
+    {
+      "journey": "journey.Making",
+      "subject": "place.water",
+      "values": {
+        "J.subject": "place.water",
+        "J.title": "The horse has a few questions.",
+        "J.paragraphs": [
+          "The guide points at the water. The horse looks down. There is already a horse in there, and it seems to have strong opinions about the guide. Nobody mentioned a committee.",
+          "Perhaps the next explanation can wait. What is the horse being invited into? The guide can look at the reflection too. You can read the little fable your own way—or just enjoy a horse declining a well-prepared presentation."
+        ],
+        "J.introduction": "Begin with the invitation you are making. What room does your design leave for another response?",
+        "J.route": "encounter-story.html"
+      }
+    }
+  ],
+  "afterShared": [
+    {
+      "journey": "journey.Listening",
+      "subject": "place.water",
+      "values": {
+        "J.subject": "place.water",
+        "J.title": "The horse asks us to listen.",
+        "J.paragraphs": [
+          "The guide points at the water. The horse looks down. There is already a horse in there, and it seems to have strong opinions about the guide. Nobody mentioned a committee.",
+          "Perhaps the next explanation can wait. What is the horse being invited into? The guide can look at the reflection too. You can read the little fable your own way—or just enjoy a horse declining a well-prepared presentation."
+        ],
+        "J.introduction": "Start by noticing what the other person is encountering, before offering your explanation.",
+        "J.route": "encounter-story.html"
+      }
+    },
+    {
+      "journey": "journey.Making",
+      "subject": "place.water",
+      "values": {
+        "J.subject": "place.water",
+        "J.title": "The horse asks us to listen.",
+        "J.paragraphs": [
+          "The guide points at the water. The horse looks down. There is already a horse in there, and it seems to have strong opinions about the guide. Nobody mentioned a committee.",
+          "Perhaps the next explanation can wait. What is the horse being invited into? The guide can look at the reflection too. You can read the little fable your own way—or just enjoy a horse declining a well-prepared presentation."
+        ],
+        "J.introduction": "Begin with the invitation you are making. What room does your design leave for another response?",
+        "J.route": "encounter-story.html"
+      }
+    }
+  ],
+  "afterLocal": [
+    {
+      "journey": "journey.Listening",
+      "subject": "place.water",
+      "values": {
+        "J.subject": "place.water",
+        "J.title": "The horse asks us to listen.",
+        "J.paragraphs": [
+          "The guide points at the water. The horse looks down. There is already a horse in there, and it seems to have strong opinions about the guide. Nobody mentioned a committee.",
+          "Perhaps the next explanation can wait. What is the horse being invited into? The guide can look at the reflection too. You can read the little fable your own way—or just enjoy a horse declining a well-prepared presentation."
+        ],
+        "J.introduction": "Before offering a lesson, notice the question you are being asked.",
+        "J.route": "encounter-story.html"
+      }
+    },
+    {
+      "journey": "journey.Making",
+      "subject": "place.water",
+      "values": {
+        "J.subject": "place.water",
+        "J.title": "The horse asks us to listen.",
+        "J.paragraphs": [
+          "The guide points at the water. The horse looks down. There is already a horse in there, and it seems to have strong opinions about the guide. Nobody mentioned a committee.",
+          "Perhaps the next explanation can wait. What is the horse being invited into? The guide can look at the reflection too. You can read the little fable your own way—or just enjoy a horse declining a well-prepared presentation."
+        ],
+        "J.introduction": "Begin with the invitation you are making. What room does your design leave for another response?",
+        "J.route": "encounter-story.html"
+      }
+    }
+  ],
+  "actualEdits": [
+    {
+      "kind": "shared-title",
+      "target": null,
+      "value": "The horse asks us to listen.",
+      "beforeInputHash": "86ffcbd91908c9b030ce94483a8e87501d8b1923e5ba325e4e3bb1f57bedae6e",
+      "afterInputHash": "2d2a849dcd00323f6baabab435fc014a6a13ff292e93f45b905e06172ec0eddb",
+      "afterProjectionHash": "5263c47239f0838f8b06c391ebfb8bce4d212e51980235e3ac27d285c693f5ab",
+      "destination": {
+        "kind": "source",
+        "field": "S.Title",
+        "node": {
+          "id": 6,
+          "line": 6,
+          "offset": 148,
+          "raw": "  P.title: source.S.Title",
+          "text": "P.title: source.S.Title",
+          "indent": 2,
+          "parent": 4
+        }
+      }
+    },
+    {
+      "kind": "journey-intro",
+      "target": "journey.Listening",
+      "value": "Before offering a lesson, notice the question you are being asked.",
+      "beforeInputHash": "2d2a849dcd00323f6baabab435fc014a6a13ff292e93f45b905e06172ec0eddb",
+      "afterInputHash": "d1213854ec11e8854a7b3e6a0b0c201a7013806a34b3513668cb5d5977d61da5",
+      "afterProjectionHash": "2db6b9b5c33788764426ae394802d1b49d2d2a155beae21d051bdb988e44c6fb",
+      "destination": {
+        "kind": "literal",
+        "node": {
+          "id": 124,
+          "line": 124,
+          "offset": 3086,
+          "raw": "    J.introduction: \"Start by noticing what the other person is encountering, before offering your explanation.\"",
+          "text": "J.introduction: \"Start by noticing what the other person is encountering, before offering your explanation.\"",
+          "indent": 4,
+          "parent": 123
+        },
+        "token": "\"Start by noticing what the other person is encountering, before offering your explanation.\""
+      }
+    }
+  ],
+  "acceptanceHash": "948a33bf0616bea0f48d085941d7e85f233421e6bb1aef9ff184f2a8431c7eed",
+  "evidenceFamily": "same-author/same-implementation/usewords-two-journeys-20261106"
+}

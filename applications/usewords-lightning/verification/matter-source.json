@@ -1,0 +1,84 @@
+{
+  "protocol": "usewords/workspace/1",
+  "definitions": [
+    "construct Encounter\nfield title text shared required max 160\nfield body text shared required max 4000\nfield introduction text local optional max 600\nheading title\nparagraph introduction\nparagraph body"
+  ],
+  "objects": [],
+  "journeys": [],
+  "matter": {
+    "id": "matter_1",
+    "title": "A shared workshop space",
+    "description": "A community group wants to open a shared workshop. Some members prioritise low fees; others want enough paid staff to make opening hours reliable. We do not yet know likely usage or operating costs. We want to understand the different priorities and possibilities before making a decision.",
+    "status": "open",
+    "items": [
+      {
+        "item": {
+          "id": "access_and_staffing",
+          "kind": "issue",
+          "title": "What balance of access and dependable staffing is workable?",
+          "body": "Explore what affordable participation and reliable opening hours each require. Operating costs, likely usage and volunteer availability remain unknown; the group may weigh these priorities differently.",
+          "issue": null,
+          "voice": null
+        },
+        "origin": {
+          "kind": "ai-suggestion",
+          "label": "Session assistant (BYO-agent demonstration)",
+          "briefHash": "eef0f8c4fc964b337efab7ee3269749c45fa85847e85764391aef3d29384b77b",
+          "sourceHash": "4eee2bef15513b86e6bc13ef44df62dbad0fc1421b92bc9db3edb262bbac8c0e"
+        },
+        "standing": "open question"
+      },
+      {
+        "item": {
+          "id": "affordable_access",
+          "kind": "position",
+          "title": "Protect access for people with little spare income",
+          "body": "One possible perspective would prioritise low fees and participation. This framing has not been confirmed by any member, and its financial implications still need evidence.",
+          "issue": "access_and_staffing",
+          "voice": "Possible affordability perspective"
+        },
+        "origin": {
+          "kind": "ai-suggestion",
+          "label": "Session assistant (BYO-agent demonstration)",
+          "briefHash": "eef0f8c4fc964b337efab7ee3269749c45fa85847e85764391aef3d29384b77b",
+          "sourceHash": "4eee2bef15513b86e6bc13ef44df62dbad0fc1421b92bc9db3edb262bbac8c0e"
+        },
+        "standing": "unconfirmed position"
+      },
+      {
+        "item": {
+          "id": "dependable_opening",
+          "kind": "position",
+          "title": "Make opening hours dependable",
+          "body": "Another possible perspective would prioritise predictable staffing and access. This is a tentative framing, not an attributed statement or proof that paid staffing is the only way to provide reliability.",
+          "issue": "access_and_staffing",
+          "voice": "Possible reliability perspective"
+        },
+        "origin": {
+          "kind": "ai-suggestion",
+          "label": "Session assistant (BYO-agent demonstration)",
+          "briefHash": "eef0f8c4fc964b337efab7ee3269749c45fa85847e85764391aef3d29384b77b",
+          "sourceHash": "4eee2bef15513b86e6bc13ef44df62dbad0fc1421b92bc9db3edb262bbac8c0e"
+        },
+        "standing": "unconfirmed position"
+      },
+      {
+        "item": {
+          "id": "bounded_pilot",
+          "kind": "option",
+          "title": "Explore a bounded pilot before long-term commitments",
+          "body": "A possible approach is to compare a small set of fee and staffing arrangements in a limited trial, with agreed observations about cost, participation and reliability. Whether to run such a trial, and what it should measure, remain open questions.",
+          "issue": "access_and_staffing",
+          "voice": null
+        },
+        "origin": {
+          "kind": "ai-suggestion",
+          "label": "Session assistant (BYO-agent demonstration)",
+          "briefHash": "eef0f8c4fc964b337efab7ee3269749c45fa85847e85764391aef3d29384b77b",
+          "sourceHash": "4eee2bef15513b86e6bc13ef44df62dbad0fc1421b92bc9db3edb262bbac8c0e"
+        },
+        "standing": "unaccepted approach"
+      }
+    ]
+  }
+}

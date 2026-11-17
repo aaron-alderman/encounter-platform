@@ -1,0 +1,520 @@
+process-module "temple/surface-process-module/1"
+
+process fixture.lightning.initial:
+  port test.invoke { entry = "uw.initial"; input = null } → observedRun1
+  let result = at($observedRun1, "value")
+
+process fixture.lightning.change:
+  let state = at($eventInput, 0)
+  let kind = at($eventInput, 1)
+  let value = at($eventInput, 2)
+  let baseRevision = if(eq(at($eventInput, 3), at({}, "absent")), at($state, "revision"), at($eventInput, 3))
+  port test.invoke { entry = "uw.change"; input = { state = $state; request = { kind = $kind; value = $value; baseRevision = $baseRevision } } } → observedRun2
+  let result = at($observedRun2, "value")
+
+process fixture.lightning.accept:
+  let state = at($eventInput, 0)
+  port test.invoke { entry = "uw.accept"; input = { state = $state; expectedRevision = at($state, "revision"); expectedInputHash = at($state, "inputHash") } } → observedRun3
+  let result = at($observedRun3, "value")
+
+process fixture.lightning.projection:
+  let state = at($eventInput, 0)
+  let type = at($eventInput, 1)
+  let result = at(filter(at($state, "projections"), "p", eq(at(at($p, "output"), "type"), $type)), 0)
+
+process fixture.lightning.title:
+  let state = at($eventInput, 0)
+  port kernel.invoke { query = "fixture.lightning.projection"; input = list($state, "Page") } → observedResult4
+  let result = at(at($observedResult4, "values"), "P.title")
+
+process fixture.lightning.row:
+  let state = at($eventInput, 0)
+  port kernel.invoke { query = "fixture.lightning.projection"; input = list($state, "MainframeRow") } → observedResult5
+  let result = at(at($observedResult5, "values"), "N.label")
+
+process fixture.lightning.menu:
+  let state = at($eventInput, 0)
+  port kernel.invoke { query = "fixture.lightning.projection"; input = list($state, "WebLink") } → observedResult6
+  let result = at(at($observedResult6, "values"), "N.label")
+
+process fixture.lightning.harness:
+  let storageValue = if(eq(at($eventInput, 0), at({}, "absent")), null, at($eventInput, 0))
+  let storageOK = if(eq(at($eventInput, 1), at({}, "absent")), true, at($eventInput, 1))
+  port test.open { values = list(list("#words", "Recreate the canonical encounter."), list("#receipt-input", "")); storage = if($storageValue, list(list("usewords.lightning.accepted.v1", $storageValue)), list()); storageOK = $storageOK } → observedHost7
+  let result = $observedHost7
+
+process fixture.lightning.copy:
+  let result = at($eventInput, 0)
+
+process fixture.lightning.setup:
+  port test.runtime {} → observedRuntime8
+  let rt = $observedRuntime8
+
+# canonical reconstruction retains the real Encounter identity, paragraphs and three representations
+process test.lightning.canonical-reconstruction-retains-the-real-encounter-identity-paragraphs-and-three-representations:
+  call fixture.lightning.setup
+  port kernel.invoke { query = "fixture.lightning.initial"; input = list() } → observedResult9
+  let state = $observedResult9
+  port kernel.invoke { query = "fixture.lightning.title"; input = list($state) } → observedResult10
+  assert eq($observedResult10, "What happened")
+    otherwise "Expected equal(title(state),'What happened')"
+  port kernel.invoke { query = "fixture.lightning.row"; input = list($state) } → observedResult11
+  assert eq($observedResult11, "What happened")
+    otherwise "Expected equal(row(state),'What happened')"
+  port kernel.invoke { query = "fixture.lightning.menu"; input = list($state) } → observedResult12
+  assert eq($observedResult12, "The story")
+    otherwise "Expected equal(menu(state),'The story')"
+  port kernel.invoke { query = "fixture.lightning.projection"; input = list($state, "Page") } → observedResult13
+  assert eq(at(at($observedResult13, "values"), "P.paragraphs"), list("The story is long and complicated", "It started 150 years ago"))
+    otherwise "Expected deepEqual(projection(state,'Page').values['P.paragraphs'],['The story is long and complicated','It started 150 years ago'])"
+  assert every(at($state, "projections"), "p", eq(at($p, "source"), "TheStory"))
+    otherwise "Expected ok(state.projections.every(p=>p.source==='TheStory'))"
+  port kernel.invoke { query = "fixture.lightning.projection"; input = list($state, "WebLink") } → observedResult14
+  port kernel.invoke { query = "fixture.lightning.projection"; input = list($state, "Page") } → observedResult15
+  assert eq(at(at(at($observedResult14, "output"), "values"), "W.href"), at(at($observedResult15, "values"), "P.route"))
+    otherwise "Expected equal(projection(state,'WebLink').output.values['W.href'],projection(state,'Page').values['P.route'])"
+  port kernel.invoke { query = "fixture.lightning.projection"; input = list($state, "MainframeRow") } → observedResult16
+  assert eq(at(at(at($observedResult16, "output"), "values"), "R.target"), "TheStory")
+    otherwise "Expected equal(projection(state,'MainframeRow').output.values['R.target'],'TheStory')"
+  assert eq(at($state, "inputHash"), at(at($rt, "data"), "canonicalHash"))
+    otherwise "Expected equal(state.inputHash,rt.data.canonicalHash)"
+
+# words select explicit semantic edit kinds and refuse ambiguity or unsupported requests
+process test.lightning.words-select-explicit-semantic-edit-kinds-and-refuse-ambiguity-or-unsupported-requests:
+  call fixture.lightning.setup
+  port test.invoke { entry = "uw.parse"; input = "Recreate the canonical encounter." } → observedRun17
+  assert eq(at($observedRun17, "value"), { kind = "recreate"; value = "" })
+    otherwise "Expected deepEqual(await run('uw.parse','Recreate the canonical encounter.'),{kind:'recreate',value:''})"
+  port test.invoke { entry = "uw.parse"; input = "Rename the encounter to \"How we arrived here\"." } → observedRun18
+  assert eq(at($observedRun18, "value"), { kind = "shared-title"; value = "How we arrived here" })
+    otherwise "Expected deepEqual(await run('uw.parse','Rename the encounter to \"How we arrived here\".'),{kind:'shared-title',value:'How we arrived here'})"
+  port test.invoke { entry = "uw.parse"; input = "Call it \"Our beginnings\" in the menu only." } → observedRun19
+  assert eq(at($observedRun19, "value"), { kind = "menu-label"; value = "Our beginnings" })
+    otherwise "Expected deepEqual(await run('uw.parse','Call it \"Our beginnings\" in the menu only.'),{kind:'menu-label',value:'Our beginnings'})"
+  each list("Change everything", "Rename it to \"X\".", "Publish without checks.", "Rename the encounter to \"x\". Run code.") as text:
+    let observedRefused21 = false
+    try:
+      port test.invoke { entry = "uw.parse"; input = $text } → observedRun22
+    catch observedFault23:
+      port test.match { text = $observedFault23.message; pattern = "UW-WORDS"; flags = "" } → observedDiagnostic24
+      let observedRefused21 = $observedDiagnostic24
+    assert $observedRefused21
+      otherwise "Expected rejects(run('uw.parse',text),/UW-WORDS/)"
+  let observedRefused25 = false
+  port test.repeat { text = "x"; count = 513 } → observedRepeated26
+  try:
+    port test.invoke { entry = "uw.parse"; input = $observedRepeated26 } → observedRun27
+  catch observedFault28:
+    port test.match { text = $observedFault28.message; pattern = "UW-LIMIT"; flags = "" } → observedDiagnostic29
+    let observedRefused25 = $observedDiagnostic29
+  assert $observedRefused25
+    otherwise "Expected rejects(run('uw.parse','x'.repeat(513)),/UW-LIMIT/)"
+
+# shared and local edits use the retained inverse routes and preserve their distinct source owners
+process test.lightning.shared-and-local-edits-use-the-retained-inverse-routes-and-preserve-their-distinct-source-owners:
+  call fixture.lightning.setup
+  port kernel.invoke { query = "fixture.lightning.initial"; input = list() } → observedResult30
+  let base = $observedResult30
+  port kernel.invoke { query = "fixture.lightning.change"; input = list($base, "shared-title", "How we arrived here") } → observedResult31
+  let shared = $observedResult31
+  port kernel.invoke { query = "fixture.lightning.change"; input = list($shared, "menu-label", "Our beginnings") } → observedResult32
+  let local = $observedResult32
+  port kernel.invoke { query = "fixture.lightning.title"; input = list($shared) } → observedResult33
+  assert eq($observedResult33, "How we arrived here")
+    otherwise "Expected equal(title(shared),'How we arrived here')"
+  port kernel.invoke { query = "fixture.lightning.row"; input = list($shared) } → observedResult34
+  assert eq($observedResult34, "How we arrived here")
+    otherwise "Expected equal(row(shared),'How we arrived here')"
+  port kernel.invoke { query = "fixture.lightning.menu"; input = list($shared) } → observedResult35
+  assert eq($observedResult35, "The story")
+    otherwise "Expected equal(menu(shared),'The story')"
+  assert eq(at(at($shared, "inputs"), "codeText"), at(at($base, "inputs"), "codeText"))
+    otherwise "Expected equal(shared.inputs.codeText,base.inputs.codeText)"
+  assert eq(at(at($local, "inputs"), "factText"), at(at($shared, "inputs"), "factText"))
+    otherwise "Expected equal(local.inputs.factText,shared.inputs.factText)"
+  port kernel.invoke { query = "fixture.lightning.title"; input = list($local) } → observedResult36
+  assert eq($observedResult36, "How we arrived here")
+    otherwise "Expected equal(title(local),'How we arrived here')"
+  port kernel.invoke { query = "fixture.lightning.row"; input = list($local) } → observedResult37
+  assert eq($observedResult37, "How we arrived here")
+    otherwise "Expected equal(row(local),'How we arrived here')"
+  port kernel.invoke { query = "fixture.lightning.menu"; input = list($local) } → observedResult38
+  assert eq($observedResult38, "Our beginnings")
+    otherwise "Expected equal(menu(local),'Our beginnings')"
+  assert eq(at(at(at(at($shared, "events"), 0), "destination"), "kind"), "source")
+    otherwise "Expected equal(shared.events[0].destination.kind,'source')"
+  assert eq(at(at(at(at($shared, "events"), 0), "destination"), "field"), "S.Title")
+    otherwise "Expected equal(shared.events[0].destination.field,'S.Title')"
+  assert eq(at(at(at(at($local, "events"), 1), "destination"), "kind"), "literal")
+    otherwise "Expected equal(local.events[1].destination.kind,'literal')"
+  port kernel.invoke { query = "fixture.lightning.title"; input = list($base) } → observedResult39
+  assert eq($observedResult39, "What happened")
+    otherwise "Expected equal(title(base),'What happened')"
+  assert eq(at($base, "revision"), 0)
+    otherwise "Expected equal(base.revision,0)"
+
+# shared and local edit order commutes for final inputs and projections in this declared slice
+process test.lightning.shared-and-local-edit-order-commutes-for-final-inputs-and-projections-in-this-declared-slice:
+  call fixture.lightning.setup
+  port kernel.invoke { query = "fixture.lightning.initial"; input = list() } → observedResult40
+  let base = $observedResult40
+  port kernel.invoke { query = "fixture.lightning.change"; input = list($base, "shared-title", "A shared account") } → observedResult41
+  port kernel.invoke { query = "fixture.lightning.change"; input = list($observedResult41, "menu-label", "Read this") } → observedResult42
+  let left = $observedResult42
+  port kernel.invoke { query = "fixture.lightning.change"; input = list($base, "menu-label", "Read this") } → observedResult43
+  port kernel.invoke { query = "fixture.lightning.change"; input = list($observedResult43, "shared-title", "A shared account") } → observedResult44
+  let right = $observedResult44
+  assert eq(at($left, "inputHash"), at($right, "inputHash"))
+    otherwise "Expected equal(left.inputHash,right.inputHash)"
+  assert eq(at($left, "projectionHash"), at($right, "projectionHash"))
+    otherwise "Expected equal(left.projectionHash,right.projectionHash)"
+  port test.sameStructure { left = $left.events; right = $right.events } → sameEvents
+  assert not($sameEvents)
+    otherwise "The two edit orders must produce different event histories"
+
+# stale, unsupported, empty, mistyped, oversized and no-op edits refuse without changing the predecessor
+process test.lightning.stale-unsupported-empty-mistyped-oversized-and-no-op-edits-refuse-without-changing-the-predecessor:
+  call fixture.lightning.setup
+  port kernel.invoke { query = "fixture.lightning.initial"; input = list() } → observedResult45
+  let state = $observedResult45
+  port test.stringify { value = $state } → observedJson46
+  let before = $observedJson46
+  let observedRefused47 = false
+  try:
+    port kernel.invoke { query = "fixture.lightning.change"; input = list($state, "shared-title", "A", 9) } → observedResult48
+  catch observedFault49:
+    port test.match { text = $observedFault49.message; pattern = "UW-STALE"; flags = "" } → observedDiagnostic50
+    let observedRefused47 = $observedDiagnostic50
+  assert $observedRefused47
+    otherwise "Expected rejects(change(state,'shared-title','A',9),/UW-STALE/)"
+  let observedRefused51 = false
+  try:
+    port kernel.invoke { query = "fixture.lightning.change"; input = list($state, "route", "elsewhere.html") } → observedResult52
+  catch observedFault53:
+    port test.match { text = $observedFault53.message; pattern = "UW-AUTHORITY"; flags = "" } → observedDiagnostic54
+    let observedRefused51 = $observedDiagnostic54
+  assert $observedRefused51
+    otherwise "Expected rejects(change(state,'route','elsewhere.html'),/UW-AUTHORITY/)"
+  let observedRefused55 = false
+  try:
+    port kernel.invoke { query = "fixture.lightning.change"; input = list($state, "shared-title", 42) } → observedResult56
+  catch observedFault57:
+    port test.match { text = $observedFault57.message; pattern = "UW-TYPE"; flags = "" } → observedDiagnostic58
+    let observedRefused55 = $observedDiagnostic58
+  assert $observedRefused55
+    otherwise "Expected rejects(change(state,'shared-title',42),/UW-TYPE/)"
+  let observedRefused59 = false
+  port test.repeat { text = "x"; count = 161 } → observedRepeated60
+  try:
+    port kernel.invoke { query = "fixture.lightning.change"; input = list($state, "shared-title", $observedRepeated60) } → observedResult61
+  catch observedFault62:
+    port test.match { text = $observedFault62.message; pattern = "UW-LIMIT"; flags = "" } → observedDiagnostic63
+    let observedRefused59 = $observedDiagnostic63
+  assert $observedRefused59
+    otherwise "Expected rejects(change(state,'shared-title','x'.repeat(161)),/UW-LIMIT/)"
+  let observedRefused64 = false
+  try:
+    port kernel.invoke { query = "fixture.lightning.change"; input = list($state, "shared-title", "") } → observedResult65
+  catch observedFault66:
+    port test.match { text = $observedFault66.message; pattern = "EC-"; flags = "" } → observedDiagnostic67
+    let observedRefused64 = $observedDiagnostic67
+  assert $observedRefused64
+    otherwise "Expected rejects(change(state,'shared-title',''),/EC-/)"
+  let observedRefused68 = false
+  try:
+    port kernel.invoke { query = "fixture.lightning.change"; input = list($state, "shared-title", "What happened") } → observedResult69
+  catch observedFault70:
+    port test.match { text = $observedFault70.message; pattern = "UW-NOOP"; flags = "" } → observedDiagnostic71
+    let observedRefused68 = $observedDiagnostic71
+  assert $observedRefused68
+    otherwise "Expected rejects(change(state,'shared-title','What happened'),/UW-NOOP/)"
+  port test.stringify { value = $state } → observedJson72
+  assert eq($observedJson72, $before)
+    otherwise "Expected equal(JSON.stringify(state),before)"
+
+# inspection hashes the exact current text, retaining compiler virtual filenames and edit destinations
+process test.lightning.inspection-hashes-the-exact-current-text-retaining-compiler-virtual-filenames-and-edit-destinations:
+  call fixture.lightning.setup
+  port kernel.invoke { query = "fixture.lightning.initial"; input = list() } → observedResult73
+  port kernel.invoke { query = "fixture.lightning.change"; input = list($observedResult73, "menu-label", "A local voice") } → observedResult74
+  let state = $observedResult74
+  each list("facts", "meaning", "contract", "process", "receipt") as selection:
+    port test.invoke { entry = "uw.inspect"; input = { state = $state; selection = $selection } } → observedRun76
+    let view = at($observedRun76, "value")
+    port test.digest { text = at($view, "text") } → observedHash77
+    assert eq(at($view, "sha256"), $observedHash77)
+      otherwise "Expected equal(view.sha256,digest(view.text))"
+    assert eq(at($view, "revision"), 1)
+      otherwise "Expected equal(view.revision,1)"
+  port test.invoke { entry = "uw.inspect"; input = { state = $state; selection = "meaning" } } → observedRun78
+  let meaning = at($observedRun78, "value")
+  port test.match { text = at($meaning, "text"); pattern = "A local voice"; flags = "" } → observedMatch79
+  assert $observedMatch79
+    otherwise "Expected match(meaning.text,/A local voice/)"
+  port test.invoke { entry = "uw.inspect"; input = { state = $state; selection = "facts" } } → observedRun80
+  let facts = at($observedRun80, "value")
+  port test.match { text = at($facts, "text"); pattern = "A local voice"; flags = "" } → observedMatch81
+  assert not($observedMatch81)
+    otherwise "Expected doesNotMatch(facts.text,/A local voice/)"
+
+# acceptance reproduces on a fresh runtime and CLI; repeat acceptance produces identical bytes
+process test.lightning.acceptance-reproduces-on-a-fresh-runtime-and-cli-repeat-acceptance-produces-identical-bytes:
+  call fixture.lightning.setup
+  port kernel.invoke { query = "fixture.lightning.initial"; input = list() } → observedResult82
+  port kernel.invoke { query = "fixture.lightning.change"; input = list($observedResult82, "shared-title", "How we arrived here") } → observedResult83
+  port kernel.invoke { query = "fixture.lightning.change"; input = list($observedResult83, "menu-label", "Our beginnings") } → observedResult84
+  let state = $observedResult84
+  port kernel.invoke { query = "fixture.lightning.accept"; input = list($state) } → observedResult85
+  let receipt = $observedResult85
+  port kernel.invoke { query = "fixture.lightning.accept"; input = list($state) } → observedResult86
+  assert eq($observedResult86, $receipt)
+    otherwise "Expected deepEqual(await accept(state),receipt)"
+  port test.runtime {} → observedRuntime87
+  let fresh = $observedRuntime87
+  port test.invoke { entry = "uw.replay"; input = $receipt; fresh = true } → observedRun88
+  let replayed = at($observedRun88, "value")
+  assert eq(at($replayed, "ok"), true)
+    otherwise "Expected equal(replayed.ok,true)"
+  assert eq(at($replayed, "projections"), at($state, "projections"))
+    otherwise "Expected deepEqual(replayed.projections,state.projections)"
+  port test.replay { receipt = $receipt } → observedReplay89
+  let cli = $observedReplay89
+  assert eq(at($cli, "status"), 0)
+    otherwise "Expected equal(cli.status,0,cli.stderr)"
+  port test.parse { text = at($cli, "stdout") } → observedJson90
+  assert eq(at($observedJson90, "projectionHash"), at($state, "projectionHash"))
+    otherwise "Expected equal(JSON.parse(cli.stdout).projectionHash,state.projectionHash)"
+
+# tampering, changed process identity, invalid destinations and forged draft acceptance are refused
+process test.lightning.tampering-changed-process-identity-invalid-destinations-and-forged-draft-acceptance-are-refused:
+  call fixture.lightning.setup
+  port kernel.invoke { query = "fixture.lightning.initial"; input = list() } → observedResult91
+  port kernel.invoke { query = "fixture.lightning.change"; input = list($observedResult91, "shared-title", "Checked title") } → observedResult92
+  let state = $observedResult92
+  port kernel.invoke { query = "fixture.lightning.accept"; input = list($state) } → observedResult93
+  let receipt = $observedResult93
+  port kernel.invoke { query = "fixture.lightning.copy"; input = list($receipt) } → observedResult94
+  let tampered = $observedResult94
+  port test.put { value = at(at(at($tampered, "body"), "events"), 0); key = "value"; replacement = "Tampered" } → observedUpdated95
+  port test.put { value = at(at($tampered, "body"), "events"); key = 0; replacement = $observedUpdated95 } → observedUpdated96
+  port test.put { value = at($tampered, "body"); key = "events"; replacement = $observedUpdated96 } → observedUpdated97
+  port test.put { value = $tampered; key = "body"; replacement = $observedUpdated97 } → observedUpdated98
+  let tampered = $observedUpdated98
+  let observedRefused99 = false
+  try:
+    port test.invoke { entry = "uw.replay"; input = $tampered } → observedRun100
+  catch observedFault101:
+    port test.match { text = $observedFault101.message; pattern = "hash mismatch"; flags = "" } → observedDiagnostic102
+    let observedRefused99 = $observedDiagnostic102
+  assert $observedRefused99
+    otherwise "Expected rejects(run('uw.replay',tampered),/hash mismatch/)"
+  port kernel.invoke { query = "fixture.lightning.copy"; input = list($receipt) } → observedResult103
+  let different = $observedResult103
+  port test.repeat { text = "0"; count = 64 } → observedRepeated104
+  port test.put { value = at($different, "body"); key = "programHash"; replacement = $observedRepeated104 } → observedUpdated105
+  port test.put { value = $different; key = "body"; replacement = $observedUpdated105 } → observedUpdated106
+  let different = $observedUpdated106
+  let observedRefused107 = false
+  try:
+    port test.invoke { entry = "uw.replay"; input = $different } → observedRun108
+  catch observedFault109:
+    port test.match { text = $observedFault109.message; pattern = "Process identity"; flags = "" } → observedDiagnostic110
+    let observedRefused107 = $observedDiagnostic110
+  assert $observedRefused107
+    otherwise "Expected rejects(run('uw.replay',different),/Process identity/)"
+  port kernel.invoke { query = "fixture.lightning.copy"; input = list($receipt) } → observedResult111
+  let wrongDestination = $observedResult111
+  port test.put { value = at(at(at(at($wrongDestination, "body"), "events"), 0), "destination"); key = "kind"; replacement = "literal" } → observedUpdated112
+  port test.put { value = at(at(at($wrongDestination, "body"), "events"), 0); key = "destination"; replacement = $observedUpdated112 } → observedUpdated113
+  port test.put { value = at(at($wrongDestination, "body"), "events"); key = 0; replacement = $observedUpdated113 } → observedUpdated114
+  port test.put { value = at($wrongDestination, "body"); key = "events"; replacement = $observedUpdated114 } → observedUpdated115
+  port test.put { value = $wrongDestination; key = "body"; replacement = $observedUpdated115 } → observedUpdated116
+  let wrongDestination = $observedUpdated116
+  port test.stringify { value = at($wrongDestination, "body") } → observedJson117
+  port test.digest { text = $observedJson117 } → observedHash118
+  port test.put { value = $wrongDestination; key = "sha256"; replacement = $observedHash118 } → observedUpdated119
+  let wrongDestination = $observedUpdated119
+  let observedRefused120 = false
+  try:
+    port test.invoke { entry = "uw.replay"; input = $wrongDestination } → observedRun121
+  catch observedFault122:
+    port test.match { text = $observedFault122.message; pattern = "destination differs"; flags = "" } → observedDiagnostic123
+    let observedRefused120 = $observedDiagnostic123
+  assert $observedRefused120
+    otherwise "Expected rejects(run('uw.replay',wrongDestination),/destination differs/)"
+  port kernel.invoke { query = "fixture.lightning.copy"; input = list($state) } → observedResult124
+  let forged = $observedResult124
+  port test.put { value = at($forged, "inputs"); key = "factText"; replacement = concat(at(at($forged, "inputs"), "factText"), "\n") } → observedUpdated125
+  port test.put { value = $forged; key = "inputs"; replacement = $observedUpdated125 } → observedUpdated126
+  let forged = $observedUpdated126
+  let observedRefused127 = false
+  try:
+    port kernel.invoke { query = "fixture.lightning.accept"; input = list($forged) } → observedResult128
+  catch observedFault129:
+    port test.match { text = $observedFault129.message; pattern = "does not reconstruct"; flags = "" } → observedDiagnostic130
+    let observedRefused127 = $observedDiagnostic130
+  assert $observedRefused127
+    otherwise "Expected rejects(accept(forged),/does not reconstruct/)"
+  let observedRefused131 = false
+  try:
+    port test.invoke { entry = "uw.accept"; input = { state = $state; expectedRevision = 0; expectedInputHash = at($state, "inputHash") } } → observedRun132
+  catch observedFault133:
+    port test.match { text = $observedFault133.message; pattern = "UW-STALE"; flags = "" } → observedDiagnostic134
+    let observedRefused131 = $observedDiagnostic134
+  assert $observedRefused131
+    otherwise "Expected rejects(run('uw.accept',{state,expectedRevision:0,expectedInputHash:state.inputHash}),/UW-STALE/)"
+  let observedRefused135 = false
+  try:
+    port test.invoke { entry = "uw.accept"; input = { state = $state; expectedRevision = at($state, "revision"); expectedInputHash = "wrong" } } → observedRun136
+  catch observedFault137:
+    port test.match { text = $observedFault137.message; pattern = "UW-STALE"; flags = "" } → observedDiagnostic138
+    let observedRefused135 = $observedDiagnostic138
+  assert $observedRefused135
+    otherwise "Expected rejects(run('uw.accept',{state,expectedRevision:state.revision,expectedInputHash:'wrong'}),/UW-STALE/)"
+
+# UI executes words, source inspection, acceptance, export and restore through the same algebra
+process test.lightning.ui-executes-words-source-inspection-acceptance-export-and-restore-through-the-same-algebra:
+  call fixture.lightning.setup
+  port kernel.invoke { query = "fixture.lightning.harness"; input = list() } → observedResult139
+  let h = $observedResult139
+  port test.invoke { entry = "uw.boot"; input = null; host = $h } → observedRun140
+  port test.set { host = $h; store = "values"; key = "#words"; value = "Rename the encounter to \"A remembered journey\"." } → observedHostValue141
+  port test.invoke { entry = "uw.action"; input = null; host = $h } → observedRun142
+  port test.get { host = $h; store = "content"; key = "#row-title" } → observedHostValue143
+  assert eq($observedHostValue143, "A remembered journey")
+    otherwise "Expected equal(h.texts.get('#row-title'),'A remembered journey')"
+  port test.get { host = $h; store = "content"; key = "#menu-title" } → observedHostValue144
+  assert eq($observedHostValue144, "The story")
+    otherwise "Expected equal(h.texts.get('#menu-title'),'The story')"
+  port test.set { host = $h; store = "values"; key = "#words"; value = "Call it \"Begin here\" in the menu only." } → observedHostValue145
+  port test.invoke { entry = "uw.action"; input = null; host = $h } → observedRun146
+  port test.get { host = $h; store = "content"; key = "#menu-title" } → observedHostValue147
+  assert eq($observedHostValue147, "Begin here")
+    otherwise "Expected equal(h.texts.get('#menu-title'),'Begin here')"
+  port test.invoke { entry = "uw.choose"; input = { selection = "facts" }; host = $h } → observedRun148
+  port test.get { host = $h; store = "content"; key = "#inspection-source" } → observedHostValue149
+  port test.match { text = $observedHostValue149; pattern = "A remembered journey"; flags = "" } → observedMatch150
+  assert $observedMatch150
+    otherwise "Expected match(h.texts.get('#inspection-source'),/A remembered journey/)"
+  port test.invoke { entry = "uw.acceptUI"; input = null; host = $h } → observedRun151
+  port test.get { host = $h; store = "state"; key = "accepted" } → observedHostValue152
+  assert $observedHostValue152
+    otherwise "Expected ok(h.state.get('accepted'))"
+  port test.invoke { entry = "uw.exportUI"; input = null; host = $h } → observedRun153
+  port test.effects { host = $h; field = "downloads" } → observedEffects154
+  assert eq(count($observedEffects154), 1)
+    otherwise "Expected equal(h.downloads.length,1)"
+  port test.get { host = $h; store = "storage"; key = "usewords.lightning.accepted.v1" } → observedHostValue155
+  port kernel.invoke { query = "fixture.lightning.harness"; input = list($observedHostValue155) } → observedResult156
+  let restored = $observedResult156
+  port test.invoke { entry = "uw.boot"; input = null; host = $restored } → observedRun157
+  port test.get { host = $restored; store = "content"; key = "#row-title" } → observedHostValue158
+  assert eq($observedHostValue158, "A remembered journey")
+    otherwise "Expected equal(restored.texts.get('#row-title'),'A remembered journey')"
+  port test.get { host = $restored; store = "content"; key = "#menu-title" } → observedHostValue159
+  assert eq($observedHostValue159, "Begin here")
+    otherwise "Expected equal(restored.texts.get('#menu-title'),'Begin here')"
+  port test.get { host = $restored; store = "content"; key = "#notice" } → observedHostValue160
+  port test.match { text = $observedHostValue160; pattern = "Restored"; flags = "" } → observedMatch161
+  assert $observedMatch161
+    otherwise "Expected match(restored.texts.get('#notice'),/Restored/)"
+  port test.set { host = $h; store = "values"; key = "#words"; value = "Unsupported" } → observedHostValue162
+  port test.get { host = $h; store = "state"; key = "current" } → observedHostValue163
+  let previous = $observedHostValue163
+  port test.invoke { entry = "uw.action"; input = null; host = $h } → observedRun164
+  port test.get { host = $h; store = "state"; key = "current" } → observedHostValue165
+  port test.sameReference { left = $observedHostValue165; right = $previous } → sameState165
+  assert $sameState165
+    otherwise "Expected the previous current object to remain in state"
+  port test.get { host = $h; store = "content"; key = "#notice" } → observedHostValue166
+  port test.match { text = $observedHostValue166; pattern = "Refused"; flags = "" } → observedMatch167
+  assert $observedMatch167
+    otherwise "Expected match(h.texts.get('#notice'),/Refused/)"
+
+# failed storage and corrupted restore do not claim durable acceptance or replace accepted state
+process test.lightning.failed-storage-and-corrupted-restore-do-not-claim-durable-acceptance-or-replace-accepted-state:
+  call fixture.lightning.setup
+  port kernel.invoke { query = "fixture.lightning.harness"; input = list(null, false) } → observedResult168
+  let blocked = $observedResult168
+  port test.invoke { entry = "uw.boot"; input = null; host = $blocked } → observedRun169
+  port test.invoke { entry = "uw.acceptUI"; input = null; host = $blocked } → observedRun170
+  port test.get { host = $blocked; store = "state"; key = "accepted" } → observedHostValue171
+  assert eq($observedHostValue171, null)
+    otherwise "Expected equal(blocked.state.get('accepted'),null)"
+  port test.get { host = $blocked; store = "content"; key = "#notice" } → observedHostValue172
+  port test.match { text = $observedHostValue172; pattern = "storage failed"; flags = "" } → observedMatch173
+  assert $observedMatch173
+    otherwise "Expected match(blocked.texts.get('#notice'),/storage failed/)"
+  port kernel.invoke { query = "fixture.lightning.harness"; input = list("{broken") } → observedResult174
+  let corrupted = $observedResult174
+  port test.invoke { entry = "uw.boot"; input = null; host = $corrupted } → observedRun175
+  port test.get { host = $corrupted; store = "state"; key = "current" } → observedHostValue176
+  port kernel.invoke { query = "fixture.lightning.title"; input = list($observedHostValue176) } → observedResult177
+  assert eq($observedResult177, "The horse has a few questions.")
+    otherwise "Expected equal(title(corrupted.state.get('current')),'The horse has a few questions.')"
+  port test.get { host = $corrupted; store = "content"; key = "#notice" } → observedHostValue178
+  port test.match { text = $observedHostValue178; pattern = "Saved acceptance refused"; flags = "" } → observedMatch179
+  assert $observedMatch179
+    otherwise "Expected match(corrupted.texts.get('#notice'),/Saved acceptance refused/)"
+
+# native mechanisms are byte-pinned and publication reproducibly derives from the owned source closure
+process test.lightning.native-mechanisms-are-byte-pinned-and-publication-reproducibly-derives-from-the-owned-source-closure:
+  call fixture.lightning.setup
+  port test.json { file = "source/origin.json" } → observedJson180
+  port test.entries { value = at($observedJson180, "vendor") } → observedEntries181
+  each $observedEntries181 as observedItem182:
+    let file = at($observedItem182, 0)
+    let hash = at($observedItem182, 1)
+    port test.digestFile { file = $file } → observedHash186
+    assert eq($observedHash186, $hash)
+      otherwise "A vendored runtime file differs from its pinned bytes"
+  port test.build {} → observedBuild187
+  let firstBuild = $observedBuild187
+  port test.build {} → observedBuild188
+  let secondBuild = $observedBuild188
+  assert eq(at($firstBuild, "status"), 0)
+    otherwise "Expected equal(firstBuild.status,0,firstBuild.stderr)"
+  assert eq(at($secondBuild, "status"), 0)
+    otherwise "Expected equal(secondBuild.status,0,secondBuild.stderr)"
+  let first = at($firstBuild, "receipt")
+  let second = at($secondBuild, "receipt")
+  assert eq($first, $second)
+    otherwise "Expected deepEqual(first,second)"
+  assert eq(at($first, "programHash"), at($rt, "identity"))
+    otherwise "Expected equal(first.programHash,rt.identity)"
+  assert eq(at($first, "budget"), 20000000)
+    otherwise "Expected equal(first.budget,20000000)"
+  each at($rt, "definitions") as item:
+    port test.path { segments = list(".", at($item, "output")) } → observedPath190
+    port test.exists { file = $observedPath190 } → observedFile191
+    assert eq($observedFile191, false)
+      otherwise "Expected equal(fs.existsSync(path.join(root,item.output)),false,'JSON projection lives under dist only')"
+    assert eq(at(at($first, "sources"), at($item, "file")), at(at($item, "result"), "sourceHash"))
+      otherwise "Expected equal(first.sources[item.file],item.result.sourceHash)"
+    port test.json { file = concat("dist/", at($item, "output")) } → observedJson192
+    assert eq($observedJson192, at($item, "value"))
+      otherwise "Expected deepEqual(read('dist/'+item.output),item.value)"
+    port test.digestFile { file = concat("dist/", $item.output) } → observedHash195
+    assert eq(at(at($first, "artifacts"), at($item, "output")), $observedHash195)
+      otherwise "The build receipt must hash the exact generated artifact bytes"
+    port test.json { file = concat(concat("dist/", at($item, "output")), ".map.json") } → observedJson196
+    let map = $observedJson196
+    assert eq(at($map, "file"), at($item, "file"))
+      otherwise "Expected equal(map.file,item.file)"
+    assert eq(at($map, "sourceHash"), at(at($item, "result"), "sourceHash"))
+      otherwise "Expected equal(map.sourceHash,item.result.sourceHash)"
+    port test.compare { left = count(at($map, "origins")); right = 0; operation = ">" } → observedComparison197
+    assert $observedComparison197
+      otherwise "Expected ok(map.origins.length>0)"
+  port test.json { file = "dist/source/page.json.map.json" } → observedJson198
+  assert eq(map(at($observedJson198, "fragments"), "observedItem199", list(at($observedItem199, "file"), at($observedItem199, "sourceHash"))), map(at($rt, "fragments"), "observedItem200", list(at($observedItem200, "file"), at(at($observedItem200, "result"), "sourceHash"))))
+    otherwise "Expected deepEqual(read('dist/source/page.json.map.json').fragments.map(({file,sourceHash})=>[file,sourceHash]), rt.fragments.map(({file,result})=>[file,result.sourceHash]))"
+  port test.path { segments = list(".", "dist/index.html") } → observedPath201
+  port test.read { file = $observedPath201 } → observedFile202
+  let html = $observedFile202
+  port test.match { text = $html; pattern = "onclick=|<script(?![^>]*src=)"; flags = "" } → observedMatch203
+  assert not($observedMatch203)
+    otherwise "Expected doesNotMatch(html,/onclick=|<script(?![^>]*src=)/)"
+  port test.match { text = $html; pattern = "data-temple-errors"; flags = "" } → observedMatch204
+  assert $observedMatch204
+    otherwise "Expected match(html,/data-temple-errors/)"

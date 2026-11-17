@@ -1,0 +1,173 @@
+{
+  "protocol": "usewords/matter-management-checks/1",
+  "date": "2026-11-07",
+  "programHash": "aea838fc6b67ffa68ab8aff2fd49d0c4561e0feda3179130408123de15e0cd14",
+  "evidenceFamily": "same-author-engineering-and-browser",
+  "independentHumanConfirmation": false,
+  "build": {
+    "passed": true,
+    "sourceClosureVerified": true,
+    "sources": {
+      "bootstrap/build.mjs": "a3a48b058ba03a70b64e71683b5c6aaa6030702f6bb96283fdb3ca92b1b2fec1",
+      "bootstrap/cli.mjs": "1386fc72e1c5869917c05c168cec2776233fabb2ad461f3b751c0201c20f5d32",
+      "bootstrap/client.cjs": "f3336c00a849fe122a9084ced4683d2f4de0a66aafb5974d2f521d7bf2b2f6fe",
+      "bootstrap/frontend.mjs": "aea59fe7d00e8363c10b2d669a2258cb8eec136242940ca596a9b86abb904246",
+      "bootstrap/runtime.mjs": "03a80db316caa42a82a6522e57d7462d86665d96a23d4ee753a373c66bcc4221",
+      "source/canonical.json": "7a2e765e96ba7d5b2e9a8f972d3244f9db62ea8ee8ad75795a86ec21546d232d",
+      "source/journeys-contracts.rel": "d9d131a4d74c0cf63e3008765cfd50d4b75255c22777f0bd199f094c7fe41ca7",
+      "source/journeys.encounter": "b4033c4459ee30f13c37c3025df72ff46eaaa1d8ee8b0d8857c02e5be04d231c",
+      "source/journeys.json": "b254cd8f95359043644f1af561e389f5e578bd4bdd4149a1183798067c009968",
+      "source/journeys.rel": "442d8de068114d980c48b94ce160bc075c2745e8edcb96204f91daf85779d52b",
+      "source/languages.json": "705ed61a4eddad8a5f69f20bb2505f498412717e83eba4c3b26f92bb63902d99",
+      "source/languages/presentation-frontend.json": "21489e6604743ce8273ce581d702a36d09edfdc7978bb4a7b0d4d028b0a17193",
+      "source/languages/usewords-frontend.json": "bbd356c0597ea2caa56a27e24aa789a04659537ab165f0f902158a001c4d73fc",
+      "source/languages/usewords-process.profile.json": "a3767295b983348bec692ba8d86d80d312463b7ec88b042bb1f39069956c000c",
+      "source/matter-management-ui.encounter": "046c695646d2c569d7aef9a3209e78f039ee632106139129f7468ace20dd2321",
+      "source/matter-management.encounter": "c30bb69a8cb136348b6aec82deabd11d207ec6b61ab0dec89bd443998ed6bd2c",
+      "source/matters-ui.encounter": "17ce1a966543eb49bfbdd08c8c55fafb5d1480c447b5808d24a4700fe0afdc33",
+      "source/matters.encounter": "dd5bc21a359535bc7b4de914f1bf64b563ac08565ce3763e511c04daff80e33e",
+      "source/origin.json": "bdfaad01aabb3b340b9c15d9c10c663fa6838df5829513fa9ccb65103c030c79",
+      "source/page.json": "b78838c7f7d6babb938b5df944dcdc10b2e1ced3c115a314d53bbc359e0df0bb",
+      "source/presentation/source-algebra.encounter": "927be102d80170a4eb2dc6d4d9f7f28589ed0f484121bdf1838275e3f930c2db",
+      "source/reference/water.rel": "695b4067e51ffdc265de7f72c9c5b653ab2f40b4762d896b325e2e5f3663fe86",
+      "source/runtime.json": "feb269dd472db227d0926c732d4815c830bd1d582aa780c685304c162225a006",
+      "source/style.json": "6126295c2b362b0ff4245a23a34d016428925eb11cfeed4208cd2e9ea5b118e7",
+      "source/usewords.encounter": "04eaa5c8a556cdfe74f77e60a3f833678f8e98a017c62133b91320d0024c1455",
+      "source/words.json": "aeb2739fdb2fae139a1e885ab730832dfdbb696763a96db824a51eb94efc44cf",
+      "source/workspace-seed.json": "7d1a0a75238a809df1375cdbaaa51febd60818c59de08f54879d63bd0908eb03",
+      "source/workspace-ui.encounter": "1268a205304ef3f65728a40a09306e35552fe0c56d511d5e6564b13344826d3d",
+      "source/workspace.encounter": "188ba2da0c9339e43459e20e25829f752b128bc93ddf94ed52b19afc84551661",
+      "vendor/worldwright/algebra/admission.process.json": "c459c0aacbb5905b6aca01a6e8344b9e645f854c35244f59c1ea7ac1c1bf662b",
+      "vendor/worldwright/algebra/css.process.json": "12dc9aca9f4c3d9d61588105246e6ae7194f638768f2d5718d0730ebecb6b4f1",
+      "vendor/worldwright/algebra/encounter-code-compiler.process.json": "4e2559bb1b560f30a245a9e71566005e7425825cb6f15e056a626ea1178582d9",
+      "vendor/worldwright/algebra/encounter-code-runtime.process.json": "4c7f7e56e0eb303b1419970f7895903b2e0581a3a27d3bb180a56424bdb64ffc",
+      "vendor/worldwright/algebra/encounter-code-types.process.json": "1289d28de383f0b00e06d9e7ae323da31ad8460668afbb6c9e49e6b6daa79b05",
+      "vendor/worldwright/algebra/fact-index.process.json": "66ba62d753114df7abad1b11a0c89cb014474da7744d391668508caa0ce336d9",
+      "vendor/worldwright/algebra/html.process.json": "3c0daa63fd4ca49a59d3228db2dc55f74f145c3f715bc7d365de0dfbbd6261ef",
+      "vendor/worldwright/algebra/language.process.json": "83e8fcd65685ea08bc875d92d68bef37c95bad2e1f702cd8f8ecbe0337c61cda",
+      "vendor/worldwright/algebra/lowering.process.json": "616c1c5860d0245bad4df16de9e04074e44a601a716d99b641e7fec07d43bbd8",
+      "vendor/worldwright/algebra/operators.expression.json": "b03c2c863cab748899675ffb4afd8f7ead0979f5e992923a086d19ad89a2c7f2",
+      "vendor/worldwright/algebra/source.process.json": "27d5b5a43e7bf6eac502e7096770bf871c6e6ea5a68d9b35e6df40012d5c6246",
+      "vendor/worldwright/algebra/workshop-lab.process.json": "9e3049811c1325c840711a8aa091f44b3f670480fa376421a47e5f69399cd037",
+      "vendor/worldwright/bootstrap/kernel-profile.json": "3067678f68016886d77569c62523c101d299648f37697df51c4524c83647a875",
+      "vendor/worldwright/bootstrap/ports/algebra-lower.cjs": "8cc997c2bc965c85b7b5615e796277a485bb1e64765c7df3031f9a30385a3ec2",
+      "vendor/worldwright/bootstrap/ports/browser-effects.cjs": "23d5aece795c7a6338ab4b302853682996797418dbdb4122b08454ce4dbb7c0d",
+      "vendor/worldwright/bootstrap/ports/browser.cjs": "ff320be4c37276a6f4e5ad5979b6eaf7f9d3a3d1190be40b32021356240abf72",
+      "vendor/worldwright/bootstrap/ports/kernel.cjs": "0ab9faa6dbd5c6d3d811171d46301037436c53b6fd5e11afab4769246d121c5c",
+      "vendor/worldwright/bootstrap/ports/process-source.cjs": "ba6c413ea117047e85e024c8aedaf4947ee37761625159ed3f16584c6206bb19",
+      "vendor/worldwright/bootstrap/ports/programme.cjs": "88d1c4d2aefe341533af1f967268e1c9da555d556db34adb7eea6b5838a5c1ec",
+      "vendor/worldwright/bootstrap/ports/value.cjs": "0f7d884a3eb5bd8eb33bcdc236560e4156c2c7498ac3ae39afc1702853fd8ca2",
+      "vendor/worldwright/bootstrap/temple-seed.cjs": "c1fdf47cb183a0c8e69d000d091ada457fdc8333b34a2a5bba4bcc51d53ac71e",
+      "vendor/worldwright/frontend/bootstrap.json": "eb38af5f82a0a2229aebcbbb0f0b6ee98ffd5251a4ed8fefd2c93071ab84e520",
+      "vendor/worldwright/frontend/language-process.process.json": "c7b765b4bb18d2c6b0b97e11e41cbacaf2ed756586dd25e748a4c48aacb63640",
+      "vendor/worldwright/frontend/lexical.json": "60f3ccd74eed17738478a63f2e24559c430f71d5091974a5c9a3d8b637801f06",
+      "vendor/worldwright/frontend/presentation.json": "04725adbc103d9e53be08a7daa6f14c053bbde9f9d2eeef2cd8e4c27a4700786",
+      "vendor/worldwright/frontend/profile.json": "d1ac279dcbb8488a61384b6cef6f07f587166bf7d995148671fa160bfb8170d6"
+    },
+    "budget": 20000000,
+    "nativePortsAndGrants": "unchanged"
+  },
+  "tests": {
+    "passed": 57,
+    "failed": 0,
+    "addedManagementTests": 6,
+    "matterTestsTotal": 14,
+    "durationMs": 126993.1935,
+    "log": "management-tests.log",
+    "sha256": "98cbabfd42bdbc6e8bd650e7506fdea8d1d2e238a6624d3b69ac329e2320a36b",
+    "commands": [
+      "node bootstrap/build.mjs",
+      "node --test tests/*.test.mjs"
+    ],
+    "note": "Direct equivalents of package build/test scripts; npm is not installed on PATH."
+  },
+  "browser": {
+    "url": "http://127.0.0.1:4197/",
+    "localOnly": true,
+    "simulatedPersonas": true,
+    "matters": 2,
+    "acceptedProposals": 10,
+    "boardRevision": 30,
+    "materialRevision": 10,
+    "sequence": [
+      "create matter",
+      "incorporate unresolved issue",
+      "orient purpose and scope",
+      "request response from Bob",
+      "record response proposed by Bob",
+      "conclude with disagreement",
+      "archive preserving conclusion",
+      "reopen preserving issue standing",
+      "update Bob capacity and coordinator role",
+      "create separate evidence-gathering matter",
+      "record declared dependency",
+      "request updated estimates",
+      "verify and save selected matter history",
+      "reload and inspect Bob attention",
+      "filter register to pending attention"
+    ],
+    "currentState": "open",
+    "openIssues": 1,
+    "responseRequests": [
+      {
+        "id": "cost_evidence",
+        "status": "answered",
+        "assignee": "bob"
+      },
+      {
+        "id": "updated_estimates",
+        "status": "open",
+        "assignee": "bob"
+      }
+    ],
+    "reloadReplay": true,
+    "scopedAttention": true,
+    "archivedAndAttentionFilters": true,
+    "narrowViewport": {
+      "width": 375,
+      "height": 812,
+      "contentWidth": 360,
+      "overflow": false
+    },
+    "nativeErrors": [],
+    "screenshot": "matter-management.png"
+  },
+  "replay": {
+    "freshProcesses": true,
+    "current": {
+      "ok": true,
+      "revision": 30,
+      "documentHash": "1091705b4e2c8bb96141cfa14674520f179a58d683cb1702ebac960a69c32aa2",
+      "file": "management-browser-history.json",
+      "sha256": "972d38975ffd2d3fec4ff10438bd8642d26a2bae3be32e3a79f5df4d3473b326"
+    },
+    "conclusion": {
+      "ok": true,
+      "revision": 15,
+      "documentHash": "11f4851dc3339d4f37ede5bce4c654783b09c3713415a22e6733bf343ac096d7",
+      "status": "concluded",
+      "outcome": "disagreement",
+      "file": "management-concluded-history.json",
+      "sha256": "7fe153bb7013f283d8a60a8e2b070649defc48119ef04d60acb5d993a847895c"
+    },
+    "issueRecordsUnchangedAcrossLifecycle": true
+  },
+  "boundaries": {
+    "deployment": false,
+    "authenticatedIdentity": false,
+    "protectedPrivateWorkspaces": false,
+    "networkCollaboration": false,
+    "persistence": "version-bound browser local storage; runtime changes do not silently migrate old histories",
+    "consentOrTruthEstablishedByAcceptance": false,
+    "relationships": "one-way declared references; no target mutation, access grant, global graph validation or proof of dependency",
+    "ai": "Existing scoped BYO-agent flow retained; no model API or new inference claimed",
+    "limits": {
+      "matters": 6,
+      "proposals": 12,
+      "boardEvents": 48,
+      "materialOperations": 16,
+      "responseRequests": 6,
+      "relationships": 6
+    }
+  }
+}

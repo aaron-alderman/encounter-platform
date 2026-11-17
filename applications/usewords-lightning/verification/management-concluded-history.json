@@ -1,0 +1,294 @@
+{
+  "protocol": "usewords/collaboration/1",
+  "body": {
+    "programHash": "aea838fc6b67ffa68ab8aff2fd49d0c4561e0feda3179130408123de15e0cd14",
+    "basis": {
+      "protocol": "usewords/workspace-acceptance/1",
+      "body": {
+        "programHash": "aea838fc6b67ffa68ab8aff2fd49d0c4561e0feda3179130408123de15e0cd14",
+        "basis": {
+          "protocol": "usewords/workspace/1",
+          "definitions": [
+            "construct Encounter\nfield title text shared required max 160\nfield body text shared required max 4000\nfield introduction text local optional max 600\nheading title\nparagraph introduction\nparagraph body"
+          ],
+          "objects": [],
+          "journeys": [],
+          "matter": {
+            "id": "matter_1",
+            "title": "A shared workshop space",
+            "description": "A community group wants to open a shared workshop. Some members prioritise low fees; others want enough paid staff to make opening hours reliable. We do not yet know likely usage or operating costs. We want to understand the different priorities and possibilities before making a decision.",
+            "status": "open",
+            "items": [],
+            "management": {
+              "purpose": "",
+              "scope": "",
+              "reason": "",
+              "outcome": null,
+              "participants": [
+                {
+                  "id": "alice",
+                  "role": "coordinator",
+                  "capacity": "Initial coordinator (simulated)"
+                },
+                {
+                  "id": "bob",
+                  "role": "contributor",
+                  "capacity": "Participant (simulated)"
+                },
+                {
+                  "id": "casey",
+                  "role": "observer",
+                  "capacity": "Observer (simulated)"
+                }
+              ],
+              "requests": [],
+              "links": []
+            }
+          }
+        },
+        "predecessor": null,
+        "journal": [],
+        "revision": 0,
+        "documentHash": "13c1c37185cebf6e77a3f1f88a14d093cc329416a6f5e28c204c6ea34bdf002b",
+        "projectionHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "sha256": "b42479efc0a31a1e87acb72c025b8f6313b2cfbe686c8535e08995cf0371a74e"
+    },
+    "events": [
+      {
+        "request": {
+          "action": "propose",
+          "actor": "alice",
+          "expectedBoardRevision": 0,
+          "id": "proposal_1",
+          "title": "Frame issue: How do we balance affordable access and reliable staffing?",
+          "change": {
+            "kind": "matter-item",
+            "matterId": "matter_1",
+            "item": {
+              "id": "access_and_staffing",
+              "kind": "issue",
+              "title": "How do we balance affordable access and reliable staffing?",
+              "body": "Costs and likely usage remain uncertain. Different priorities can be recorded without deciding whose priority should prevail.",
+              "issue": null,
+              "voice": null
+            },
+            "origin": {
+              "kind": "participant",
+              "label": "alice",
+              "briefHash": null,
+              "sourceHash": null
+            },
+            "baseRevision": 0
+          }
+        },
+        "headHash": "13c1c37185cebf6e77a3f1f88a14d093cc329416a6f5e28c204c6ea34bdf002b"
+      },
+      {
+        "request": {
+          "action": "review",
+          "actor": "bob",
+          "expectedBoardRevision": 1,
+          "id": "proposal_1",
+          "contentHash": "eedc2eb93aa067e7ab2a785340f5df7a1b6b9df95cdf8f24332c3754130d18f4",
+          "decision": "approve",
+          "comment": "Record this change accurately. It does not endorse a substantive position or require resolution."
+        },
+        "headHash": "13c1c37185cebf6e77a3f1f88a14d093cc329416a6f5e28c204c6ea34bdf002b"
+      },
+      {
+        "request": {
+          "action": "accept",
+          "actor": "bob",
+          "expectedBoardRevision": 2,
+          "id": "proposal_1",
+          "contentHash": "eedc2eb93aa067e7ab2a785340f5df7a1b6b9df95cdf8f24332c3754130d18f4",
+          "decision": "approve",
+          "comment": "Record this change accurately. It does not endorse a substantive position or require resolution."
+        },
+        "headHash": "c6c2f2a7e3b799e998ae54d66548f43af7a8a97bc921e70b38a1656762892694"
+      },
+      {
+        "request": {
+          "action": "propose",
+          "actor": "alice",
+          "expectedBoardRevision": 3,
+          "id": "proposal_2",
+          "title": "Manage matter: orient",
+          "change": {
+            "kind": "matter-manage",
+            "matterId": "matter_1",
+            "operation": "orient",
+            "payload": {
+              "purpose": "Understand the priorities and unknowns around a shared workshop before making commitments.",
+              "scope": "Fees, staffing and evidence needs. No lease, budget or staffing commitment is being agreed here."
+            },
+            "baseRevision": 1
+          }
+        },
+        "headHash": "c6c2f2a7e3b799e998ae54d66548f43af7a8a97bc921e70b38a1656762892694"
+      },
+      {
+        "request": {
+          "action": "review",
+          "actor": "bob",
+          "expectedBoardRevision": 4,
+          "id": "proposal_2",
+          "contentHash": "b50fae25d17a2350d2fb7232238661cb3d549f7d8ff8a5a88b691dc605fcdbcc",
+          "decision": "approve",
+          "comment": "Record this change accurately. It does not endorse a substantive position or require resolution."
+        },
+        "headHash": "c6c2f2a7e3b799e998ae54d66548f43af7a8a97bc921e70b38a1656762892694"
+      },
+      {
+        "request": {
+          "action": "accept",
+          "actor": "bob",
+          "expectedBoardRevision": 5,
+          "id": "proposal_2",
+          "contentHash": "b50fae25d17a2350d2fb7232238661cb3d549f7d8ff8a5a88b691dc605fcdbcc",
+          "decision": "approve",
+          "comment": "Record this change accurately. It does not endorse a substantive position or require resolution."
+        },
+        "headHash": "599e3a2fc7d8ab0cc540795e31f52263b49faf2b7b709c7845ce4e79c2c981b2"
+      },
+      {
+        "request": {
+          "action": "propose",
+          "actor": "alice",
+          "expectedBoardRevision": 6,
+          "id": "proposal_3",
+          "title": "Manage matter: request",
+          "change": {
+            "kind": "matter-manage",
+            "matterId": "matter_1",
+            "operation": "request",
+            "payload": {
+              "id": "cost_evidence",
+              "title": "What do we know about operating costs, and what is still missing?",
+              "assignee": "bob"
+            },
+            "baseRevision": 2
+          }
+        },
+        "headHash": "599e3a2fc7d8ab0cc540795e31f52263b49faf2b7b709c7845ce4e79c2c981b2"
+      },
+      {
+        "request": {
+          "action": "review",
+          "actor": "bob",
+          "expectedBoardRevision": 7,
+          "id": "proposal_3",
+          "contentHash": "329834a89f6e0a1a09667adefb510c902656125c7ca4f45e6555cd037cf0b685",
+          "decision": "approve",
+          "comment": "Record this change accurately. It does not endorse a substantive position or require resolution."
+        },
+        "headHash": "599e3a2fc7d8ab0cc540795e31f52263b49faf2b7b709c7845ce4e79c2c981b2"
+      },
+      {
+        "request": {
+          "action": "accept",
+          "actor": "bob",
+          "expectedBoardRevision": 8,
+          "id": "proposal_3",
+          "contentHash": "329834a89f6e0a1a09667adefb510c902656125c7ca4f45e6555cd037cf0b685",
+          "decision": "approve",
+          "comment": "Record this change accurately. It does not endorse a substantive position or require resolution."
+        },
+        "headHash": "4aebcad4157e93129b3bd6510a47d6e5dcd4c62481ff1d241363c33fb5838156"
+      },
+      {
+        "request": {
+          "action": "propose",
+          "actor": "bob",
+          "expectedBoardRevision": 9,
+          "id": "proposal_4",
+          "title": "Manage matter: respond",
+          "change": {
+            "kind": "matter-manage",
+            "matterId": "matter_1",
+            "operation": "respond",
+            "payload": {
+              "id": "cost_evidence",
+              "response": "We have no verified total yet. We need rent, insurance, equipment maintenance and staffing estimates before comparing options."
+            },
+            "baseRevision": 3
+          }
+        },
+        "headHash": "4aebcad4157e93129b3bd6510a47d6e5dcd4c62481ff1d241363c33fb5838156"
+      },
+      {
+        "request": {
+          "action": "review",
+          "actor": "alice",
+          "expectedBoardRevision": 10,
+          "id": "proposal_4",
+          "contentHash": "49d9562879ead5d3076e57b8e40e7c88dc7ec86355b23df7c54f9ae6bd7cc8f6",
+          "decision": "approve",
+          "comment": "Record this change accurately. It does not endorse a substantive position or require resolution."
+        },
+        "headHash": "4aebcad4157e93129b3bd6510a47d6e5dcd4c62481ff1d241363c33fb5838156"
+      },
+      {
+        "request": {
+          "action": "accept",
+          "actor": "alice",
+          "expectedBoardRevision": 11,
+          "id": "proposal_4",
+          "contentHash": "49d9562879ead5d3076e57b8e40e7c88dc7ec86355b23df7c54f9ae6bd7cc8f6",
+          "decision": "approve",
+          "comment": "Record this change accurately. It does not endorse a substantive position or require resolution."
+        },
+        "headHash": "c7573ee713f138f96b8f9a21dc30068e2df610c457ec6da09c1f9c6b5d6e818a"
+      },
+      {
+        "request": {
+          "action": "propose",
+          "actor": "alice",
+          "expectedBoardRevision": 12,
+          "id": "proposal_5",
+          "title": "Manage matter: transition",
+          "change": {
+            "kind": "matter-manage",
+            "matterId": "matter_1",
+            "operation": "transition",
+            "payload": {
+              "status": "concluded",
+              "reason": "We have recorded the unresolved trade-off and evidence gaps. We have not chosen fees or a staffing arrangement.",
+              "outcome": "disagreement"
+            },
+            "baseRevision": 4
+          }
+        },
+        "headHash": "c7573ee713f138f96b8f9a21dc30068e2df610c457ec6da09c1f9c6b5d6e818a"
+      },
+      {
+        "request": {
+          "action": "review",
+          "actor": "bob",
+          "expectedBoardRevision": 13,
+          "id": "proposal_5",
+          "contentHash": "7f7f7d1bac8b0445b0aaaeb1306a220ebdba1ffe11a2a31702fea3b6de8bbb5c",
+          "decision": "approve",
+          "comment": "Record this change accurately. It does not endorse a substantive position or require resolution."
+        },
+        "headHash": "c7573ee713f138f96b8f9a21dc30068e2df610c457ec6da09c1f9c6b5d6e818a"
+      },
+      {
+        "request": {
+          "action": "accept",
+          "actor": "bob",
+          "expectedBoardRevision": 14,
+          "id": "proposal_5",
+          "contentHash": "7f7f7d1bac8b0445b0aaaeb1306a220ebdba1ffe11a2a31702fea3b6de8bbb5c",
+          "decision": "approve",
+          "comment": "Record this change accurately. It does not endorse a substantive position or require resolution."
+        },
+        "headHash": "11f4851dc3339d4f37ede5bce4c654783b09c3713415a22e6733bf343ac096d7"
+      }
+    ],
+    "revision": 15,
+    "stateHash": "a46c792b4657ada6c1e354a510a1bf365014002e2e2de82fb3e510cd8e9a2ac2"
+  },
+  "sha256": "0f42704e88ddc7cdbf6eb850cc7b9b45aab043fdc3da09f715434daad8acc45f"
+}

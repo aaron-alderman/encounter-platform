@@ -1,0 +1,26 @@
+{
+  "protocol": "usewords/party-receiver-contract/1",
+  "status": "policy-qualified-effect-unimplemented",
+  "applicationId": "app.usewords",
+  "policy": "platform/parties.encounter#pr.prepare",
+  "requestFields": ["action", "matterId", "operationId", "expectedHead", "payload"],
+  "actions": ["read-shared", "read-private", "save-private", "shared-command", "packet"],
+  "trustedContextSource": "Receiver-owned session, CSRF/origin validation and current membership/slot/idempotency rows; never browser JSON",
+  "identityBinding": "Two distinct authenticated principals map to alice/bob protocol party slots. Persona labels alone are not real identities. Binding establishment/invitation requires the host identity and authorization service; no client can self-assign a slot.",
+  "scopeKeys": {"shared": ["application", "matterId"], "preparation": ["application", "matterId", "principal"], "operation": ["application", "matterId", "principal", "operationId"]},
+  "transactionRequirements": [
+    "Pin the exact receiver policy hash and application/native runtime source closure; qualify and admit before activation.",
+    "Authenticate the session and revalidate current membership, revocation and origin/CSRF at every operation, including idempotency reconciliation.",
+    "Load only the current principal's preparation slot for private operations. Private values must never enter shared reads, model briefs, public logs, packets or shared event history.",
+    "Never accept actor, principal, trusted context, owner, session or arbitrary process queries from a client. Derive protocol actor from current trusted membership.",
+    "For a write, read the exact head and run policy inside one transaction, atomically compare-and-swap value/head and commit the principal-scoped operation outcome. Policy preparation alone is not a write.",
+    "Enforce unique scoped operation identifiers and request hashes. Return an earlier exact result only after authorization; changed content under the same identifier refuses.",
+    "After an uncertain response, read operation status. Do not automatically repeat an uncertain write.",
+    "Refuse stale heads; return a scoped conflict that requires reload and fresh proposal/review. No silent overwrite or approval rebase.",
+    "Enforce byte, record, event, execution and pagination bounds server-side. Roll back all effects on any policy/storage failure.",
+    "Restart durability, concurrent transactions, session revocation and cross-session isolation require tests on the actual receiver. Browser-local read-before-write is non-atomic and cannot qualify those effects."
+  ],
+  "requiredQualification": ["two actual independently authenticated sessions", "forged actor denial", "cross-party private read/write denial", "membership revocation on retry", "simultaneous stale-head conflict", "atomic rollback", "restart durability", "lost-response reconciliation", "private data absent from shared exports and logs", "exact shared packet replay"],
+  "currentBoundary": "Connected worker has no Usewords application write/identity receiver. Candidate tests supply trusted fixtures; no real identity, private security boundary, transaction effect or platform persistence is claimed.",
+  "deployment": false
+}

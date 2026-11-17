@@ -1,0 +1,446 @@
+# Usewords language, authoring, inspection and acceptance processes.
+# Authoritative source. JSON is a generated representation.
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process uw.hash:
+  port json.stringify { value = $eventInput; space = 0 } → encoded
+  port digest.sha256 { text = $encoded } → result
+
+process uw.project:
+  port kernel.invoke { query = "ec.prepare"; input = $eventInput } → candidate
+  port kernel.invoke { query = "ec.run"; input = { candidate = $candidate } } → projections
+  port kernel.invoke { query = "uw.hash"; input = $eventInput } → inputHash
+  port kernel.invoke { query = "uw.hash"; input = $projections } → projectionHash
+  let result = { inputs = $eventInput; projections = $projections; inputHash = $inputHash; projectionHash = $projectionHash }
+
+process uw.initial:
+  port kernel.invoke { query = "uw.project"; input = $data.canonical } → base
+  let result = { inputs = $base.inputs; projections = $base.projections; inputHash = $base.inputHash; projectionHash = $base.projectionHash; revision = 0; events = list() }
+
+process uw.parse:
+  port value.describe { value = $eventInput } → kind
+  assert eq($kind.type, "string")
+    otherwise "UW-WORDS: Enter a supported sentence."
+  port number.calculate { operation = "lessEqual"; values = list(count($eventInput), 512) } → bounded
+  assert $bounded
+    otherwise "UW-LIMIT: Words must fit within 512 characters."
+  port text.trim { value = $eventInput } → words
+  let parsed = null
+  fold $data.words.commands as grammar; parsed starts null:
+    port text.match { value = $words; pattern = $grammar.pattern } → match
+    when $match:
+      assert eq($parsed, null)
+        otherwise "UW-WORDS: Ambiguous command."
+      let parsed = { kind = $grammar.kind; value = if(eq(count($match.groups), 0), "", at($match.groups, 0)) }
+      when at($grammar, "target"):
+        let parsed = { kind = $grammar.kind; value = at($match.groups, 0); target = $grammar.target }
+    yield $parsed → parsed
+  assert $parsed
+    otherwise "UW-WORDS: Use one of the supported sentence forms below."
+  let result = $parsed
+
+process uw.change:
+  when eq(at($eventInput.state, "profile"), "journeys.v1"):
+    port kernel.invoke { query = "uw.journeyChange"; input = $eventInput } → result
+  when not(eq(at($eventInput.state, "profile"), "journeys.v1")):
+    let current = $eventInput.state
+    let request = $eventInput.request
+    assert eq($request.baseRevision, $current.revision)
+      otherwise "UW-STALE: The revision changed. Reinspect before editing."
+    assert includes(list("shared-title", "menu-label"), $request.kind)
+      otherwise "UW-AUTHORITY: Only shared-title and menu-label edits are supported."
+    port value.describe { value = $request.value } → valueKind
+    assert eq($valueKind.type, "string")
+      otherwise "UW-TYPE: An edit value must be text."
+    port number.calculate { operation = "lessEqual"; values = list(count($request.value), 160) } → bounded
+    assert $bounded
+      otherwise "UW-LIMIT: Labels are limited to 160 characters."
+    port number.calculate { operation = "less"; values = list(count($current.events), 32) } → bounded
+    assert $bounded
+      otherwise "UW-LIMIT: Accept or start a new reconstruction after 32 edits."
+    port kernel.invoke { query = "ec.prepare"; input = $current.inputs } → candidate
+    port kernel.invoke { query = "lab.edit"; input = { candidate = $candidate; kind = if(eq($request.kind, "shared-title"), "title", "web-label"); value = $request.value } } → patched
+    port kernel.invoke { query = "uw.project"; input = $patched.candidate.inputs } → next
+    assert not(eq($next.inputHash, $current.inputHash))
+      otherwise "UW-NOOP: This edit does not change the source."
+    let record = { kind = $request.kind; value = $request.value; beforeInputHash = $current.inputHash; afterInputHash = $next.inputHash; afterProjectionHash = $next.projectionHash; destination = $patched.destination }
+    let result = { inputs = $next.inputs; projections = $next.projections; inputHash = $next.inputHash; projectionHash = $next.projectionHash; revision = add($current.revision, 1); events = append($current.events, list($record)) }
+
+process uw.reconstruct:
+  assert eq($eventInput.protocol, "usewords/acceptance/1")
+    otherwise "UW-REPLAY: Unsupported acceptance format."
+  let receipt = $eventInput
+  assert eq($receipt.body.programHash, $data.programHash)
+    otherwise "UW-REPLAY: Process identity differs."
+  assert includes(list("example.v1", "journeys.v1"), at($receipt.body, "profile"))
+    otherwise "UW-REPLAY: Unknown reconstruction profile."
+  assert eq($receipt.body.canonicalHash, if(eq($receipt.body.profile, "journeys.v1"), $data.journeyCanonicalHash, $data.canonicalHash))
+    otherwise "UW-REPLAY: Canonical source identity differs."
+  port value.describe { value = $receipt.body.events } → eventsKind
+  assert $eventsKind.array
+    otherwise "UW-REPLAY: Events must be a list."
+  port number.calculate { operation = "lessEqual"; values = list(count($receipt.body.events), 32) } → bounded
+  assert $bounded
+    otherwise "UW-LIMIT: Too many replay events."
+  port kernel.invoke { query = "uw.hash"; input = $receipt.body } → receiptHash
+  assert eq($receiptHash, $receipt.sha256)
+    otherwise "UW-REPLAY: Receipt hash mismatch."
+  port kernel.invoke { query = "uw.initial"; input = {  } } → replayed
+  when eq($receipt.body.profile, "journeys.v1"):
+    port kernel.invoke { query = "uw.journeyInitial"; input = {  } } → replayed
+  fold $receipt.body.events as event; replayed starts $replayed:
+    port kernel.invoke { query = "uw.change"; input = { state = $replayed; request = { kind = $event.kind; value = $event.value; target = at($event, "target"); baseRevision = $replayed.revision } } } → replayed
+    assert eq(at($replayed.events, add(count($replayed.events), -1)), $event)
+      otherwise "UW-REPLAY: Event or edit destination differs."
+    yield $replayed → replayed
+  assert eq($replayed.inputHash, $receipt.body.inputHash)
+    otherwise "UW-REPLAY: Final source differs."
+  assert eq($replayed.projectionHash, $receipt.body.projectionHash)
+    otherwise "UW-REPLAY: Final projections differ."
+  assert eq($replayed.revision, $receipt.body.revision)
+    otherwise "UW-REPLAY: Final revision differs."
+  let result = $replayed
+
+process uw.accept:
+  let current = $eventInput.state
+  assert eq($eventInput.expectedRevision, $current.revision)
+    otherwise "UW-STALE: Acceptance revision changed."
+  assert eq($eventInput.expectedInputHash, $current.inputHash)
+    otherwise "UW-STALE: Acceptance source changed."
+  let body = { profile = if(eq(at($current, "profile"), "journeys.v1"), "journeys.v1", "example.v1"); programHash = $data.programHash; canonicalHash = if(eq(at($current, "profile"), "journeys.v1"), $data.journeyCanonicalHash, $data.canonicalHash); revision = $current.revision; events = $current.events; inputHash = $current.inputHash; projectionHash = $current.projectionHash }
+  port kernel.invoke { query = "uw.hash"; input = $body } → receiptHash
+  let receipt = { protocol = "usewords/acceptance/1"; body = $body; sha256 = $receiptHash }
+  port kernel.invoke { query = "uw.reconstruct"; input = $receipt } → replayed
+  assert eq($replayed.inputs, $current.inputs)
+    otherwise "UW-ACCEPT: Replay does not reconstruct this source."
+  assert eq($replayed.projections, $current.projections)
+    otherwise "UW-ACCEPT: Replay does not reconstruct these projections."
+  let result = $receipt
+
+process uw.replay:
+  port kernel.invoke { query = "uw.reconstruct"; input = $eventInput } → state
+  let result = { ok = true; revision = $state.revision; inputHash = $state.inputHash; projectionHash = $state.projectionHash; projections = $state.projections }
+
+process uw.propose:
+  let proposal = $eventInput
+  port kernel.invoke { query = "uw.initial"; input = {  } } → current
+  when eq(at($proposal, "profile"), "journeys.v1"):
+    port kernel.invoke { query = "uw.journeyInitial"; input = {  } } → current
+  when $proposal.receipt:
+    port kernel.invoke { query = "uw.reconstruct"; input = $proposal.receipt } → current
+  port kernel.invoke { query = "uw.change"; input = { state = $current; request = $proposal.request } } → changed
+  port kernel.invoke { query = "uw.accept"; input = { state = $changed; expectedRevision = $changed.revision; expectedInputHash = $changed.inputHash } } → result
+
+process uw.inspect:
+  let current = $eventInput.state
+  let selection = $eventInput.selection
+  assert includes(list("facts", "meaning", "contract", "process", "generated", "map", "languages", "receipt"), $selection)
+    otherwise "UW-INSPECT: Unknown source selection."
+  let journeyMode = eq(at($current, "profile"), "journeys.v1")
+  let document = { file = if($journeyMode, "source/journeys.rel", "source/experiment/story.rel"); text = $current.inputs.factText }
+  when eq($selection, "meaning"):
+    let document = { file = if($journeyMode, "source/journeys.encounter", "source/experiment/story.encounter"); text = $current.inputs.codeText }
+  when eq($selection, "contract"):
+    let document = { file = if($journeyMode, "source/journeys-contracts.rel", "source/experiment/contracts.rel"); text = $current.inputs.contractText }
+  when eq($selection, "process"):
+    let document = { file = "source/usewords.encounter"; text = $data.policySource }
+  when eq($selection, "generated"):
+    port json.stringify { value = $data.policy; space = 2 } → text
+    let document = { file = "dist/algebra/usewords.process.json"; text = $text }
+  when eq($selection, "map"):
+    let definitions = filter($data.sourceMap.origins, "origin", eq($origin.kind, "process-definition"))
+    port json.stringify { value = { file = $data.sourceMap.file; sourceHash = $data.sourceMap.sourceHash; basis = $data.sourceMap.basis; scope = "Process-definition ranges; the complete map is in dist/algebra/usewords.process.json.map.json"; origins = $definitions }; space = 2 } → text
+    let document = { file = "usewords-definition-map.json"; text = $text }
+  when eq($selection, "languages"):
+    port json.stringify { value = $data.languages; space = 2 } → text
+    let document = { file = "source/languages.json"; text = $text }
+  when eq($selection, "receipt"):
+    port json.stringify { value = { revision = $current.revision; inputHash = $current.inputHash; projectionHash = $current.projectionHash; events = $current.events }; space = 2 } → text
+    let document = { file = "current-session-events.json"; text = $text }
+  port digest.sha256 { text = $document.text } → sourceHash
+  let result = { file = $document.file; text = $document.text; sha256 = $sourceHash; revision = $current.revision; scope = "Exact current source or recorded session events. Static definitions are not execution traces." }
+
+process uw.present:
+  port kernel.invoke {
+    query = "sp.present";
+    input = {
+      text = $eventInput.text;
+      file = $eventInput.file;
+      language = "auto";
+      theme = "light";
+      expectedHash = $eventInput.sha256;
+      lineNumbers = true;
+      selectedLine = null;
+      origin = { file = $eventInput.file }
+    }
+  } → result
+
+process uw.document:
+  let input = $data.page
+  call html.serialize
+
+process uw.sourceView:
+  port kernel.invoke { query = "uw.present"; input = $eventInput } → presentation
+  let input = $presentation.tree
+  call html.serialize
+  let result = { presentation = $presentation; html = $result }
+
+process uw.styles:
+  let styleRules = $data.style.rules
+  call uw.styleRules
+  let css = $result
+  fold $data.style.media as media; css starts $css:
+    let styleRules = $media.rules
+    call uw.styleRules
+    yield concat($css, "@media", $media.condition, "{", $result, "}\n") → result
+  let applicationCss = $result
+  call sp.style
+  let result = concat($applicationCss, "\n", $result)
+
+process uw.paint:
+  port state.get { key = "current" } → current
+  let page = at(filter($current.projections, "p", eq($p.output.type, "Page")), 0)
+  let row = at(filter($current.projections, "p", eq($p.output.type, "MainframeRow")), 0)
+  let menu = at(filter($current.projections, "p", eq($p.output.type, "WebLink")), 0)
+  let input = $page.output.tree
+  call html.serialize
+  port browser.content { ref = "#reading"; html = $result } → _
+  port browser.write { ref = "#row-title"; name = "textContent"; value = at($row.values, "N.label") } → _
+  port browser.write { ref = "#menu-title"; name = "textContent"; value = at($menu.values, "N.label") } → _
+  port browser.write { ref = "#revision"; name = "textContent"; value = concat("Revision ", $current.revision) } → _
+  port browser.write { ref = "#source-hash"; name = "textContent"; value = $current.inputHash } → _
+  port browser.write { ref = "#projection-hash"; name = "textContent"; value = $current.projectionHash } → _
+  port json.stringify { value = $current.events; space = 2 } → eventText
+  port browser.write { ref = "#events"; name = "textContent"; value = $eventText } → _
+  port state.get { key = "selection" } → selection
+  port kernel.invoke { query = "uw.inspect"; input = { state = $current; selection = $selection } } → inspected
+  port browser.write { ref = "#inspection-file"; name = "textContent"; value = $inspected.file } → _
+  port browser.write { ref = "#inspection-hash"; name = "textContent"; value = $inspected.sha256 } → _
+  port kernel.invoke { query = "uw.sourceView"; input = $inspected } → sourceView
+  let presentation = $sourceView.presentation
+  port browser.content { ref = "#inspection-source"; html = $sourceView.html } → _
+  port browser.write { ref = "#presentation-status"; name = "textContent"; value = if($presentation.diagnostic, $presentation.diagnostic, concat("Shared Worldwright presenter · ", $presentation.language, " · exact source text · UTF-16 coordinates")) } → _
+  each list("meaning", "facts", "contract", "process", "generated", "map", "languages", "receipt") as choice:
+    port browser.write { ref = concat("#inspect-", $choice); name = "className"; value = if(eq($selection, $choice), "is-selected", "") } → _
+  call uw.journeyPaint
+  port state.get { key = "notice" } → notice
+  port browser.write { ref = "#notice"; name = "textContent"; value = $notice } → _
+  let result = { revision = $current.revision; inputHash = $current.inputHash; projectionHash = $current.projectionHash }
+
+process uw.words:
+  port browser.property { ref = "#words"; name = "value" } → words
+  port kernel.invoke { query = "uw.parse"; input = $words } → request
+  port state.get { key = "current" } → current
+  when eq($request.kind, "recreate"):
+    port kernel.invoke { query = "uw.journeyInitial"; input = {  } } → current
+    port state.set { key = "current"; value = $current } → _
+    port state.set { key = "notice"; value = "Recreated one real encounter in two journeys through ec.prepare and ec.run. Nothing is accepted yet." } → _
+  when not(eq($request.kind, "recreate")):
+    port kernel.invoke { query = "uw.change"; input = { state = $current; request = { kind = $request.kind; value = $request.value; target = at($request, "target"); baseRevision = $current.revision } } } → changed
+    port state.set { key = "current"; value = $changed } → _
+    port state.set { key = "notice"; value = if(eq($request.kind, "shared-title"), "Shared title changed once. Both journeys read the new title; their introductions stay independent.", if(eq($request.kind, "journey-intro"), "Changed one journey introduction. The other introduction and shared encounter are unchanged.", "Only the menu label changed through its declared local edit route.")) } → _
+  call uw.paint
+
+process uw.action:
+  try:
+    call uw.words
+  catch fault:
+    port state.set { key = "notice"; value = concat("Refused: ", $fault.message) } → _
+    call uw.paint
+
+process uw.choose:
+  port state.set { key = "selection"; value = $eventInput.selection } → _
+  call uw.paint
+
+process uw.example:
+  port browser.write { ref = "#words"; name = "value"; value = $eventInput.words } → _
+
+process uw.acceptUI:
+  try:
+    port state.get { key = "current" } → current
+    port kernel.invoke { query = "uw.accept"; input = { state = $current; expectedRevision = $current.revision; expectedInputHash = $current.inputHash } } → receipt
+    port json.stringify { value = $receipt; space = 2 } → encoded
+    port storage.write { key = "usewords.lightning.accepted.v1"; value = $encoded } → stored
+    assert $stored.ok
+      otherwise "UW-STORAGE: Acceptance replay passed, but browser storage failed. No durable acceptance was recorded."
+    port state.set { key = "accepted"; value = $receipt } → _
+    port browser.write { ref = "#receipt-input"; name = "value"; value = $encoded } → _
+    port state.set { key = "notice"; value = "Accepted after a fresh replay. Saved in this browser; export the receipt to reproduce it elsewhere." } → _
+    call uw.paint
+  catch fault:
+    port state.set { key = "notice"; value = concat("Refused: ", $fault.message) } → _
+    call uw.paint
+
+process uw.importUI:
+  try:
+    port browser.property { ref = "#receipt-input"; name = "value" } → encoded
+    port number.calculate { operation = "lessEqual"; values = list(count($encoded), 131072) } → bounded
+    assert $bounded
+      otherwise "UW-LIMIT: Receipt is too large."
+    port json.parse { text = $encoded } → receipt
+    port kernel.invoke { query = "uw.reconstruct"; input = $receipt } → current
+    port state.set { key = "current"; value = $current } → _
+    port state.set { key = "notice"; value = "Receipt replay passed. Reconstructed as a draft; choose Accept to save it in this browser." } → _
+    call uw.paint
+  catch fault:
+    port state.set { key = "notice"; value = concat("Refused: ", $fault.message) } → _
+    call uw.paint
+
+process uw.exportUI:
+  try:
+    port state.get { key = "accepted" } → receipt
+    assert $receipt
+      otherwise "UW-EXPORT: Accept a revision before exporting."
+    port json.stringify { value = $receipt; space = 2 } → encoded
+    port download.text { name = "usewords-acceptance.json"; text = $encoded } → _
+    port state.set { key = "notice"; value = "Exported the last accepted revision. Unaccepted edits are excluded." } → _
+    call uw.paint
+  catch fault:
+    port state.set { key = "notice"; value = concat("Refused: ", $fault.message) } → _
+    call uw.paint
+
+process uw.open:
+  port browser.focus { ref = "#reading" } → _
+  port state.set { key = "notice"; value = "Opened TheStory. Page, row and menu retain the same encounter identity." } → _
+  call uw.paint
+
+process uw.agent:
+  assert includes(list("command", "accept", "inspect"), $eventInput.operation)
+    otherwise "UW-AUTHORITY: Unknown agent operation."
+  let request = $eventInput
+  when eq($request.operation, "command"):
+    port state.get { key = "current" } → current
+    assert eq($request.baseRevision, $current.revision)
+      otherwise "UW-STALE: Agent revision changed."
+    port kernel.invoke { query = "uw.parse"; input = $request.words } → parsed
+    assert not(eq($parsed.kind, "recreate"))
+      otherwise "UW-AUTHORITY: Recreate through the explicit UI action."
+    port kernel.invoke { query = "uw.change"; input = { state = $current; request = { kind = $parsed.kind; value = $parsed.value; target = at($parsed, "target"); baseRevision = $request.baseRevision } } } → changed
+    port state.set { key = "current"; value = $changed } → _
+    port state.set { key = "notice"; value = "Agent proposal applied as a draft through the same edit process." } → _
+    call uw.paint
+  when eq($request.operation, "inspect"):
+    port state.get { key = "current" } → current
+    port kernel.invoke { query = "uw.inspect"; input = { state = $current; selection = $request.selection } } → result
+  when eq($request.operation, "accept"):
+    port state.get { key = "current" } → current
+    port kernel.invoke { query = "uw.accept"; input = { state = $current; expectedRevision = $request.baseRevision; expectedInputHash = $request.inputHash } } → result
+
+process uw.boot:
+  port kernel.invoke { query = "uw.journeyInitial"; input = {  } } → current
+  port state.set { key = "current"; value = $current } → _
+  port state.set { key = "selection"; value = "meaning" } → _
+  port state.set { key = "accepted"; value = null } → _
+  port state.set { key = "notice"; value = "One real encounter, two newly authored journeys. Change the shared title, then an introduction in just one journey." } → _
+  try:
+    port storage.read { key = "usewords.lightning.accepted.v1"; maxLength = 131072 } → stored
+    when and($stored.ok, not(eq($stored.value, null))):
+      port json.parse { text = $stored.value } → receipt
+      port kernel.invoke { query = "uw.reconstruct"; input = $receipt } → restored
+      port state.set { key = "current"; value = $restored } → _
+      port state.set { key = "accepted"; value = $receipt } → _
+      port browser.write { ref = "#receipt-input"; name = "value"; value = $stored.value } → _
+      port state.set { key = "notice"; value = "Restored the accepted encounter after checking its hashes and replaying every edit." } → _
+    when not($stored.ok):
+      port state.set { key = "notice"; value = "Browser storage is unavailable. Draft edits work; acceptance requires storage. Export/import is available after acceptance." } → _
+  catch fault:
+    port state.set { key = "notice"; value = concat("Saved acceptance refused; canonical draft retained. ", $fault.message) } → _
+  port browser.on { ref = "#words-form"; event = "submit"; query = "uw.action"; input = {  }; preventDefault = true } → _
+  port browser.on { ref = "#accept"; event = "click"; query = "uw.acceptUI"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#export"; event = "click"; query = "uw.exportUI"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#import"; event = "click"; query = "uw.importUI"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#menu-open"; event = "click"; query = "uw.open"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#row-open"; event = "click"; query = "uw.open"; input = {  }; preventDefault = false } → _
+  port browser.on { ref = "#inspect-meaning"; event = "click"; query = "uw.choose"; input = { selection = "meaning" }; preventDefault = false } → _
+  port browser.on { ref = "#inspect-facts"; event = "click"; query = "uw.choose"; input = { selection = "facts" }; preventDefault = false } → _
+  port browser.on { ref = "#inspect-contract"; event = "click"; query = "uw.choose"; input = { selection = "contract" }; preventDefault = false } → _
+  port browser.on { ref = "#inspect-process"; event = "click"; query = "uw.choose"; input = { selection = "process" }; preventDefault = false } → _
+  port browser.on { ref = "#inspect-generated"; event = "click"; query = "uw.choose"; input = { selection = "generated" }; preventDefault = false } → _
+  port browser.on { ref = "#inspect-map"; event = "click"; query = "uw.choose"; input = { selection = "map" }; preventDefault = false } → _
+  port browser.on { ref = "#inspect-languages"; event = "click"; query = "uw.choose"; input = { selection = "languages" }; preventDefault = false } → _
+  port browser.on { ref = "#inspect-receipt"; event = "click"; query = "uw.choose"; input = { selection = "receipt" }; preventDefault = false } → _
+  port browser.on { ref = "#example-recreate"; event = "click"; query = "uw.example"; input = { words = "Recreate the two journeys." }; preventDefault = false } → _
+  port browser.on { ref = "#example-shared"; event = "click"; query = "uw.example"; input = { words = "Rename the encounter to \"The horse asks us to listen.\"." }; preventDefault = false } → _
+  port browser.on { ref = "#example-local"; event = "click"; query = "uw.example"; input = { words = "Introduce it in Listening well as \"Before offering a lesson, notice the question you are being asked.\"." }; preventDefault = false } → _
+  port browser.on { ref = "#example-making"; event = "click"; query = "uw.example"; input = { words = "Introduce it in Making with care as \"Make an invitation that leaves room for a different response.\"." }; preventDefault = false } → _
+  call uw.paint
+
+process uw.styleRules:
+  fold $styleRules as rule; css starts "":
+    fold $rule.declarations as declaration; body starts "":
+      yield concat($body, $declaration.name, ":", $declaration.value, ";") → body
+    yield concat($css, $rule.selector, "{", $body, "}\n") → result
+
+process uw.journeyInitial:
+  port kernel.invoke { query = "uw.project"; input = $data.journeyCanonical } → base
+  let result = { profile = "journeys.v1"; inputs = $base.inputs; projections = $base.projections; inputHash = $base.inputHash; projectionHash = $base.projectionHash; revision = 0; events = list() }
+  port kernel.invoke { query = "uw.journeys"; input = $result } → checked
+
+process uw.journeys:
+  let current = $eventInput
+  let entries = filter($current.projections, "p", eq($p.output.type, "JourneyEntry"))
+  assert eq(count($entries), 2)
+    otherwise "UW-JOURNEY: Both journey entries must exist."
+  let shared = at(filter($current.projections, "p", eq($p.output.type, "Page")), 0)
+  each $data.journeys.journeys as journey:
+    let matching = filter($entries, "p", eq($p.contribution.id, $journey.id))
+    assert eq(count($matching), 1)
+      otherwise "UW-JOURNEY: Each journey must have exactly one contribution."
+    let entry = at($matching, 0)
+    assert and(eq($entry.source, $data.journeys.subject), eq(at($entry.values, "J.subject"), $data.journeys.subject), eq(at($entry.values, "J.title"), at($shared.values, "P.title")), eq(at($entry.values, "J.paragraphs"), at($shared.values, "P.paragraphs")))
+      otherwise "UW-JOURNEY: Both journeys must preserve the shared encounter identity and content."
+  let result = $entries
+
+process uw.journeyChange:
+  let current = $eventInput.state
+  let request = $eventInput.request
+  assert eq($request.baseRevision, $current.revision)
+    otherwise "UW-STALE: The revision changed. Reinspect before editing."
+  assert includes(list("shared-title", "menu-label", "journey-intro"), $request.kind)
+    otherwise "UW-AUTHORITY: Only declared shared and local edit routes are supported."
+  port value.describe { value = $request.value } → valueKind
+  assert eq($valueKind.type, "string")
+    otherwise "UW-TYPE: An edit value must be text."
+  port number.calculate { operation = "lessEqual"; values = list(count($request.value), 160) } → bounded
+  assert $bounded
+    otherwise "UW-LIMIT: Edit text is limited to 160 characters."
+  port number.calculate { operation = "less"; values = list(count($current.events), 32) } → bounded
+  assert $bounded
+    otherwise "UW-LIMIT: At most 32 edits are supported per reconstruction."
+  let target = null
+  let matches = filter($current.projections, "p", eq($p.output.type, if(eq($request.kind, "shared-title"), "Page", "WebLink")))
+  let field = if(eq($request.kind, "shared-title"), "P.title", "N.label")
+  when eq($request.kind, "journey-intro"):
+    let target = at($request, "target")
+    assert includes(list("journey.Listening", "journey.Making"), $target)
+      otherwise "UW-JOURNEY: Name exactly one known journey for a local introduction edit."
+    let matches = filter($current.projections, "p", and(eq($p.output.type, "JourneyEntry"), eq(at($p.contribution, "id"), $target)))
+    let field = "J.introduction"
+  assert eq(count($matches), 1)
+    otherwise "UW-JOURNEY: The edit must select exactly one current projection."
+  port kernel.invoke { query = "ec.prepare"; input = $current.inputs } → candidate
+  port kernel.invoke { query = "ec.patch"; input = { candidate = $candidate; projection = at($matches, 0); field = $field; value = $request.value } } → patched
+  port kernel.invoke { query = "uw.project"; input = $patched.candidate.inputs } → next
+  assert not(eq($next.inputHash, $current.inputHash))
+    otherwise "UW-NOOP: This edit does not change the source."
+  let changed = { profile = "journeys.v1"; inputs = $next.inputs; projections = $next.projections; inputHash = $next.inputHash; projectionHash = $next.projectionHash; revision = add($current.revision, 1); events = append($current.events, list({ kind = $request.kind; target = $target; value = $request.value; beforeInputHash = $current.inputHash; afterInputHash = $next.inputHash; afterProjectionHash = $next.projectionHash; destination = $patched.destination })) }
+  port kernel.invoke { query = "uw.journeys"; input = $changed } → checked
+  let result = $changed
+
+process uw.journeyPaint:
+  port state.get { key = "current" } → current
+  let active = eq(at($current, "profile"), "journeys.v1")
+  port browser.write { ref = "#journeys-preview"; name = "hidden"; value = not($active) } → _
+  port browser.write { ref = "#legacy-preview"; name = "hidden"; value = $active } → _
+  when $active:
+    port kernel.invoke { query = "uw.journeys"; input = $current } → entries
+    each $data.journeys.journeys as journey:
+      let entry = at(filter($entries, "p", eq($p.contribution.id, $journey.id)), 0)
+      let input = $entry.output.tree
+      call html.serialize
+      port browser.content { ref = $journey.mount; html = $result } → _
+      let localChanges = filter($current.events, "event", and(eq($event.kind, "journey-intro"), eq(at($event, "target"), $journey.id)))
+      port browser.write { ref = $journey.badge; name = "textContent"; value = if(eq(count($localChanges), 0), "Own introduction · shared encounter", "Local introduction edited · shared encounter preserved") } → _
+    let sharedChanges = filter($current.events, "event", eq($event.kind, "shared-title"))
+    port browser.write { ref = "#shared-proof"; name = "textContent"; value = if(eq(count($sharedChanges), 0), "One encounter identity. Two introductions. A single shared title and text.", "Shared title edited once → both journeys updated. Their introductions stay independent.") } → _

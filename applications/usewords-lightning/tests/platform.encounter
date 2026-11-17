@@ -1,0 +1,382 @@
+process-module "temple/surface-process-module/1"
+
+process fixture.platform.prepare:
+  let request = at($eventInput, 0)
+  let context = if(eq(at($eventInput, 1), at({}, "absent")), $trusted, at($eventInput, 1))
+  port test.invoke { entry = "wp.prepare"; input = { request = $request; trusted = $context }; platform = $platform } → observedRun1
+  let result = at($observedRun1, "value")
+
+process fixture.platform.prepareParty:
+  let request = if(eq(at($eventInput, 0), at({}, "absent")), $partyRequest, at($eventInput, 0))
+  let context = if(eq(at($eventInput, 1), at({}, "absent")), $partyTrusted, at($eventInput, 1))
+  port test.invoke { entry = "pr.prepare"; input = { request = $request; trusted = $context }; platform = $platform } → observedRun2
+  let result = at($observedRun2, "value")
+
+process fixture.platform.setup:
+  port test.runtime {} → observedRuntime3
+  let app = $observedRuntime3
+  port test.openPlatform {
+    files = list("platform/service.encounter", "platform/parties.encounter");
+    entry = "wp.prepare"
+  } → projection
+  let platform = $projection.id
+  let overlaps = $projection.overlaps
+  assert eq($overlaps, list())
+    otherwise "Platform processes must have distinct names from one another and from the live runtime"
+  port test.invoke { entry = "ws.initial"; input = {}; platform = $platform } → observedRun5
+  let initial = at($observedRun5, "value")
+  port test.invoke { entry = "ws.accept"; input = { state = $initial; expectedRevision = at($initial, "revision"); expectedHash = at($initial, "documentHash") }; platform = $platform } → observedRun6
+  let receipt = at($observedRun6, "value")
+  let trusted = { authenticated = true; principal = "owner-a"; origin = "https://usewords.ai"; current = null }
+  let request = { action = "accept"; workspace = "lightning"; operationId = "accept_one"; expectedHead = null; receipt = $receipt }
+  port test.invoke { entry = "mw.create"; input = { id = "workshop"; title = "A shared workshop"; description = "Explore different priorities without requiring agreement." }; platform = $platform } → observedRun7
+  let partyBoard = at($observedRun7, "value")
+  port test.invoke { entry = "cw.receipt"; input = $partyBoard; platform = $platform } → observedRun8
+  let partyReceipt = at($observedRun8, "value")
+  let partyTrusted = { applicationId = "app.usewords"; programHash = at($app, "identity"); authenticated = true; csrfVerified = true; principal = "subject-a"; matterId = "workshop"; members = list({ principal = "subject-a"; actor = "alice" }, { principal = "subject-b"; actor = "bob" }); sharedSlot = { matterId = "workshop"; head = "shared-head"; value = $partyReceipt }; privateSlot = { principal = "subject-a"; matterId = "workshop"; head = null; value = null }; priorOperation = null }
+  let partyRequest = { action = "shared-command"; matterId = "workshop"; operationId = "include_issue"; expectedHead = "shared-head"; payload = { action = "propose"; expectedBoardRevision = 0; id = "issue_one"; title = "Include an open question"; change = { kind = "matter-item"; matterId = "workshop"; baseRevision = 0; item = { id = "balance"; kind = "issue"; title = "How should priorities be balanced?"; body = "We still need costs and usage evidence."; issue = null; voice = null }; origin = { kind = "participant"; label = "alice"; briefHash = null; sourceHash = null } } } }
+
+# proposed platform policy prepares owner-scoped replayed acceptance without claiming an effect
+process test.platform.proposed-platform-policy-prepares-owner-scoped-replayed-acceptance-without-claiming-an-effect:
+  call fixture.platform.setup
+  port kernel.invoke { query = "fixture.platform.prepare"; input = list($request) } → observedResult9
+  let command = $observedResult9
+  assert eq(at($command, "owner"), "owner-a")
+    otherwise "Expected equal(command.owner,'owner-a')"
+  assert eq(at(at(at($command, "value"), "accepted"), "sha256"), at($receipt, "sha256"))
+    otherwise "Expected equal(command.value.accepted.sha256,receipt.sha256)"
+  assert eq(at($command, "applicationAdmission"), false)
+    otherwise "Expected equal(command.applicationAdmission,false)"
+  assert eq(at($command, "requiredEffect"), "authenticated-atomic-compare-and-swap-with-idempotency")
+    otherwise "Expected equal(command.requiredEffect,'authenticated-atomic-compare-and-swap-with-idempotency')"
+  port kernel.invoke { query = "fixture.platform.prepare"; input = list($request) } → observedResult10
+  assert eq($command, $observedResult10)
+    otherwise "Expected deepEqual(command,await prepare(request))"
+  let bad = $receipt
+  port test.repeat { text = "0"; count = 64 } → observedRepeated11
+  port test.put { value = $bad; key = "sha256"; replacement = $observedRepeated11 } → observedUpdated12
+  let bad = $observedUpdated12
+  let observedRefused13 = false
+  port test.merge { records = list($request, { receipt = $bad }) } → observedRecord14
+  try:
+    port kernel.invoke { query = "fixture.platform.prepare"; input = list($observedRecord14) } → observedResult15
+  catch observedFault16:
+    port test.match { text = $observedFault16.message; pattern = "hash mismatch"; flags = "" } → observedDiagnostic17
+    let observedRefused13 = $observedDiagnostic17
+  assert $observedRefused13
+    otherwise "Expected rejects(prepare({...request,receipt:bad}),/hash mismatch/)"
+
+# proposed platform policy denies missing identity, cross-owner scope and stale heads
+process test.platform.proposed-platform-policy-denies-missing-identity-cross-owner-scope-and-stale-heads:
+  call fixture.platform.setup
+  let observedRefused18 = false
+  port test.merge { records = list($trusted, { authenticated = false }) } → observedRecord19
+  try:
+    port kernel.invoke { query = "fixture.platform.prepare"; input = list($request, $observedRecord19) } → observedResult20
+  catch observedFault21:
+    port test.match { text = $observedFault21.message; pattern = "WP-AUTH"; flags = "" } → observedDiagnostic22
+    let observedRefused18 = $observedDiagnostic22
+  assert $observedRefused18
+    otherwise "Expected rejects(prepare(request,{...trusted,authenticated:false}),/WP-AUTH/)"
+  let observedRefused23 = false
+  port test.merge { records = list($trusted, { authenticated = "true" }) } → observedRecord24
+  try:
+    port kernel.invoke { query = "fixture.platform.prepare"; input = list($request, $observedRecord24) } → observedResult25
+  catch observedFault26:
+    port test.match { text = $observedFault26.message; pattern = "WP-AUTH"; flags = "" } → observedDiagnostic27
+    let observedRefused23 = $observedDiagnostic27
+  assert $observedRefused23
+    otherwise "Expected rejects(prepare(request,{...trusted,authenticated:'true'}),/WP-AUTH/)"
+  let observedRefused28 = false
+  port test.merge { records = list($trusted, { principal = null }) } → observedRecord29
+  try:
+    port kernel.invoke { query = "fixture.platform.prepare"; input = list($request, $observedRecord29) } → observedResult30
+  catch observedFault31:
+    port test.match { text = $observedFault31.message; pattern = "WP-AUTH"; flags = "" } → observedDiagnostic32
+    let observedRefused28 = $observedDiagnostic32
+  assert $observedRefused28
+    otherwise "Expected rejects(prepare(request,{...trusted,principal:null}),/WP-AUTH/)"
+  let observedRefused33 = false
+  port test.merge { records = list($trusted, { origin = "https://other.example" }) } → observedRecord34
+  try:
+    port kernel.invoke { query = "fixture.platform.prepare"; input = list($request, $observedRecord34) } → observedResult35
+  catch observedFault36:
+    port test.match { text = $observedFault36.message; pattern = "WP-ORIGIN"; flags = "" } → observedDiagnostic37
+    let observedRefused33 = $observedDiagnostic37
+  assert $observedRefused33
+    otherwise "Expected rejects(prepare(request,{...trusted,origin:'https://other.example'}),/WP-ORIGIN/)"
+  let current = { owner = "owner-b"; workspace = "lightning"; head = "head-one"; accepted = $receipt }
+  let observedRefused38 = false
+  port test.merge { records = list($request, { expectedHead = "head-one" }) } → observedRecord39
+  port test.merge { records = list($trusted, { current = $current }) } → observedRecord40
+  try:
+    port kernel.invoke { query = "fixture.platform.prepare"; input = list($observedRecord39, $observedRecord40) } → observedResult41
+  catch observedFault42:
+    port test.match { text = $observedFault42.message; pattern = "WP-OWNER"; flags = "" } → observedDiagnostic43
+    let observedRefused38 = $observedDiagnostic43
+  assert $observedRefused38
+    otherwise "Expected rejects(prepare({...request,expectedHead:'head-one'},{...trusted,current}),/WP-OWNER/)"
+  let observedRefused44 = false
+  port test.merge { records = list($current, { owner = "owner-a" }) } → observedRecord45
+  port test.merge { records = list($trusted, { current = $observedRecord45 }) } → observedRecord46
+  try:
+    port kernel.invoke { query = "fixture.platform.prepare"; input = list($request, $observedRecord46) } → observedResult47
+  catch observedFault48:
+    port test.match { text = $observedFault48.message; pattern = "WP-CONFLICT"; flags = "" } → observedDiagnostic49
+    let observedRefused44 = $observedDiagnostic49
+  assert $observedRefused44
+    otherwise "Expected rejects(prepare(request,{...trusted,current:{...current,owner:'owner-a'}}),/WP-CONFLICT/)"
+
+# proposed publication derives only the selected accepted journey and excludes later drafts
+process test.platform.proposed-publication-derives-only-the-selected-accepted-journey-and-excludes-later-drafts:
+  call fixture.platform.setup
+  let draft = at($initial, "document")
+  port test.put { value = at(at(at($draft, "objects"), 0), "values"); key = "title"; replacement = "PRIVATE UNACCEPTED TITLE" } → observedUpdated50
+  port test.put { value = at(at($draft, "objects"), 0); key = "values"; replacement = $observedUpdated50 } → observedUpdated51
+  port test.put { value = at($draft, "objects"); key = 0; replacement = $observedUpdated51 } → observedUpdated52
+  port test.put { value = $draft; key = "objects"; replacement = $observedUpdated52 } → observedUpdated53
+  let draft = $observedUpdated53
+  let current = { owner = "owner-a"; workspace = "lightning"; head = "head-one"; draft = $draft; accepted = $receipt }
+  let publish = { action = "publish"; workspace = "lightning"; operationId = "publish_one"; expectedHead = "head-one"; acceptedHash = at($receipt, "sha256"); journey = "listening"; slug = "listening" }
+  port test.merge { records = list($trusted, { current = $current }) } → observedRecord54
+  port kernel.invoke { query = "fixture.platform.prepare"; input = list($publish, $observedRecord54) } → observedResult55
+  let command = $observedResult55
+  port test.stringify { value = at($command, "value") } → observedJson56
+  let text = $observedJson56
+  assert eq(at($command, "publicPath"), "/j/listening")
+    otherwise "Expected equal(command.publicPath,'/j/listening')"
+  assert eq(at(at($command, "value"), "name"), "Listening well")
+    otherwise "Expected equal(command.value.name,'Listening well')"
+  assert eq(count(at(at($command, "value"), "entries")), 1)
+    otherwise "Expected equal(command.value.entries.length,1)"
+  assert eq(includes($text, "PRIVATE UNACCEPTED TITLE"), false)
+    otherwise "Expected equal(text.includes('PRIVATE UNACCEPTED TITLE'),false)"
+  assert eq(includes($text, "Making with care"), false)
+    otherwise "Expected equal(text.includes('Making with care'),false)"
+  assert eq(includes($text, "owner-a"), false)
+    otherwise "Expected equal(text.includes('owner-a'),false)"
+  assert eq(includes($text, "Before offering a lesson"), false)
+    otherwise "Expected equal(text.includes('Before offering a lesson'),false)"
+  assert eq(at(at($command, "value"), "acceptanceHash"), at($receipt, "sha256"))
+    otherwise "Expected equal(command.value.acceptanceHash,receipt.sha256)"
+  let observedRefused57 = false
+  port test.merge { records = list($publish, { acceptedHash = "other" }) } → observedRecord58
+  port test.merge { records = list($trusted, { current = $current }) } → observedRecord59
+  try:
+    port kernel.invoke { query = "fixture.platform.prepare"; input = list($observedRecord58, $observedRecord59) } → observedResult60
+  catch observedFault61:
+    port test.match { text = $observedFault61.message; pattern = "WP-ACCEPT"; flags = "" } → observedDiagnostic62
+    let observedRefused57 = $observedDiagnostic62
+  assert $observedRefused57
+    otherwise "Expected rejects(prepare({...publish,acceptedHash:'other'},{...trusted,current}),/WP-ACCEPT/)"
+  let observedRefused63 = false
+  port test.merge { records = list($publish, { journey = "absent" }) } → observedRecord64
+  port test.merge { records = list($trusted, { current = $current }) } → observedRecord65
+  try:
+    port kernel.invoke { query = "fixture.platform.prepare"; input = list($observedRecord64, $observedRecord65) } → observedResult66
+  catch observedFault67:
+    port test.match { text = $observedFault67.message; pattern = "WP-JOURNEY"; flags = "" } → observedDiagnostic68
+    let observedRefused63 = $observedDiagnostic68
+  assert $observedRefused63
+    otherwise "Expected rejects(prepare({...publish,journey:'absent'},{...trusted,current}),/WP-JOURNEY/)"
+  let observedRefused69 = false
+  port test.merge { records = list($current, { accepted = null }) } → observedRecord70
+  port test.merge { records = list($trusted, { current = $observedRecord70 }) } → observedRecord71
+  try:
+    port kernel.invoke { query = "fixture.platform.prepare"; input = list($publish, $observedRecord71) } → observedResult72
+  catch observedFault73:
+    port test.match { text = $observedFault73.message; pattern = "WP-ACCEPT"; flags = "" } → observedDiagnostic74
+    let observedRefused69 = $observedDiagnostic74
+  assert $observedRefused69
+    otherwise "Expected rejects(prepare(publish,{...trusted,current:{...current,accepted:null}}),/WP-ACCEPT/)"
+
+# saving a checked draft preserves the accepted pointer and does not prepare publication
+process test.platform.saving-a-checked-draft-preserves-the-accepted-pointer-and-does-not-prepare-publication:
+  call fixture.platform.setup
+  let current = { owner = "owner-a"; workspace = "lightning"; head = "head-one"; accepted = $receipt }
+  port test.merge { records = list($trusted, { current = $current }) } → observedRecord75
+  port kernel.invoke { query = "fixture.platform.prepare"; input = list({ action = "save-draft"; workspace = "lightning"; operationId = "draft_one"; expectedHead = "head-one"; document = at($initial, "document") }, $observedRecord75) } → observedResult76
+  let command = $observedResult76
+  assert eq(at(at(at($command, "value"), "accepted"), "sha256"), at($receipt, "sha256"))
+    otherwise "Expected equal(command.value.accepted.sha256,receipt.sha256)"
+  assert eq(at($command, "publicPath"), null)
+    otherwise "Expected equal(command.publicPath,null)"
+  assert eq(at($command, "expectedHead"), "head-one")
+    otherwise "Expected equal(command.expectedHead,'head-one')"
+  port test.stringify { value = at($command, "value") } → observedJson77
+  port test.digest { text = $observedJson77 } → observedHash78
+  assert eq(at($command, "valueHash"), $observedHash78)
+    otherwise "Expected equal(command.valueHash,digest(JSON.stringify(command.value)))"
+
+# party receiver policy derives the actor from trusted membership and prepares a replay-checked atomic command
+process test.platform.party-receiver-policy-derives-the-actor-from-trusted-membership-and-prepares-a-replay-checked-atomic-command:
+  call fixture.platform.setup
+  port kernel.invoke { query = "fixture.platform.prepareParty"; input = list() } → observedResult79
+  let candidate = $observedResult79
+  assert eq(at($candidate, "mode"), "atomic-write-required")
+    otherwise "Expected equal(candidate.mode,'atomic-write-required')"
+  assert eq(at($candidate, "applicationAdmission"), false)
+    otherwise "Expected equal(candidate.applicationAdmission,false)"
+  assert eq(at($candidate, "authenticatedEffectProven"), false)
+    otherwise "Expected equal(candidate.authenticatedEffectProven,false)"
+  port test.invoke { entry = "cw.reconstruct"; input = at($candidate, "value"); platform = $platform } → observedRun80
+  let reconstructed = at($observedRun80, "value")
+  assert eq(at(at(at(at($reconstructed, "proposals"), 0), "content"), "author"), "alice")
+    otherwise "Expected equal(reconstructed.proposals[0].content.author,'alice')"
+  assert eq(count(at(at(at(at($reconstructed, "head"), "document"), "matter"), "items")), 0)
+    otherwise "Expected equal(reconstructed.head.document.matter.items.length,0)"
+  let observedRefused81 = false
+  port test.merge { records = list(at($partyRequest, "payload"), { actor = "bob" }) } → observedRecord82
+  port test.merge { records = list($partyRequest, { payload = $observedRecord82 }) } → observedRecord83
+  try:
+    port kernel.invoke { query = "fixture.platform.prepareParty"; input = list($observedRecord83) } → observedResult84
+  catch observedFault85:
+    port test.match { text = $observedFault85.message; pattern = "PR-IDENTITY"; flags = "" } → observedDiagnostic86
+    let observedRefused81 = $observedDiagnostic86
+  assert $observedRefused81
+    otherwise "Expected rejects(prepareParty({...partyRequest,payload:{...partyRequest.payload,actor:'bob'}}),/PR-IDENTITY/)"
+  let observedRefused87 = false
+  port test.merge { records = list(at($partyRequest, "payload"), { trusted = { principal = "subject-b" } }) } → observedRecord88
+  port test.merge { records = list($partyRequest, { payload = $observedRecord88 }) } → observedRecord89
+  try:
+    port kernel.invoke { query = "fixture.platform.prepareParty"; input = list($observedRecord89) } → observedResult90
+  catch observedFault91:
+    port test.match { text = $observedFault91.message; pattern = "PR-IDENTITY"; flags = "" } → observedDiagnostic92
+    let observedRefused87 = $observedDiagnostic92
+  assert $observedRefused87
+    otherwise "Expected rejects(prepareParty({...partyRequest,payload:{...partyRequest.payload,trusted:{principal:'subject-b'}}}),/PR-IDENTITY/)"
+  let observedRefused93 = false
+  port test.merge { records = list($partyTrusted, { principal = "subject-b" }) } → observedRecord94
+  try:
+    port kernel.invoke { query = "fixture.platform.prepareParty"; input = list($partyRequest, $observedRecord94) } → observedResult95
+  catch observedFault96:
+    port test.match { text = $observedFault96.message; pattern = "PC-AUTHORITY"; flags = "" } → observedDiagnostic97
+    let observedRefused93 = $observedDiagnostic97
+  assert $observedRefused93
+    otherwise "Expected rejects(prepareParty(partyRequest,{...partyTrusted,principal:'subject-b'}),/PC-AUTHORITY/)"
+
+# party receiver policy refuses missing identity, CSRF, foreign membership, stale heads and cross-party slots
+process test.platform.party-receiver-policy-refuses-missing-identity-csrf-foreign-membership-stale-heads-and-cross-party-slots:
+  call fixture.platform.setup
+  port test.merge { records = list($partyTrusted, { authenticated = false }) } → observedRecord98
+  port test.merge { records = list($partyTrusted, { csrfVerified = false }) } → observedRecord99
+  port test.merge { records = list($partyTrusted, { programHash = "other" }) } → observedRecord100
+  each list($observedRecord98, $observedRecord99, $observedRecord100) as context:
+    let observedRefused102 = false
+    try:
+      port kernel.invoke { query = "fixture.platform.prepareParty"; input = list($partyRequest, $context) } → observedResult103
+    catch observedFault104:
+      port test.match { text = $observedFault104.message; pattern = "PR-AUTH"; flags = "" } → observedDiagnostic105
+      let observedRefused102 = $observedDiagnostic105
+    assert $observedRefused102
+      otherwise "Expected rejects(prepareParty(partyRequest,context),/PR-AUTH/)"
+  let observedRefused106 = false
+  port test.merge { records = list($partyTrusted, { principal = "outsider" }) } → observedRecord107
+  try:
+    port kernel.invoke { query = "fixture.platform.prepareParty"; input = list($partyRequest, $observedRecord107) } → observedResult108
+  catch observedFault109:
+    port test.match { text = $observedFault109.message; pattern = "PR-MEMBERS"; flags = "" } → observedDiagnostic110
+    let observedRefused106 = $observedDiagnostic110
+  assert $observedRefused106
+    otherwise "Expected rejects(prepareParty(partyRequest,{...partyTrusted,principal:'outsider'}),/PR-MEMBERS/)"
+  let observedRefused111 = false
+  port test.merge { records = list($partyRequest, { expectedHead = "old-head" }) } → observedRecord112
+  try:
+    port kernel.invoke { query = "fixture.platform.prepareParty"; input = list($observedRecord112) } → observedResult113
+  catch observedFault114:
+    port test.match { text = $observedFault114.message; pattern = "PR-CONFLICT"; flags = "" } → observedDiagnostic115
+    let observedRefused111 = $observedDiagnostic115
+  assert $observedRefused111
+    otherwise "Expected rejects(prepareParty({...partyRequest,expectedHead:'old-head'}),/PR-CONFLICT/)"
+  let observedRefused116 = false
+  port test.merge { records = list($partyRequest, { matterId = "other" }) } → observedRecord117
+  try:
+    port kernel.invoke { query = "fixture.platform.prepareParty"; input = list($observedRecord117) } → observedResult118
+  catch observedFault119:
+    port test.match { text = $observedFault119.message; pattern = "PR-SCOPE"; flags = "" } → observedDiagnostic120
+    let observedRefused116 = $observedDiagnostic120
+  assert $observedRefused116
+    otherwise "Expected rejects(prepareParty({...partyRequest,matterId:'other'}),/PR-SCOPE/)"
+  let observedRefused121 = false
+  port test.merge { records = list($partyRequest, { action = "read-private"; payload = {} }) } → observedRecord122
+  port test.merge { records = list(at($partyTrusted, "privateSlot"), { principal = "subject-b" }) } → observedRecord123
+  port test.merge { records = list($partyTrusted, { privateSlot = $observedRecord123 }) } → observedRecord124
+  try:
+    port kernel.invoke { query = "fixture.platform.prepareParty"; input = list($observedRecord122, $observedRecord124) } → observedResult125
+  catch observedFault126:
+    port test.match { text = $observedFault126.message; pattern = "PR-PRIVATE"; flags = "" } → observedDiagnostic127
+    let observedRefused121 = $observedDiagnostic127
+  assert $observedRefused121
+    otherwise "Expected rejects(prepareParty({...partyRequest,action:'read-private',payload:{}},{...partyTrusted,privateSlot:{...partyTrusted.privateSlot,principal:'subject-b'}}),/PR-PRIVATE/)"
+  let observedRefused128 = false
+  port test.merge { records = list($partyRequest, { owner = "subject-b" }) } → observedRecord129
+  try:
+    port kernel.invoke { query = "fixture.platform.prepareParty"; input = list($observedRecord129) } → observedResult130
+  catch observedFault131:
+    port test.match { text = $observedFault131.message; pattern = "MW-SHAPE"; flags = "" } → observedDiagnostic132
+    let observedRefused128 = $observedDiagnostic132
+  assert $observedRefused128
+    otherwise "Expected rejects(prepareParty({...partyRequest,owner:'subject-b'}),/MW-SHAPE/)"
+
+# private receiver preparation and shared packet projections have disjoint payloads
+process test.platform.private-receiver-preparation-and-shared-packet-projections-have-disjoint-payloads:
+  call fixture.platform.setup
+  let draft = { item = at(at(at($partyRequest, "payload"), "change"), "item"); privateNote = "DO NOT DISCLOSE PREPARATION" }
+  port test.merge { records = list($partyRequest, { action = "save-private"; operationId = "save_preparation"; expectedHead = null; payload = { draft = $draft; expectedRevision = 0 } }) } → observedRecord133
+  port kernel.invoke { query = "fixture.platform.prepareParty"; input = list($observedRecord133) } → observedResult134
+  let privateWrite = $observedResult134
+  assert eq(at($privateWrite, "scope"), "principal-preparation")
+    otherwise "Expected equal(privateWrite.scope,'principal-preparation')"
+  assert eq(at(at($privateWrite, "value"), "actor"), "alice")
+    otherwise "Expected equal(privateWrite.value.actor,'alice')"
+  port test.stringify { value = at($privateWrite, "value") } → observedJson135
+  port test.match { text = $observedJson135; pattern = "DO NOT DISCLOSE"; flags = "" } → observedMatch136
+  assert $observedMatch136
+    otherwise "Expected match(JSON.stringify(privateWrite.value),/DO NOT DISCLOSE/)"
+  port test.merge { records = list(at($partyTrusted, "privateSlot"), { head = at($privateWrite, "valueHash"); value = at($privateWrite, "value") }) } → observedRecord137
+  port test.merge { records = list($partyTrusted, { privateSlot = $observedRecord137 }) } → observedRecord138
+  let context = $observedRecord138
+  port test.merge { records = list($partyRequest, { action = "packet"; operationId = "read_packet"; payload = {} }) } → observedRecord139
+  port kernel.invoke { query = "fixture.platform.prepareParty"; input = list($observedRecord139, $context) } → observedResult140
+  let packet = $observedResult140
+  port test.stringify { value = at($packet, "value") } → observedJson141
+  assert eq(includes($observedJson141, "DO NOT DISCLOSE"), false)
+    otherwise "Expected equal(JSON.stringify(packet.value).includes('DO NOT DISCLOSE'),false)"
+  assert eq(at($packet, "scope"), "shared-matter")
+    otherwise "Expected equal(packet.scope,'shared-matter')"
+  port test.invoke { entry = "pc.checkPacket"; input = at($packet, "value"); platform = $platform } → observedRun142
+  assert eq(at(at($observedRun142, "value"), "ok"), true)
+    otherwise "Expected equal((await run('pc.checkPacket',packet.value)).ok,true)"
+
+# principal-scoped idempotency reconciles a known result and rejects changed content or ledger scope
+process test.platform.principal-scoped-idempotency-reconciles-a-known-result-and-rejects-changed-content-or-ledger-scope:
+  call fixture.platform.setup
+  port kernel.invoke { query = "fixture.platform.prepareParty"; input = list() } → observedResult143
+  let result = $observedResult143
+  let priorOperation = { principal = "subject-a"; matterId = "workshop"; operationId = at($partyRequest, "operationId"); requestHash = at($result, "requestHash"); result = $result }
+  port test.merge { records = list(at($partyTrusted, "sharedSlot"), { head = "later-head" }) } → observedRecord144
+  port test.merge { records = list($partyTrusted, { priorOperation = $priorOperation; sharedSlot = $observedRecord144 }) } → observedRecord145
+  let context = $observedRecord145
+  port kernel.invoke { query = "fixture.platform.prepareParty"; input = list($partyRequest, $context) } → observedResult146
+  assert eq($observedResult146, $result)
+    otherwise "Expected deepEqual(await prepareParty(partyRequest,context),result)"
+  let observedRefused147 = false
+  port test.merge { records = list(at($partyRequest, "payload"), { title = "Changed request" }) } → observedRecord148
+  port test.merge { records = list($partyRequest, { payload = $observedRecord148 }) } → observedRecord149
+  try:
+    port kernel.invoke { query = "fixture.platform.prepareParty"; input = list($observedRecord149, $context) } → observedResult150
+  catch observedFault151:
+    port test.match { text = $observedFault151.message; pattern = "PR-IDEMPOTENCY"; flags = "" } → observedDiagnostic152
+    let observedRefused147 = $observedDiagnostic152
+  assert $observedRefused147
+    otherwise "Expected rejects(prepareParty({...partyRequest,payload:{...partyRequest.payload,title:'Changed request'}},context),/PR-IDEMPOTENCY/)"
+  let observedRefused153 = false
+  port test.merge { records = list($priorOperation, { principal = "subject-b" }) } → observedRecord154
+  port test.merge { records = list($context, { priorOperation = $observedRecord154 }) } → observedRecord155
+  try:
+    port kernel.invoke { query = "fixture.platform.prepareParty"; input = list($partyRequest, $observedRecord155) } → observedResult156
+  catch observedFault157:
+    port test.match { text = $observedFault157.message; pattern = "PR-IDEMPOTENCY"; flags = "" } → observedDiagnostic158
+    let observedRefused153 = $observedDiagnostic158
+  assert $observedRefused153
+    otherwise "Expected rejects(prepareParty(partyRequest,{...context,priorOperation:{...priorOperation,principal:'subject-b'}}),/PR-IDEMPOTENCY/)"

@@ -1,0 +1,21 @@
+{
+  "protocol": "usewords/verification/1",
+  "programHash": "8b589ff8972e0b9bbc2c4a00144d9b9007cc4a0a09ecfa6ad419ec93bc80eb94",
+  "automated": {
+    "command": "node --test tests/lightning.test.mjs",
+    "passed": 11,
+    "failed": 0
+  },
+  "browser": {
+    "url": "http://127.0.0.1:4197/",
+    "observed": [
+      "shared title changes page and row only",
+      "menu-only change preserves shared title",
+      "acceptance replay and browser storage",
+      "reload reconstructs revision 2",
+      "375px viewport has no horizontal overflow"
+    ]
+  },
+  "evidenceFamily": "same-author/same-implementation/usewords-lightning-20261106",
+  "scope": "Bounded engineering checks, not independent verification or a general correctness proof."
+}
