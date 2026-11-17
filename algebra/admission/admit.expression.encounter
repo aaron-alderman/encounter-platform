@@ -1,0 +1,57 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process admit.expression:
+  port value.describe { value = $expression } → kind
+  assert or(
+    $kind.null,
+    eq($kind.type, "string"),
+    eq($kind.type, "boolean"),
+    $kind.finite,
+    $kind.array,
+    $kind.plain
+  )
+    otherwise "TEMPLE-S002: Unsupported source value. Use finite JSON data."
+  assert $kind.dataOnly
+    otherwise "TEMPLE-S003: Accessor-bearing source is forbidden. Supply own-data records."
+  when eq($kind.type, "string"):
+    port text.matches { value = $expression; pattern = "^\\$" } → referenceLike
+    when $referenceLike:
+      port text.matches { value = $expression; pattern = "^\\$[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_-]+)*$" } → valid
+      assert $valid
+        otherwise "TEMPLE-S004: Invalid reference. Correct the source reference."
+      port text.split { value = $expression; pattern = "^\\$|\\." } → segments
+      assert every(
+        $segments,
+        "segment",
+        not(includes(list("__proto__", "prototype", "constructor"), $segment))
+      )
+        otherwise "TEMPLE-S004: Reserved reference segment. Correct the authored reference before effects."
+  when $kind.plain:
+    port record.entries { value = $expression } → entries
+    each $entries as entry:
+      assert not(includes(list("__proto__", "prototype", "constructor"), at($entry, 0)))
+        otherwise "TEMPLE-S005: Reserved source field. Rename the field."
+      let expression = at($entry, 1)
+      call admit.expression
+  when $kind.array:
+    assert $kind.dense
+      otherwise "TEMPLE-S006: Sparse source arrays are forbidden."
+    when count($expression):
+      let operation = at($expression, 0)
+      let rule = at($profile.operators, $operation)
+      assert $rule
+        otherwise "TEMPLE-S007: Unknown core operation. Lower authored operators before admission."
+      assert includes($rule.arities, add(count($expression), -1))
+        otherwise "TEMPLE-S008: Wrong core arity. Correct the source call."
+      each range(add(count($expression), -1)) as position:
+        let argument = at($expression, $position)
+        when includes($rule.binders, add($position, -1)):
+          let binding = $argument
+          call admit.binding
+        when not(includes($rule.binders, add($position, -1))):
+          let expression = $argument
+          call admit.expression
+      when eq($operation, "fold"):
+        assert not(eq(at($expression, 2), at($expression, 3)))
+          otherwise "TEMPLE-S009: Fold item and accumulator must have distinct bindings."

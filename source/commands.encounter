@@ -1,0 +1,277 @@
+process-module "temple/surface-process-module/1"
+
+process document.decode:
+  let text = $eventInput
+  port text.split { value = $text; pattern = "\\r?\\n" } → lines
+  fold $lines as line; values starts {}:
+    port text.trim { value = $line } → line
+    when not(eq($line, "")):
+      port text.indexOf { value = $line; search = "="; from = 0 } → offset
+      assert not(eq($offset, -1))
+        otherwise "DOCUMENT: Use one field = scalar literal per line."
+      port text.slice { value = $line; start = 0; end = $offset } → key
+      port text.trim { value = $key } → key
+      port kernel.invoke { query = "domain.identifier"; input = $key } → _
+      port record.entries { value = $values } → entries
+      assert not(some($entries, "entry", eq(at($entry, 0), $key)))
+        otherwise "DOCUMENT: Duplicate field."
+      port text.slice { value = $line; start = add($offset, 1) } → literal
+      port scalar.read { text = $literal } → value
+      port record.put { record = $values; key = $key; value = $value } → values
+    yield $values → values
+  let result = $values
+
+process document.print:
+  port record.entries { value = $eventInput } → entries
+  fold $entries as entry; text starts "":
+    port scalar.quoteValue { value = at($entry, 1) } → literal
+    yield concat($text, at($entry, 0), " = ", $literal, "\n") → text
+  let result = $text
+
+process field.read:
+  let result = $eventInput.text
+  when not(includes(list("Text", "Reference"), $eventInput.kind)):
+    port scalar.read { text = $eventInput.text } → result
+
+process thing.replaceValue:
+  let thingId = $eventInput.thing
+  let alias = $eventInput.alias
+  let fieldId = $eventInput.field
+  let value = $eventInput.value
+  let target = at(filter($state.things, "thing", eq($thing.id, $thingId)), 0)
+  assert $target
+    otherwise "EDIT: Choose an existing thing."
+  let selectedRole = at(filter($target.roles, "role", eq($role.alias, $alias)), 0)
+  assert $selectedRole
+    otherwise "EDIT: Choose an existing explicit role."
+  fold $state.things as thing; things starts list():
+    when eq($thing.id, $thingId):
+      fold $thing.roles as role; roles starts list():
+        when eq($role.alias, $alias):
+          assert not(eq(at($role.values, $fieldId), at({}, "absent")))
+            otherwise "EDIT: The field is not part of this role."
+          port record.put { record = $role.values; key = $fieldId; value = $value } → cells
+          port record.put { record = $role; key = "values"; value = $cells } → role
+        yield append($roles, list($role)) → roles
+      port record.put { record = $thing; key = "roles"; value = $roles } → thing
+    yield append($things, list($thing)) → things
+  port record.put { record = $state; key = "things"; value = $things } → result
+
+process command.apply:
+  let command = $eventInput
+  let values = $command.values
+  let operation = $command.operation
+  assert or(eq($operation, "intent"), count($state.intent))
+    otherwise "INTENT: Retain an original purpose before authoring application definitions."
+  let handled = false
+  let description = ""
+  when eq($operation, "intent"):
+    assert count($values.intent)
+      otherwise "INTENT: Say what you want to make."
+    port record.put { record = $state; key = "intent"; value = $values.intent } → state
+    let description = "Retain the original intent."
+    let handled = true
+  when eq($operation, "type"):
+    assert count($state.intent)
+      otherwise "INTENT: Retain the purpose before constructing an application."
+    port kernel.invoke { query = "domain.identifier"; input = $values.id } → _
+    assert not(some($state.definitions, "type", eq($type.id, $values.id)))
+      otherwise "TYPE: This identity already exists."
+    port record.put { record = $state; key = "definitions"; value = append($state.definitions, list({ id = $values.id; label = $values.label; fields = list() })) } → state
+    let description = concat("Create type ", $values.label, ".")
+    let handled = true
+  when eq($operation, "field"):
+    let matches = filter($state.definitions, "type", eq($type.id, $values.type))
+    assert eq(count($matches), 1)
+      otherwise "FIELD: Choose an existing type."
+    port kernel.invoke { query = "domain.identifier"; input = $values.id } → _
+    let definition = at($matches, 0)
+    assert not(some($definition.fields, "field", eq($field.id, $values.id)))
+      otherwise "FIELD: This field already exists."
+    let field = { id = $values.id; label = $values.label; kind = $values.kind; expects = $values.expects }
+    fold $state.things as thing; things starts list():
+      fold $thing.roles as role; roles starts list():
+        when eq($role.type, $definition.id):
+          let key = concat("resolve.", $thing.id, ".", $role.alias)
+          assert not(eq(at($values, $key), at({}, "absent")))
+            otherwise "FIELD: Resolve every existing affected role explicitly. No default is invented."
+          assert eq(at($values, concat("confirmed.", $thing.id, ".", $role.alias)), "yes")
+            otherwise "FIELD: Confirm each resolution explicitly, including an intentionally empty Text value."
+          port kernel.invoke { query = "field.read"; input = { kind = $field.kind; text = at($values, $key) } } → value
+          port record.put { record = $role.values; key = $field.id; value = $value } → cells
+          port record.put { record = $role; key = "values"; value = $cells } → role
+        yield append($roles, list($role)) → roles
+      port record.put { record = $thing; key = "roles"; value = $roles } → thing
+      yield append($things, list($thing)) → things
+    port record.put { record = $definition; key = "fields"; value = append($definition.fields, list($field)) } → definition
+    let definitions = map($state.definitions, "type", if(eq($type.id, $definition.id), $definition, $type))
+    port record.put { record = $state; key = "definitions"; value = $definitions } → state
+    port record.put { record = $state; key = "things"; value = $things } → state
+    let description = concat("Add only ", $field.label, " and resolve all existing values.")
+    let handled = true
+  when includes(list("thing", "role"), $operation):
+    let definition = at(filter($state.definitions, "type", eq($type.id, $values.type)), 0)
+    assert $definition
+      otherwise "THING: Choose an existing type."
+    port kernel.invoke { query = "document.decode"; input = $values.document } → cells
+    let role = { type = $definition.id; alias = $values.alias; values = $cells }
+    when eq($operation, "thing"):
+      port kernel.invoke { query = "domain.identifier"; input = $values.id } → _
+      assert not(some($state.things, "thing", eq($thing.id, $values.id)))
+        otherwise "THING: This identity already exists."
+      let things = append($state.things, list({ id = $values.id; label = $values.label; roles = list($role) }))
+    when eq($operation, "role"):
+      assert some($state.things, "thing", eq($thing.id, $values.id))
+        otherwise "ROLE: Choose an existing thing."
+      let things = map($state.things, "thing", if(eq($thing.id, $values.id), { id = $thing.id; label = $thing.label; roles = append($thing.roles, list($role)) }, $thing))
+    port record.put { record = $state; key = "things"; value = $things } → state
+    let description = if(eq($operation, "thing"), concat("Create ", $values.label, " with checked initial values."), "Add one explicit typed role.")
+    let handled = true
+  when includes(list("value", "document"), $operation):
+    let thing = at(filter($state.things, "thing", eq($thing.id, $values.thing)), 0)
+    assert $thing
+      otherwise "EDIT: Choose an existing thing."
+    let role = at(filter($thing.roles, "role", eq($role.alias, $values.alias)), 0)
+    assert $role
+      otherwise "EDIT: Choose the exact role."
+    let definition = at(filter($state.definitions, "type", eq($type.id, $role.type)), 0)
+    let fieldId = $values.field
+    when eq($operation, "value"):
+      let field = at(filter($definition.fields, "field", eq($field.id, $fieldId)), 0)
+      assert $field
+        otherwise "EDIT: Choose a declared field."
+      port kernel.invoke { query = "field.read"; input = { kind = $field.kind; text = $values.value } } → value
+    when eq($operation, "document"):
+      port kernel.invoke { query = "document.decode"; input = $values.document } → cells
+      port record.entries { value = $cells } → entries
+      assert eq(count($entries), count($definition.fields))
+        otherwise "DOCUMENT: Preserve the complete role document."
+      assert every($entries, "entry", some($definition.fields, "field", eq($field.id, at($entry, 0))))
+        otherwise "DOCUMENT: Do not introduce an undeclared field."
+      let changed = filter($entries, "entry", not(eq(at($entry, 1), at($role.values, at($entry, 0)))))
+      assert eq(count($changed), 1)
+        otherwise "DOCUMENT: Change exactly one value at a time. Other values remain untouched."
+      let fieldId = at(at($changed, 0), 0)
+      let value = at(at($changed, 0), 1)
+    port kernel.invoke { query = "thing.replaceValue"; input = { thing = $thing.id; alias = $role.alias; field = $fieldId; value = $value } } → state
+    let description = concat("Change ", $thing.label, " / ", $fieldId, " through ", $operation, ".")
+    let handled = true
+  when eq($operation, "projection"):
+    port kernel.invoke { query = "domain.identifier"; input = $values.id } → _
+    let projection = { id = $values.id; thing = $values.thing; alias = $values.alias; field = $values.field; kind = $values.kind; action = $values.action }
+    assert not(some($state.projections, "item", eq($item.id, $projection.id)))
+      otherwise "PROJECTION: This identity already exists."
+    port record.put { record = $state; key = "projections"; value = append($state.projections, list($projection)) } → state
+    let description = concat("Create ", $projection.kind, " projection ", $projection.id, ".")
+    let handled = true
+  when eq($operation, "projection-action"):
+    assert some($state.projections, "projection", eq($projection.id, $values.id))
+      otherwise "PROJECTION: Choose an existing projection."
+    fold $state.projections as projection; projections starts list():
+      when eq($projection.id, $values.id):
+        port record.put { record = $projection; key = "action"; value = $values.action } → projection
+      yield append($projections, list($projection)) → projections
+    port record.put { record = $state; key = "projections"; value = $projections } → state
+    let description = "Choose the explicit action for this projection."
+    let handled = true
+  when includes(list("overlay", "projection-value"), $operation):
+    let projection = at(filter($state.projections, "projection", eq($projection.id, $values.id)), 0)
+    assert $projection
+      otherwise "PROJECTION: Choose an existing projection."
+    let overlays = filter($state.overlays, "overlay", eq($overlay.projection, $projection.id))
+    when or(eq($operation, "overlay"), count($overlays)):
+      assert eq($projection.kind, "web")
+        otherwise "OVERLAY: Choose a web context."
+      port record.put { record = $state; key = "overlays"; value = append(filter($state.overlays, "overlay", not(eq($overlay.projection, $projection.id))), list({ projection = $projection.id; value = $values.value })) } → state
+      let description = "Change only the explicit web-label overlay."
+    when and(eq($operation, "projection-value"), not(count($overlays))):
+      port kernel.invoke { query = "projection.value"; input = $projection } → mapping
+      assert not(eq($mapping.inverse, "none"))
+        otherwise "INVERSE: This rule has no checked inverse. Edit its linked input or action source."
+      let value = $values.value
+      when eq($mapping.inverse, "suffix"):
+        port number.calculate { operation = "subtract"; values = list(count($value), count($mapping.suffix)) } → end
+        port number.calculate { operation = "greaterEqual"; values = list($end, 0) } → valid
+        assert $valid
+          otherwise "INVERSE: Preserve the rule's suffix or edit its input instead."
+        port text.slice { value = $value; start = $end } → suffix
+        assert eq($suffix, $mapping.suffix)
+          otherwise "INVERSE: The requested value is outside this inverse domain."
+        port text.slice { value = $value; start = 0; end = $end } → value
+      port kernel.invoke { query = "thing.replaceValue"; input = { thing = $projection.thing; alias = $projection.alias; field = $projection.field; value = $value } } → state
+      port kernel.invoke { query = "projection.value"; input = $projection } → reproduced
+      assert eq($reproduced.value, $values.value)
+        otherwise "INVERSE: The edit did not reproduce the requested output."
+      let description = concat("Follow the checked inverse to ", $mapping.source, ".")
+    let handled = true
+  when includes(list("action", "action-builder"), $operation):
+    port kernel.invoke { query = "domain.identifier"; input = $values.id } → _
+    let path = concat("actions/", $values.id, ".encounter")
+    let action = { id = $values.id; label = $values.label; input = $values.input; output = $values.output; source = $path }
+    let code = ""
+    when eq($operation, "action"):
+      let code = $values.code
+    when eq($operation, "action-builder"):
+      assert includes(list("identity", "append"), $values.operator)
+        otherwise "ACTION: Choose an available typed expression constructor."
+      let expression = concat(at(" $", 1), "eventInput")
+      when eq($values.operator, "append"):
+        assert and(eq($values.input, "Text"), eq($values.output, "Text"))
+          otherwise "ACTION: Append requires a Text to Text signature."
+        port scalar.quoteValue { value = $values.suffix } → literal
+        let expression = concat("concat(", $expression, ", ", $literal, ")")
+      let code = concat("process-module \"temple/surface-process-module/1\"\nprocess run:\n  let result = ", $expression, "\n")
+    let documents = append(filter($documents, "document", not(eq($document.path, $path))), list({ path = $path; text = $code }))
+    port kernel.invoke { query = "action.check"; input = $action } → _
+    let actions = map($state.actions, "item", if(eq($item.id, $action.id), $action, $item))
+    when not(some($actions, "item", eq($item.id, $action.id))):
+      let actions = append($actions, list($action))
+    port record.put { record = $state; key = "actions"; value = $actions } → state
+    let description = concat("Publish checked action ", $action.label, " from actual Encounter source.")
+    let handled = true
+  when eq($operation, "queue"):
+    port kernel.invoke { query = "domain.identifier"; input = $values.id } → _
+    assert not(some($state.jobs, "job", eq($job.id, $values.id)))
+      otherwise "JOB: This identity already exists."
+    port record.put { record = $state; key = "jobs"; value = append($state.jobs, list({ id = $values.id; status = "queued"; basis = $command.base; output = ""; digest = "" })) } → state
+    let description = "Queue one local export. It has no mail, network or deployment grant."
+    let handled = true
+  when includes(list("run", "cancel-job", "resume-job"), $operation):
+    let job = at(filter($state.jobs, "job", eq($job.id, $values.id)), 0)
+    assert $job
+      otherwise "JOB: Choose an existing job."
+    let expected = if(eq($operation, "resume-job"), "cancelled", "queued")
+    assert eq($job.status, $expected)
+      otherwise "JOB: This transition is not currently admissible. A completed job is never replayed."
+    when eq($operation, "run"):
+      port kernel.invoke { query = "export.document"; input = $job } → html
+      let path = concat("exports/", $job.id, ".html")
+      port digest.sha256 { text = $html } → digest
+      let documents = append($documents, list({ path = $path; text = $html }))
+      let job = { id = $job.id; status = "completed"; basis = $command.base; output = $path; digest = $digest }
+    when not(eq($operation, "run")):
+      port record.put { record = $job; key = "status"; value = if(eq($operation, "cancel-job"), "cancelled", "queued") } → job
+    port record.put { record = $state; key = "jobs"; value = map($state.jobs, "item", if(eq($item.id, $job.id), $job, $item)) } → state
+    let description = concat($operation, " ", $job.id, ".")
+    let handled = true
+  when eq($operation, "restore"):
+    port scalar.read { text = $values.revision } → revision
+    port storage.snapshot { revision = $revision } → previous
+    port kernel.invoke { query = "types.named"; input = { name = "Snapshot"; value = $previous } } → _
+    let documents = $previous.documents
+    let source = at(filter($documents, "document", eq($document.path, "application.rel")), 0)
+    assert $source
+      otherwise "HISTORY: This revision has no application source."
+    port rel.decode { text = $source.text; kind = "Application" } → state
+    let description = concat("Restore revision ", $values.revision, " as a new checked revision. History is retained.")
+    let handled = true
+  assert $handled
+    otherwise "COMMAND: Choose a currently offered operation."
+  port kernel.invoke { query = "domain.check"; input = $state } → _
+  each $state.actions as action:
+    port kernel.invoke { query = "action.check"; input = $action } → _
+  port rel.encode { value = $state; kind = "Application" } → application
+  let documents = append(filter($documents, "document", not(eq($document.path, "application.rel"))), list({ path = "application.rel"; text = $application }))
+  each $documents as document:
+    port kernel.invoke { query = "types.named"; input = { name = "Document"; value = $document } } → _
+  let result = { documents = $documents; description = $description }

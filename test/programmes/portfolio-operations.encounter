@@ -1,0 +1,91 @@
+process-module "temple/surface-process-module/1"
+
+process portfolio.test.fill:
+  port browser.act { page = $page; locator = list({ label = $field }); action = "fill"; value = $value } → _
+
+process portfolio.test.sees:
+  port browser.observe { page = $page; locator = list({ text = $text }); property = "count" } → visible
+  assert eq($visible, 1)
+    otherwise "The expected saved state is missing from the page."
+
+process test.portfolio.timesheet:
+  port browser.open { declaration = "products/timesheet/application.rel"; width = 390; height = 844 } → opened
+  assert eq($opened.status, 200)
+    otherwise "Timesheet did not open."
+  let page = $opened.page
+  each list(list("Person", "Alex"), list("Project", "Stocktake"), list("Work date", "2026-11-09"), list("Hours", "7.25"), list("Work note", "Counted stock")) as field:
+    port browser.act { page = $page; locator = list({ label = at($field, 0) }); action = "fill"; value = at($field, 1) } → _
+  let button = "Log time"
+  call portfolio.test.submit
+  let text = "Alex · 2026-11-09 · 7.25 h · Draft"
+  call portfolio.test.sees
+  let button = "Submit entry"
+  call portfolio.test.submit
+  let button = "Approve entry"
+  call portfolio.test.submit
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  let text = "Approved total: 7.25 h"
+  call portfolio.test.sees
+
+process test.portfolio.tradie:
+  port browser.open { declaration = "products/tradie/application.rel"; width = 390; height = 844 } → opened
+  assert eq($opened.status, 200)
+    otherwise "Tradie did not open."
+  let page = $opened.page
+  each list(list("Customer", "Demo customer"), list("Job site", "Workshop"), list("Work requested", "Repair the latch")) as field:
+    port browser.act { page = $page; locator = list({ label = at($field, 0) }); action = "fill"; value = at($field, 1) } → _
+  let button = "Record enquiry"
+  call portfolio.test.submit
+  let field = "Operator"
+  let value = "Jordan"
+  call portfolio.test.fill
+  let button = "Claim enquiry"
+  call portfolio.test.submit
+  let field = "Escalation reason"
+  let value = "Awaiting a replacement part"
+  call portfolio.test.fill
+  let button = "Escalate enquiry"
+  call portfolio.test.submit
+  let text = "Escalated · Jordan"
+  call portfolio.test.sees
+  let field = "Operator"
+  let value = "Morgan"
+  call portfolio.test.fill
+  let button = "Claim enquiry"
+  call portfolio.test.submit
+  let field = "Completion note"
+  let value = "Latch replaced and tested"
+  call portfolio.test.fill
+  let button = "Complete enquiry"
+  call portfolio.test.submit
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  let text = "Completed · Morgan"
+  call portfolio.test.sees
+
+process test.portfolio.crm:
+  port browser.open { declaration = "products/super-crm/application.rel"; width = 390; height = 844 } → opened
+  assert eq($opened.status, 200)
+    otherwise "Super CRM did not open."
+  let page = $opened.page
+  each list(list("Account name", "Example Co"), list("Primary contact", "Casey")) as field:
+    port browser.act { page = $page; locator = list({ label = at($field, 0) }); action = "fill"; value = at($field, 1) } → _
+  let button = "Add account"
+  call portfolio.test.submit
+  each list(list("Case title", "Site onboarding"), list("New case owner", "Rowan")) as field:
+    port browser.act { page = $page; locator = list({ label = at($field, 0) }); action = "fill"; value = at($field, 1) } → _
+  let button = "Open case"
+  call portfolio.test.submit
+  port browser.act { page = $page; locator = list({ label = "Case stage" }); action = "select"; value = "In delivery" } → _
+  let field = "Activity note"
+  let value = "Scoping visit booked"
+  call portfolio.test.fill
+  let button = "Save case update"
+  call portfolio.test.submit
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  let text = "Primary contact: Casey"
+  call portfolio.test.sees
+  let text = "Intake → In delivery · Rowan · Scoping visit booked"
+  call portfolio.test.sees

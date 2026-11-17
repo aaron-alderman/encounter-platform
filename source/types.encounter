@@ -1,0 +1,209 @@
+process-module "temple/surface-process-module/1"
+
+process types.schema:
+  let text = { kind = "text" }
+  let number = { kind = "number" }
+  let integer = { kind = "integer" }
+  let boolean = { kind = "boolean" }
+  let strings = { kind = "list"; item = $text }
+  let field = { kind = "record"; fields = { id = $text; label = $text; kind = $text; expects = $text } }
+  let definition = { kind = "record"; fields = { id = $text; label = $text; fields = { kind = "list"; item = $field } } }
+  let role = { kind = "record"; fields = { type = $text; alias = $text; values = { kind = "map"; item = { kind = "scalar" } } } }
+  let thing = { kind = "record"; fields = { id = $text; label = $text; roles = { kind = "list"; item = $role } } }
+  let action = { kind = "record"; fields = { id = $text; label = $text; input = $text; output = $text; source = $text } }
+  let projection = { kind = "record"; fields = { id = $text; thing = $text; alias = $text; field = $text; kind = $text; action = $text } }
+  let overlay = { kind = "record"; fields = { projection = $text; value = $text } }
+  let job = { kind = "record"; fields = { id = $text; status = $text; basis = $integer; output = $text; digest = $text } }
+  let result = {
+    State = { kind = "record"; fields = { intent = $text; definitions = { kind = "list"; item = $definition }; things = { kind = "list"; item = $thing }; actions = { kind = "list"; item = $action }; projections = { kind = "list"; item = $projection }; overlays = { kind = "list"; item = $overlay }; jobs = { kind = "list"; item = $job } } };
+    Command = { kind = "record"; fields = { operation = $text; base = $integer; operationId = $text; profile = $text; basis = $text; source = $text; reason = $text; target = $text; goal = $text; values = { kind = "map"; item = $text } } };
+    Document = { kind = "record"; fields = { path = $text; text = $text } };
+    Snapshot = { kind = "record"; fields = { revision = $integer; documents = { kind = "list"; item = { kind = "record"; fields = { path = $text; text = $text } } } } };
+    Prepared = { kind = "record"; fields = { command = { kind = "named"; name = "Command" }; documents = { kind = "list"; item = { kind = "named"; name = "Document" } }; description = $text } };
+    Session = { kind = "record"; fields = { view = $text; selected = $text; alias = $text; notice = $text; draft = { kind = "map"; item = $text }; prepared = { kind = "choice"; cases = { none = { kind = "unit" }; some = { kind = "named"; name = "Prepared" } } } } };
+    Receipt = { kind = "record"; fields = { revision = $integer; base = $integer; operationId = $text; sourceHash = $text; profile = $text; basis = $text; reason = $text; target = $text; goal = $text; source = $text; description = $text } };
+    History = { kind = "list"; item = { kind = "record"; fields = { revision = $integer; parent = $integer; operationId = $text; sourceHash = $text; profile = $text; basis = $text; reason = $text; target = $text; goal = $text; source = $text; description = $text; created = $text } } };
+    Documents = { kind = "list"; item = { kind = "named"; name = "Document" } };
+    Response = { kind = "record"; fields = { session = { kind = "named"; name = "Session" }; html = $text } };
+    Request = { kind = "record"; fields = { method = $text; path = $text; fields = { kind = "map"; item = $text }; session = { kind = "named"; name = "Session" }; snapshot = { kind = "named"; name = "Snapshot" }; csrf = $text; nonce = $text; profile = $text; basis = $text } };
+    Scalar = { kind = "scalar" }
+  }
+
+process types.check:
+  port number.calculate { operation = "lessEqual"; values = list($eventInput.depth, 48) } → bounded
+  assert $bounded
+    otherwise "TYPE: Value nesting exceeds the supported bound."
+  let type = $eventInput.type
+  let value = $eventInput.value
+  let depth = add($eventInput.depth, 1)
+  port value.describe { value = $value } → shape
+  when eq($type.kind, "named"):
+    call types.schema
+    let schema = at($result, $type.name)
+    assert $schema
+      otherwise "TYPE: Unknown nominal contract."
+    port kernel.invoke { query = "types.check"; input = { type = $schema; value = $value; depth = $depth } } → _
+  when eq($type.kind, "text"):
+    assert eq($shape.type, "string")
+      otherwise "TYPE: Text required. Values are never coerced."
+  when eq($type.kind, "number"):
+    assert and(eq($shape.type, "number"), $shape.finite)
+      otherwise "TYPE: A finite Number is required."
+  when eq($type.kind, "integer"):
+    assert and(eq($shape.type, "number"), $shape.finite)
+      otherwise "TYPE: A finite Integer is required."
+    port number.calculate { operation = "floor"; values = list($value) } → rounded
+    assert eq($rounded, $value)
+      otherwise "TYPE: An Integer is required."
+  when eq($type.kind, "boolean"):
+    assert eq($shape.type, "boolean")
+      otherwise "TYPE: Boolean required."
+  when eq($type.kind, "unit"):
+    assert eq($value, null)
+      otherwise "TYPE: Unit is explicit null."
+  when eq($type.kind, "choice"):
+    assert and($shape.plain, not($shape.array), $shape.dataOnly)
+      otherwise "TYPE: A choice is an own-data record."
+    port record.entries { value = $value } → choiceFields
+    assert and(eq(count($choiceFields), 2), not(eq(at($value, "case"), at({}, "absent"))), not(eq(at($value, "value"), at({}, "absent"))))
+      otherwise "TYPE: A choice contains exactly case and value."
+    port kernel.invoke { query = "types.check"; input = { type = { kind = "text" }; value = $value.case; depth = $depth } } → _
+    assert not(eq(at($type.cases, $value.case), at({}, "absent")))
+      otherwise "TYPE: Unknown choice."
+    port kernel.invoke { query = "types.check"; input = { type = at($type.cases, $value.case); value = $value.value; depth = $depth } } → _
+  when eq($type.kind, "scalar"):
+    assert or(eq($shape.type, "string"), eq($shape.type, "boolean"), and(eq($shape.type, "number"), $shape.finite))
+      otherwise "TYPE: A supported scalar value is required."
+  when eq($type.kind, "list"):
+    assert and($shape.array, $shape.dense, $shape.dataOnly)
+      otherwise "TYPE: An ordered list is required."
+    each $value as item:
+      port kernel.invoke { query = "types.check"; input = { type = $type.item; value = $item; depth = $depth } } → _
+  when includes(list("record", "map"), $type.kind):
+    assert and($shape.plain, not($shape.array), $shape.dataOnly)
+      otherwise "TYPE: An own-data record is required."
+    port record.entries { value = $value } → entries
+    when eq($type.kind, "record"):
+      port record.entries { value = $type.fields } → fields
+      assert eq(count($fields), count($entries))
+        otherwise "TYPE: The closed record has missing or extra fields."
+      each $fields as field:
+        assert some($entries, "entry", eq(at($entry, 0), at($field, 0)))
+          otherwise "TYPE: A required field is missing."
+        port kernel.invoke { query = "types.check"; input = { type = at($field, 1); value = at($value, at($field, 0)); depth = $depth } } → _
+    when eq($type.kind, "map"):
+      each $entries as entry:
+        port kernel.invoke { query = "types.check"; input = { type = $type.item; value = at($entry, 1); depth = $depth } } → _
+  assert includes(list("named", "text", "number", "integer", "boolean", "unit", "choice", "scalar", "list", "record", "map"), $type.kind)
+    otherwise "TYPE: Unsupported type form."
+  let result = true
+
+process types.named:
+  port kernel.invoke { query = "types.check"; input = { type = { kind = "named"; name = $eventInput.name }; value = $eventInput.value; depth = 0 } } → result
+
+process domain.identifier:
+  port text.matches { value = $eventInput; pattern = "^[A-Za-z][A-Za-z0-9_.-]{0,63}$" } → valid
+  assert $valid
+    otherwise "IDENTITY: Use a letter followed by letters, numbers, dots, underscores or hyphens, up to64 characters."
+  assert not(includes(list("constructor", "prototype", "__proto__"), $eventInput))
+    otherwise "IDENTITY: This name is reserved."
+  let result = true
+
+process domain.scalar:
+  let field = $eventInput.field
+  let value = $eventInput.value
+  let kind = if(eq($field.kind, "Reference"), "text", if(eq($field.kind, "Text"), "text", if(eq($field.kind, "Number"), "number", "boolean")))
+  assert includes(list("Text", "Number", "Boolean", "Reference"), $field.kind)
+    otherwise "TYPE: Choose a supported field type."
+  port kernel.invoke { query = "types.check"; input = { type = { kind = $kind }; value = $value; depth = 0 } } → _
+  when eq($field.kind, "Reference"):
+    let targets = filter($state.things, "thing", eq($thing.id, $value))
+    assert eq(count($targets), 1)
+      otherwise "REFERENCE: Select one existing thing."
+    assert some(at(at($targets, 0), "roles"), "role", eq($role.type, $field.expects))
+      otherwise "REFERENCE: The thing does not have the required type."
+  let result = true
+
+process domain.empty:
+  let result = { intent = ""; definitions = list(); things = list(); actions = list(); projections = list(); overlays = list(); jobs = list() }
+
+process domain.check:
+  let state = $eventInput
+  port kernel.invoke { query = "types.named"; input = { name = "State"; value = $state } } → _
+  each list("definitions", "things", "actions", "projections", "jobs") as collection:
+    let ids = map(at($state, $collection), "item", $item.id)
+    assert eq(count($ids), count(distinct($ids)))
+      otherwise "IDENTITY: Duplicate canonical identity."
+    each $ids as id:
+      port kernel.invoke { query = "domain.identifier"; input = $id } → _
+  each $state.definitions as definition:
+    let ids = map($definition.fields, "field", $field.id)
+    assert eq(count($ids), count(distinct($ids)))
+      otherwise "TYPE: Duplicate field identity."
+    each $definition.fields as field:
+      port kernel.invoke { query = "domain.identifier"; input = $field.id } → _
+      assert includes(list("Text", "Number", "Boolean", "Reference"), $field.kind)
+        otherwise "TYPE: Unknown scalar kind."
+      when eq($field.kind, "Reference"):
+        assert some($state.definitions, "type", eq($type.id, $field.expects))
+          otherwise "TYPE: Reference target type is missing."
+      when not(eq($field.kind, "Reference")):
+        assert eq($field.expects, "")
+          otherwise "TYPE: Only a Reference declares its target."
+  each $state.things as thing:
+    assert count($thing.roles)
+      otherwise "TYPE: A thing requires a declared role."
+    let types = map($thing.roles, "role", $role.type)
+    let aliases = map($thing.roles, "role", $role.alias)
+    assert eq(count($types), count(distinct($types)))
+      otherwise "TYPE: One participation per nominal type is permitted."
+    assert eq(count($aliases), count(distinct($aliases)))
+      otherwise "TYPE: Roles need distinct explicit aliases."
+    each $thing.roles as role:
+      when not(eq($role.alias, "")):
+        port kernel.invoke { query = "domain.identifier"; input = $role.alias } → _
+      let matches = filter($state.definitions, "type", eq($type.id, $role.type))
+      assert eq(count($matches), 1)
+        otherwise "TYPE: The role's type is missing."
+      let definition = at($matches, 0)
+      port record.entries { value = $role.values } → cells
+      assert eq(count($cells), count($definition.fields))
+        otherwise "TYPE: Every field must be resolved, with no extra values."
+      each $definition.fields as field:
+        assert some($cells, "cell", eq(at($cell, 0), $field.id))
+          otherwise "TYPE: A required field is missing."
+        port kernel.invoke { query = "domain.scalar"; input = { field = $field; value = at($role.values, $field.id) } } → _
+  each $state.projections as projection:
+    assert includes(list("web", "row"), $projection.kind)
+      otherwise "PROJECTION: Choose a supported representation."
+    let target = filter($state.things, "thing", eq($thing.id, $projection.thing))
+    assert eq(count($target), 1)
+      otherwise "PROJECTION: The source thing is missing."
+    let roles = filter(at(at($target, 0), "roles"), "role", eq($role.alias, $projection.alias))
+    assert eq(count($roles), 1)
+      otherwise "PROJECTION: Choose the exact role alias."
+    let definition = at(filter($state.definitions, "type", eq($type.id, at(at($roles, 0), "type"))), 0)
+    let fields = filter($definition.fields, "field", eq($field.id, $projection.field))
+    assert eq(count($fields), 1)
+      otherwise "PROJECTION: The field is missing."
+    assert eq(at(at($fields, 0), "kind"), "Text")
+      otherwise "PROJECTION: This first label profile requires a Text field."
+    when not(eq($projection.action, "")):
+      let actions = filter($state.actions, "action", eq($action.id, $projection.action))
+      assert eq(count($actions), 1)
+        otherwise "PROJECTION: The selected action is missing."
+      assert and(eq(at(at($actions, 0), "input"), "Text"), eq(at(at($actions, 0), "output"), "Text"))
+        otherwise "PROJECTION: Labels require a Text to Text action."
+  let ids = map($state.overlays, "overlay", $overlay.projection)
+  assert eq(count($ids), count(distinct($ids)))
+    otherwise "OVERLAY: Only one explicit label overlay per projection is permitted."
+  each $state.overlays as overlay:
+    assert some($state.projections, "projection", and(eq($projection.id, $overlay.projection), eq($projection.kind, "web")))
+      otherwise "OVERLAY: A web context is required."
+  each $state.jobs as job:
+    assert includes(list("queued", "cancelled", "completed"), $job.status)
+      otherwise "JOB: Unknown status."
+  each $state.actions as action:
+    assert eq($action.source, concat("actions/", $action.id, ".encounter"))
+      otherwise "SOURCE: Action source must use its own explicit document coordinate."
+  let result = true

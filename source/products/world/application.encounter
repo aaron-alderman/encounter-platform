@@ -1,0 +1,114 @@
+process-module "temple/surface-process-module/1"
+
+process world.gaps:
+  let input = $eventInput
+  fold $input.requirements as requirement; gaps starts list():
+    let observed = at($input.stocks, $requirement.resource)
+    port number.calculate { operation = "less"; values = list($observed, $requirement.threshold) } → short
+    let gap = { resource = $requirement.resource; observed = $observed; threshold = $requirement.threshold; rationale = $requirement.rationale }
+    yield if($short, append($gaps, list($gap)), $gaps) → gaps
+  let result = $gaps
+
+process world.realize:
+  let step = $eventInput
+  # Outputs can unlock another capability in the same epoch.
+  fold $step.capabilities as round; pass starts { stocks = $step.stocks; realized = $step.realized; changed = true }:
+    let next = $pass
+    when $pass.changed:
+      fold $step.capabilities as capability; progress starts { stocks = $pass.stocks; realized = $pass.realized; changed = false }:
+        let nextProgress = $progress
+        when eq(at($progress.realized, $capability.id), at({}, "missing")):
+          port kernel.invoke { query = "world.gaps"; input = { stocks = $progress.stocks; requirements = $capability.requirements } } → gaps
+          when not(count($gaps)):
+            fold $capability.outputs as output; stocks starts $progress.stocks:
+              port record.put { record = $stocks; key = $output.resource; value = add(at($stocks, $output.resource), $output.delta) } → stocks
+              yield $stocks → stocks
+            port record.put { record = $progress.realized; key = $capability.id; value = $step.epoch } → achieved
+            let nextProgress = { stocks = $stocks; realized = $achieved; changed = true }
+        yield $nextProgress → progress
+      let next = $progress
+    yield $next → pass
+  let result = { stocks = $pass.stocks; realized = $pass.realized }
+
+process world.epoch:
+  let epoch = $eventInput
+  fold $epoch.actions as action; stocks starts $epoch.state.stocks:
+    let next = $stocks
+    when every($action.requires, "id", not(eq(at($epoch.state.realized, $id), at({}, "missing")))):
+      fold $action.effects as effect; affected starts $stocks:
+        let coordinate = concat($action.id, ":", $effect.resource)
+        let multiplier = at($epoch.scenario.multipliers, $coordinate)
+        when eq($multiplier, at({}, "missing")):
+          let multiplier = at($epoch.scenario.multipliers, $action.id)
+        when eq($multiplier, at({}, "missing")):
+          let multiplier = 1
+        port number.calculate { operation = "multiply"; values = list($effect.delta, $multiplier) } → delta
+        port number.calculate { operation = "max"; values = list(0, add(at($affected, $effect.resource), $delta)) } → stock
+        port record.put { record = $affected; key = $effect.resource; value = $stock } → affected
+        yield $affected → affected
+      let next = $affected
+    yield $next → stocks
+  port kernel.invoke { query = "world.realize"; input = { stocks = $stocks; realized = $epoch.state.realized; epoch = $epoch.number; capabilities = $epoch.capabilities } } → result
+
+process world.simulate:
+  let run = $eventInput
+  let basis = $run.basis
+  port kernel.invoke { query = "world.realize"; input = { stocks = $basis.initial; realized = {}; epoch = 0; capabilities = $basis.capabilities } } → initial
+  fold range($run.horizon) as epoch; state starts $initial:
+    port kernel.invoke { query = "world.epoch"; input = { state = $state; number = $epoch; actions = $basis.actions; capabilities = $basis.capabilities; scenario = $run.scenario } } → state
+    yield $state → state
+  fold $basis.capabilities as capability; results starts list():
+    let tick = at($state.realized, $capability.id)
+    let realized = not(eq($tick, at({}, "missing")))
+    port kernel.invoke { query = "world.gaps"; input = { stocks = $state.stocks; requirements = $capability.requirements } } → gaps
+    let entry = { name = $capability.name; realized = $realized; tick = if($realized, $tick, null); gaps = if($realized, list(), $gaps) }
+    yield append($results, list($entry)) → results
+  let result = { capabilities = $results; governedData = at($state.stocks, "governed-data") }
+
+process product.empty:
+  let result = { runs = list() }
+
+process product.change:
+  let command = $eventInput
+  assert eq($command.fields.action, "simulate")
+    otherwise "Choose Run development scenario."
+  port application.data {} → basis
+  let scenario = at(filter($basis.scenarios, "scenario", eq($scenario.id, $command.fields.scenario)), 0)
+  assert $scenario
+    otherwise "Choose a declared scenario."
+  port kernel.invoke { query = "portfolio.number"; input = { text = $command.fields.horizon; min = 1; max = $basis.maxTicks; integer = true } } → horizon
+  port kernel.invoke { query = "world.simulate"; input = { basis = $basis; scenario = $scenario; horizon = $horizon } } → outcome
+  let run = { id = $command.id; name = $scenario.name; note = $scenario.explanation; horizon = $horizon; seed = $scenario.seed; outcome = $outcome }
+  let result = { state = { runs = append(list($run), $command.state.runs) }; target = $scenario.id; notice = "Development scenario calculated and saved." }
+
+process world.card:
+  let run = $eventInput
+  let achievements = filter($run.outcome.capabilities, "entry", $entry.realized)
+  fold $run.outcome.capabilities as entry; rows starts list():
+    let heading = if($entry.realized, concat($entry.name, " · realized at epoch ", $entry.tick), concat($entry.name, " · blocked"))
+    let gaps = map($entry.gaps, "gap", { tag = "li"; attrs = {}; children = list(concat($gap.resource, ": ", $gap.observed, " / ", $gap.threshold, " required. ", $gap.rationale)) })
+    let details = if(count($gaps), list({ tag = "ul"; attrs = {}; children = $gaps }), list())
+    let row = { tag = "li"; attrs = {}; children = append(list({ tag = "strong"; attrs = {}; children = list($heading) }), $details) }
+    yield append($rows, list($row)) → rows
+  let result = { tag = "article"; attrs = {}; children = list(
+    { tag = "h3"; attrs = {}; children = list($run.name) },
+    { tag = "p"; attrs = {}; children = list($run.note) },
+    { tag = "p"; attrs = {}; children = list(concat(count($achievements), " / ", count($run.outcome.capabilities), " capabilities realized after ", $run.horizon, " epochs")) },
+    { tag = "p"; attrs = {}; children = list(concat("Governed data stock: ", $run.outcome.governedData)) },
+    { tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list("Capability outcomes") }, { tag = "ul"; attrs = {}; children = $rows }) }
+  ) }
+
+process product.view:
+  let screen = $eventInput
+  port application.data {} → basis
+  let options = map($basis.scenarios, "scenario", { value = $scenario.id; label = $scenario.name })
+  let inputs = list(
+    { name = "scenario"; label = "Scenario"; labelId = "world-scenario"; type = "select"; options = $options; value = at(at($basis.scenarios, 0), "id") },
+    { name = "horizon"; label = "Epochs"; type = "number"; value = $basis.maxTicks; min = 1; max = $basis.maxTicks; required = true }
+  )
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = $inputs; action = "simulate"; button = "Run development scenario" } } → form
+  port kernel.invoke { query = "portfolio.recent"; input = { rows = $screen.state.runs; limit = 5 } } → recent
+  fold $recent as run; cards starts list():
+    port kernel.invoke { query = "world.card"; input = $run } → card
+    yield append($cards, list($card)) → cards
+  let result = { title = "World"; summary = "Run the legacy material-development model and inspect what enables or blocks each capability."; content = append(list($form), $cards) }

@@ -1,0 +1,59 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    sections = list(
+      {
+        subject = "application";
+        module = "source/types.encounter";
+        stateProfile = "encounter/authoring-loop/1"
+      },
+      {
+        subject = "application";
+        module = list(
+          "source/actions.encounter",
+          "source/commands.encounter",
+          "source/application.encounter",
+          "source/ui.encounter",
+          "algebra/html/html.escape.encounter",
+          "algebra/html/html.cssText.encounter",
+          "algebra/html/html.serialize.encounter",
+          "algebra/css/css.renderPlan.encounter"
+        );
+        entry = list(
+          "app.request",
+          "app.newSession",
+          "ui.styles"
+        );
+        grant = list(
+          "value.describe",
+          "value.string",
+          "value.type",
+          "record.entries",
+          "record.get",
+          "record.put",
+          "text.trim",
+          "text.join",
+          "text.slice",
+          "text.split",
+          "text.matches",
+          "text.indexOf",
+          "text.replaceAll",
+          "number.calculate",
+          "rel.encode",
+          "rel.decode",
+          "scalar.read",
+          "scalar.quoteValue",
+          "digest.sha256",
+          "source.observe",
+          "source.catalogue",
+          "storage.snapshot",
+          "storage.operation",
+          "storage.history",
+          "storage.cas",
+          "kernel.invoke",
+          "encounter.execute"
+        )
+      }
+    )
+  }

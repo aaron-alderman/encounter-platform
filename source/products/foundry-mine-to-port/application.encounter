@@ -1,0 +1,89 @@
+process-module "temple/surface-process-module/1"
+
+process foundry.scenarios:
+  let result = list(
+    { id = "baseline"; label = "Balanced export baseline"; disturbance = 0; berth = 90; profiles = list("Standard", "Rail focused", "Port focused") },
+    { id = "rail-disruption"; label = "Rail disturbance"; disturbance = 25; berth = 90; profiles = list("Standard", "Rail focused") },
+    { id = "port-expansion"; label = "Port expansion"; disturbance = 0; berth = 115; profiles = list("Standard", "Port focused") }
+  )
+
+process foundry.run:
+  let input = $eventInput
+  let scenario = $input.scenario
+  let stages = list(
+    { id = "mine"; label = "Mine loadout"; capacity = 120; hour = 1 },
+    { id = "rail"; label = "Rail haul"; capacity = 100; hour = 2 },
+    { id = "yard"; label = "Port stockyard"; capacity = 110; hour = 3 },
+    { id = "berth"; label = "Berth transfer"; capacity = $scenario.berth; hour = 4 },
+    { id = "marine"; label = "Marine departure"; capacity = 95; hour = 5 }
+  )
+  port number.calculate { operation = "min"; values = map($stages, "stage", $stage.capacity) } → nominal
+  let bottleneck = at(filter($stages, "stage", eq($stage.capacity, $nominal)), 0)
+  port number.calculate { operation = "min"; values = list($nominal, $scenario.disturbance) } → loss
+  port number.calculate { operation = "remainder"; values = list($input.seed, 3) } → residue
+  port number.calculate { operation = "subtract"; values = list($nominal, $loss) } → disturbed
+  port number.calculate { operation = "max"; values = list(0, add(add($disturbed, $residue), -1)) } → throughput
+  port number.calculate { operation = "divide"; values = list($scenario.disturbance, 5) } → recovery
+  port number.calculate { operation = "divide"; values = list($scenario.disturbance, 10) } → cycleDelta
+  port number.calculate { operation = "divide"; values = list($throughput, $nominal) } → utilization
+  let events = map($stages, "stage", { label = $stage.label; capacity = $stage.capacity; hour = add($stage.hour, if(eq($stage.id, "mine"), 0, $recovery)) })
+  let result = { throughput = $throughput; recovery = $recovery; cycle = add(5, $cycleDelta); utilization = $utilization; bottleneck = $bottleneck.label; events = $events }
+
+process product.empty:
+  let result = { runs = list() }
+
+process product.change:
+  let command = $eventInput
+  assert eq($command.fields.action, "run")
+    otherwise "Choose Run scenario."
+  port kernel.invoke { query = "foundry.scenarios" } → scenarios
+  let scenario = at(filter($scenarios, "scenario", eq($scenario.id, $command.fields.scenario)), 0)
+  assert $scenario
+    otherwise "Choose a declared scenario."
+  let profile = $command.fields.profile
+  assert includes($scenario.profiles, $profile)
+    otherwise "This profile is unavailable for the selected scenario."
+  port kernel.invoke { query = "portfolio.number"; input = { text = $command.fields.seed; min = 0; max = 999999; integer = true } } → seed
+  port kernel.invoke { query = "foundry.run"; input = { scenario = at($scenarios, 0); seed = $seed } } → baseline
+  port kernel.invoke { query = "foundry.run"; input = { scenario = $scenario; seed = $seed } } → metrics
+  port number.calculate { operation = "subtract"; values = list($metrics.throughput, $baseline.throughput) } → delta
+  let run = { scenario = $scenario.id; label = $scenario.label; profile = $profile; seed = $seed; metrics = $metrics; baseline = $baseline.throughput; delta = $delta }
+  let result = { state = { runs = append(list($run), $command.state.runs) }; notice = "Scenario calculated and saved."; target = $scenario.id }
+
+process foundry.card:
+  let run = $eventInput
+  let metrics = list(
+    concat("Throughput: ", $run.metrics.throughput, " t/h"),
+    concat("Baseline at this seed: ", $run.baseline, " t/h"),
+    concat("Change from baseline: ", $run.delta, " t/h"),
+    concat("Bottleneck: ", $run.metrics.bottleneck),
+    concat("Cycle time: ", $run.metrics.cycle, " h"),
+    concat("Recovery: ", $run.metrics.recovery, " h"),
+    concat("Utilization ratio: ", $run.metrics.utilization)
+  )
+  let stages = map($run.metrics.events, "stage", { tag = "li"; attrs = {}; children = list(concat($stage.label, " · ", $stage.capacity, " t/h capacity · completed at hour ", $stage.hour)) })
+  let result = { tag = "article"; attrs = {}; children = list(
+    { tag = "h3"; attrs = {}; children = list($run.label) },
+    { tag = "p"; attrs = {}; children = list(concat($run.profile, " · seed ", $run.seed)) },
+    { tag = "ul"; attrs = {}; children = map($metrics, "metric", { tag = "li"; attrs = {}; children = list($metric) }) },
+    { tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list("Completion timeline") }, { tag = "ol"; attrs = {}; children = $stages }) }
+  ) }
+
+process product.view:
+  let screen = $eventInput
+  port kernel.invoke { query = "foundry.scenarios" } → scenarios
+  let options = map($scenarios, "scenario", { value = $scenario.id; label = $scenario.label })
+  let profiles = map(list("Standard", "Rail focused", "Port focused"), "profile", { value = $profile; label = $profile })
+  let inputs = list(
+    { name = "scenario"; label = "Scenario"; labelId = "scenario-label"; type = "select"; options = $options; value = "baseline"; required = true },
+    { name = "profile"; label = "Profile"; labelId = "profile-label"; type = "select"; options = $profiles; value = "Standard"; required = true },
+    { name = "seed"; label = "Seed"; type = "number"; min = 0; max = 999999; step = 1; value = 1; required = true }
+  )
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = $inputs; action = "run"; button = "Run scenario" } } → form
+  port kernel.invoke { query = "portfolio.recent"; input = { rows = $screen.state.runs; limit = 8 } } → recent
+  fold $recent as run; cards starts list():
+    port kernel.invoke { query = "foundry.card"; input = $run } → card
+    yield append($cards, list($card)) → cards
+  port kernel.invoke { query = "portfolio.section"; input = { title = "Recent runs"; content = $cards } } → history
+  let boundary = { tag = "p"; attrs = {}; children = list("Structural model only. Empirical validation requires operating data and modeller sign-off.") }
+  let result = { title = "Foundry Mine to Port"; summary = "Compare mine, rail, stockyard, berth and marine capacity scenarios."; content = list($form, $boundary, $history) }

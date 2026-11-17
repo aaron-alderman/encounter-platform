@@ -1,0 +1,74 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process language.process.compile:
+  let lpFile = at($eventInput, "file")
+  let lpText = at($eventInput, "text")
+  let lpHash = at($eventInput, "expectedTextSha256")
+  try:
+    port kernel.invoke { query = "s01.portable"; input = { value = $eventInput; ancestors = list() } } → portable
+    when not($portable):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-LEX";
+          summary = "Compilation input must be portable own-data.";
+          token = { start = 0; end = 0; line = 1; column = 1 }
+        }
+      } → unused
+    port value.describe { value = $lpText } → textType
+    port value.describe { value = $lpFile } → fileType
+    when not(
+      and(
+        eq(at($textType, "type"), "string"),
+        eq(at($fileType, "type"), "string"),
+        not(eq($lpFile, ""))
+      )
+    ):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-LEX";
+          summary = "Exact text and an explicit file identity are required.";
+          token = { start = 0; end = 0; line = 1; column = 1 }
+        }
+      } → unused
+    port digest.sha256 { text = $lpText } → actualHash
+    when not(and(eq($actualHash, $lpHash), eq(at($eventInput, "expectedBasis"), $lpBasis))):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-BASIS";
+          summary = "Text or compiler dependencies differ from their pinned basis.";
+          token = { start = 0; end = 0; line = 1; column = 1 }
+        }
+      } → unused
+    port kernel.invoke { query = "source.lex"; input = { text = $lpText; language = "process" } } → lexed
+    when not(at($lexed, "withinLimit")):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-LIMIT";
+          summary = "Source/token bound exceeded.";
+          token = { start = 0; end = 0; line = 1; column = 1 }
+        }
+      } → unused
+    port kernel.invoke { query = "lp.layout"; input = { tokens = at($lexed, "tokens") } } → lpTokens
+    port kernel.invoke { query = "lp.parse"; input = {  } } → parsed
+    let result = {
+      ok = true;
+      surface = at($parsed, "surface");
+      origins = at($parsed, "origins");
+      tokens = at($lexed, "tokens");
+      layout = $lpTokens;
+      sourceHash = $lpHash;
+      basis = $lpBasis;
+      scope = "supplied-core-process-candidate";
+      admitted = false
+    }
+  catch fault:
+    try:
+      port rel.decode { text = at($fault, "message") } → diagnostic
+    catch unstructured:
+      let result = raise(at($fault, "message"))
+    let result = { ok = false; diagnostic = $diagnostic }
