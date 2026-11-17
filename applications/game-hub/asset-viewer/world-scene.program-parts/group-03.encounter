@@ -1,0 +1,350 @@
+process-module "temple/surface-process-module/1"
+
+process programme.fragments:
+  let result = {
+    node1226 = list(
+      "Sequence",
+      {
+        body = list(
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "progress" });
+                init = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "Math" });
+                property = list("NameReference", { name = "min" })
+                }
+                );
+                arguments = list(
+                list("LiteralValue", { value = 1 }),
+                list(
+                "Calculate",
+                {
+                operator = "/";
+                left = list(
+                "Calculate",
+                {
+                operator = "-";
+                left = list("NameReference", { name = "now" });
+                right = list("NameReference", { name = "started" })
+                }
+                );
+                right = list("LiteralValue", { value = 1800 })
+                }
+                )
+                )
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          { fragment = "node1206" },
+          list(
+            "Do",
+            {
+              expression = list(
+                "Invoke",
+                { optional = false; callee = list("NameReference", { name = "draw" }); arguments = list() }
+              )
+            }
+          ),
+          list(
+            "Branch",
+            {
+              test = list(
+                "Calculate",
+                {
+                operator = "<";
+                left = list("NameReference", { name = "progress" });
+                right = list("LiteralValue", { value = 1 })
+                }
+              );
+              consequent = list(
+                "Do",
+                {
+                expression = list(
+                "Set",
+                {
+                operator = "=";
+                left = list("NameReference", { name = "animation" });
+                right = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list("NameReference", { name = "requestAnimationFrame" });
+                arguments = list(list("NameReference", { name = "update" }))
+                }
+                )
+                }
+                )
+                }
+              );
+              alternate = list(
+                "Do",
+                {
+                expression = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "canvas" });
+                property = list("NameReference", { name = "removeAttribute" })
+                }
+                );
+                arguments = list(list("LiteralValue", { value = "aria-busy" }))
+                }
+                )
+                }
+              )
+            }
+          )
+        )
+      }
+    );
+    node1227 = list(
+      "Define",
+      {
+        generator = false;
+        async = false;
+        id = list("NameReference", { name = "update" });
+        params = list(list("NameReference", { name = "now" }));
+        body = { fragment = "node1226" }
+      }
+    );
+    node1234 = list(
+      "Sequence",
+      {
+        body = list(
+          list(
+            "Do",
+            {
+              expression = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list("NameReference", { name = "cancelAnimationFrame" });
+                arguments = list(list("NameReference", { name = "animation" }))
+                }
+              )
+            }
+          ),
+          list(
+            "BindGroup",
+            {
+              kind = "const";
+              terminate = true;
+              declarations = list(
+                list(
+                "Binding",
+                {
+                id = list("NameReference", { name = "started" });
+                init = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "performance" });
+                property = list("NameReference", { name = "now" })
+                }
+                );
+                arguments = list()
+                }
+                )
+                }
+                )
+              )
+            }
+          ),
+          list(
+            "Do",
+            {
+              expression = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "canvas" });
+                property = list("NameReference", { name = "setAttribute" })
+                }
+                );
+                arguments = list(list("LiteralValue", { value = "aria-busy" }), list("LiteralValue", { value = "true" }))
+                }
+              )
+            }
+          ),
+          { fragment = "node1227" },
+          list(
+            "Do",
+            {
+              expression = list(
+                "Set",
+                {
+                operator = "=";
+                left = list("NameReference", { name = "animation" });
+                right = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list("NameReference", { name = "requestAnimationFrame" });
+                arguments = list(list("NameReference", { name = "update" }))
+                }
+                )
+                }
+              )
+            }
+          )
+        )
+      }
+    );
+    node1235 = list(
+      "Procedure",
+      {
+        generator = false;
+        async = false;
+        block = true;
+        id = null;
+        params = list();
+        body = { fragment = "node1234" }
+      }
+    );
+    node1236 = list(
+      "Binding",
+      { id = list("NameReference", { name = "play" }); init = { fragment = "node1235" } }
+    );
+    node1237 = list(
+      "BindGroup",
+      { kind = "const"; terminate = true; declarations = list({ fragment = "node1236" }) }
+    );
+    node1255 = list(
+      "Sequence",
+      {
+        body = list(
+          list(
+            "Do",
+            {
+              expression = list(
+                "Set",
+                {
+                operator = "=";
+                left = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "replay" });
+                property = list("NameReference", { name = "hidden" })
+                }
+                );
+                right = list("LiteralValue", { value = false })
+                }
+              )
+            }
+          ),
+          { fragment = "node1237" },
+          list(
+            "Do",
+            {
+              expression = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list("NameReference", { name = "replay" });
+                property = list("NameReference", { name = "addEventListener" })
+                }
+                );
+                arguments = list(list("LiteralValue", { value = "click" }), list("NameReference", { name = "play" }))
+                }
+              )
+            }
+          ),
+          list(
+            "Branch",
+            {
+              test = list(
+                "Unary",
+                {
+                operator = "!";
+                prefix = true;
+                argument = list(
+                "Select",
+                {
+                computed = false;
+                optional = false;
+                object = list(
+                "Invoke",
+                {
+                optional = false;
+                callee = list("NameReference", { name = "matchMedia" });
+                arguments = list(list("LiteralValue", { value = "(prefers-reduced-motion: reduce)" }))
+                }
+                );
+                property = list("NameReference", { name = "matches" })
+                }
+                )
+                }
+              );
+              consequent = list(
+                "Do",
+                {
+                expression = list(
+                "Invoke",
+                { optional = false; callee = list("NameReference", { name = "play" }); arguments = list() }
+                )
+                }
+              );
+              alternate = null
+            }
+          )
+        )
+      }
+    );
+    node1256 = list(
+      "Branch",
+      {
+        test = list(
+          "Select",
+          {
+            computed = false;
+            optional = false;
+            object = list("NameReference", { name = "moving" });
+            property = list("NameReference", { name = "length" })
+          }
+        );
+        consequent = { fragment = "node1255" };
+        alternate = null
+      }
+    )
+  }

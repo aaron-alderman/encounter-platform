@@ -1,0 +1,133 @@
+process-module "temple/surface-process-module/1"
+
+process app.newSession:
+  let result = {}
+
+process app.request:
+  let request = $eventInput
+  let snapshot = $request.snapshot
+  let fields = $request.fields
+  let base = $snapshot.revision
+  let operation = $fields.operation
+  let notice = ""
+  let error = ""
+  let session = $request.session
+  let preview = false
+  call market.read
+  let body = null
+  when eq($request.path, "/app-data/"):
+    try:
+      call market.package
+      let body = $result
+    catch fault:
+      let body = { tag = "p"; attrs = { id = "app-package"; role = "alert" }; children = list($fault.message) }
+  when not(eq($request.path, "/app-data/")):
+    let view = $fields.view
+    let evidence = and(eq($request.method, "GET"), includes(list("execution", "trace", "source", "receipts", "design"), $view))
+    when $evidence:
+      call market.evidence
+      let body = $result
+    when not($evidence):
+      call market.workbench
+      let body = $result
+    call market.shell
+    let body = $result
+  let input = $body
+  call html.serialize
+  let result = { html = concat("<!doctype html>\n", $result); session = $session; assetPreview = $preview }
+
+process market.apply:
+  try:
+    call market.operation
+  catch fault:
+    let error = $fault.message
+  let result = { notice = $notice; error = $error }
+
+process market.workbench:
+  let appCommand = and(eq($request.method, "POST"), includes(list("publish-app", "install-app"), $operation))
+  let provider = null
+  let observed = null
+  when $appCommand:
+    port execution.observe { query = "market.apply"; input = $request;
+      processes = list("market.apply", "market.operation", "store.checkVersion", "market.persist", "hub.persist") } → observed
+    let notice = $observed.result.notice
+    let error = $observed.result.error
+    port storage.snapshot {} → snapshot
+    port record.put { record = $request; key = "snapshot"; value = $snapshot } → request
+    port record.put { record = $request; key = "method"; value = "GET" } → request
+  port record.put { record = $request; key = "storePath"; value = "/" } → request
+  port record.put { record = $request; key = "gameRoot"; value = "https://appdev.sourcerytech.com.au/game" } → request
+  when eq($request.method, "GET"):
+    port kernel.invoke { query = "store.request"; input = $request } → provider
+  when eq($request.method, "POST"):
+    call hub.mappingOwners
+    port execution.observe { query = "store.request"; input = $request; processes = $result.store } → observed
+    let provider = $observed.result
+  let session = $provider.session
+  let preview = $provider.preview
+  when $observed:
+    port kernel.invoke { query = "hub.operationLabel"; input = $operation } → label
+    let execution = { operation = $label; events = $observed.events; dropped = $observed.dropped }
+    port record.put { record = $session; key = "store"; value = $execution } → session
+  port storage.snapshot {} → snapshot
+  let base = $snapshot.revision
+  call market.read
+  let apps = null
+  when not($fields.play):
+    call market.view
+    let apps = $result
+  let result = list(
+    if($notice, { tag = "p"; attrs = { role = "status"; class = "asset-notice" }; children = list($notice) }, null),
+    if($error, { tag = "p"; attrs = { role = "alert"; class = "asset-error" }; children = list($error) }, null),
+    $apps, $provider.body
+  )
+
+process market.evidence:
+  let doc = { id = "store" }
+  port record.put { record = $request; key = "storePath"; value = "/" } → request
+  when eq($view, "execution"):
+    let execution = at($session, "store")
+    call hub.executionView
+  when includes(list("trace", "source"), $view):
+    call hub.inspect
+  when eq($view, "design"):
+    port kernel.invoke { query = "design.page"; input = { fields = $fields } } → result
+  when eq($view, "receipts"):
+    port storage.history {} → history
+    let entries = filter($history, "item", includes(list("EncounterStore", "EncounterInstalledApp", "GameStore"), $item.goal))
+    let recent = filter(map(range(12), "index", at($entries, add($index, -1))), "item", $item)
+    let result = list({ tag = "h2"; children = list("Publication and installation receipts") },
+      map($recent, "item", { tag = "details"; children = list(
+        { tag = "summary"; children = list("Revision ", $item.revision, " · ", $item.reason) },
+        { tag = "p"; attrs = { class = "asset-id" }; children = list($item.sourceHash) }
+      ) }))
+
+process market.shell:
+  let result = { tag = "html"; attrs = { lang = "en" }; children = list(
+    { tag = "head"; children = list(
+      { tag = "meta"; attrs = { charset = "utf-8" } },
+      { tag = "meta"; attrs = { name = "viewport"; content = "width=device-width, initial-scale=1" } },
+      { tag = "title"; children = list(if(eq($view, "design"), "Encounter design demo", "Store"), " | Sourcery") },
+      { tag = "link"; attrs = { rel = "stylesheet"; href = "/styles.css" } }
+    ) },
+    { tag = "body"; children = list(
+      { tag = "main"; attrs = { class = "store-window" }; children = list(
+        { tag = "header"; children = list(
+          { tag = "h1"; children = list(if(eq($view, "design"), "Encounter design demo", "Store")) }
+        ) },
+        { tag = "nav"; attrs = { class = "project-command-bar"; "aria-label" = "Platform" }; children = list(
+          { tag = "a"; attrs = { href = "https://appdev.sourcerytech.com.au/" }; children = list("Workspace") },
+          { tag = "a"; attrs = { href = "/" }; children = list("Store") },
+          { tag = "a"; attrs = { href = "https://appdev.sourcerytech.com.au/game/" }; children = list("Game Hub") },
+          { tag = "a"; attrs = { href = "/?view=design"; "aria-current" = if(eq($view, "design"), "page", null) }; children = list("Design demo") }
+        ) },
+        if(not(eq($view, "design")), { tag = "nav"; attrs = { class = "project-command-bar"; "aria-label" = "Store views" }; children = list(
+          { tag = "a"; attrs = { href = "/"; "aria-current" = if(not($view), "page", null) }; children = list("Catalog") },
+          { tag = "a"; attrs = { href = "/?view=execution"; "aria-current" = if(eq($view, "execution"), "page", null) }; children = list("Trace") },
+          { tag = "a"; attrs = { href = "/?view=trace"; "aria-current" = if(includes(list("trace", "source"), $view), "page", null) }; children = list("Trace map") },
+          { tag = "a"; attrs = { href = "/?view=receipts"; "aria-current" = if(eq($view, "receipts"), "page", null) }; children = list("Receipts") }
+        ) }, null),
+        { tag = "article"; attrs = { id = "store-content" }; children = list($body) }
+      ) }
+    ) }
+  ) }

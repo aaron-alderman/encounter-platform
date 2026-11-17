@@ -1,0 +1,35 @@
+process-module "temple/surface-process-module/1"
+
+process gateway.route:
+  let request = $eventInput
+  let runtime = at($request, "mount")
+  let mounted = if($runtime, true, eq($request.path, "/runtime/"))
+  let path = if($mounted, or($runtime, "/"), $request.path)
+  let browser = eq($path, "/_encounter/browser")
+  let workspaceSignIn = and(not($mounted), eq($path, "/connect"))
+  let allowed = if($mounted, includes(list("/", "/styles.css", "/_encounter/browser.mjs", "/_encounter/browser"), $path),
+    includes(list("/", "/app-data/", "/styles.css", "/asset-download/", "/connect"), $path))
+  port text.indexOf { value = $path; search = "/asset-viewer/" } → viewer
+  let allowed = or($allowed, and(not($mounted), eq($viewer, 0)))
+  let post = and(not($mounted), includes(list("/", "/app-data/"), $path), eq($request.method, "POST"))
+  let upgrade = and($mounted, $browser, $request.upgrade)
+  let status = if(not($allowed), 404,
+    if($request.upgrade, if($upgrade, 200, 403), if(or(eq($request.method, "GET"), $post), 200, 405)))
+  let result = { path = $path; mounted = $mounted; status = $status; upgrade = $upgrade;
+    readOnly = false; workspaceSignIn = $workspaceSignIn; assetDownload = eq($path, "/asset-download/") }
+
+process gateway.page:
+  let result = $eventInput.html
+
+process test.routes:
+  port kernel.invoke { query = "gateway.route"; input = { path = "/"; method = "POST" } } → store
+  port kernel.invoke { query = "gateway.route"; input = { path = "/app-data/"; method = "POST" } } → save
+  port kernel.invoke { query = "gateway.route"; input = { path = "/runtime/_encounter/browser"; mount = "/_encounter/browser"; method = "GET"; upgrade = true } } → browser
+  port kernel.invoke { query = "gateway.route"; input = { path = "/runtime/unknown"; mount = "/unknown"; method = "GET" } } → unknown
+  port kernel.invoke { query = "gateway.route"; input = { path = "/"; method = "GET"; upgrade = true } } → refused
+  port kernel.invoke { query = "gateway.route"; input = { path = "/connect"; method = "GET" } } → connect
+  port kernel.invoke { query = "gateway.route"; input = { path = "/connect"; method = "POST" } } → connectPost
+  assert and(eq($store.status, 200), eq($save.status, 200), eq($browser.status, 200), $browser.upgrade, $browser.mounted, eq($unknown.status, 404), eq($refused.status, 403),
+    eq($connect.status, 200), $connect.workspaceSignIn, eq($connectPost.status, 405))
+    otherwise "Store gateway route contract failed."
+  let result = true

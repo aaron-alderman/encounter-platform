@@ -1,0 +1,7 @@
+process-module "temple/surface-process-module/1"
+
+process cli.main:
+  when eq(at($eventInput, 0), "styles"):
+    call ui.styles
+  when not(eq(at($eventInput, 0), "styles")):
+    call runner.shell

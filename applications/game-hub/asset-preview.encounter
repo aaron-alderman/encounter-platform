@@ -1,0 +1,60 @@
+process-module "temple/surface-process-module/1"
+
+process asset.preview:
+  let build = or($candidate, at($state, "previous"))
+  let levels = filter(or(at($build, "variants"), list()), "variant",
+    includes(list("high", "detail", "medium", "low"), $variant.level))
+  let options = map($levels, "variant", {
+    tag = "option"; attrs = { value = $variant.level; "data-triangles" = $variant.measurements.triangles };
+    children = list($variant.level)
+  })
+  let result = { tag = "section"; attrs = { class = "asset-preview"; "aria-label" = "3D asset comparison";
+    "data-asset" = $asset.id; "data-asset-label" = $asset.label; "data-bundle" = at($build, "bundleIdentity") }; children = list(
+    { tag = "div"; attrs = { class = "asset-controls asset-preview-toolbar" }; children = list(
+      { tag = "a"; attrs = { class = "notes-button"; href = concat("/asset-foundry/?asset=", $asset.id, "&preview=off") }; children = list("Hide 3D preview") },
+      if(count($levels), { tag = "label"; children = list("Build LOD ", { tag = "select"; attrs = { "data-preview-lod" = true }; children = $options }) }, null),
+      { tag = "button"; attrs = { type = "button"; "data-preview-reset" = true; disabled = true }; children = list("Reset view") }
+    ) },
+    { tag = "div"; attrs = { class = "workbench-split" }; children = list(
+      $buildForms,
+      { tag = "div"; attrs = { class = "asset-preview-panes" }; children = list(
+          { tag = "section"; children = list(
+            { tag = "h2"; children = list("Original asset") },
+            { tag = "canvas"; attrs = { "data-preview-original" = true; "aria-label" = "Original asset 3D view"; tabindex = "0" } },
+            { tag = "p"; attrs = { "data-preview-status" = "original"; role = "status" }; children = list("Loading original asset…") },
+            { tag = "button"; attrs = { type = "button"; "data-preview-fix" = true; hidden = true }; children = list("Fix preview") },
+            { tag = "button"; attrs = { type = "button"; "data-preview-copy" = true; hidden = true }; children = list("Copy error") },
+            { tag = "span"; attrs = { "data-preview-copy-status" = true; role = "status" } }
+          ) },
+          { tag = "section"; children = list(
+            { tag = "h2"; children = list("Verified build") },
+            if(count($levels), { tag = "canvas"; attrs = { "data-preview-build" = true; "aria-label" = "Verified build 3D view"; tabindex = "0" } }, null),
+            { tag = "p"; attrs = { "data-preview-status" = "build"; role = "status" };
+              children = list(if(count($levels), "Loading verified build…", "Build a verified candidate to compare it here.")) }
+          ) }
+      ) }
+    ) },
+    { tag = "script"; attrs = { type = "module"; src = "/asset-viewer/viewer.js" } }
+  ) }
+
+process app.viewerFile:
+  port application.data { name = "asset-viewer" } → files
+  let result = at($files, $eventInput)
+
+process app.previewSource:
+  let input = $eventInput
+  let id = $input.asset
+  call asset.inventory
+  let asset = at(filter($result, "entry", eq($entry.id, $id)), 0)
+  let result = null
+  when $asset:
+    call asset.groups
+    let group = at(filter($result, "entry", eq($entry.id, $asset.project)), 0)
+    try:
+      port game.kernel { kernel = "asset"; operation = if(eq($input.level, "source-repair"), "repair-preview", "preview-source");
+        asset = concat($group.root, "/assets/", $asset.id, ".gltf") } → preview
+      let diagnostic = at(at($preview, "diagnostics"), 0)
+      let result = if(eq($preview.status, "accepted"), { file = $preview.file },
+        { error = or(at($diagnostic, "message"), "The preview generator returned no GLB.") })
+    catch fault:
+      let result = { error = $fault.message }

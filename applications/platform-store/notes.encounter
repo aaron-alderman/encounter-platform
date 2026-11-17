@@ -1,0 +1,29 @@
+process-module "temple/surface-process-module/1"
+
+process notes.request:
+  let request = $eventInput
+  let state = $request.state
+  let notes = $state.notes
+  let nextId = $state.nextId
+  let event = $request.event
+  when includes(list("add", "submit"), at($event, "action")):
+    assert at($event, "text")
+      otherwise "Write a note before adding it."
+    let notes = append($notes, list({ id = concat($nextId); text = $event.text }))
+    let nextId = add($nextId, 1)
+  when eq(at($event, "action"), "remove"):
+    let notes = filter($notes, "note", not(eq($note.id, $event.note)))
+  let result = {
+    state = { notes = $notes; nextId = $nextId };
+    view = list(
+      { tag = "h2"; children = list("Field notebook") },
+      { tag = "ul"; children = map($notes, "note", { tag = "li"; children = list($note.text) }) },
+      { tag = "label"; children = list("New note ", { tag = "input"; attrs = { name = "text"; maxlength = "1000" } }) },
+      { tag = "button"; attrs = { type = "button"; "data-action" = "add" }; children = list("Add note") },
+      if(count($notes), list(
+        { tag = "label"; children = list("Note to remove ", { tag = "select"; attrs = { name = "note" };
+          children = map($notes, "note", { tag = "option"; attrs = { value = $note.id }; children = list($note.text) }) }) },
+        { tag = "button"; attrs = { type = "button"; "data-action" = "remove" }; children = list("Remove note") }
+      ), null)
+    )
+  }

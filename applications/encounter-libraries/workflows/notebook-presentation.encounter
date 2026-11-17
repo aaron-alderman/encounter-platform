@@ -1,0 +1,46 @@
+process-module "temple/surface-process-module/1"
+
+# Shared presentation semantics. Application adapters own navigation and authority.
+
+process notebook.presentation.caption:
+  let spec = $eventInput
+  let result = { product = "Encounter Notebook"; mark = "N"; title = $spec.title; section = $spec.section }
+
+process notebook.presentation.view:
+  let id = $eventInput
+  let registry = {
+    workbench = { label = "Workbench"; role = "editable-workspace" };
+    "trace-map" = { label = "Trace map"; role = "declared-instructions" };
+    receipts = { label = "Receipts"; role = "stored-revisions" };
+    changes = { label = "Changes"; role = "change-set" };
+    flow = { label = "Flow"; role = "intended-flow" };
+    data = { label = "Data"; role = "sample-data" };
+    source = { label = "Source"; role = "admitted-source" };
+    scenario = { label = "Scenario"; role = "observed-scenario" };
+    overview = { label = "Overview"; role = "case-summary" };
+    context = { label = "Context"; role = "supplied-context" };
+    reply = { label = "Replies"; role = "recorded-reply" };
+    trace = { label = "Trace"; role = "recorded-execution" };
+    effects = { label = "Effects"; role = "recorded-effects" };
+    pins = { label = "Pins"; role = "artifact-identity" };
+    files = { label = "Files"; role = "replay-artifacts" }
+  }
+  let result = at($registry, $id)
+  assert $result
+    otherwise "NOTEBOOK PRESENTATION: Unregistered evidence view."
+
+process notebook.presentation.emphasis:
+  let role = $eventInput
+  let tag = null
+  when includes(list("heading", "positive", "warning", "negative"), $role):
+    let tag = "strong"
+  when eq($role, "note"):
+    let tag = "em"
+  when eq($role, "code"):
+    let tag = "code"
+  let result = if($tag, { tag = $tag; class = concat("rich-", $role) }, null)
+
+process notebook.presentation.coordinate:
+  let source = $eventInput
+  let column = at($source, "column")
+  let result = concat($source.path, ":", $source.line, if($column, concat(":", $column), ""))

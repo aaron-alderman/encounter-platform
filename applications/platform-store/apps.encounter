@@ -1,0 +1,159 @@
+process-module "temple/surface-process-module/1"
+
+process market.read:
+  let item = at(filter($snapshot.documents, "doc", eq($doc.path, "platform-store/catalog.rel")), 0)
+  let market = { releases = list(); installations = list() }
+  when $item:
+    port rel.decode { text = $item.text; kind = "EncounterStore" } → market
+
+process market.persist:
+  let savePath = "platform-store/catalog.rel"
+  let change = $market
+  let kind = "EncounterStore"
+  let target = "platform-store"
+  call hub.persist
+
+process market.operation:
+  assert eq($fields.base, concat($base))
+    otherwise "The Store changed. Review the current releases and submit again."
+  when eq($operation, "publish-app"):
+    port text.matches { value = $fields.app; pattern = "^[a-zA-Z][a-zA-Z0-9-]*$" } → validId
+    port text.matches { value = $fields.app; pattern = "^[\\s\\S]{1,64}$" } → boundedId
+    port text.matches { value = $fields.title; pattern = "^[\\s\\S]{1,100}$" } → title
+    port text.matches { value = $fields.entry; pattern = "^[A-Za-z][A-Za-z0-9_.-]{0,63}$" } → entry
+    port text.matches { value = $fields.stateProfile; pattern = "^[A-Za-z][A-Za-z0-9_.-]{0,63}$" } → profile
+    assert and($validId, $boundedId, $title, $entry, $profile)
+      otherwise "Provide an app ID, title, entry process and state profile."
+    call store.checkVersion
+    let releaseId = concat($fields.app, "@", $fields.version)
+    assert not(some($market.releases, "item", eq($item.id, $releaseId)))
+      otherwise "This app version is already published. Publish changes under a new version."
+    port text.replaceAll { value = $fields.source; search = "\r\n"; replacement = "\n" } → normalized
+    port text.replaceAll { value = $normalized; search = "\r"; replacement = "\n" } → source
+    port text.matches { value = $source; pattern = "^[\\s\\S]{1,160000}$" } → boundedSource
+    assert $boundedSource
+      otherwise "Provide the Encounter app source."
+    port text.indexOf { value = $source; search = "process-module \"temple/surface-process-module/1\"" } → header
+    assert eq($header, 0)
+      otherwise "The package must contain Encounter process source."
+    port rel.decode { text = $fields.initialState; kind = "EncounterAppState" } → initialState
+    port digest.sha256 { text = $source } → sourceHash
+    let release = { id = $releaseId; app = $fields.app; title = $fields.title; version = $fields.version;
+      runtime = "encounter/store-app/1"; entry = $fields.entry; stateProfile = $fields.stateProfile;
+      source = $source; sourceHash = $sourceHash; initialState = $initialState }
+    port rel.encode { value = $release; kind = "EncounterAppRelease" } → manifest
+    port digest.sha256 { text = $manifest } → digest
+    port record.put { record = $release; key = "sha256"; value = $digest } → release
+    port record.put { record = $market; key = "releases"; value = append($market.releases, list($release)) } → market
+    let reason = "Encounter app published"
+    call market.persist
+    let notice = "Encounter app published. Source admission is checked when the app opens."
+  when eq($operation, "install-app"):
+    let release = at(filter($market.releases, "item", eq($item.id, $fields.release)), 0)
+    assert and($release, eq($release.runtime, "encounter/store-app/1"))
+      otherwise "Choose an Encounter app release."
+    let saved = at(filter($snapshot.documents, "doc", eq($doc.path, concat("platform-store/apps/", $release.app, ".rel"))), 0)
+    when $saved:
+      port rel.decode { text = $saved.text; kind = "EncounterInstalledApp" } → previous
+      assert eq($previous.stateProfile, $release.stateProfile)
+        otherwise "This release requires a different state profile. The existing app data needs a migration."
+    let installation = { app = $release.app; release = $release.id }
+    let installations = append(filter($market.installations, "item", not(eq($item.app, $release.app))), list($installation))
+    port record.put { record = $market; key = "installations"; value = $installations } → market
+    let reason = "Encounter app installed"
+    call market.persist
+    let notice = "Encounter app installed."
+
+process market.package:
+  let installation = at(filter($market.installations, "item", eq($item.app, $fields.app)), 0)
+  let release = at(filter($market.releases, "item", eq($item.id, at($installation, "release"))), 0)
+  assert $release
+    otherwise "Install this app from Store before opening it."
+  let savePath = concat("platform-store/apps/", $release.app, ".rel")
+  let saved = at(filter($snapshot.documents, "doc", eq($doc.path, $savePath)), 0)
+  let appState = $release.initialState
+  when $saved:
+    port rel.decode { text = $saved.text; kind = "EncounterInstalledApp" } → previous
+    assert eq($previous.stateProfile, $release.stateProfile)
+      otherwise "The installed app data has a different state profile."
+    let appState = $previous.state
+  let savedState = false
+  when eq($request.method, "POST"):
+    assert and(eq($fields.base, concat($base)), eq($fields.release, $release.id), eq($fields.sourceHash, $release.sourceHash))
+      otherwise "The app or its saved data changed. Reopen the app before saving."
+    port rel.decode { text = $fields.state; kind = "EncounterAppState" } → appState
+    let change = { state = $appState; stateProfile = $release.stateProfile; release = $release.id }
+    let kind = "EncounterInstalledApp"
+    let target = $release.app
+    let reason = "Save installed Encounter app"
+    call hub.persist
+    let savedState = true
+  port rel.encode { value = $appState; kind = "EncounterAppState" } → stateText
+  let result = { tag = "section"; attrs = { id = "app-package" }; children = list(
+    { tag = "input"; attrs = { id = "package-title"; value = $release.title } },
+    { tag = "input"; attrs = { id = "package-entry"; value = $release.entry } },
+    { tag = "input"; attrs = { id = "package-hash"; value = $release.sourceHash } },
+    { tag = "input"; attrs = { id = "package-saved"; value = if($savedState, "yes", "no") } },
+    { tag = "textarea"; attrs = { id = "package-source" }; children = list($release.source) },
+    { tag = "textarea"; attrs = { id = "package-state" }; children = list($stateText) },
+    { tag = "form"; attrs = { id = "state-form" }; children = list(
+      { tag = "input"; attrs = { type = "hidden"; name = "_csrf"; value = $request.csrf } },
+      { tag = "input"; attrs = { type = "hidden"; name = "base"; value = $base } },
+      { tag = "input"; attrs = { type = "hidden"; name = "app"; value = $release.app } },
+      { tag = "input"; attrs = { type = "hidden"; name = "release"; value = $release.id } },
+      { tag = "input"; attrs = { type = "hidden"; name = "sourceHash"; value = $release.sourceHash } },
+      { tag = "textarea"; attrs = { id = "state-value"; name = "state" } }
+    ) }
+  ) }
+
+process market.view:
+  let hidden = list(
+    { tag = "input"; attrs = { type = "hidden"; name = "_csrf"; value = $request.csrf } },
+    { tag = "input"; attrs = { type = "hidden"; name = "base"; value = $base } }
+  )
+  fold $market.releases as item; releases starts list():
+    port kernel.invoke { query = "source.widget"; input = { label = "Published Encounter source"; language = "Encounter"; text = $item.source } } → publishedSource
+    let row = { tag = "li"; children = list(
+    { tag = "strong"; children = list($item.title, " ", $item.version) }, " ",
+    if(some($market.installations, "installed", eq($installed.release, $item.id)),
+      { tag = "a"; attrs = { class = "notes-button"; href = concat("/runtime/?app=", $item.app) }; children = list("Open installed app") },
+      { tag = "form"; attrs = { method = "post"; action = "/"; class = "asset-editor" }; children = list(
+        $hidden, { tag = "input"; attrs = { type = "hidden"; name = "release"; value = $item.id } },
+        { tag = "button"; attrs = { name = "operation"; value = "install-app" }; children = list("Install ", $item.version) }
+      ) }),
+    { tag = "details"; children = list(
+      { tag = "summary"; children = list("Package and compatibility") },
+      { tag = "p"; attrs = { class = "asset-id" }; children = list("Release ", $item.sha256) },
+      { tag = "p"; children = list($item.runtime, " · state profile ", $item.stateProfile) },
+      $publishedSource
+    ) }
+    ) }
+    yield append($releases, list($row)) → releases
+  port source.module { file = "platform-store/notes.encounter" } → sample
+  port kernel.invoke { query = "source.widget"; input = { label = "Encounter source"; language = "Encounter"; text = $sample.text;
+    name = "source"; editable = true; required = true; rows = "16" } } → sourceEditor
+  port rel.encode { value = { notes = list(); nextId = 1 }; kind = "EncounterAppState" } → initialState
+  port kernel.invoke { query = "source.widget"; input = { label = "Initial state"; language = "REL"; text = $initialState;
+    name = "initialState"; editable = true; required = true; rows = "5" } } → stateEditor
+  let result = { tag = "section"; attrs = { class = "asset-workbench"; "aria-label" = "Encounter apps" }; children = list(
+    { tag = "h2"; children = list("Encounter apps") },
+    if(count($releases), { tag = "ul"; children = $releases }, { tag = "p"; children = list("Publish your first Encounter app below.") }),
+    { tag = "details"; children = list(
+      { tag = "summary"; children = list("Publish an Encounter app") },
+      { tag = "p"; children = list("The app receives its saved state and a form event, and returns state and a view. Store saves the state and renders the view. This profile supports pure Encounter processes and calls between them.") },
+      { tag = "form"; attrs = { method = "post"; action = "/"; class = "asset-editor" }; children = list(
+        $hidden,
+        { tag = "fieldset"; children = list(
+          { tag = "legend"; children = list("Release") },
+          { tag = "label"; children = list("App ID ", { tag = "input"; attrs = { name = "app"; value = "field-notebook"; required = true } }) },
+          { tag = "label"; children = list("Title ", { tag = "input"; attrs = { name = "title"; value = "Field notebook"; required = true } }) },
+          { tag = "label"; children = list("Version ", { tag = "input"; attrs = { name = "version"; placeholder = "1.0.0"; required = true } }) },
+          { tag = "label"; children = list("Entry process ", { tag = "input"; attrs = { name = "entry"; value = "notes.request"; required = true } }) },
+          { tag = "label"; children = list("State profile ", { tag = "input"; attrs = { name = "stateProfile"; value = "field-notebook-v1"; required = true } }) }
+        ) },
+        $sourceEditor,
+        $stateEditor,
+        { tag = "button"; attrs = { name = "operation"; value = "publish-app" }; children = list("Publish Encounter app") }
+      ) }
+    ) }
+  ) }

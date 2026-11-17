@@ -1,0 +1,255 @@
+process-module "temple/surface-process-module/1"
+
+process store.read:
+  let snapshot = $eventInput
+  call store.readSnapshot
+
+process store.readSnapshot:
+  let item = at(filter($snapshot.documents, "doc", eq($doc.path, "store/catalog.rel")), 0)
+  let result = { assets = list(); games = list(); dependency = null; installed = null }
+  when $item:
+    port rel.decode { text = $item.text; kind = "GameStore" } → result
+
+process store.request:
+  let request = $eventInput
+  let snapshot = $request.snapshot
+  let base = $snapshot.revision
+  let fields = $request.fields
+  let operation = $fields.operation
+  let storePath = or(at($request, "storePath"), "/store/")
+  let gameRoot = or(at($request, "gameRoot"), "")
+  port kernel.invoke { query = "store.read"; input = $snapshot } → store
+  let play = at($request.session, "storePlay")
+  let release = at(filter($store.games, "row", eq($row.id, $fields.play)), 0)
+  let notice = ""
+  let error = ""
+  try:
+    when and(eq($request.method, "POST"), not($fields.play)):
+      assert eq($fields.base, concat($base))
+        otherwise "The store changed. Review the current releases and submit again."
+      assert includes(list("publish-asset", "use-asset", "publish-game", "install-game"), $operation)
+        otherwise "Unknown store operation."
+      let change = $store
+      let reason = ""
+      let target = ""
+      when eq($operation, "publish-asset"):
+        port kernel.invoke { query = "world.foundryChoices"; input = $snapshot } → foundry
+        let asset = at(filter($foundry.builds, "item", eq($item.id, $fields.build)), 0)
+        assert $asset
+          otherwise "Choose a verified build from Asset Foundry."
+        assert not(count(filter($store.assets, "item", eq($item.id, $asset.id))))
+          otherwise "This exact asset build is already published."
+        port record.put { record = $store; key = "assets"; value = append($store.assets, list($asset)) } → change
+        let reason = "Verified asset published"
+        let target = $asset.id
+      when eq($operation, "use-asset"):
+        let asset = at(filter($store.assets, "item", eq($item.id, $fields.build)), 0)
+        assert $asset
+          otherwise "Choose a published asset."
+        port record.put { record = $store; key = "dependency"; value = $asset.id } → change
+        let reason = "Asset installed into One World"
+        let target = $asset.id
+      when eq($operation, "publish-game"):
+        call store.gameRelease
+        let game = $result
+        port record.put { record = $store; key = "games"; value = append($store.games, list($game)) } → change
+        let reason = "One World release published"
+        let target = $game.id
+      when eq($operation, "install-game"):
+        let game = at(filter($store.games, "item", eq($item.id, $fields.release)), 0)
+        assert $game
+          otherwise "Choose a published One World release."
+        port record.put { record = $store; key = "installed"; value = $game.id } → change
+        let reason = "One World release installed"
+        let target = $game.id
+      when not(eq($store, $change)):
+        let savePath = "store/catalog.rel"
+        let kind = "GameStore"
+        call hub.persist
+        let store = $change
+      let notice = concat($reason, ".")
+  catch fault:
+    let error = or($error, $fault.message)
+  let session = $request.session
+  let body = null
+  let preview = false
+  when $fields.play:
+    call store.player
+    let body = $result
+    port record.put { record = $session; key = "storePlay"; value = $play } → session
+    let preview = $sceneReady
+  when not($fields.play):
+    port kernel.invoke { query = "world.foundryChoices"; input = $snapshot } → foundry
+    call store.catalogView
+    let body = $result
+  let result = { body = $body; session = $session; preview = $preview }
+
+process store.gameRelease:
+  call store.checkVersion
+  let id = concat("one-world-", $fields.version)
+  assert not(count(filter($store.games, "item", eq($item.id, $id))))
+    otherwise "This game version is already published. Choose a new version."
+  call store.gameContent
+
+process store.checkVersion:
+  port text.replaceAll { value = or($fields.version, ""); search = "."; replacement = "/" } → slashes
+  port text.split { value = $slashes; pattern = "/" } → segments
+  port text.join { values = $segments; separator = "." } → canonical
+  assert and(eq(count($segments), 3), eq($canonical, $fields.version))
+    otherwise "Enter a version such as 0.1.0."
+  each $segments as segment:
+    port text.matches { value = $segment; pattern = "^[0-9]{1,9}$" } → digits
+    assert $digits
+      otherwise "Version numbers must be numeric, such as 0.1.0."
+    port scalar.read { text = $segment } → number
+    assert eq(concat($number), $segment)
+      otherwise "Version numbers must omit leading zeroes."
+process store.gameContent:
+  let item = at(filter($snapshot.documents, "doc", eq($doc.path, "one-world/one-shipment.rel")), 0)
+  assert $item
+    otherwise "Save a One World scene before publishing."
+  port rel.decode { text = $item.text; kind = "GameWorldWorkspace" } → world
+  let composition = at($world, "composition")
+  let dependency = at(filter($store.assets, "asset", eq($asset.id, $store.dependency)), 0)
+  assert and($dependency, eq(at(at($composition, "asset"), "id"), $dependency.id),
+    eq(at(at($composition, "asset"), "hash"), $dependency.hash))
+    otherwise "Install a published asset and apply that exact build with a saved terrain revision in One World."
+  let commands = or(at($world, "commands"), list())
+  assert not(at($commands, 47))
+    otherwise "The saved scenario must leave room for at least one player command."
+  port game.kernel { kernel = "world"; basis = or(at($world, "basis"), null); priorHash = or(at($world, "hash"), null); commands = $commands } → view
+  when not(eq($view.status, "accepted")):
+    let diagnostic = at(at($view, "diagnostics"), 0)
+    let error = or(at($diagnostic, "message"), "The scenario did not pass replay verification.")
+  assert eq($view.status, "accepted")
+    otherwise "The scenario did not pass replay verification."
+  let result = { id = $id; version = $fields.version; runtime = "one-shipment/1";
+    commands = $commands; basis = $view.basis; hash = $view.hash; composition = $composition;
+    dependency = $dependency; workspaceRevision = $base }
+  port rel.encode { value = $result; kind = "GameRelease" } → manifest
+  port digest.sha256 { text = $manifest } → digest
+  port record.put { record = $result; key = "sha256"; value = $digest } → result
+
+process store.catalogView:
+  let hidden = list(
+    { tag = "input"; attrs = { type = "hidden"; name = "_csrf"; value = $request.csrf } },
+    { tag = "input"; attrs = { type = "hidden"; name = "base"; value = $base } }
+  )
+  let available = filter($foundry.builds, "item", not(count(filter($store.assets, "released", eq($released.id, $item.id)))))
+  let options = map($available, "item", { tag = "option"; attrs = { value = $item.id; selected = eq($fields.build, $item.id) }; children = list($item.label) })
+  let assets = map($store.assets, "item", { tag = "li"; children = list(
+    { tag = "strong"; children = list($item.label) },
+    " · verified GLB",
+    if(eq($item.id, $store.dependency), " · installed in One World",
+      { tag = "form"; attrs = { method = "post"; action = $storePath }; children = list(
+        $hidden, { tag = "input"; attrs = { type = "hidden"; name = "build"; value = $item.id } },
+        { tag = "button"; attrs = { name = "operation"; value = "use-asset" }; children = list("Use in One World") }
+      ) }),
+    if($item.downloadable, { tag = "span"; children = list(" · ",
+      { tag = "a"; attrs = { href = concat("/asset-download/?asset=", $item.asset, "&bundle=", $item.bundle, "&level=high") }; children = list("Download GLB") }) }, null)
+  ) })
+  let games = map($store.games, "item", { tag = "li"; children = list(
+    { tag = "strong"; children = list("One World ", $item.version) },
+    " · ", $item.dependency.label, " · terrain revision ", $item.composition.terrain.revision,
+    { tag = "details"; children = list(
+      { tag = "summary"; children = list("Release pins") },
+      { tag = "p"; attrs = { class = "asset-id" }; children = list("Release SHA-256 ", $item.sha256) },
+      { tag = "p"; attrs = { class = "asset-id" }; children = list("Runtime ", $item.runtime, " · basis ", $item.basis) },
+      { tag = "p"; attrs = { class = "asset-id" }; children = list("Asset bundle ", $item.dependency.bundle) },
+      { tag = "p"; attrs = { class = "asset-id" }; children = list("Terrain ", $item.composition.terrain.head, " · workspace revision ", $item.workspaceRevision) }
+    ) },
+    if(eq($item.id, $store.installed),
+      { tag = "a"; attrs = { class = "notes-button"; href = concat($storePath, "?play=", $item.id) }; children = list("Play installed release") },
+      { tag = "form"; attrs = { method = "post"; action = $storePath }; children = list(
+        $hidden, { tag = "input"; attrs = { type = "hidden"; name = "release"; value = $item.id } },
+        { tag = "button"; attrs = { name = "operation"; value = "install-game" }; children = list("Install release") }
+      ) })
+  ) })
+  let result = { tag = "section"; attrs = { class = "asset-workbench"; "aria-label" = "Private Store" }; children = list(
+    if($error, { tag = "p"; attrs = { role = "alert"; class = "asset-error" }; children = list($error) }, null),
+    if($notice, { tag = "p"; attrs = { role = "status"; class = "asset-notice" }; children = list($notice) }, null),
+    { tag = "section"; children = list(
+      { tag = "h2"; children = list("Asset releases") },
+      if(count($assets), { tag = "ul"; children = $assets }, { tag = "p"; children = list("No assets published yet.") }),
+      if(count($options), { tag = "form"; attrs = { method = "post"; action = $storePath; class = "asset-editor" }; children = list(
+        $hidden,
+        { tag = "label"; children = list("Verified build ", { tag = "select"; attrs = { name = "build"; required = true }; children = $options }) },
+        { tag = "button"; attrs = { name = "operation"; value = "publish-asset" }; children = list("Publish asset") }
+      ) }, { tag = "a"; attrs = { href = concat($gameRoot, "/asset-foundry/") }; children = list("Build an asset in Asset Foundry") })
+    ) },
+    { tag = "section"; children = list(
+      { tag = "h2"; children = list("Game releases") },
+      if(count($games), { tag = "ul"; children = $games }, { tag = "p"; children = list("No games published yet.") }),
+      if($store.dependency, { tag = "form"; attrs = { method = "post"; action = $storePath; class = "asset-editor" }; children = list(
+        $hidden,
+        { tag = "p"; children = list({ tag = "a"; attrs = { href = concat($gameRoot, "/one-world/") }; children = list("Apply the installed asset in One World") }, " before publishing.") },
+        { tag = "label"; children = list("One World version ", { tag = "input"; attrs = { name = "version"; required = true; maxlength = "29"; placeholder = "0.1.0" } }) },
+        { tag = "button"; attrs = { name = "operation"; value = "publish-game" }; children = list("Publish One World") }
+      ) }, { tag = "p"; children = list("Install a published asset into One World to prepare a release.") })
+    ) }
+  ) }
+
+process store.player:
+  let view = null
+  let sceneReady = false
+  let workspace = { composition = at($release, "composition") }
+  try:
+    assert and($release, eq($store.installed, $release.id), eq($release.runtime, "one-shipment/1"))
+      otherwise "Install this One World release before playing."
+    let commands = if(eq(at($play, "release"), $release.id), $play.commands, $release.commands)
+    let priorHash = if(eq(at($play, "release"), $release.id), $play.hash, $release.hash)
+    when and(eq($request.method, "POST"), eq($operation, "reset")):
+      let commands = $release.commands
+      let priorHash = $release.hash
+    port game.kernel { kernel = "world"; basis = $release.basis; priorHash = $priorHash; commands = $commands } → view
+    assert eq($view.status, "accepted")
+      otherwise "The installed release did not pass replay verification."
+    let sceneReady = true
+    when eq($request.method, "POST"):
+      assert includes(list("dispatch", "advance", "reset"), $operation)
+        otherwise "Unknown player command."
+      when not(eq($operation, "reset")):
+        assert eq($fields.state, $view.hash)
+          otherwise "The play session changed. Review the current state and submit again."
+        assert not(at($commands, 47))
+          otherwise "This play session has reached its replay limit. Reset to play again."
+        call world.command
+        let command = $result
+        port game.kernel { kernel = "world"; basis = $release.basis; priorHash = $view.hash; commands = $commands; command = $command } → proposed
+        assert eq($proposed.status, "accepted")
+          otherwise "The player command was refused by One World."
+        let commands = append($commands, list($command))
+        let view = $proposed
+      let play = { release = $release.id; commands = $commands; hash = $view.hash }
+  catch fault:
+    let error = $fault.message
+  let scene = null
+  let embedded = eq(at($fields, "workspace-fragment"), "1")
+  when and($sceneReady, not($embedded)):
+    call world.scene
+    let scene = $result
+  when and($sceneReady, $embedded, $workspace.composition):
+    let scene = { tag = "p"; children = list({ tag = "a"; attrs = {
+      href = concat($storePath, "?play=", $release.id); target = "_blank"; rel = "noopener"
+    }; children = list("Open the 3D scene in the full player") }) }
+  let result = { tag = "section"; attrs = { class = "asset-workbench"; "aria-label" = "One World player" }; children = list(
+    { tag = "a"; attrs = { href = $storePath }; children = list("Back to Store") },
+    if($error, { tag = "p"; attrs = { role = "alert"; class = "asset-error" }; children = list($error) }, null),
+    if($sceneReady, { tag = "section"; children = list(
+      { tag = "h2"; children = list("Playing One World ", $release.version) },
+      { tag = "p"; children = list("Tick ", $view.tick, " · ", $release.dependency.label, " · terrain revision ", $release.composition.terrain.revision) },
+      $scene,
+      { tag = "form"; attrs = { method = "post"; action = $storePath; class = "asset-editor" }; children = list(
+        { tag = "input"; attrs = { type = "hidden"; name = "_csrf"; value = $request.csrf } },
+        { tag = "input"; attrs = { type = "hidden"; name = "play"; value = $release.id } },
+        { tag = "input"; attrs = { type = "hidden"; name = "state"; value = $view.hash } },
+        { tag = "label"; children = list("Ready shipment ", { tag = "select"; attrs = { name = "shipment" };
+          children = map(filter($view.shipments, "item", eq($item.state, "ready")), "item", { tag = "option"; attrs = { value = $item.id }; children = list($item.name) }) }) },
+        { tag = "button"; attrs = { name = "operation"; value = "dispatch"; disabled = not(count(filter($view.shipments, "item", eq($item.state, "ready")))) }; children = list("Dispatch shipment") },
+        { tag = "label"; children = list("Ticks to advance ", { tag = "input"; attrs = { type = "number"; name = "ticks"; min = "1"; max = "120"; value = "10" } }) },
+        { tag = "button"; attrs = { name = "operation"; value = "advance" }; children = list("Advance simulation") },
+        { tag = "button"; attrs = { name = "operation"; value = "reset"; formnovalidate = true }; children = list("Reset play session") }
+      ) },
+      { tag = "ul"; children = map($view.shipments, "item", { tag = "li"; children = list($item.name, " · ", $item.state) }) }
+    ) }, null)
+  ) }

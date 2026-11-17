@@ -1,0 +1,7 @@
+("application", "stateProfile", "encounter/platform-store-gateway/1")
+("application", "module", "platform-store/https.encounter")
+("application", "entry", "gateway.route")
+("application", "entry", "gateway.page")
+("application", "entry", "test.routes")
+("application", "grant", "kernel.invoke")
+("application", "grant", "text.indexOf")

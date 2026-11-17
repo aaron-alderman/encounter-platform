@@ -1,0 +1,10 @@
+process-module "temple/surface-process-module/1"
+
+process app.newSession:
+  call hub.newSession
+
+process app.request:
+  call hub.request
+
+process ui.styles:
+  call hub.styles

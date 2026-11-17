@@ -1,0 +1,87 @@
+process-module "temple/surface-process-module/1"
+
+process programme.definition:
+  let result = {
+    protocol = "encounter/program-projection/1";
+    identity = "viewport.js";
+    reason = "Preserve the current behaviour while transferring ownership out of generated JavaScript.";
+    target = "viewport.js";
+    goal = "A typed programme projected through the shared algebra grammar.";
+    tree = list(
+      "Module",
+      {
+        body = list(
+          list(
+            "Use",
+            {
+              specifiers = list(
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Color" });
+                local = list("NameReference", { name = "Color" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "DirectionalLight" });
+                local = list("NameReference", { name = "DirectionalLight" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "HemisphereLight" });
+                local = list("NameReference", { name = "HemisphereLight" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "PerspectiveCamera" });
+                local = list("NameReference", { name = "PerspectiveCamera" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "Scene" });
+                local = list("NameReference", { name = "Scene" })
+                }
+                ),
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "WebGLRenderer" });
+                local = list("NameReference", { name = "WebGLRenderer" })
+                }
+                )
+              );
+              source = list("LiteralValue", { value = "./vendor/build/three.module.js" });
+              attributes = list()
+            }
+          ),
+          list(
+            "Use",
+            {
+              specifiers = list(
+                list(
+                "ImportBinding",
+                {
+                imported = list("NameReference", { name = "OrbitControls" });
+                local = list("NameReference", { name = "OrbitControls" })
+                }
+                )
+              );
+              source = list("LiteralValue", { value = "./vendor/examples/jsm/controls/OrbitControls.js" });
+              attributes = list()
+            }
+          ),
+          { fragment = "node139" },
+          { fragment = "node232" }
+        )
+      }
+    );
+    fragments = list("viewport.program-parts/group-01.encounter")
+  }

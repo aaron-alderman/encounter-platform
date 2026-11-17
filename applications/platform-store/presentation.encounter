@@ -1,0 +1,16 @@
+process-module "temple/surface-process-module/1"
+
+process ui.styles:
+  port kernel.invoke { query = "hub.styles"; input = null } → gameStyles
+  call ui.presentationStyles
+  let standard = $result
+  call source.widgetStyles
+  let source = $result
+  call design.styles
+  let result = concat($gameStyles, $standard, $source, $result,
+    "html,body{height:auto;overflow:visible}body{color:var(--sourcery-ink);font:inherit}",
+    "#store-content .asset-editor>fieldset,#store-content .asset-editor>.source-widget,#store-content .asset-editor>label{flex:1 1 100%}",
+    "#store-content .asset-editor textarea{width:100%}.store-window>nav{padding:.35rem .6rem}",
+    "#store-content .asset-notice{background:var(--sourcery-selected);border-color:var(--sourcery-line);color:var(--sourcery-accent)}",
+    "#store-content .asset-editor button,#store-content .notes-button{background:var(--sourcery-frame);color:var(--sourcery-accent);box-shadow:var(--sourcery-raised);border:0}",
+    "#installed-app{max-width:72rem}#app-form{display:block}#app-view label{margin:.55rem 0}#app-view button{margin:.25rem .35rem .25rem 0}")

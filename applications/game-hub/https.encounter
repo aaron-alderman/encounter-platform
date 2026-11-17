@@ -1,0 +1,46 @@
+process-module "temple/surface-process-module/1"
+
+process gateway.route:
+  let request = $eventInput
+  call hub.catalog
+  let documents = $result
+  let page = or(
+    includes(list("/", "/styles.css"), $request.path),
+    count(filter($documents, "doc", or(eq($request.path, concat("/", $doc.id, "/")),
+      includes(or($doc.aliases, list()), $request.path))))
+  )
+  let image = count(filter($documents, "doc", count(filter($doc.images, "image", or(
+    eq($request.path, concat("/images/", $image.file)),
+    eq($request.path, concat("/attachments/", $image.file))
+  )))))
+  let edit = includes(list("/asset-foundry/", "/landscape-foundry/", "/one-world/", "/store/"), $request.path)
+  let methodAllowed = or(eq($request.method, "GET"), and($edit, eq($request.method, "POST")))
+  port text.indexOf { value = $request.path; search = "/asset-viewer/" } → viewerStart
+  let viewer = eq($viewerStart, 0)
+  let status = if(or($page, $image, $viewer, eq($request.path, "/asset-download/")), if($request.upgrade, 403, if($methodAllowed, 200, 405)), 404)
+  let editorShell = or($edit, eq($request.path, "/"))
+  let result = { path = $request.path; status = $status; readOnly = not($editorShell);
+    queryForm = if(and($page, not($editorShell)), $request.path, null);
+    assetDownload = eq($request.path, "/asset-download/"); upgrade = false }
+
+process gateway.page:
+  let result = $eventInput.html
+
+process test.routes:
+  port kernel.invoke { query = "gateway.route"; input = { path = "/"; method = "GET" } } → home
+  port kernel.invoke { query = "gateway.route"; input = { path = "/design-references/"; method = "GET" } } → references
+  port kernel.invoke { query = "gateway.route"; input = { path = "/images/sourcery-game-port.jpg"; method = "GET" } } → image
+  port kernel.invoke { query = "gateway.route"; input = { path = "/images/unlisted.jpg"; method = "GET" } } → unlisted
+  port kernel.invoke { query = "gateway.route"; input = { path = "/"; method = "POST" } } → post
+  port kernel.invoke { query = "gateway.route"; input = { path = "/"; method = "GET"; upgrade = true } } → upgrade
+  port kernel.invoke { query = "gateway.route"; input = { path = "/asset-foundry/"; method = "POST" } } → edit
+  port kernel.invoke { query = "gateway.route"; input = { path = "/landscape-foundry/"; method = "POST" } } → terrain
+  port kernel.invoke { query = "gateway.route"; input = { path = "/one-world/"; method = "POST" } } → world
+  port kernel.invoke { query = "gateway.route"; input = { path = "/store/"; method = "POST" } } → store
+  port kernel.invoke { query = "gateway.route"; input = { path = "/design-references/"; method = "POST" } } → reference
+  port kernel.invoke { query = "gateway.route"; input = { path = "/asset-download/"; method = "GET" } } → download
+  port kernel.invoke { query = "gateway.route"; input = { path = "/asset-download/"; method = "POST" } } → downloadPost
+  port kernel.invoke { query = "gateway.route"; input = { path = "/recent-folio/"; method = "GET" } } → folio
+  port kernel.invoke { query = "gateway.route"; input = { path = "/encounter/"; method = "GET" } } → previousExample
+  let result = and(eq($folio.status, 200), $folio.readOnly, eq($previousExample.status, 200), $previousExample.readOnly, eq($store.status, 200), not($store.readOnly), eq($download.status, 200), $download.readOnly, $download.assetDownload, eq($downloadPost.status, 405), eq($terrain.status, 200), eq($world.status, 200), eq($reference.status, 405), eq($edit.status, 200), not($edit.readOnly), eq($home.status, 200), not($home.readOnly), eq($references.status, 200), $references.readOnly, eq($references.queryForm, "/design-references/"),
+    eq($image.status, 200), eq($unlisted.status, 404), eq($post.status, 405), eq($upgrade.status, 403))

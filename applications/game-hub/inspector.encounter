@@ -1,0 +1,169 @@
+process-module "temple/surface-process-module/1"
+
+process hub.mappingOwners:
+  let result = {
+    "asset-foundry" = list("asset.request", "asset.improve", "recipe.applyEdits", "recipe.editAt", "hub.persist");
+    "landscape-foundry" = list("landscape.request", "landscape.group", "hub.persist");
+    "one-world" = list("world.request", "world.command", "world.compose", "hub.persist");
+    store = list("store.request", "store.gameRelease", "store.checkVersion", "store.gameContent", "store.player", "world.command", "hub.persist")
+  }
+
+process hub.inspect:
+  call hub.mappingOwners
+  let owners = at($result, $doc.id)
+  port application.data { name = "semantic-map" } → index
+  let fields = $request.fields
+  let path = or(at($request, "storePath"), concat("/", $doc.id, "/"))
+  let filter = or($fields.kind, "all")
+  let search = if($fields.q, $fields.q, "")
+  port text.lowerCase { value = $search } → term
+  fold filter($index.sites, "site", includes($owners, $site.process)) as site; matches starts list():
+    let label = concat($site.process, " · ", $site.address, " · ", or($site.port, $site.kind), " ", or($site.query, ""), " ", $site.source.file)
+    port text.lowerCase { value = $label } → words
+    yield if(and(or(eq($filter, "all"), eq($filter, $site.kind)), or(not($term), includes($words, $term))),
+      append($matches, list($site)), $matches) → matches
+  let found = at(filter($matches, "site", eq($site.id, $fields.site)), 0)
+  let selected = if(eq($view, "source"), $found, or($found, at($matches, 0)))
+  when eq($view, "trace"):
+    call hub.traceMap
+  when eq($view, "source"):
+    call hub.sourceView
+
+process hub.traceMap:
+  let options = map(list(
+    { id = "all"; title = "All sites" }, { id = "when"; title = "Branches" },
+    { id = "assert"; title = "Checks" }, { id = "port-end"; title = "Effects" }, { id = "catch"; title = "Caught refusals" }
+  ), "kind", { tag = "option"; attrs = { value = $kind.id; selected = eq($filter, $kind.id) }; children = list($kind.title) })
+  let picker = map($matches, "site", { tag = "option"; attrs = { value = $site.id; selected = eq($selected.id, $site.id) };
+    children = list($site.process, " · ", $site.address, " · ", or($site.port, $site.kind), if($site.query, concat(" → ", $site.query), "")) })
+  let statement = null
+  when $selected:
+    port kernel.invoke { query = "semantic.siteLabel"; input = $selected } → kind
+    let statement = { tag = "section"; attrs = { class = "inspector-sheet" }; children = list(
+      { tag = "h2"; children = list($kind, " · ", $selected.process) },
+      { tag = "p"; children = list($selected.source.file, ":", $selected.source.line, " · Compiled address ", $selected.address) },
+      if($selected.port, { tag = "p"; children = list($selected.port, if($selected.query, concat(" → ", $selected.query), "")) }, null),
+      if($selected.diagnostic, { tag = "p"; children = list($selected.diagnostic) }, null),
+      { tag = "a"; attrs = { class = "notes-button"; href = concat($path, "?view=source&site=", $selected.id, "&pin=", $selected.source.sha256, "&start=", $selected.source.start) };
+        children = list("Open Encounter source") }
+    ) }
+  let result = { tag = "section"; attrs = { class = "inspector"; "aria-label" = "Semantic trace map" }; children = list(
+    { tag = "p"; attrs = { class = "map-note" }; children = list("Declared branches, checks, and effects in the admitted Encounter image. See Trace for your latest observed run.") },
+    { tag = "form"; attrs = { method = "get"; action = $path; class = "inspector-tools" }; children = list(
+      { tag = "input"; attrs = { type = "hidden"; name = "view"; value = "trace" } },
+      { tag = "label"; children = list("Show", { tag = "select"; attrs = { name = "kind" }; children = $options }) },
+      { tag = "label"; children = list("Find instruction", { tag = "input"; attrs = { type = "search"; name = "q"; value = $search; maxlength = "100" } }) },
+      { tag = "button"; attrs = { type = "submit" }; children = list("Filter") }
+    ) },
+    if(count($matches), { tag = "form"; attrs = { method = "get"; action = $path; class = "inspector-tools site-picker" }; children = list(
+      { tag = "input"; attrs = { type = "hidden"; name = "view"; value = "trace" } },
+      { tag = "input"; attrs = { type = "hidden"; name = "kind"; value = $filter } },
+      { tag = "input"; attrs = { type = "hidden"; name = "q"; value = $search } },
+      { tag = "label"; children = list("Instruction", { tag = "select"; attrs = { name = "site" }; children = $picker }) },
+      { tag = "button"; attrs = { type = "submit" }; children = list("Open instruction") }
+    ) }, null),
+    if(count($matches), $statement, { tag = "p"; children = list("No instructions match this filter.") })
+  ) }
+
+process hub.sourceView:
+  let result = { tag = "p"; attrs = { role = "alert" }; children = list("This source link does not match the admitted semantic map.") }
+  when and($selected, eq($fields.pin, at(at($selected, "source"), "sha256")),
+    eq($fields.start, concat(at(at($selected, "source"), "start")))):
+    let origin = $selected.source
+    port source.module { file = $origin.file } → admitted
+    port text.slice { value = $admitted.text; start = $origin.start; end = $origin.end } → statement
+    port digest.sha256 { text = $statement } → pin
+    when and(eq($admitted.sha256, $origin.sha256), eq($pin, $selected.lexemeSha256)):
+      call hub.sourceDocument
+
+process hub.sourceDocument:
+  let lines = at($index.files, $origin.file)
+  let line = $origin.line
+  when $fields.line:
+    try:
+      port scalar.read { text = $fields.line } → requested
+      port number.calculate { operation = "floor"; values = list($requested) } → integer
+      port number.calculate { operation = "greaterEqual"; values = list($integer, 1) } → minimum
+      port number.calculate { operation = "lessEqual"; values = list($integer, count($lines)) } → maximum
+      when and(eq($integer, $requested), $minimum, $maximum):
+        let line = $integer
+    catch fault:
+      let line = $origin.line
+  port number.calculate { operation = "max"; values = list(1, add($line, -1)) } → first
+  let numbers = map(range(8), "offset", add($first, add($offset, -1)))
+  fold $numbers as number; rows starts list():
+    let parts = at($lines, add($number, -1))
+    let row = null
+    when not(eq($parts, at({}, "missing"))):
+      port kernel.invoke { query = "hub.sourceLine"; input = { text = $admitted.text; parts = $parts;
+        number = $number; target = $origin.line } } → row
+    yield if($row, append($rows, list($row)), $rows) → rows
+  port kernel.invoke { query = "notebook.presentation.coordinate"; input = { path = $origin.file; line = $origin.line; column = $origin.column } } → coordinate
+  let fromExecution = eq($fields.from, "execution")
+  let sourceUrl = concat($path, "?view=source&site=", $selected.id, "&pin=", $origin.sha256, "&start=", $origin.start,
+    if($fromExecution, "&from=execution", ""))
+  port number.calculate { operation = "max"; values = list(1, add($line, -8)) } → previous
+  port number.calculate { operation = "min"; values = list(count($lines), add($line, 8)) } → next
+  let result = { tag = "section"; attrs = { class = "inspector"; "aria-label" = "Encounter source inspector" }; children = list(
+    { tag = "div"; attrs = { class = "inspector-tools" }; children = list(
+      { tag = "a"; attrs = { class = "notes-button"; href = if($fromExecution, concat($path, "?view=execution"),
+        concat($path, "?view=trace&site=", $selected.id)) }; children = list(if($fromExecution, "Back to Trace", "Back to Trace map")) },
+      { tag = "a"; attrs = { class = "notes-button"; href = $sourceUrl }; children = list("Mapped statement") },
+      { tag = "a"; attrs = { class = "notes-button"; href = concat($sourceUrl, "&line=", $previous) }; children = list("Previous lines") },
+      { tag = "a"; attrs = { class = "notes-button"; href = concat($sourceUrl, "&line=", $next) }; children = list("Next lines") }
+    ) },
+    { tag = "div"; attrs = { class = "inspector-tools" }; children = list(
+      { tag = "p"; children = list($coordinate) },
+      { tag = "form"; attrs = { method = "get"; action = $path; class = "inspector-tools" }; children = list(
+        { tag = "input"; attrs = { type = "hidden"; name = "view"; value = "source" } },
+        { tag = "input"; attrs = { type = "hidden"; name = "site"; value = $selected.id } },
+        { tag = "input"; attrs = { type = "hidden"; name = "pin"; value = $origin.sha256 } },
+        { tag = "input"; attrs = { type = "hidden"; name = "start"; value = $origin.start } },
+        if($fromExecution, { tag = "input"; attrs = { type = "hidden"; name = "from"; value = "execution" } }, null),
+        { tag = "label"; children = list("Line", { tag = "input"; attrs = { name = "line"; type = "number"; min = "1"; max = count($lines); value = $line } }) },
+        { tag = "button"; attrs = { type = "submit" }; children = list("Go") }
+      ) }
+    ) },
+    { tag = "div"; attrs = { class = "source-code"; "aria-label" = "Pinned Encounter source lines" }; children = $rows },
+    { tag = "p"; attrs = { class = "inspector-pin" }; children = list("Admitted source SHA-256 ", $origin.sha256) }
+  ) }
+
+process hub.sourceLine:
+  let line = $eventInput
+  let tokens = list()
+  when $line.parts:
+    port text.split { value = $line.parts; pattern = "/" } → offsets
+    fold $offsets as offset; scan starts { start = null; tokens = list() }:
+      port scalar.read { text = $offset } → coordinate
+      let next = { start = $coordinate; tokens = $scan.tokens }
+      when not(eq($scan.start, null)):
+        port text.slice { value = $line.text; start = $scan.start; end = $coordinate } → text
+        let next = { start = null; tokens = append($scan.tokens, list({ text = $text; start = $scan.start; end = $coordinate })) }
+      yield $next → scan
+    let tokens = $scan.tokens
+  port kernel.invoke { query = "semantic.syntax"; input = $tokens } → spans
+  let segments = map($tokens, "token", {
+    tag = "span"; attrs = { class = at(at(filter($spans, "span", eq($span.start, $token.start)), 0), "kind") };
+    children = list($token.text)
+  })
+  let result = { tag = "div"; attrs = { class = if(eq($line.number, $line.target), "source-line mapped", "source-line") }; children = list(
+    { tag = "span"; attrs = { class = "gutter"; "aria-hidden" = "true" }; children = list($line.number) },
+    { tag = "code"; children = $segments }
+  ) }
+
+process hub.receipts:
+  let goals = { "asset-foundry" = list("Asset Foundry", "GameAssetWorkspace");
+    "landscape-foundry" = list("GameLandscapeWorkspace"); "one-world" = list("GameWorldWorkspace"); store = list("GameStore") }
+  port storage.history {} → history
+  fold filter($history, "entry", includes(at($goals, $doc.id), $entry.goal)) as entry; receipts starts list():
+    let receipt = { tag = "details"; attrs = { class = "inspector-sheet" }; children = list(
+      { tag = "summary"; children = list("Revision ", $entry.revision, " · ", $entry.reason) },
+      { tag = "p"; children = list("Target ", $entry.target, " · Parent revision ", $entry.parent) },
+      { tag = "p"; attrs = { class = "inspector-pin" }; children = list("Stored-document SHA-256 ", $entry.sourceHash) },
+      { tag = "p"; attrs = { class = "inspector-pin" }; children = list("Recorded application basis ", $entry.basis) }
+    ) }
+    yield if(at($receipts, 11), $receipts, append($receipts, list($receipt))) → receipts
+  let result = { tag = "section"; attrs = { class = "inspector"; "aria-label" = "Recorded workspace receipts" }; children = list(
+    { tag = "p"; attrs = { class = "map-note" }; children = list("The latest 12 saved workspace revisions for this editor.") },
+    if(count($receipts), $receipts, { tag = "p"; children = list("This editor has no saved revisions yet.") })
+  ) }

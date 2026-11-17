@@ -1,0 +1,151 @@
+process-module "temple/surface-process-module/1"
+
+process asset.groups:
+  let result = list(
+    { id = "asset-foundry"; label = "Foundry examples"; root = "examples/asset-foundry" },
+    { id = "asset-foundry-industrial"; label = "Industrial reference"; root = "examples/asset-foundry-industrial" },
+    { id = "asset-foundry-generic-industrial"; label = "Generic industrial"; root = "examples/asset-foundry-generic-industrial" },
+    { id = "horizon-production-foundry"; label = "Horizon production"; root = "examples/horizon-production-foundry" },
+    { id = "bronze-logistics"; label = "Bronze Logistics"; root = "assets/production/bronze-logistics" }
+  )
+
+process asset.navigation:
+  call asset.selection
+  let branches = map($groups, "group", {
+    tag = "li"; children = list(
+      { tag = "details"; attrs = { open = eq($group.id, $asset.project) }; children = list(
+        { tag = "summary"; children = list($group.label) },
+        { tag = "ul"; children = map(filter($inventory, "entry", eq($entry.project, $group.id)), "entry", {
+          tag = "li"; children = list(
+            { tag = "a"; attrs = { href = concat("/asset-foundry/?asset=", $entry.id);
+              "aria-current" = if(eq($entry.id, $asset.id), "page", null) }; children = list($entry.label) }
+          )
+        }) }
+      ) }
+    )
+  })
+  let result = { asset = $asset; tree = { tag = "ul"; attrs = { class = "asset-tree" }; children = $branches } }
+
+process asset.improve:
+  let fields = $request.fields
+  port scalar.read { text = $fields.texture } → texture
+  port scalar.read { text = $fields.medium } → medium
+  port scalar.read { text = $fields.low } → low
+  port scalar.read { text = $fields.error } → errorLimit
+  assert or(includes(list(256, 512, 1024, 2048, 4096), $texture), eq($texture, at($recipe.targetProfile, "textureMaximumDimension")))
+    otherwise "Choose a supported maximum texture dimension."
+  let lods = { high = 1; medium = $medium; low = $low }
+  when $fields.detail:
+    port scalar.read { text = $fields.detail } → detail
+    let lods = { high = 1; detail = $detail; medium = $medium; low = $low }
+  port kernel.invoke { query = "recipe.applyEdits"; input = { recipe = $recipe; edits = list(
+    { op = "add"; path = "/targetProfile/textureMaximumDimension"; value = $texture },
+    { op = "add"; path = "/targetProfile/lodRatios"; value = $lods },
+    { op = "add"; path = "/targetProfile/maximumGeometricError"; value = $errorLimit }
+  ) } } → result
+
+process asset.improvementForm:
+  let profile = $recipe.targetProfile
+  let lods = at($profile, "lodRatios")
+  let dimension = or(at($profile, "textureMaximumDimension"), 4096)
+  let dimensions = map(distinct(append(list(256, 512, 1024, 2048, 4096), list($dimension))), "size",
+    { tag = "option"; attrs = { value = $size; selected = eq($size, $dimension) }; children = list($size, " px") })
+  let result = { tag = "fieldset"; attrs = { class = "asset-improvement" }; children = list(
+    { tag = "legend"; children = list("Improve asset") },
+    { tag = "button"; attrs = { type = "submit"; name = "operation"; value = "improve" }; children = list("Build improved candidate") },
+    { tag = "div"; attrs = { class = "asset-improvement-fields" }; children = list(
+      { tag = "label"; children = list("Maximum texture dimension", { tag = "select"; attrs = { name = "texture" }; children = $dimensions }) },
+      { tag = "label"; children = list("Detail LOD ratio (optional)", { tag = "input"; attrs = { type = "number"; name = "detail"; min = "0.01"; max = "0.99"; step = "any"; value = at($lods, "detail"); placeholder = "e.g. 0.8" } }) },
+      { tag = "label"; children = list("Medium LOD ratio", { tag = "input"; attrs = { type = "number"; name = "medium"; min = "0.01"; max = "1"; step = "any"; required = true; value = or(at($lods, "medium"), 0.5) } }) },
+      { tag = "label"; children = list("Low LOD ratio", { tag = "input"; attrs = { type = "number"; name = "low"; min = "0.01"; max = "1"; step = "any"; required = true; value = or(at($lods, "low"), 0.2) } }) },
+      { tag = "label"; children = list("Maximum geometric error", { tag = "input"; attrs = { type = "number"; name = "error"; min = "0"; max = "1"; step = "any"; required = true; value = if(eq(at($profile, "maximumGeometricError"), 0), 0, or(at($profile, "maximumGeometricError"), 0.8)) } }) }
+    ) }
+  ) }
+
+process asset.lifecycle:
+  port storage.history {} → history
+  let entries = filter($history, "entry", and(eq($entry.goal, "GameAssetWorkspace"), eq($entry.target, $asset.id)))
+  let stages = list(
+    { label = "Source"; status = if(at($source, "recipe"), "Available", "Unavailable") },
+    { label = "Draft"; status = if(at($state, "draft"), "Saved", "Original recipe") },
+    { label = "Intake"; status = or(at($state, "intake"), if($candidate, "accepted", "Pending")) },
+    { label = "Validation"; status = or(at($state, "validation"), if($candidate, "accepted", "Pending")) },
+    { label = "Candidate"; status = if($candidate, "Verified", "Pending build") }
+  )
+  let timeline = map(filter(map(range(8), "index", at($entries, add($index, -1))), "entry", $entry), "entry", {
+    tag = "li"; children = list("Revision ", $entry.revision, " · ", $entry.reason)
+  })
+  let result = { tag = "section"; attrs = { class = "asset-lifecycle"; "aria-label" = "Asset lifecycle" }; children = list(
+    { tag = "h2"; children = list("Asset lifecycle") },
+    if($candidate, { tag = "a"; attrs = { class = "notes-button"; href = concat("https://appdev.sourcerytech.com.au/store/?build=", $asset.id, ".", $candidate.bundleIdentity) }; children = list("Publish in Store") }, null),
+    { tag = "dl"; attrs = { class = "asset-metrics" }; children = map($stages, "stage", {
+      tag = "div"; children = list({ tag = "dt"; children = list($stage.label) }, { tag = "dd"; children = list($stage.status) })
+    }) },
+    if(count($timeline), { tag = "details"; children = list(
+      { tag = "summary"; children = list("Recent asset revisions") },
+      { tag = "ol"; children = $timeline }
+    ) }, null)
+  ) }
+
+process asset.variantTable:
+  let previous = at($state, "previous")
+  let previousTexture = at($previous, "textureMaximumDimension")
+  fold $report.variants as variant; variantRows starts list():
+    port number.calculate { operation = "lessEqual"; values = list($variant.bytes, 16777216) } → downloadable
+    let row = { tag = "tr"; children = list(
+      { tag = "th"; attrs = { scope = "row" }; children = list($variant.level, if(at($variant, "ratio"), concat(" · ", $variant.ratio), "")) },
+      { tag = "td"; children = list($variant.measurements.triangles) },
+      { tag = "td"; children = list(or(at(at(at(filter(or(at($previous, "variants"), list()), "row", eq($row.level, $variant.level)), 0), "measurements"), "triangles"), "—")) },
+      { tag = "td"; children = list($variant.measurements.geometricError) },
+      { tag = "td"; children = list($variant.bytes) },
+      { tag = "td"; children = list(if($downloadable,
+        { tag = "a"; attrs = { href = concat("/asset-download/?asset=", $asset.id, "&bundle=", $report.bundleIdentity, "&level=", $variant.level);
+          download = concat($asset.id, "-", $variant.level, ".glb"); "aria-label" = concat("Download ", $variant.level, " GLB") }; children = list("GLB") }, "Over 16 MiB")) }
+    ) }
+    yield append($variantRows, list($row)) → variantRows
+  let result = { tag = "div"; children = list(
+    if(at($report, "textureMaximumDimension"), { tag = "p"; children = list("Largest output texture ", $report.textureMaximumDimension, " px",
+      if($previousTexture, concat(" · previous ", $previousTexture, " px"), "")) }, null),
+    { tag = "table"; attrs = { class = "execution-table asset-variants"; "aria-label" = "Verified LOD measurements" }; children = list(
+      { tag = "thead"; children = list({ tag = "tr"; children = map(list("LOD", "Triangles", "Previous", "Error", "Bytes", "Download"), "heading",
+        { tag = "th"; attrs = { scope = "col" }; children = list($heading) }) }) },
+      { tag = "tbody"; children = $variantRows }
+    ) }
+  ) }
+
+process app.download:
+  let request = $eventInput
+  let fields = $request.fields
+  call asset.inventory
+  let asset = at(filter($result, "entry", eq($entry.id, $fields.asset)), 0)
+  let result = null
+  when and($asset, includes(list("high", "detail", "medium", "low"), $fields.level)):
+    let path = concat("asset-foundry/", $asset.id, ".rel")
+    let saved = at(filter($request.snapshot.documents, "entry", eq($entry.path, $path)), 0)
+    when $saved:
+      port rel.decode { text = $saved.text; kind = "GameAssetWorkspace" } → state
+      let candidate = at($state, "candidate")
+      let previous = at($state, "previous")
+      let selected = if(eq(at($candidate, "bundleIdentity"), $fields.bundle), $candidate,
+        if(eq(at($previous, "bundleIdentity"), $fields.bundle), $previous, null))
+      when $selected:
+        let variant = at(filter($selected.variants, "entry", eq($entry.level, $fields.level)), 0)
+        let downloadable = false
+        when $variant:
+          port number.calculate { operation = "lessEqual"; values = list($variant.bytes, 16777216) } → downloadable
+        when $downloadable:
+          port text.slice { value = $selected.bundleIdentity; start = 0; end = 2 } → prefix
+          let result = { path = concat("sha256/", $prefix, "/", $selected.bundleIdentity, "/derived/payloads/", $variant.level, ".glb");
+            bytes = $variant.bytes; sha256 = $variant.hash }
+  when eq($fields.level, "world-scene"):
+    call world.sceneFile
+  when and(not($result), $asset, eq($fields.level, "high")):
+    let snapshot = $request.snapshot
+    call store.readSnapshot
+    let store = $result
+    let result = null
+    let published = at(filter($store.assets, "item", and(eq($item.asset, $asset.id), eq($item.bundle, $fields.bundle))), 0)
+    when at($published, "downloadable"):
+      port text.slice { value = $published.bundle; start = 0; end = 2 } → prefix
+      let result = { path = concat("sha256/", $prefix, "/", $published.bundle, "/derived/payloads/high.glb");
+        bytes = $published.bytes; sha256 = $published.hash }

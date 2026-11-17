@@ -1,0 +1,16 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = { sections = list({
+    subject = "application";
+    stateProfile = "encounter/platform-store-runner/1";
+    module = list("platform-store/runner.encounter",
+      "encounter/algebra/html/html.escape.encounter",
+      "encounter/algebra/html/html.cssText.encounter",
+      "encounter/algebra/html/html.serialize.encounter");
+    entry = list("browser.boot", "runner.submit", "runner.click");
+    grant = list("kernel.prepare", "kernel.execute", "kernel.invoke", "browser.location", "browser.on",
+      "browser.request", "browser.content", "browser.property", "browser.write", "browser.formFields",
+      "state.get", "state.set", "dom.exists", "text.match", "text.replaceAll", "rel.encode", "rel.decode",
+      "value.describe", "record.entries", "record.put", "text.matches", "text.join", "value.string", "value.type")
+  }) }
