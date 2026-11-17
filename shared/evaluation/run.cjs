@@ -183,9 +183,9 @@ function loadEncounter(bindingsFile) {
     '../../applications/encounter-libraries/semantic/notes.encounter'), 'utf8'));
   const notebookPresentation = front.hydrate('encounter-libraries/workflows/notebook-presentation.encounter',
     readFileSync(path.resolve(__dirname, '../../applications/encounter-libraries/workflows/notebook-presentation.encounter'), 'utf8'));
-  const { readApplicationModules } = require('../node/application-modules.cjs');
-  const [renderer] = readApplicationModules(path.join(applications, 'encounter'), ['algebra/css/css.renderPlan.encounter']);
-  const css = front.hydrate('encounter/' + renderer.file, renderer.text);
+  // The pinned replay uses the application renderer's compact-rule entry.
+  const css = front.hydrate('encounter/algebra/css/css.renderPlan.encounter',
+    readFileSync(path.join(applications, 'encounter/algebra/css/css.renderPlan.encounter'), 'utf8'));
   const decompilerEntries = ['decompiler.page', 'decompiler.identityTrace', 'decompiler.styles', 'decompiler.verification', 'decompiler.benchmarkReview', 'decompiler.experiment', 'decompiler.contextFeedback', 'desk.compareReplies', 'desk.compareVisits', 'desk.sheet', 'desk.traceSite', 'desk.syntax', 'desk.page', 'desk.styles'];
   const presentation = front.admit(front.link([surface, workflow, semantics, decompiler, comparison, notes, notebookPresentation, css, ...desk], {
     roots: ['evaluation.rows', 'evaluation.review', 'evaluation.page', 'evaluation.styles', 'evaluation.report', ...decompilerEntries]
