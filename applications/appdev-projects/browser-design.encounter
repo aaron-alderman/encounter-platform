@@ -1,0 +1,45 @@
+process-module "temple/surface-process-module/1"
+
+process design.workspaceBind:
+  port dom.exists { selector = "#notes-design-demo-content" } → available
+  when $available:
+    port browser.onMany { bindings = list(
+      { ref = "#notes-design-demo-content"; event = "submit"; delegate = "#design-controls"; preventDefault = true; query = "design.workspaceEvent"; input = { action = "apply" } },
+      { ref = "#notes-design-demo-content"; event = "click"; delegate = "[data-design-reset]"; query = "design.workspaceEvent"; input = { action = "reset" } },
+      { ref = "#notes-design-demo-content"; event = "change"; delegate = ".custom-choices select"; query = "design.workspaceEvent"; input = { action = "select" } },
+      { ref = "#notes-design-demo-content"; event = "click"; delegate = "[data-design-role]"; query = "design.workspaceEvent"; input = { action = "inspect" } }
+    ) } → _
+
+process design.workspacePrepare:
+  port dom.exists { selector = "#notes-design-demo-content #design-controls" } → rendered
+  when not($rendered):
+    let fields = {}
+    let pick = null
+    let expanded = {}
+    call design.workspaceRender
+
+process design.workspaceEvent:
+  let action = $eventInput.action
+  let fields = {}
+  let pick = at($eventInput.matched.attributes, "data-design-role")
+  when not(eq($action, "reset")):
+    port browser.formFields { ref = "#design-controls" } → designFields
+    port browser.formFields { ref = "#design-syntax-controls" } → syntaxFields
+    port record.entries { value = $designFields } → designEntries
+    port record.entries { value = $syntaxFields } → syntaxEntries
+    port record.fromEntries { entries = append($designEntries, $syntaxEntries) } → fields
+  port browser.property { ref = ".custom-token-panel"; name = "open" } → tokensOpen
+  port browser.property { ref = ".custom-token-panel details"; name = "open" } → syntaxOpen
+  port browser.property { ref = ".custom-catalog"; name = "open" } → catalogOpen
+  let expanded = { tokens = $tokensOpen; syntax = $syntaxOpen; catalog = $catalogOpen }
+  call design.workspaceRender
+  let name = at($eventInput.matched.attributes, "name")
+  let selector = if(and(eq($action, "select"), includes(list("window-type", "window", "font", "density"), $name)), $name, "role")
+  let focus = if(eq($action, "apply"), "#design-preview", concat(".custom-choices select[name=", $selector, "]"))
+  port browser.focus { ref = $focus } → _
+  let result = true
+
+process design.workspaceRender:
+  port kernel.invoke { query = "customization.page"; input = { fields = $fields; pick = $pick; expanded = $expanded } } → input
+  call html.serialize
+  port browser.content { ref = "#notes-design-demo-content"; html = $result } → _

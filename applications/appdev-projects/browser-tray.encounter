@@ -1,0 +1,182 @@
+process-module "temple/surface-process-module/1"
+
+process tray.boot:
+  port dom.exists { selector = "#home-tray-open" } → present
+  when $present:
+    let bindings = list(
+      { ref = "#home-tray-open"; event = "click"; action = "tray-open" },
+      { ref = "body[data-workspace-signed-in='true'] #home-tray-open"; event = "interval"; milliseconds = 30000; action = "tray-inbox" },
+      { ref = "#home-tray-panel[open], main.desktop:not([hidden]) #notes-performance-window:not([hidden])"; event = "interval"; milliseconds = 10000; action = "tray-resources" }
+    )
+    call appdev.bind
+
+process tray.event:
+  when eq($action, "tray-open"):
+    port browser.dialog { ref = "#home-tray-panel"; open = true } → _
+    call tray.resources
+    call tray.inbox
+  when eq($action, "tray-inbox"):
+    call tray.inbox
+  when eq($action, "tray-resources"):
+    call tray.resources
+
+process tray.identityChanged:
+  port dom.exists { selector = "#home-tray-open" } → present
+  when $present:
+    port state.get { key = "home-tray-identity" } → before
+    let current = or(at($session, "templeIdentity"), "")
+    when not(eq($before, $current)):
+      port state.set { key = "home-tray-identity"; value = $current } → _
+      let rows = list()
+      let seen = list()
+      let status = if($current, "Checking Inbox…", "Sign in to view inbox messages.")
+      call tray.renderInbox
+      port browser.write { ref = "#home-tray-resources"; name = "hidden"; value = true } → _
+      port browser.content { ref = "#home-tray-resources"; html = "" } → _
+      port browser.content { ref = "#notes-performance-environment"; html = "" } → _
+      when $current:
+        call tray.inbox
+
+process tray.readKey:
+  when $email:
+    port digest.sha256 { text = $email } → identityHash
+  let result = if($email, concat("sourcery.home-inbox.seen.", $identityHash), "")
+
+process tray.seen:
+  port state.get { key = "home-tray-identity" } → email
+  call tray.readKey
+  let seen = list()
+  when $result:
+    port storage.read { key = $result; maxLength = 3500 } → stored
+    when $stored.value:
+      port text.split { value = $stored.value; pattern = "," } → seen
+
+process tray.inbox:
+  let rows = list()
+  let status = "Inbox is unavailable."
+  try:
+    port dom.exists { selector = "body[data-workspace-signed-in='true']" } → signedIn
+    when not($signedIn):
+      let status = "Sign in to view inbox messages."
+    when $signedIn:
+      call tray.messageProjection
+      let projection = $result
+      port browser.request { path = "/identity-management/aster/"; rows = $projection; query = { support = "1"; inbox = "1"; home = "1"; fragment = "1" }; fragment = "[data-notes-inbox]" } → response
+      when includes(list(0, 401, 403), $response.status):
+        let status = "Inbox access is required to view messages."
+      when and(eq($response.status, 200), $response.body):
+        call tray.inboxRows
+        let rows = $result
+        let status = if(count($rows), "", "No incoming messages.")
+  catch fault:
+    let rows = list()
+  call tray.seen
+  call tray.renderInbox
+
+process tray.renderInbox:
+  let unread = count(filter($rows, "row", not(includes($seen, $row.id))))
+  let preview = filter(list(at($rows, 0), at($rows, 1), at($rows, 2), at($rows, 3), at($rows, 4)), "row", $row)
+  let items = map($preview, "row", { tag = "li"; attrs = { "data-unread" = if(includes($seen, $row.id), null, true) };
+    children = list({ tag = "a"; attrs = { href = concat("/workspace/platform?view=platform-inbox&item=", $row.id) }; children = list($row.title) }) })
+  let input = { tag = "div"; children = list(
+    if($status, { tag = "p"; children = list($status) }, { tag = "p"; children = list(concat($unread, if(eq($unread, 1), " unread message", " unread messages"))) }),
+    if(count($items), { tag = "ul"; children = $items }, null)
+  ) }
+  call html.serialize
+  port browser.content { ref = "#home-tray-inbox"; html = $result } → _
+  port browser.batch { steps = list(
+    { port = "browser.write"; args = { ref = "#home-tray-badge"; name = "textContent"; value = concat("", $unread) } },
+    { port = "browser.write"; args = { ref = "#home-tray-badge"; name = "hidden"; value = eq($unread, 0) } },
+    { port = "browser.write"; args = { ref = "#home-tray-unread-label"; name = "textContent"; value = if($unread, concat($unread, " unread messages"), "") } }
+  ) } → _
+
+process tray.messageProjection:
+  let result = { row = ".platform-request"; fields = {
+    id = { attr = "id" }; title = { selector = ".platform-request-header h3" }
+  } }
+
+process tray.inboxRows:
+  let entries = or(at($response, "rows"), list())
+  fold $entries as entry; validRows starts list():
+    port text.match { value = $entry.id; pattern = "^platform-request-([a-f0-9]{32})$" } → match
+    yield if(and($match, $entry.title), append($validRows, list({ id = at($match.groups, 0); title = $entry.title })), $validRows) → validRows
+  let result = $validRows
+
+process tray.markViewed:
+  try:
+    call tray.inboxRows
+    let rows = $result
+    let ids = map($rows, "row", $row.id)
+    let marked = if(eq($mode, "inbox"), $ids, if(includes($ids, $selected), list($selected), list()))
+    when count($marked):
+      port state.get { key = "home-tray-identity" } → email
+      let session = null
+      when not($email):
+        port browser.request { path = "/workspace/session" } → sessionResponse
+        when eq($sessionResponse.status, 200):
+          port json.parse { text = $sessionResponse.body } → session
+          let email = $session.templeIdentity
+      call tray.readKey
+      let key = $result
+      when $key:
+        port storage.read { key = $key; maxLength = 3500 } → stored
+        let seen = list()
+        when $stored.value:
+          port text.split { value = $stored.value; pattern = "," } → seen
+        let seen = append($marked, filter($seen, "entry", not(includes($marked, $entry))))
+        port text.join { values = $seen; separator = "," } → value
+        port text.slice { value = $value; start = 0; end = 3299 } → bounded
+        port storage.write { key = $key; value = $bounded } → _
+        port dom.exists { selector = "#home-tray-open" } → home
+        when and($home, $session):
+          call appdev.renderIdentity
+        when and($home, not($session)):
+          let status = ""
+          call tray.seen
+          call tray.renderInbox
+  catch fault:
+    let recorded = false
+
+process tray.resources:
+  port dom.exists { selector = "#home-tray-panel[open]" } → trayOpen
+  port dom.exists { selector = "main.desktop:not([hidden]) #notes-performance-window:not([hidden])" } → performanceOpen
+  when or($trayOpen, $performanceOpen):
+    let metrics = null
+    try:
+      port browser.request { path = "/workspace/server-resources" } → response
+      when eq($response.status, 200):
+        port json.parse { text = $response.body } → metrics
+    catch fault:
+      let metrics = null
+    let html = ""
+    when $metrics:
+      call tray.resourcesMarkup
+      let html = $result
+    when $trayOpen:
+      port browser.write { ref = "#home-tray-resources"; name = "hidden"; value = not($metrics) } → _
+      port browser.content { ref = "#home-tray-resources"; html = $html } → _
+    when $performanceOpen:
+      port browser.content { ref = "#notes-performance-environment"; html = $html } → _
+
+process tray.resourcesMarkup:
+  fold $metrics.disks as disk; rows starts list():
+    let reading = $disk.usage
+    call tools.capacity
+    let usage = if($reading, concat($result, " · ", $reading.usedPercent, "% used"), "Unavailable")
+    yield append($rows, list({ tag = "dt"; children = list(concat("Disk · ", $disk.label)) }, { tag = "dd"; children = list($usage) })) → rows
+  let memory = "Unavailable"
+  when $metrics.memory:
+    let reading = $metrics.memory
+    call tools.capacity
+    let memory = $result
+  let cpu = if(eq($metrics.cpuPercent, null), "Sampling…", concat($metrics.cpuPercent, "%"))
+  port text.slice { value = $metrics.sampledAt; start = 11; end = 19 } → updated
+  let input = { tag = "div"; attrs = { class = "home-server-resources" }; children = list(
+    { tag = "h3"; children = list("Server resources") },
+    { tag = "dl"; children = append($rows, list(
+      { tag = "dt"; children = list("RAM") }, { tag = "dd"; children = list($memory) },
+      { tag = "dt"; children = list("CPU") }, { tag = "dd"; children = list($cpu) }
+    )) },
+    { tag = "small"; children = list("Updated ", { tag = "time"; attrs = { datetime = $metrics.sampledAt }; children = list(concat($updated, " UTC")) }) }
+  ) }
+  call html.serialize

@@ -1,0 +1,22 @@
+("preview", "contract", "encounter/appdev-preview/1")
+("preview", "package", "notes")
+("preview", "credentials", "qa-credentials")
+("preview", "stewardEmail", "qa-steward@example.test")
+("port", "http", "25479")
+("port", "workspace", "25477")
+("port", "browser", "25478")
+// Optional certificate fixtures on loopback
+// ("fixture", "certificateInventory", "24376")
+// ("fixture", "certificateRenewal", "25475")
+// ("fixture", "certificateRollover", "true")
+// For direct fixture identity, supply both facts
+// ("fixture", "directPrincipal", "qa-steward")
+// ("fixture", "directActorSession", "fixture-session-1234567890")
+// For an identity gateway instead, supply its REL configuration and port
+// ("fixture", "identityGateway", "gateway.rel")
+// ("port", "identityGateway", "25473")
+// An optional synthetic sign-in broker can run alongside that gateway
+// ("fixture", "identityBroker", "synthetic-temple")
+// ("port", "identityBroker", "25474")
+// Opt-in preview of the overview move with the fixture gateway and broker
+// ("preview", "identityOverview", "/settings/identity/")

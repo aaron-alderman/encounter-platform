@@ -1,0 +1,588 @@
+process-module "temple/surface-process-module/1"
+
+process managers.button:
+  let result = { tag = "button"; attrs = { type = "button"; class = $buttonClass; "data-manager-action" = $command;
+    "data-manager-item" = $item; "aria-pressed" = $pressed }; children = list($label) }
+
+process managers.densities:
+  let result = list({ id = "compact"; label = "Compact" }, { id = "roomier"; label = "Roomier" })
+
+process managers.densityControl:
+  call managers.densities
+  let result = { tag = "label"; attrs = { class = "manager-density-control" }; children = list($densityLabel,
+    { tag = "select"; attrs = $densityAttrs; children = map($result, "mode", {
+      tag = "option"; attrs = { value = $mode.id; selected = eq($mode.id, $density) }; children = list($mode.label)
+    }) }) }
+
+process managers.slots:
+  let service = eq($app.key, "service-manager")
+  let locationAction = null
+  when $service:
+    let density = "compact"
+    let densityLabel = "Density"
+    let densityAttrs = { id = "service-manager-density"; "data-manager-action" = "density" }
+    call managers.densityControl
+    let locationAction = { tag = "div"; attrs = { class = "manager-location-controls" }; children = list($result,
+      { tag = "button"; attrs = { type = "button"; class = "button"; "data-manager-action" = "refresh"; id = "service-manager-refresh" };
+        children = list("Refresh observations") }) }
+  let managed = not(eq($app.key, "temple-manager"))
+  let fileViewer = eq($app.key, "file-viewer")
+  let help = if(eq($app.key, "file-manager"), "Open Documents to browse text files saved in this browser. Choose a published folder to browse indexed files.",
+    if(eq($app.key, "service-manager"), "Services shows observed state. Schedules shows timer observations. Runs shows published outcomes and their receipts.",
+      "Open the Memory or Journal editor to make a change. Use Refresh saved records to pick up changes from another device."))
+  when $fileViewer:
+    let help = "Open a supported file from File Manager. Use File to reload the current file."
+  let description = if(eq($app.key, "file-manager"), "Browse Documents and published files.",
+    if(eq($app.key, "service-manager"), "Inspect apps, internal services and scheduled work.", "Memory and journal"))
+  when $fileViewer:
+    let description = "Read code and REL, view images, and play movies."
+  let document = {
+    description = $description; help = $help; build = $releaseId;
+    fileCommands = if($fileViewer, list({ id = "viewer-refresh"; label = "Reload file" }), if(eq($app.key, "service-manager"), list({ id = "refresh"; label = "Refresh observations" }), if(eq($app.key, "file-manager"), list({ id = "refresh"; label = "Refresh index" }), list({ id = "temple-refresh"; label = "Refresh saved records" }))));
+    indexLabel = if(eq($app.key, "file-manager"), "File contexts", if(eq($app.key, "service-manager"), "Service Manager records", null));
+    detailLabel = if($fileViewer, "File preview", if(eq($app.key, "file-manager"), "File details", if($managed, "Service details", "Temple records")));
+    showLocation = not(eq($app.key, "file-manager"));
+    tabs = if(eq($app.key, "file-manager"), list({ tag = "span"; children = list("Files") }), list());
+    detail = if($managed, list(), list({ tag = "p"; attrs = { role = "status" }; children = list("Opening saved records…") }));
+    density = if($service, "compact", null);
+    locationAction = $locationAction
+  }
+  call desktop.documentSlots
+
+process managers.templeDetails:
+  let signedIn = eq($custody.mode, "signed-in")
+  let signedOut = eq($custody.mode, "browser")
+  let loading = eq($custody.mode, "loading")
+  let status = if($signedIn, "Showing your signed-in records.", if($loading, "Opening saved records…",
+    if($signedOut, "Sign in to Temple to see your saved records.", "Saved records could not be loaded.")))
+  let refresh = { tag = "button"; attrs = { type = "button"; class = "button"; "data-document-command" = "temple-refresh"; disabled = $loading };
+    children = list("Refresh") }
+  let result = list({ tag = "p"; attrs = { role = "status" }; children = list($status) })
+  when $signedOut:
+    let result = append($result, list(
+      { tag = "p"; children = list({ tag = "a"; attrs = { href = "/settings/identity/"; target = "_blank"; rel = "noopener" };
+        children = list("Sign in to Temple (new tab)") }) }))
+  let result = append($result, list($refresh))
+  when $signedIn:
+    let sections = list(
+      { id = "memory"; title = "Memory"; kind = "note"; editor = "Edit memory"; empty = "No memory saved yet." },
+      { id = "journal"; title = "Journal"; kind = "project"; editor = "Edit journal"; empty = "No journal entry saved yet." })
+    let result = append($result, map($sections, "section", {
+      tag = "section"; attrs = { "aria-labelledby" = concat("temple-", $section.id, "-heading") };
+      children = list(
+        { tag = "h3"; attrs = { id = concat("temple-", $section.id, "-heading") }; children = list($section.title) },
+        { tag = "pre"; attrs = { class = "published-evidence"; "data-temple-record" = $section.kind };
+          children = list(or(at(at($custody.records, $section.kind), "text"), $section.empty)) },
+        { tag = "button"; attrs = { type = "button"; class = "button"; "data-first-run" = $section.kind };
+          children = list($section.editor) })
+    }))
+
+process files.publishedReceipts:
+  let published = list(
+    { id = "standalone-release"; run = "qualification"; name = "Encounter 0.1.7 qualification"; state = "Passed";
+      detail = "Standalone platform release verification"; started = "9 Nov 2026, 15:46:12 AWST"; duration = "66 seconds";
+      text = "Run: 20261109T074612193955Z-encounter-standalone-release-bc2a8e91\nResult: Passed\nStarted: 9 Nov 2026, 15:46:12 AWST\nFinished: 9 Nov 2026, 15:47:18 AWST\nExit code: 0\n\nThe standalone Linux release passed the manifest pin checks, native contracts, and installed browser workflows." }
+  )
+  fold $published as receipt; receipts starts list():
+    port text.utf8Length { value = $receipt.text } → bytes
+    let file = { id = $receipt.id; parent = "platform-receipts"; name = $receipt.name; kind = "Run receipt";
+      path = concat("Platform/Receipts/", $receipt.name); permission = "Platform steward"; text = $receipt.text; bytes = $bytes; viewer = "text" }
+    yield append($receipts, list({ file = $file; run = { id = $receipt.run; name = $receipt.name; state = $receipt.state;
+      detail = $receipt.detail; started = $receipt.started; duration = $receipt.duration; receipt = $receipt.id;
+      receiptFolder = $file.parent; receiptPath = $file.path } })) → result
+
+process files.catalogue:
+  let collections = or(at($snapshot, "collections"), {})
+  let sources = list("Platform/Releases/Home", "Platform/Kernel/Releases", "Platform/Scheduled run receipts", "Apps/Game Hub/Assets",
+    "Apps/Game Hub/Store/Published assets", "Apps/North River/Source", "Apps/North River/Receipts")
+  fold $sources as source; rows starts list():
+    yield append($rows, or(at($collections, $source), list())) → rows
+  when at($snapshot, "platform"):
+    call files.publishedReceipts
+    let receipts = map($result, "receipt", $receipt.file)
+    fold $receipts as receipt; total starts 0:
+      yield add($total, $receipt.bytes) → bytes
+    let folder = { id = "platform-receipts"; name = "Receipts"; path = "Platform/Receipts"; kind = "Folder";
+      permission = "Platform steward"; bytes = $bytes; uniqueBytes = $bytes; fileCount = count($receipts) }
+    let rows = append($rows, append(list($folder), $receipts))
+  let result = append($rows, list({ id = "office-briefcase"; name = "Briefcase"; path = "Office/Briefcase"; kind = "Folder" }))
+
+process files.treeFolder:
+  let selected = eq(at($folder, "id"), $node.id)
+  let button = { tag = "button"; attrs = { type = "button"; class = "file-tree-label"; title = $node.name;
+    "data-manager-action" = "folder"; "data-manager-item" = $node.id;
+    "aria-pressed" = if($selected, "true", "false") }; children = list($node.name) }
+  let result = { tag = "li"; children = list($button) }
+  when count($children):
+    let selectedPath = if($folder, $folder.path, "")
+    port text.indexOf { value = $selectedPath; search = concat($node.path, "/") } → descendant
+    let result = { tag = "li"; children = list({ tag = "details"; attrs = { open = or($selected, eq($descendant, 0)) }; children = list(
+      { tag = "summary"; attrs = { "aria-label" = concat("Subfolders of ", $node.name) }; children = list($button) },
+      { tag = "ul"; children = $children }
+    ) }) }
+
+process files.branch:
+  let nodes = filter($roots, "node", includes($branch.paths, $node.path))
+  let result = null
+  when count($nodes):
+    let links = map($nodes, "node", at($tree.nodes, $node.id))
+    when eq($branch.label, "North River"):
+      let command = "folder"
+      let item = "office-briefcase"
+      let label = "↗ Briefcase shortcut"
+      let buttonClass = "file-tree-label"
+      let pressed = null
+      call managers.button
+      let links = append($links, list({ tag = "li"; children = list($result) }))
+    let result = { tag = "li"; children = list({ tag = "details"; attrs = { open = true }; children = list(
+      { tag = "summary"; children = list($branch.label) }, { tag = "ul"; children = $links }) }) }
+
+process files.tree:
+  let roots = filter($folders, "node", not(at($node, "parent")))
+  # Folder rows arrive in path order within each collection. Build the
+  # children first so a branch can be rendered with a single pass.
+  fold $folders as node; reversed starts list():
+    yield append(list($node), $reversed) → reversed
+  fold $reversed as node; tree starts { nodes = {}; children = {} }:
+    let children = or(at($tree.children, $node.id), list())
+    call files.treeFolder
+    let rendered = $result
+    port record.put { record = $tree.nodes; key = $node.id; value = $rendered } → nodes
+    let byParent = $tree.children
+    let parent = at($node, "parent")
+    when $parent:
+      let siblings = or(at($byParent, $parent), list())
+      port record.put { record = $byParent; key = $parent; value = append(list($rendered), $siblings) } → byParent
+    yield { nodes = $nodes; children = $byParent } → tree
+  let office = { label = "Office"; paths = list("Office/Briefcase") }
+  let platform = list({ label = "Releases"; paths = list("Platform/Releases/Home") },
+    { label = "Kernel"; paths = list("Platform/Kernel/Releases") }, { label = "Receipts"; paths = list("Platform/Receipts") })
+  let apps = list({ label = "Game Hub"; paths = list("Apps/Game Hub/Assets", "Apps/Game Hub/Store/Published assets") },
+    { label = "North River"; paths = list("Apps/North River/Source", "Apps/North River/Receipts") })
+  let branch = $office
+  call files.branch
+  let officeView = $result
+  fold list({ label = "Platform"; branches = $platform }, { label = "Apps"; branches = $apps }) as group; sections starts list():
+    fold $group.branches as branch; branches starts list():
+      call files.branch
+      yield if($result, append($branches, list($result)), $branches) → branches
+    let section = { tag = "li"; children = list({ tag = "details"; attrs = { open = true }; children = list(
+      { tag = "summary"; children = list($group.label) }, { tag = "ul"; children = $branches }) }) }
+    yield if(count($branches), append($sections, list($section)), $sections) → sections
+  let local = at($tree.nodes, "local-documents")
+  let result = { tag = "ul"; attrs = { class = "file-tree" }; children = append(list($local, $officeView), $sections) }
+
+process files.owner:
+  let owner = at($node, "owner")
+  let steward = at($node, "steward")
+  let result = if($owner, $owner, if($steward, concat("Steward · ", if(eq($steward, "role:platform-steward"), "Platform steward", $steward)), "Unrecorded"))
+
+process files.size:
+  let formatted = at($sizes, concat("", $bytes))
+  let long = if(eq($bytes, null), "Unavailable", or(at($formatted, "long"), concat($bytes, " B")))
+  let result = { long = $long; short = or(at($formatted, "short"), $long) }
+
+process files.metadata:
+  call files.owner
+  let owner = $result
+  let bytes = at($node, "bytes")
+  call files.size
+  let size = $result.long
+  let unique = at($node, "uniqueBytes")
+  let showUnique = and(eq($node.kind, "Folder"), not(eq($unique, null)))
+  let bytes = $unique
+  call files.size
+  let result = { tag = "dl"; attrs = { class = "file-index-properties" }; children = list(
+    { tag = "dt"; children = list("Size") }, { tag = "dd"; children = list($size) },
+    if($showUnique, { tag = "dt"; attrs = { title = "Total size after counting identical file contents once" }; children = list("Unique content") }, null),
+    if($showUnique, { tag = "dd"; children = list($result.long) }, null),
+    { tag = "dt"; children = list("Owner") }, { tag = "dd"; children = list($owner) },
+    { tag = "dt"; children = list("Permissions") }, { tag = "dd"; children = list($node.permission, " · Read only") },
+    if(not(eq(at($node, "fileCount"), null)), { tag = "dt"; children = list("Files") }, null),
+    if(not(eq(at($node, "fileCount"), null)), { tag = "dd"; children = list($node.fileCount) }, null)
+  ) }
+
+process files.type:
+  port text.matches { value = $node.name; pattern = "(?i)\\.encounter$" } → encounter
+  port text.matches { value = $node.name; pattern = "(?i)\\.rel$" } → rel
+  let result = { id = null; label = $node.kind }
+  when not(eq($node.kind, "Folder")):
+    let result = if($encounter, { id = "encounter"; label = "Encounter" },
+      if($rel, { id = "rel"; label = if(eq($node.kind, "receipt"), "REL receipt", "REL") },
+        if(eq($node.kind, "Run receipt"), { id = "receipt"; label = "Run receipt" },
+          if(eq($node.kind, "image"), { id = "image"; label = "Image" },
+            if(eq(at($node, "viewer"), "video"), { id = "video"; label = "Movie" }, $result)))))
+
+process files.viewerLink:
+  let result = if(at($node, "viewer"), { tag = "button"; attrs = { type = "button"; class = "file-viewer-link";
+    "data-manager-action" = "open-viewer"; "data-manager-item" = $node.id;
+    "aria-label" = concat("Open ", $node.name, " in File Viewer") }; children = list("Open in File Viewer") }, null)
+
+process files.entryRow:
+  let command = if(eq($node.kind, "Folder"), "folder", if(at($node, "local"), "open-local", "file"))
+  call files.type
+  let type = $result
+  let button = { tag = "button"; attrs = { type = "button"; class = "file-entry-name"; title = $node.name;
+    "data-file-type" = $type.id; "data-manager-action" = $command; "data-manager-item" = $node.id }; children = list($node.name) }
+  call files.viewerLink
+  let viewerLink = $result
+  call files.owner
+  let owner = $result
+  let bytes = at($node, "bytes")
+  call files.size
+  let size = $result
+  let result = { tag = "tr"; children = list(
+    { tag = "td"; children = list($button, $viewerLink) },
+    { tag = "td"; attrs = { title = $type.label; "data-file-type" = $type.id }; children = list($type.label) },
+    { tag = "td"; attrs = { class = "file-size"; title = $size.long }; children = list($size.short) },
+    { tag = "td"; attrs = { title = $owner }; children = list($owner) },
+    { tag = "td"; attrs = { title = $node.permission }; children = list($node.permission) }) }
+
+process files.breadcrumbs:
+  port text.split { value = $node.path; pattern = "/" } → segments
+  fold $segments as segment; trail starts { path = ""; items = list() }:
+    let path = if($trail.path, concat($trail.path, "/", $segment), $segment)
+    let current = eq($path, $node.path)
+    let destination = at(filter($folders, "candidate", eq($candidate.path, $path)), 0)
+    let crumb = { tag = "span"; attrs = { "aria-current" = if($current, "page", null) }; children = list($segment) }
+    when and($destination, not($current)):
+      let crumb = { tag = "button"; attrs = { type = "button"; "data-manager-action" = "folder"; "data-manager-item" = $destination.id }; children = list($segment) }
+    let item = { tag = "li"; attrs = { title = $segment }; children = list($crumb) }
+    yield { path = $path; items = append($trail.items, list($item)) } → trail
+  let result = { tag = "nav"; attrs = { class = "file-breadcrumbs"; "aria-label" = "File location" }; children = list(
+    { tag = "ol"; children = $trail.items }) }
+
+process files.relViewer:
+  let facts = $viewer.rows
+  let countText = if($viewer.filter,
+    concat("Showing ", count($facts), " of ", $viewer.matches, " matching facts (", $viewer.total, " total)"),
+    concat("Showing ", count($facts), " of ", $viewer.total, " facts"))
+  let headers = map(list("Subject", "Predicate", "Object", "Polarity"), "column",
+    { tag = "th"; attrs = { scope = "col" }; children = list($column) })
+  let rows = map($facts, "fact", { tag = "tr"; children = list(
+    { tag = "td"; children = list($fact.subject) },
+    { tag = "td"; children = list($fact.predicate) },
+    { tag = "td"; children = list($fact.object) },
+    { tag = "td"; children = list($fact.polarity) }
+  ) })
+  let table = { tag = "table"; attrs = { class = "sourcery-data-table"; "aria-label" = "REL facts" }; children = list(
+    { tag = "thead"; children = list({ tag = "tr"; children = $headers }) },
+    { tag = "tbody"; children = $rows }) }
+  let result = { tag = "section"; attrs = { class = "file-rel-viewer"; "aria-label" = "REL viewer" }; children = list(
+    { tag = "h4"; children = list("REL facts") },
+    { tag = "form"; attrs = { id = concat($previewScope, "-rel-filter"); method = "post"; "data-manager-action" = "rel-filter" }; children = list(
+      { tag = "label"; attrs = { for = concat($previewScope, "-rel-query") }; children = list("Search facts") },
+      { tag = "input"; attrs = { id = concat($previewScope, "-rel-query"); name = "filter"; type = "search"; maxlength = "120";
+        autocomplete = "off"; value = $viewer.filter } },
+      { tag = "button"; attrs = { type = "submit"; class = "button" }; children = list("Search") }
+    ) },
+    { tag = "p"; attrs = { role = "status" }; children = list($countText) },
+    if(count($facts), $table, { tag = "p"; children = list("No matching facts.") }),
+    { tag = "details"; children = list(
+      { tag = "summary"; children = list("REL source preview") }, { tag = "pre"; children = list($file.text) }) }
+  ) }
+
+process files.viewerVariants:
+  let result = list(
+    { id = "file"; name = "Release source excerpt"; surface = "System Catalogue · Rule source";
+      scope = "One indexed process excerpt from the published Home release.";
+      admission = "The session has Platform steward access and the named process resolves in the indexed excerpt." },
+    { id = "authoring"; name = "App source browser"; surface = "App authoring · Encounter source";
+      scope = "The full workspace.encounter file in the matching release, read only.";
+      admission = "The source reference resolves to the exact release receipt and its pinned file. Platform steward access is checked again." })
+
+process files.encounterViewer:
+  let selectedLine = at($file, "sourceLine")
+  let sourceText = $file.text
+  let firstLine = or(at($file, "sourceFirstLine"), 1)
+  let context = if(at($file, "sourceFirstLine"), { tag = "p"; children = list("Release source excerpt") }, null)
+  let source = { tag = "pre"; children = list($sourceText) }
+  try:
+    call source.encounterLightPolicy
+    let spPolicy = $result.presentation
+    let lexPolicy = $result.lexical
+    let lexGrammar = $result.grammar
+    port digest.sha256 { text = $sourceText } → hash
+    port kernel.invoke { query = "sp.present"; input = { text = $sourceText; expectedHash = $hash;
+      file = $file.name; language = "encounter"; theme = "light"; lineNumbers = true;
+      selectedLine = $selectedLine; sourceFirstLine = $firstLine } } → presented
+    let source = { tag = "pre"; children = list($presented.tree) }
+  catch fault:
+    let source = { tag = "pre"; children = list($sourceText) }
+  let result = { tag = "section"; attrs = { class = "file-encounter-viewer"; "aria-label" = "Encounter source" }; children = list(
+    { tag = "h4"; children = list("Encounter source") }, $context, $source) }
+
+process files.location:
+  call files.breadcrumbs
+  let result = list($result, { tag = "h3"; attrs = { tabindex = "-1" }; children = list($node.name) })
+
+process files.content:
+  let result = null
+  let image = at($file, "imagePreview")
+  when $image:
+    let result = { tag = "section"; attrs = { class = "file-image-preview"; "aria-label" = "Image preview" }; children = list(
+      { tag = "h4"; children = list("Image preview") },
+      { tag = "img"; attrs = { src = $image; alt = $file.name; decoding = "async" } }
+    ) }
+  when at($file, "text"):
+    let viewer = at($file, "rel")
+    let textLabel = $file.name
+    let textValue = $file.text
+    let textEditable = false
+    call windowWidget.text
+    when $viewer:
+      call files.relViewer
+    when not($viewer):
+      let plain = $result
+      call files.type
+      let encounter = eq($result.id, "encounter")
+      let result = $plain
+      when $encounter:
+        call files.encounterViewer
+  when and(eq($previewScope, "viewer"), eq(at($file, "viewer"), "video")):
+    let result = { tag = "video"; attrs = { class = "file-viewer-video"; controls = true; preload = "metadata";
+      src = concat("/workspace/file-media?file=", $file.id); "aria-label" = $file.name }; children = list("This browser cannot play this movie.") }
+
+process files.preview:
+  let unavailable = { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "warning"; role = "status" }; children = list("No indexed location is available. Sign in to a provider and refresh the index.") }
+  let command = "back-run"
+  let item = null
+  let label = "Back to Service Manager"
+  let buttonClass = "button"
+  let pressed = null
+  call managers.button
+  let returnButton = if($returnToRun, $result, null)
+  let result = list($unavailable, $returnButton)
+  when $folder:
+    let node = or($file, $folder)
+    call files.location
+    let location = $result
+    let parent = if($file, $folder.id, at($folder, "parent"))
+    let command = "folder"
+    let item = $parent
+    let label = if($file, "Back to folder", "Up one folder")
+    let buttonClass = "button"
+    let pressed = null
+    call managers.button
+    let back = if($parent, $result, null)
+    let result = append($location, list($returnButton,
+      { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "warning"; role = "status" }; children = list("The Office Briefcase provider is unavailable.") })
+    )
+    when not(eq($folder.id, "office-briefcase")):
+      call files.metadata
+      let properties = $result
+      let result = append($location, list($back, $returnButton, $properties))
+      when $file:
+        let previewScope = "file"
+        call files.viewerLink
+        let viewerLink = $result
+        call files.content
+        let preview = $result
+        let unavailable = if(or($viewerLink, $preview), null, { tag = "p"; children = list("No inline preview is available for this file.") })
+        let result = append($location, list($back, $returnButton, $viewerLink, $preview, $properties, $unavailable))
+      when not($file):
+        let entries = filter($rows, "node", eq(at($node, "parent"), $folder.id))
+        fold $entries as node; children starts list():
+          call files.entryRow
+          yield append($children, list($result)) → children
+        let columns = map(list("Name", "Type", "Size", "Owner", "Permissions"), "column",
+          { tag = "th"; attrs = { scope = "col" }; children = list($column) })
+        let table = { tag = "table"; attrs = { class = "sourcery-data-table file-contents-table"; "aria-label" = "Folder contents" }; children = list(
+          { tag = "thead"; children = list({ tag = "tr"; children = $columns }) }, { tag = "tbody"; children = $children }) }
+        let preview = $result
+        let directoryContents = if(count($children), $table, null)
+        call windowWidget.directory
+        let listing = $result
+        let hint = { tag = "p"; attrs = { class = "file-list-hint" }; children = list(
+          if(at($folder, "local"), "Open a text file in Text Editor.", "Click a filename to open its preview or details.")) }
+        let result = append($preview, if($directoryContents, list($hint, $listing), list($listing)))
+  let input = $result
+  call html.serialize
+
+process services.views:
+  let result = list({ id = "services"; name = "Services" }, { id = "schedules"; name = "Schedules" }, { id = "runs"; name = "Runs" })
+
+process services.runs:
+  call files.publishedReceipts
+  let published = map($result, "receipt", $receipt.run)
+  let indexed = filter($receiptFiles, "file", at($file, "execution"))
+  let scheduled = map($indexed, "file", {
+    id = concat("systemd-invocation:", $file.execution.invocationId);
+    name = $file.execution.service; state = if(eq($file.execution.result, "success"), "Succeeded", concat("Failed · ", $file.execution.result));
+    detail = "Published receipt for a scheduled systemd execution.";
+    started = concat($file.execution.started, " AWST"); duration = concat($file.execution.duration, " seconds");
+    receipt = $file.id; receiptFolder = $file.parent; receiptPath = $file.path
+  })
+  let result = append($published, $scheduled)
+
+process services.entryButton:
+  let command = "service-item"
+  let item = $entry.id
+  let label = concat($entry.name, " · ", $entry.state)
+  let pressed = if(eq($item, $selected), "true", "false")
+  let buttonClass = null
+  call managers.button
+
+process services.groups:
+  when eq($view, "services"):
+    let services = list()
+    when $snapshot:
+      let services = map($snapshot.services, "entry", {
+        id = concat("app-", $entry.name); name = $entry.name; state = $entry.status; detail = $entry.detail; href = $entry.href
+      })
+    when not($snapshot):
+      call gate.apps
+      let services = map($result, "entry", { id = concat("app-", $entry.name); name = $entry.name; state = "Not observed"; detail = $entry.detail })
+    let units = list()
+    when $snapshot:
+      fold $snapshot.units as scope; units starts list():
+        yield append($units, map($scope.names, "name", {
+          id = concat($scope.scope, "-", $name); name = $name; state = "Running"; detail = concat("Observed systemd ", $scope.scope, " service unit.")
+        })) → units
+    let listening = filter($services, "entry", eq($entry.state, "Listening"))
+    let other = filter($services, "entry", not(eq($entry.state, "Listening")))
+    let apps = if(count($listening), list({ label = "Listening apps"; items = $listening }), list())
+    let result = append($apps, list(
+      { label = if(count($listening), "Other registered apps", "Registered apps"); items = $other; empty = "No other apps are listed." },
+      { label = "Internal services"; items = $units; empty = if($snapshot, "No running units were reported.", "Refresh through Front Gate to see running units.") }
+    ))
+  when eq($view, "schedules"):
+    let schedules = if($snapshot, or(at($snapshot, "schedules"), list()), list())
+    let result = list({ label = "Systemd timers"; items = $schedules;
+      empty = if(and($snapshot, at($snapshot, "timerStatus")), $snapshot.timerStatus, "Timer observations are unavailable from this Front Gate connection.") })
+  when eq($view, "runs"):
+    call services.runs
+    let published = $result
+    let publishedIds = map($published, "run", $run.id)
+    let executions = or(at($snapshot, "runs"), list())
+    let observed = filter($executions, "run", not(includes($publishedIds, $run.id)))
+    when and($returnRun, not(includes($publishedIds, $returnRun.id)), not(some($observed, "run", eq($run.id, $returnRun.id)))):
+      let observed = append($observed, list({
+        id = $returnRun.id; name = $returnRun.name; state = $returnRun.state; detail = $returnRun.detail;
+        started = $returnRun.started; duration = $returnRun.duration
+      }))
+    let empty = if(count($executions), "Executions with receipts are listed under Published runs.",
+      "No completed timer service executions are available.")
+    let result = list(
+      { label = "Published runs"; items = $published; empty = "No run receipts have been published." },
+      { label = "Observed service executions"; items = $observed; empty = $empty }
+    )
+
+process services.observationFacts:
+  let state = $entry.state
+  port text.indexOf { value = $state; search = "Failed · " } → failure
+  let tone = if(eq($failure, 0), "error", if(eq($state, "Offline"), "warning",
+    if(includes(list("Listening", "Running", "Connected", "Succeeded", "Passed"), $state), "success",
+      if(eq($state, "Not observed"), "muted", null))))
+  let result = filter(list(
+    { label = if(eq($observationView, "runs"), "Outcome", "State"); value = $state; role = if(eq($state, "Timer"), null, "state"); tone = $tone; action = $runOutcomeAction },
+    { label = "Next trigger"; value = at($entry, "next"); role = "next" },
+    { label = "Last trigger"; value = or(at($entry, "last"), if($lastTriggerAction, "Not reported", null)); action = $lastTriggerAction },
+    { label = "Started"; value = at($entry, "started") },
+    { label = "Duration"; value = at($entry, "duration") },
+    { label = "Description"; value = at($entry, "detail"); role = "context" }
+  ), "fact", $fact.value)
+
+process services.observationTable:
+  fold $facts as fact; rows starts list():
+    let role = at($fact, "role")
+    let value = if(includes(list("state", "next"), $role), { tag = "strong"; children = list($fact.value) },
+      if(eq($role, "context"), { tag = "em"; children = list($fact.value) }, $fact.value))
+    let action = at($fact, "action")
+    when $action:
+      let value = { tag = "div"; attrs = { class = "service-observation-with-action" }; children = list(
+        { tag = "span"; children = list($value) }, $action) }
+    let row = { tag = "tr"; children = list(
+      { tag = "th"; attrs = { scope = "row" }; children = list($fact.label) },
+      { tag = "td"; attrs = { "data-observation-role" = $role; "data-observation-tone" = at($fact, "tone") }; children = list($value) }
+    ) }
+    yield append($rows, list($row)) → rows
+  let result = { tag = "table"; attrs = { class = "sourcery-data-table service-observations"; "data-table-layout" = $tableLayout;
+    "aria-label" = "Service observations" }; children = list(
+    { tag = "thead"; children = list({ tag = "tr"; children = list(
+      { tag = "th"; attrs = { scope = "col" }; children = list("Field") },
+      { tag = "th"; attrs = { scope = "col" }; children = list("Observation") }
+    ) }) },
+    { tag = "tbody"; children = $rows }
+  ) }
+
+process services.panel:
+  call services.groups
+  let groups = $result
+  fold $groups as group; items starts list():
+    yield append($items, $group.items) → items
+  let entry = at(filter($items, "entry", eq($entry.id, $selected)), 0)
+  when not($entry):
+    let entry = at($items, 0)
+  let selected = at($entry, "id")
+  call services.views
+  fold $result as tab; tabs starts list():
+    let command = "service-view"
+    let item = $tab.id
+    let label = $tab.name
+    let buttonClass = null
+    let pressed = if(eq($view, $tab.id), "true", "false")
+    call managers.button
+    yield append($tabs, list($result)) → tabs
+  fold $groups as group; sections starts list():
+    fold $group.items as entry; rows starts list():
+      call services.entryButton
+      yield append($rows, list({ tag = "li"; children = list($result) })) → rows
+    yield append($sections, list({ tag = "section"; children = list(
+      { tag = "h4"; children = list($group.label) },
+      if(count($rows), { tag = "ul"; children = $rows }, { tag = "p"; children = list($group.empty) })
+    ) })) → sections
+  let receipt = at($entry, "receipt")
+  let detail = list({ tag = "p"; children = list("Select an available entry.") })
+  when $entry:
+    let observed = or(at($snapshot, "runs"), list())
+    let service = at($entry, "service")
+    let scope = at($entry, "scope")
+    let execution = at(filter($observed, "run", and($service, eq($run.name, $service), eq($run.scope, $scope))), 0)
+    let invocation = at($execution, "id")
+    when $service:
+      let matched = filter($receiptFiles, "file", and(
+        eq(at(at($file, "execution"), "scope"), $scope),
+        eq(at(at($file, "execution"), "service"), $service),
+        eq(at(at($file, "execution"), "timer"), $entry.name),
+        eq(at(at($file, "execution"), "lastTrigger"), at($entry, "last"))))
+      when eq(count($matched), 1):
+        let receiptExecution = at(at($matched, 0), "execution")
+        let invocation = concat("systemd-invocation:", $receiptExecution.invocationId)
+    let command = "invocation"
+    let item = $invocation
+    let label = "View last service execution"
+    let buttonClass = "button"
+    let pressed = null
+    call managers.button
+    let invocationButton = $result
+    let command = "receipt"
+    let item = $receipt
+    let label = "Open receipt in File Manager"
+    let buttonClass = "button"
+    let pressed = null
+    call managers.button
+    let runOutcomeAction = if($receipt, $result, null)
+    let lastTriggerAction = if($invocation, $invocationButton, null)
+    let observationView = $view
+    call services.observationFacts
+    let facts = $result
+    let tableLayout = "grid"
+    call services.observationTable
+    let detail = list(
+      { tag = "h3"; children = list($entry.name) },
+      $result,
+      if(at($entry, "href"), { tag = "p"; children = list({ tag = "a"; attrs = { href = $entry.href; target = "_blank"; rel = "noopener" }; children = list("Open app") }) }, null),
+      if($receipt, { tag = "section"; children = list({ tag = "h4"; children = list("Run receipt") },
+        { tag = "p"; children = list($entry.receiptPath) }) },
+        if(eq($view, "runs"), { tag = "p"; children = list("No published receipt for this execution.") }, null))
+    )
+  let input = $tabs
+  call html.serialize
+  let serviceTabsHtml = $result
+  let input = $sections
+  call html.serialize
+  let serviceIndexHtml = $result
+  let input = $detail
+  call html.serialize
+  let result = { tabs = $serviceTabsHtml; index = $serviceIndexHtml; detail = $result; selected = $selected }

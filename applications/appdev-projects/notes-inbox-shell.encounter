@@ -1,0 +1,471 @@
+process-module "temple/surface-process-module/1"
+
+process inbox.shortcuts:
+  let result = list(
+    { id = "notes-inbox-launch"; href = "/workspace/home?view=inbox"; name = "Inbox"; detail = "Requests across your environments" },
+    { id = "notes-platform-launch"; href = "/workspace/platform"; name = "Platform"; detail = "Platform apps" }
+  )
+
+process inbox.navigation:
+  call inbox.shortcuts
+  let inbox = at($result, 0)
+  let input = { tag = "a"; attrs = { id = $inbox.id; class = "app-link"; href = $inbox.href; "data-open-notes-inbox" = true };
+    children = list(
+      { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" }; children = list({ tag = "use"; attrs = { href = "#icon-notes" } }) },
+      { tag = "span"; attrs = { class = "app-label" }; children = list({ tag = "strong"; children = list($inbox.name) }, { tag = "small"; children = list($inbox.detail) }) }) }
+  let launch = $input
+  let input = { tag = "a"; attrs = { class = "app-link"; id = "aster-kernel-show"; href = "/workspace/home?view=aster" }; children = list(
+    { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" }; children = list(
+      { tag = "use"; attrs = { href = "#icon-trace" } }
+    ) },
+    { tag = "span"; attrs = { class = "app-label" }; children = list(
+      { tag = "strong"; children = list("Ask Aster") },
+      { tag = "small"; children = list("Chat or get three next steps with a Temple steward account.") }
+    ) }
+  ) }
+  let result = list($input, $launch, { tag = "span"; attrs = { "data-workspace-platform-start" = true } })
+
+process inbox.window:
+  let result = { tag = "main"; attrs = { id = "notes-inbox-window"; class = "platform-window"; "aria-labelledby" = "notes-inbox-title"; hidden = true }; children = list(
+    { tag = "header"; attrs = { class = "titlebar" }; children = list(
+      { tag = "h1"; attrs = { id = "notes-inbox-title"; tabindex = "-1" }; children = list("Inbox") },
+      { tag = "button"; attrs = { type = "button"; id = "notes-inbox-close" }; children = list("Close") }
+    ) },
+    { tag = "nav"; attrs = { id = "notes-platform-apps"; class = "platform-apps"; "aria-label" = "Platform apps"; hidden = true }; children = list(
+      { tag = "a"; attrs = { class = "app-link"; "data-platform-view" = "inbox"; href = "/identity-management/aster/?support=1&inbox=1" }; children = list(
+        { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" }; children = list(
+          { tag = "use"; attrs = { href = "#icon-notes" } }
+        ) },
+        { tag = "span"; children = list(
+          { tag = "strong"; children = list("Platform Inbox") },
+          { tag = "small"; children = list("Incoming Platform requests") }
+        ) }
+      ) },
+      { tag = "a"; attrs = { class = "app-link"; "data-platform-view" = "workspace"; href = "/identity-management/aster/?support=1&workspace=1" }; children = list(
+        { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" }; children = list(
+          { tag = "use"; attrs = { href = "#icon-tools" } }
+        ) },
+        { tag = "span"; children = list(
+          { tag = "strong"; children = list("Work items") },
+          { tag = "small"; children = list("Track work and open the Semantic Decompiler") }
+        ) }
+      ) }
+    ) },
+    { tag = "div"; attrs = { id = "notes-inbox-content"; class = "dialog-body" } }
+  ) }
+# Older generators hand off a complete document. Their original Start menu
+# predates the Workspaces group and its explicit slot.
+process inbox.shell:
+  let desktop = $eventInput
+  port html.select { html = $desktop; select = { tag = "a"; attrs = { id = "notes-inbox-launch" } } } → launches
+  port html.select { html = $desktop; select = { tag = "main"; attrs = { id = "notes-inbox-window" } } } → windows
+  when not(count($windows)):
+    port html.select { html = $desktop; select = { tag = "dialog"; attrs = { id = "notes-inbox-dialog" } } } → windows
+  let result = $desktop
+  when not(and(count($launches), count($windows))):
+    let edits = list()
+    when not(count($launches)):
+      call inbox.navigation
+      let input = $result
+      call html.serialize
+      let links = $result
+      port html.select { html = $desktop; select = { tag = "span"; attrs = { "data-home-start-workspaces" = "slot" } } } → slots
+      when count($slots):
+        let slot = at($slots, 0)
+        let edits = list({ start = $slot.start; end = $slot.end; value = $links })
+      when not(count($slots)):
+        port html.select { html = $desktop; select = { tag = "nav"; attrs = { "aria-label" = "Start menu" } } } → menus
+        assert count($menus)
+          otherwise "The Notes workspace has no Inbox menu placement."
+        let menu = at($menus, 0)
+        let edits = list({ start = $menu.openEnd; end = $menu.openEnd; value = $links })
+      port html.select { html = $desktop; select = { tag = "a"; attrs = { id = "aster-kernel-show"; href = "/?view=aster" } } } → oldAster
+      let edits = append($edits, map($oldAster, "anchor", { start = $anchor.start; end = $anchor.end; value = "" }))
+    when not(count($windows)):
+      call inbox.window
+      let input = $result
+      call html.serialize
+      let window = $result
+      port html.select { html = $desktop; select = { tag = "footer"; attrs = { "aria-label" = "Workspace taskbar" } } } → taskbars
+      assert count($taskbars)
+        otherwise "The Notes workspace has no Inbox window placement."
+      let taskbar = at($taskbars, 0)
+      let edits = append($edits, list({ start = $taskbar.start; end = $taskbar.start; value = $window }))
+    port html.edit { html = $desktop; edits = $edits } → result
+
+
+process inbox.styles:
+  let cssRuleSeparator = "\n"
+  let cssRules = list(
+    { selector = "main.desktop[hidden],#notes-inbox-window[hidden],#notes-platform-apps[hidden],#notes-inbox-content[hidden],#notes-inbox-close[hidden]"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".platform-window"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex"; value = "1" },
+      { property = "flex-direction"; value = "column" },
+      { property = "min-height"; value = "0" },
+      { property = "margin"; value = "10px 12px" },
+      { property = "padding"; value = "4px" },
+      { property = "background"; value = "var(--gray)" },
+      { property = "box-shadow"; value = "var(--raised)" },
+      { property = "color"; value = "var(--ink)" }
+    ) },
+    { selector = ".platform-window>.titlebar"; declarations = list(
+      { property = "flex"; value = "none" },
+      { property = "justify-content"; value = "space-between" }
+    ) },
+    { selector = ".platform-window h1"; declarations = list(
+      { property = "font-size"; value = "14px" },
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".platform-apps"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "repeat(auto-fit,minmax(min(220px,100%),1fr))" },
+      { property = "gap"; value = "10px" },
+      { property = "padding"; value = "12px" },
+      { property = "max-width"; value = "720px" }
+    ) },
+    { selector = ".platform-apps a"; declarations = list(
+      { property = "background"; value = "#fffef3" },
+      { property = "border"; value = "1px solid #a4a199" },
+      { property = "padding"; value = "12px" },
+      { property = "min-height"; value = "62px" }
+    ) },
+    { selector = "#notes-inbox-content"; declarations = list(
+      { property = "overflow"; value = "auto" },
+      { property = "overscroll-behavior"; value = "contain" },
+      { property = "padding"; value = "10px 12px" }
+    ) },
+    { selector = "#notes-inbox-content .platform-toolbar"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "align-items"; value = "center" },
+      { property = "justify-content"; value = "space-between" },
+      { property = "gap"; value = "8px" },
+      { property = "border-bottom"; value = "1px solid #88868a" },
+      { property = "padding-bottom"; value = "8px" }
+    ) },
+    { selector = "#notes-inbox-content .platform-views,#notes-inbox-content .platform-tools"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "6px" }
+    ) },
+    { selector = "#notes-inbox-content .platform-views a,#notes-inbox-content .platform-tools a"; declarations = list(
+      { property = "padding"; value = "6px 9px" },
+      { property = "text-decoration"; value = "none" }
+    ) },
+    { selector = "#notes-inbox-content .platform-views a"; declarations = list(
+      { property = "background"; value = "#e8e5dc" },
+      { property = "box-shadow"; value = "var(--raised)" }
+    ) },
+    { selector = "#notes-inbox-content .platform-views a[aria-current=page]"; declarations = list(
+      { property = "background"; value = "var(--navy)" },
+      { property = "box-shadow"; value = "none" },
+      { property = "color"; value = "#fff" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = "#notes-inbox-content .platform-tools a"; declarations = list(
+      { property = "text-decoration"; value = "underline" },
+      { property = "text-underline-offset"; value = "2px" }
+    ) },
+    { selector = "#notes-inbox-content .platform-list-title"; declarations = list(
+      { property = "font-size"; value = "13px" },
+      { property = "margin"; value = "12px 0 7px" }
+    ) },
+    { selector = "#notes-inbox-content .platform-requests"; declarations = list(
+      { property = "list-style"; value = "none" },
+      { property = "padding"; value = "0" },
+      { property = "margin"; value = "0" },
+      { property = "display"; value = "grid" },
+      { property = "gap"; value = "8px" }
+    ) },
+    { selector = "#notes-inbox-content .platform-request,#notes-inbox-content .platform-empty"; declarations = list(
+      { property = "background"; value = "#fffef3" },
+      { property = "border"; value = "1px solid #a4a199" },
+      { property = "padding"; value = "10px 12px" },
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = "#notes-inbox-content .platform-request-header"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "baseline" },
+      { property = "justify-content"; value = "space-between" },
+      { property = "gap"; value = "4px 12px" },
+      { property = "flex-wrap"; value = "wrap" }
+    ) },
+    { selector = "#notes-inbox-content .platform-request-header h3"; declarations = list(
+      { property = "font-size"; value = "14px" },
+      { property = "margin"; value = "0" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = "#notes-inbox-content .platform-request-meta"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "gap"; value = "8px" },
+      { property = "align-items"; value = "center" },
+      { property = "flex-wrap"; value = "wrap" }
+    ) },
+    { selector = "#notes-inbox-content .platform-request-meta .platform-destination"; declarations = list(
+      { property = "background"; value = "#e3e8f7" },
+      { property = "color"; value = "#19254d" },
+      { property = "padding"; value = "3px 7px" },
+      { property = "font-weight"; value = "bold" }
+    ); joinPrevious = true },
+    { selector = "#notes-inbox-content .platform-jump"; declarations = list(
+      { property = "margin-left"; value = "auto" },
+      { property = "font-weight"; value = "bold" },
+      { property = "padding"; value = "5px 0" }
+    ); joinPrevious = true },
+    { selector = "#notes-inbox-content .platform-request:focus"; declarations = list(
+      { property = "outline"; value = "2px solid #39508d" },
+      { property = "outline-offset"; value = "-2px" }
+    ); joinPrevious = true },
+    { selector = "#notes-inbox-content .platform-request-header span,#notes-inbox-content .platform-reference"; declarations = list(
+      { property = "font-size"; value = "12px" },
+      { property = "color"; value = "#55525a" }
+    ); joinPrevious = true },
+    { selector = "#notes-inbox-content :is(.platform-request-details,.platform-conversation)"; declarations = list(
+      { property = "margin-top"; value = "7px" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = "#notes-inbox-content details>summary"; declarations = list(
+      { property = "display"; value = "list-item" },
+      { property = "list-style"; value = "revert" },
+      { property = "text-decoration"; value = "underline" },
+      { property = "text-underline-offset"; value = "2px" },
+      { property = "cursor"; value = "pointer" },
+      { property = "width"; value = "fit-content" }
+    ) },
+    { selector = "#notes-inbox-content details>summary::-webkit-details-marker"; declarations = list(
+      { property = "display"; value = "revert" }
+    ) },
+    { selector = "#notes-inbox-content .platform-description,#notes-inbox-content pre"; declarations = list(
+      { property = "white-space"; value = "pre-wrap" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = "#notes-inbox-content .platform-request-actions"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "justify-content"; value = "space-between" },
+      { property = "gap"; value = "8px" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "border-top"; value = "1px solid #d8d4c7" },
+      { property = "margin-top"; value = "10px" },
+      { property = "padding-top"; value = "8px" }
+    ) },
+    { selector = "#notes-inbox-content .platform-request-actions form"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "6px" },
+      { property = "margin"; value = "0 0 0 auto" }
+    ) },
+    { selector = "#notes-inbox-content .platform-status"; declarations = list(
+      { property = "background"; value = "#e3e8f7" },
+      { property = "color"; value = "#19254d" },
+      { property = "padding"; value = "3px 7px" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = "#notes-inbox-content .platform-status[data-work-status=done]"; declarations = list(
+      { property = "background"; value = "#e0eddd" },
+      { property = "color"; value = "#254325" }
+    ) },
+    { selector = "#notes-inbox-content .platform-decompiler,#notes-inbox-content .platform-split-launch a,#notes-inbox-content .platform-primary"; declarations = list(
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = "#notes-inbox-content .platform-split-launch a"; declarations = list(
+      { property = "display"; value = "inline-block" },
+      { property = "background"; value = "var(--navy)" },
+      { property = "color"; value = "#fff" },
+      { property = "padding"; value = "7px 10px" },
+      { property = "text-decoration"; value = "none" }
+    ) },
+    { selector = "#notes-inbox-content .platform-split"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "minmax(0,2fr) minmax(16rem,1fr)" },
+      { property = "gap"; value = "10px" },
+      { property = "margin-top"; value = "10px" },
+      { property = "align-items"; value = "start" }
+    ) },
+    { selector = "#notes-inbox-content .platform-tool-pane iframe"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "width"; value = "100%" },
+      { property = "height"; value = "clamp(18rem,62dvh,54rem)" },
+      { property = "border"; value = "1px solid #88868a" },
+      { property = "background"; value = "white" }
+    ) },
+    { selector = "#notes-inbox-content .platform-split>section+section"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "max-height"; value = "clamp(18rem,62dvh,54rem)" },
+      { property = "overflow"; value = "auto" },
+      { property = "padding"; value = "0 8px" },
+      { property = "background"; value = "#fffef3" },
+      { property = "border"; value = "1px solid #d8d4c7" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:740px)"; rules = list(
+      { selector = "#notes-inbox-content .platform-split"; declarations = list(
+        { property = "grid-template-columns"; value = "minmax(0,1fr)" }
+      ) }
+    ) },
+    { atRule = "media"; prelude = "(max-width:420px)"; rules = list(
+      { selector = "#notes-inbox-content"; declarations = list(
+        { property = "padding-inline"; value = "8px" }
+      ) },
+      { selector = "#notes-inbox-content .platform-request-actions form"; declarations = list(
+        { property = "margin-left"; value = "0" }
+      ) }
+    ) }
+  )
+  call css.renderCompactRules
+  let result = concat("/* Platform inbox and work items */\n", $result, "\n")
+
+process platformWorkspace.apps:
+  let result = list(
+    { view = "platform-inbox"; title = "Platform Inbox"; detail = "Incoming Platform requests" },
+    { view = "work-items"; title = "Work items"; detail = "Track work and open the Semantic Decompiler" }
+  )
+
+process platformWorkspace.vmWorkloads:
+  let result = { view = "vm-workloads"; title = "VM workloads"; detail = "Manage VM releases and run BASIC jobs"; href = "/workspace/vm-workloads/"; defaultAction = "open" }
+
+process platformWorkspace.vmWorkloadCard:
+  call platformWorkspace.vmWorkloads
+  let app = $result
+  let input = { id = $app.view; name = $app.title; defaultAction = $app.defaultAction;
+    launch = { tag = "a"; attrs = { id = "vm-workloads-launch"; href = $app.href; "data-launch-action" = $app.defaultAction }; children = list(
+      { tag = "strong"; children = list($app.title) },
+      { tag = "small"; children = list($app.detail) }
+    ) } }
+  call appCard.compose
+  let result = $result.card
+
+process platformWorkspace.styles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = ":root"; declarations = list(
+      { property = "color-scheme"; value = "light" },
+      { property = "--ink"; value = "#172441" },
+      { property = "--navy"; value = "#182e5b" },
+      { property = "--gray"; value = "#e9e5d9" },
+      { property = "--raised"; value = "1px 1px #88868a" },
+      { property = "font"; value = "15px/1.45 Tahoma,Verdana,sans-serif" }
+    ) },
+    { selector = "*"; declarations = list(
+      { property = "box-sizing"; value = "border-box" }
+    ) },
+    { selector = "body"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "min-height"; value = "100dvh" },
+      { property = "display"; value = "flex" },
+      { property = "flex-direction"; value = "column" },
+      { property = "background"; value = "#275f69" },
+      { property = "color"; value = "var(--ink)" }
+    ) },
+    { selector = "[hidden]"; declarations = list(
+      { property = "display"; value = "none"; important = true }
+    ) },
+    { selector = "a"; declarations = list(
+      { property = "color"; value = "var(--navy)" }
+    ) },
+    { selector = "button,input,select,textarea"; declarations = list(
+      { property = "font"; value = "inherit" }
+    ) },
+    { selector = ".workspace-switch"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = ".8rem" },
+      { property = "padding"; value = ".55rem 1rem" },
+      { property = "background"; value = "var(--gray)" }
+    ) },
+    { selector = ".workspace-switch [aria-current=page]"; declarations = list(
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".platform-window>.titlebar"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = ".5rem" },
+      { property = "align-items"; value = "center" },
+      { property = "padding"; value = ".55rem .75rem" },
+      { property = "background"; value = "var(--navy)" },
+      { property = "color"; value = "white" }
+    ) },
+    { selector = ".platform-window>.titlebar a"; declarations = list(
+      { property = "color"; value = "inherit" }
+    ) },
+    { selector = ".platform-apps a"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-direction"; value = "column" },
+      { property = "gap"; value = ".25rem" }
+    ) },
+    { selector = ".platform-apps small"; declarations = list(
+      { property = "color"; value = "var(--ink)" }
+    ) },
+    { selector = "html[data-temple-embedded=true] .sourcery-os-header"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".sourcery-feedback"; declarations = list(
+      { property = "padding"; value = ".75rem" },
+      { property = "border"; value = "1px solid #88868a" },
+      { property = "background"; value = "#fffef3" }
+    ) },
+    { selector = ".sourcery-feedback[data-feedback=error]"; declarations = list(
+      { property = "color"; value = "#8d322b" }
+    ) },
+    { selector = ".platform-connection:not([data-state=disconnected])"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".platform-connection"; declarations = list(
+      { property = "padding"; value = ".5rem .75rem" }
+    ) }
+  )
+  call css.renderCompactRules
+
+process platformWorkspace.page:
+  let mode = $request.view
+  let launcher = not($mode)
+  call platformWorkspace.apps
+  let apps = $result
+  call platformWorkspace.vmWorkloadCard
+  let workloadsCard = $result
+  let selected = at(filter($apps, "app", eq($app.view, $mode)), 0)
+  let title = if($selected, $selected.title, "Platform")
+  call inbox.styles
+  let inboxCss = $result
+  call platformWorkspace.styles
+  let style = concat($result, $inboxCss)
+  let input = list({ tag = "html"; attrs = { lang = "en"; "data-encounter" = if($launcher, "ready", null) }; children = list(
+    { tag = "head"; children = list(
+      { tag = "meta"; attrs = { charset = "utf-8" } },
+      { tag = "meta"; attrs = { name = "viewport"; content = "width=device-width, initial-scale=1" } },
+      { tag = "title"; children = list(concat($title, " · Sourcery OS")) },
+      { tag = "style"; children = list($style) }) },
+    { tag = "body"; attrs = { "data-platform-workspace" = true }; children = list(
+      { tag = "nav"; attrs = { class = "workspace-switch sourcery-os-header"; "aria-label" = "Workspaces" }; children = list(
+        { tag = "a"; attrs = { href = "/workspace/home" }; children = list("Home") },
+        { tag = "a"; attrs = { href = "/workspace/work" }; children = list("Work") },
+        { tag = "a"; attrs = { href = "/workspace/platform"; "aria-current" = "page" }; children = list("Platform") },
+        { tag = "a"; attrs = { href = "/workspace/mobile" }; children = list("Mobile") }) },
+      { tag = "main"; attrs = { id = "notes-inbox-window"; class = "platform-window"; "aria-labelledby" = "notes-inbox-title" }; children = list(
+        { tag = "header"; attrs = { class = "titlebar" }; children = list(
+          { tag = "h1"; attrs = { id = "notes-inbox-title"; tabindex = "-1" }; children = list($title) },
+          { tag = "a"; attrs = { id = "notes-inbox-close"; href = "/workspace/platform"; hidden = $launcher }; children = list("Back to Platform") }) },
+        { tag = "nav"; attrs = { id = "notes-platform-apps"; class = "platform-apps"; "aria-label" = "Platform apps"; hidden = not($launcher) };
+          children = append(map($apps, "app", { tag = "a"; attrs = { href = or(at($app, "href"), concat("/workspace/platform?view=", $app.view)) }; children = list(
+            { tag = "strong"; children = list($app.title) },
+            { tag = "small"; children = list($app.detail) }) }), list($workloadsCard)) },
+        if($launcher, "", { tag = "div"; attrs = { class = "platform-connection"; "data-encounter-connection" = true; "data-connection-name" = "Platform app" };
+          children = list(
+            { tag = "span"; attrs = { role = "status" }; children = list(
+              { tag = "span"; attrs = { "data-connection-label" = true } }, " ",
+              { tag = "span"; attrs = { "data-connection-countdown" = true } }, " ",
+              { tag = "span"; attrs = { "data-connection-reason" = true } }, " ") },
+            { tag = "button"; attrs = { type = "button"; "data-encounter-retry" = true; hidden = true }; children = list("Reconnect Platform app") }) }),
+        { tag = "span"; attrs = { "data-temple-errors" = true; role = "status" } },
+        { tag = "div"; attrs = { id = "notes-inbox-content"; class = "dialog-body"; hidden = $launcher };
+          children = list({ tag = "p"; attrs = { role = "status" }; children = list(concat("Opening ", $title, "…")) }) }
+      ) },
+      if($launcher, "", { tag = "script"; attrs = { type = "module"; src = "/_encounter/browser.mjs" } })
+    ) }
+  ) })
+  call html.serialize
+  let result = concat("<!doctype html>", $result)

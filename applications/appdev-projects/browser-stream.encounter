@@ -1,0 +1,20 @@
+process-module "temple/surface-process-module/1"
+
+process aster.browserStream:
+  let event = $eventInput.event
+  port dom.exists { selector = "#aster-content #aster-live, #aster-panel-content #aster-live" } → live
+  when $live:
+    port browser.property { ref = "#aster-thread"; name = "value" } → thread
+    port browser.property { ref = "#aster-run"; name = "value" } → run
+    when eq($event.thread, $thread):
+      when eq($event.type, "stream-error"):
+        port browser.write { ref = "#aster-state"; name = "textContent"; value = "Live updates disconnected. Reopen the conversation to catch up." } → _
+      when and(eq($event.type, "stream"), eq($event.data.thread, $thread), eq($event.data.run, $run)):
+        port browser.write { ref = "#aster-output"; name = "textContent"; value = $event.data.text } → _
+        when eq($event.name, "done"):
+          port browser.request { path = "/identity-management/aster/"; query = { thread = $thread; fragment = "1" };
+            fragment = "[data-notes-content=aster]" } → response
+          when and(eq($response.status, 200), $response.body):
+            port dom.exists { selector = "#aster-panel-content" } → panel
+            port browser.content { ref = if($panel, "#aster-panel-content", "#aster-content"); html = $response.body } → _
+  let result = true

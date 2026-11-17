@@ -1,0 +1,43 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    sections = list({
+      subject = "application";
+      stateProfile = "encounter/appdev-projects/1";
+      module = list(
+        "applications/encounter-libraries/workspace-connection.encounter",
+        "applications/appdev-projects/projects.encounter",
+        "applications/appdev-projects/tray.encounter",
+        "applications/appdev-projects/catalogue.encounter",
+        "applications/appdev-projects/desktop-assurance.encounter",
+        "applications/appdev-projects/desktop-launch.encounter",
+        "applications/appdev-projects/system-catalogue.encounter",
+        "encounter-platform/shared/rendering/app-card.encounter",
+        "applications/appdev-projects/managers.encounter",
+        "applications/appdev-projects/front-gate-desktop.encounter",
+        "applications/appdev-projects/front-gate-presentation.encounter",
+        "applications/appdev-projects/store-desktop.encounter", "applications/appdev-projects/store-window.encounter",
+        "applications/appdev-projects/game-hub-desktop.encounter",
+        "applications/appdev-projects/first-run-shell.encounter",
+        "applications/appdev-projects/notes-inbox-shell.encounter",
+        "applications/appdev-projects/presentation.encounter",
+        "applications/platform-store/design.encounter",
+      "applications/appdev-projects/customization.encounter",
+      "applications/encounter-libraries/source-presentation/source-algebra.encounter",
+      "applications/encounter-libraries/source-presentation/encounter-light-policy.encounter",
+        "applications/game-hub/presentation.encounter",
+        "applications/encounter-libraries/semantic/notes.encounter",
+        "applications/encounter/algebra/css/css.renderPlan.encounter",
+        "applications/encounter-libraries/workflows/sourcery-presentation.encounter",
+        "applications/encounter-libraries/workflows/sourcery-notebook-web.encounter",
+        "applications/encounter-libraries/source-presentation/source-widget.encounter",
+        "applications/encounter/algebra/html/html.escape.encounter",
+        "applications/encounter/algebra/html/html.cssText.encounter",
+        "applications/encounter/algebra/html/html.serialize.encounter",
+        "encounter-platform/applications/front-gate/services.encounter"
+      );
+      entry = "cli.main";
+      grant = list("kernel.invoke", "application.data", "text.match", "text.matchAll", "text.matches", "text.split", "record.entries", "record.put", "value.describe", "value.string", "value.type", "text.join", "text.replaceAll", "digest.sha256", "text.slice", "text.lowerCase", "text.indexOf")
+    })
+  }

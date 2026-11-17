@@ -1,0 +1,34 @@
+process-module "temple/surface-process-module/1"
+
+process gate.apps:
+  let apps = list(
+    { id = "encounter"; defaultAction = "open"; group = "Encounter platform"; name = "Encounter Authoring"; detail = "Create and review Encounter applications."; port = 24187 },
+    { id = "game-hub"; defaultAction = "open"; group = "Encounter platform"; name = "Game Hub"; detail = "Open One World, the Foundries, and game design references."; port = 24241 },
+    { id = "creator-studio"; defaultAction = "open"; group = "Encounter platform"; name = "Creator Studio"; detail = "Compose and preview creator projects."; port = 24191 },
+    { id = "workgarden"; defaultAction = "open"; group = "Encounter platform"; name = "Workgarden"; detail = "Plan and track work."; port = 24189 },
+    { id = "harborboard"; defaultAction = "open"; group = "Encounter platform"; name = "Harborboard"; detail = "Organize work on a shared board."; port = 24190 },
+    { id = "claimipedia"; defaultAction = "open"; group = "Encounter platform"; name = "Claimipedia"; detail = "Review claims and prepare editorial drafts with operator access."; port = 24210 },
+    { id = "claimipedia-native"; defaultAction = "open"; group = "Encounter platform"; name = "Claimipedia · Native pilot"; detail = "Search and browse a pinned release of Claimipedia claims."; port = 24212 },
+    { id = "claimipedia-surfaces"; defaultAction = "open"; group = "Encounter platform"; name = "Claimipedia · Surface preview"; detail = "Explore released claims, evidence, atlas and knowledge ecology."; port = 24211 },
+    { id = "evaluation"; defaultAction = "open"; group = "Encounter platform"; name = "Model Evaluation"; detail = "Inspect Ollama trials, semantic evidence, and the PageRank comparison."; port = 24228; readOnlyPaths = list("/evaluation", "/evaluation.css", "/receipt.rel", "/decompiler", "/decompiler/lexical", "/decompiler/pagerank", "/decompiler/notebook.css", "/decompiler/desk.css", "/decompiler/desk.js", "/decompiler/desk-editor.js", "/decompiler/desk-rich.js", "/decompiler/trace-data", "/decompiler/trace-site", "/decompiler/source-data", "/decompiler/image.rel.gz", "/decompiler/trace.rel.gz", "/decompiler/encounter.gz", "/decompiler/manifest.rel", "/decompiler/offline-replay.tar", "/decompiler/benchmark"); postPaths = list("/decompiler/verify", "/decompiler/benchmark-action") },
+    { id = "worldbox"; defaultAction = "open"; group = "Encounter platform"; name = "Worldbox K1"; detail = "Run numeric world definitions and capture or restore checkpoints."; port = 4188 },
+    { id = "foundry"; defaultAction = "open"; group = "Encounter portfolio"; name = "Foundry Mine to Port"; detail = "Compare mine-to-port capacity scenarios."; port = 24201 },
+    { id = "industrial-optimizer"; defaultAction = "open"; group = "Encounter portfolio"; name = "Industrial Systems Optimizer"; detail = "Compare industrial build sequences under budget and demand assumptions."; port = 24202 },
+    { id = "super-crm"; defaultAction = "open"; group = "Encounter portfolio"; name = "Super CRM"; detail = "Relationship and customer work."; port = 24203 },
+    { id = "timesheet"; defaultAction = "open"; group = "Encounter portfolio"; name = "Timesheet"; detail = "Record and review work hours."; port = 24204 },
+    { id = "tradie"; defaultAction = "open"; group = "Encounter portfolio"; name = "Tradie"; detail = "Trade and job coordination."; port = 24205 },
+    { id = "outcome-value"; defaultAction = "open"; group = "Encounter portfolio"; name = "Outcome Value Navigator"; detail = "Trace outcome value through constraints, evidence and reversible trials."; port = 24206 },
+    { id = "relationship"; defaultAction = "open"; group = "Encounter portfolio"; name = "Relationship Navigator"; detail = "Guide a private, consent-based relationship repair process."; port = 24207 },
+    { id = "world"; defaultAction = "open"; group = "Encounter portfolio"; name = "World"; detail = "Run material-development scenarios and inspect capability constraints."; port = 24208 },
+    { id = "sourcery-desktop"; defaultAction = "open"; group = "Encounter portfolio"; name = "Sourcery Desktop"; detail = "Record claims, evidence, revisions and withdrawals."; port = 24209 },
+    { id = "context-hub"; defaultAction = "open"; group = "Workspace previews"; name = "Context Hub Observatory"; detail = "Inspect context, episodes, and evaluations."; port = 4178 },
+    { id = "personal-site"; defaultAction = "open"; group = "Workspace previews"; name = "Personal website"; detail = "Current publication preview."; production = "https://aaronalderman.com/"; port = 24186 },
+    { id = "worldwright-unified"; defaultAction = "open"; group = "Workspace previews"; name = "Worldwright Unified"; detail = "Worldwright workshop and examples."; port = 24192 },
+    { id = "usewords"; defaultAction = "open"; group = "Workspace previews"; name = "Usewords · First Lightning"; detail = "Matters, proposals, and personas."; port = 24193 },
+    { id = "pyramid-material-history"; defaultAction = "open"; group = "Workspace previews"; name = "Pyramid Material History"; detail = "The Missing Middle research explorer."; production = "https://aaron-alderman.github.io/pyramid-material-history/"; port = 24194 },
+    { id = "the-field"; defaultAction = "open"; group = "Workspace previews"; name = "The Field household explorer"; detail = "Explore synthetic household responses and learning across scenarios."; port = 24195 },
+    { id = "perth-encounter"; defaultAction = "open"; group = "Workspace previews"; name = "Perth Encounter 2027"; detail = "Perth Revival Event preview."; port = 24196 },
+    { id = "church-on-air"; defaultAction = "open"; group = "Workspace previews"; name = "Church on Air"; detail = "Broadcast studio and retained cuts."; port = 24197 },
+    { id = "worldwright-platform"; defaultAction = "open"; group = "Workspace previews"; name = "Worldwright Platform Site"; detail = "Worldwright platform website preview."; production = "https://worldwright.io/"; port = 24198 }
+  )
+  let result = $apps

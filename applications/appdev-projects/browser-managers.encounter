@@ -1,0 +1,400 @@
+process-module "temple/surface-process-module/1"
+
+process managers.open:
+  when eq($key, "file-manager"):
+    port state.get { key = "file-manager-selection" } → previous
+    let folderId = if($closed, null, at($previous, "folder"))
+    let fileId = if($closed, null, at($previous, "file"))
+    let relFilter = if($closed, "", or(at($previous, "relFilter"), ""))
+    let returnToRun = if($closed, false, at($previous, "returnToRun"))
+    call managers.showFiles
+  when eq($key, "service-manager"):
+    let view = "services"
+    let selected = null
+    call managers.refreshServices
+  when eq($key, "file-viewer"):
+    port state.get { key = "file-viewer-selection" } → selection
+    let fileId = if($closed, null, at($selection, "file"))
+    let relFilter = if($closed, "", or(at($selection, "relFilter"), ""))
+    let sourcePath = if($closed, null, at($selection, "sourcePath"))
+    let sourceProcess = if($closed, null, at($selection, "sourceProcess"))
+    let sourceName = if($closed, null, at($selection, "sourceName"))
+    call managers.showViewer
+
+process managers.restoreDensity:
+  port storage.read { key = "sourcery.service-manager.density"; maxLength = 7 } → saved
+  let density = $saved.value
+  call managers.applyDensity
+
+process managers.applyDensity:
+  call managers.densities
+  let valid = some($result, "mode", eq($mode.id, $density))
+  when $valid:
+    port browser.attribute { ref = "#service-manager-panel"; name = "data-density-roomier"; value = eq($density, "roomier") } → _
+    port browser.write { ref = "#service-manager-density"; name = "value"; value = $density } → _
+  let result = $valid
+
+process managers.event:
+  let managerKey = $key
+  let managerAction = or(at($eventInput.matched.attributes, "data-manager-action"), at($eventInput.matched.attributes, "data-document-command"))
+  let managerItem = at($eventInput.matched.attributes, "data-manager-item")
+  when eq($managerKey, "file-manager"):
+    port state.get { key = "file-manager-selection" } → previous
+    let folderId = if(eq($managerAction, "folder"), $managerItem, at($previous, "folder"))
+    let retained = includes(list("refresh", "rel-filter"), $managerAction)
+    let fileId = if(eq($managerAction, "file"), $managerItem, if($retained, at($previous, "file"), null))
+    let relFilter = if($retained, or(at($previous, "relFilter"), ""), "")
+    when and(eq($managerAction, "rel-filter"), $fileId):
+      port browser.formFields { ref = "#file-rel-filter" } → fields
+      port text.trim { value = or(at($fields, "filter"), "") } → relFilter
+    let returnToRun = at($previous, "returnToRun")
+    when includes(list("folder", "file", "refresh", "rel-filter"), $managerAction):
+      call managers.showFiles
+    when eq($managerAction, "back-run"):
+      call managers.returnToRun
+    when eq($managerAction, "open-local"):
+      call browserDocuments.catalogue
+      let entry = at(filter($result, "node", and(eq($node.id, $managerItem), eq($node.kind, "Text"))), 0)
+      when $entry:
+        let key = "text-editor"
+        let app = at(filter($apps, "candidate", eq($candidate.key, $key)), 0)
+        let returned = false
+        let managerHandoff = true
+        call desktop.open
+        let path = $entry.path
+        call browserEditor.association
+      when not($entry):
+        call managers.showFiles
+    when eq($managerAction, "open-viewer"):
+      let key = "file-viewer"
+      let app = at(filter($apps, "entry", eq($entry.key, $key)), 0)
+      let returned = false
+      let managerHandoff = true
+      call desktop.open
+      let fileId = $managerItem
+      let relFilter = ""
+      let sourcePath = null
+      let sourceProcess = null
+      let sourceName = null
+      call managers.showViewer
+  when eq($managerKey, "file-viewer"):
+    port state.get { key = "file-viewer-selection" } → selection
+    let fileId = at($selection, "file")
+    let sourcePath = at($selection, "sourcePath")
+    let sourceProcess = at($selection, "sourceProcess")
+    let sourceName = at($selection, "sourceName")
+    let relFilter = or(at($selection, "relFilter"), "")
+    when and($fileId, eq($managerAction, "rel-filter")):
+      port browser.formFields { ref = "#viewer-rel-filter" } → fields
+      port text.trim { value = or(at($fields, "filter"), "") } → relFilter
+    when includes(list("viewer-refresh", "rel-filter", "viewer-excerpt"), $managerAction):
+      call managers.showViewer
+    when eq($managerAction, "viewer-authoring"):
+      let revision = at($selection, "authoringRevision")
+      call managers.showAuthoring
+  when and(eq($managerKey, "service-manager"), eq($managerAction, "density")):
+    port browser.property { ref = "#service-manager-density"; name = "value" } → density
+    call managers.applyDensity
+    when $result:
+      port storage.write { key = "sourcery.service-manager.density"; value = $density } → _
+  when and(eq($managerKey, "service-manager"), not(eq($managerAction, "density"))):
+    port state.get { key = "service-manager-selection" } → previous
+    let view = if(eq($managerAction, "service-view"), $managerItem, $previous.view)
+    let selected = if(eq($managerAction, "service-view"), null, if(eq($managerAction, "service-item"), $managerItem, $previous.selected))
+    when eq($managerAction, "invocation"):
+      let view = "runs"
+      let selected = $managerItem
+    when eq($managerAction, "refresh"):
+      call managers.refreshServices
+    when includes(list("service-view", "service-item", "invocation"), $managerAction):
+      port state.get { key = "service-manager-observations" } → snapshot
+      call managers.showServices
+    when eq($managerAction, "receipt"):
+      call managers.openRunReceipt
+
+process managers.openRunReceipt:
+  port state.get { key = "service-manager-selection" } → current
+  call managers.scheduledReceiptFiles
+  let receiptFiles = $result
+  call services.runs
+  let run = at(filter($result, "run", and(eq($run.id, at($current, "selected")), eq($run.receipt, $managerItem))), 0)
+  when $run:
+    port state.set { key = "manager-return-run"; value = $run } → _
+    let key = "file-manager"
+    let app = at(filter($apps, "entry", eq($entry.key, $key)), 0)
+    let returned = false
+    let managerHandoff = true
+    call desktop.open
+    let folderId = $run.receiptFolder
+    let fileId = $run.receipt
+    let relFilter = ""
+    let returnToRun = true
+    call managers.showFiles
+
+process managers.returnToRun:
+  port state.get { key = "manager-return-run" } → prior
+  let selected = at($prior, "id")
+  let key = "service-manager"
+  let app = at(filter($apps, "entry", eq($entry.key, $key)), 0)
+  let returned = false
+  let managerHandoff = true
+  call desktop.open
+  let view = "runs"
+  port state.get { key = "service-manager-observations" } → snapshot
+  call managers.showServices
+  port dom.exists { selector = "#service-manager-panel button[data-manager-action=receipt]" } → available
+  when $available:
+    port browser.focus { ref = "#service-manager-panel button[data-manager-action=receipt]" } → _
+
+process managers.clearFiles:
+  port browser.content { ref = "#file-manager-index"; html = "" } → _
+  port browser.content { ref = "#file-manager-detail"; html = "" } → _
+  port state.set { key = "file-manager-location"; value = "" } → _
+
+process managers.readFiles:
+  let fileSnapshot = null
+  try:
+    call files.publishedReceipts
+    let localReceipt = some($result, "receipt", eq($receipt.file.id, $fileId))
+    let query = if(and($fileId, not($localReceipt)), { file = $fileId }, null)
+    when and($query, $relFilter):
+      let query = { file = $fileId; "rel-filter" = $relFilter }
+    port browser.request { path = "/workspace/files"; query = $query } → response
+    when eq($response.status, 200):
+      port json.parse { text = $response.body } → fileSnapshot
+  catch fault:
+    let fileSnapshot = null
+  let result = $fileSnapshot
+
+process managers.showFiles:
+  port state.get { key = "file-manager-location" } → previousLocation
+  let input = { tag = "p"; attrs = { role = "status" }; children = list("Checking access…") }
+  call html.serialize
+  port browser.content { ref = "#file-manager-detail"; html = concat(if($previousLocation, $previousLocation, ""), $result) } → _
+  call managers.readFiles
+  let snapshot = $result
+  call files.catalogue
+  let published = $result
+  call browserDocuments.catalogue
+  let rows = append($published, $result)
+  let folders = filter($rows, "node", eq($node.kind, "Folder"))
+  let defaultFolder = at(filter($folders, "node", and(not(at($node, "parent")), at($node, "permission"), not(at($node, "local")))), 0)
+  let folder = if($folderId, at(filter($folders, "node", eq($node.id, $folderId)), 0), $defaultFolder)
+  let file = at(filter($rows, "node", and($folder, $fileId, not(eq($node.kind, "Folder")), eq($node.id, $fileId), eq(at($node, "parent"), at($folder, "id")))), 0)
+  call files.tree
+  let input = $result
+  call html.serialize
+  port browser.content { ref = "#file-manager-index"; html = $result } → _
+  let location = ""
+  when $folder:
+    let node = $folder
+    call files.location
+    let input = $result
+    call html.serialize
+    let location = $result
+  port state.set { key = "file-manager-location"; value = $location } → _
+  port state.set { key = "file-manager-selection"; value = { folder = at($folder, "id"); file = at($file, "id"); returnToRun = $returnToRun; relFilter = $relFilter } } → _
+  let sizes = {}
+  when $folder:
+    let visible = if($file, list($file), append(list($folder), filter($rows, "node", eq(at($node, "parent"), $folder.id))))
+    let lengths = append(map($visible, "node", at($node, "bytes")), list(at(or($file, $folder), "uniqueBytes")))
+    let bytes = filter($lengths, "length", not(eq($length, null)))
+    try:
+      port browser.formatFileSizes { bytes = $bytes } → sizes
+    catch fault:
+      let sizes = {}
+  call files.preview
+  port browser.content { ref = "#file-manager-detail"; html = $result } → _
+  when $folder:
+    let target = "#file-manager-detail h3"
+    when and(eq(at(at(at($eventInput, "matched"), "attributes"), "data-manager-action"), "rel-filter"), at($file, "rel")):
+      let target = "#file-rel-query"
+    port browser.focus { ref = $target } → _
+
+process managers.showViewer:
+  let target = "#file-viewer-detail"
+  let input = { tag = "p"; attrs = { role = "status" }; children = list(if(or($fileId, $sourcePath), "Checking access…", "Open a supported file from File Manager.")) }
+  call html.serialize
+  port browser.content { ref = $target; html = $result } → _
+  let fileId = $fileId
+  when $sourcePath:
+    port digest.sha256 { text = $sourcePath } → fileId
+  port state.set { key = "file-viewer-selection"; value = { file = $fileId; relFilter = $relFilter; sourcePath = $sourcePath; sourceProcess = $sourceProcess; sourceName = $sourceName } } → _
+  when $fileId:
+    let file = null
+    let unavailable = "The file is unavailable or access has changed."
+    let authoringRevision = null
+    when $sourcePath:
+      try:
+        port browser.request { path = "/workspace/files"; query = { file = $fileId; view = "file" } } → response
+        when eq($response.status, 200):
+          port json.parse { text = $response.body } → snapshot
+          let homeSources = or(at(at($snapshot, "collections"), "Platform/Releases/Home"), list())
+          let candidate = at($homeSources, 0)
+          when and(eq(count($homeSources), 1), eq(at($candidate, "id"), $fileId),
+            eq(at($candidate, "path"), $sourcePath), eq(at($candidate, "viewer"), "text"), at($candidate, "text")):
+            let file = $candidate
+            let authoringRevision = at($snapshot, "authoringRevision")
+          when eq(at($snapshot, "platform"), false):
+            let unavailable = "Indexed Home source requires Platform steward access."
+      catch fault:
+        let unavailable = "Could not check source access. Use File → Reload file to try again."
+    when not($sourcePath):
+      call managers.readFiles
+      let snapshot = $result
+      call files.catalogue
+      let file = at(filter($result, "node", and(eq($node.id, $fileId), at($node, "viewer"))), 0)
+    let input = { tag = "p"; attrs = { role = "status" }; children = list($unavailable) }
+    when $file:
+      let file = $file
+      when and($sourceProcess, at($file, "text")):
+        port text.match { value = $file.text; pattern = "^# catalogue-source ([1-9][0-9]{0,7})\\n" } → header
+        when $header:
+          port number.parse { value = at($header.groups, 0) } → firstLine
+          port text.slice { value = $file.text; start = count($header.text); end = count($file.text) } → sourceText
+          port text.split { value = $sourceText; pattern = "\\r\\n|\\n|\\r" } → lines
+          let declaration = concat("process ", $sourceProcess, ":")
+          fold $lines as line; position starts { next = $firstLine; selected = null }:
+            let selected = if(eq($line, $declaration), $position.next, $position.selected)
+            yield { next = add($position.next, 1); selected = $selected } → position
+          let selectedLine = $position.selected
+          port record.put { record = $file; key = "name"; value = $sourceName } → file
+          port record.put { record = $file; key = "text"; value = $sourceText } → file
+          port record.put { record = $file; key = "sourceFirstLine"; value = $firstLine } → file
+          port record.put { record = $file; key = "sourceLine"; value = $selectedLine } → file
+      let previewScope = "viewer"
+      let folders = list()
+      let node = $file
+      call files.location
+      let location = $result
+      call files.content
+      let missing = if(and($sourceProcess, not(at($file, "sourceLine"))), { tag = "p"; attrs = { role = "status" };
+        children = list("Process ", $sourceProcess, " was not found in the indexed file.") }, null)
+      let preview = $result
+      let authoring = null
+      when eq($sourceProcess, "workspace.environmentPolicy"):
+        let authoring = { tag = "p"; attrs = { role = "status" }; children = list("The matching release revision is unavailable for authoring.") }
+        when and($authoringRevision, at($file, "sourceLine")):
+          let command = "viewer-authoring"
+          let item = null
+          let label = "Open in authoring"
+          let buttonClass = "button"
+          let pressed = null
+          call managers.button
+          let authoring = { tag = "div"; children = list($result, { tag = "p"; attrs = { id = "viewer-authoring-status"; role = "status" }; children = list() }) }
+          port state.set { key = "file-viewer-selection"; value = { file = $fileId; relFilter = $relFilter; sourcePath = $sourcePath;
+            sourceProcess = $sourceProcess; sourceName = $sourceName; authoringRevision = $authoringRevision } } → _
+      let input = append($location, list($missing, $authoring, if($preview, $preview, { tag = "p"; children = list("The preview is unavailable.") })))
+    call html.serialize
+    port browser.content { ref = $target; html = $result } → _
+    when $sourceProcess:
+      let lineRef = concat($target, " .sp-line.highlight")
+      port dom.exists { selector = $lineRef } → hasLine
+      when $hasLine:
+        port browser.write { ref = $lineRef; name = "tabIndex"; value = -1 } → _
+        port browser.focus { ref = $lineRef } → _
+    when and($file, not($sourceProcess)):
+      let ref = if(and($relFilter, at($file, "rel")), "#viewer-rel-query", "#file-viewer-detail h3")
+      port browser.focus { ref = $ref } → _
+
+process managers.showAuthoring:
+  when and($fileId, $revision):
+    call files.viewerVariants
+    let variant = at(filter($result, "entry", eq($entry.id, "authoring")), 0)
+    let target = "#file-viewer-detail"
+    let status = "#viewer-authoring-status"
+    port browser.write { ref = $status; name = "textContent"; value = "Checking release source access…" } → _
+    let message = "The matching release source is unavailable. Reload the excerpt and try again."
+    try:
+      port browser.request { path = "/workspace/files"; query = { file = $fileId; view = $variant.id; revision = $revision } } → response
+      when eq($response.status, 403):
+        let message = "App source browser requires Platform steward access."
+      when eq($response.status, 409):
+        let message = "The release changed. Reload the excerpt before opening authoring."
+      when eq($response.status, 200):
+        port json.parse { text = $response.body } → source
+        when and(eq($source.revision, $revision), eq($source.file, $sourceName), eq($source.process, $sourceProcess), $source.text, $source.line):
+          port text.split { value = $source.text; pattern = "(\\r\\n|\\n|\\r)" } → lines
+          fold $lines as line; view starts { number = 1; rows = list() }:
+            port text.matches { value = $line; pattern = "^(?:\\r\\n|\\n|\\r)$" } → newline
+            let selected = eq($view.number, $source.line)
+            let row = if($newline, $line, { tag = "span";
+              attrs = { class = if($selected, "sp-line highlight", "sp-line"); "data-line" = $view.number };
+              children = list($line) })
+            yield { number = if($newline, add($view.number, 1), $view.number); rows = append($view.rows, list($row)) } → view
+          let preview = { tag = "section"; attrs = { class = "file-encounter-viewer"; "aria-label" = "Full Encounter source" };
+            children = list({ tag = "pre"; children = list({ tag = "code"; attrs = { class = "sp-code"; "data-numbered" = "true"; tabindex = "0" };
+              children = $view.rows }) }) }
+          let command = "viewer-excerpt"
+          let item = null
+          let label = "Back to release excerpt"
+          let buttonClass = "button"
+          let pressed = null
+          call managers.button
+          let input = list(
+            { tag = "h3"; attrs = { id = "viewer-authoring-heading"; tabindex = "-1" }; children = list("App authoring · ", $variant.name) },
+            { tag = "p"; children = list("Read only · Published source revision ", { tag = "code"; children = list($source.revision) }) },
+            $result,
+            { tag = "nav"; attrs = { "aria-label" = "App tree" }; children = list({ tag = "ul"; children = list(
+              { tag = "li"; children = list($source.app, { tag = "ul"; children = list(
+                { tag = "li"; children = list({ tag = "code"; attrs = { "aria-current" = "location" }; children = list($source.file) }) }) }) }) }) },
+            { tag = "p"; children = list("Selected process ", { tag = "code"; children = list($source.process) }, " · Line ", $source.line) },
+            $preview)
+          call html.serialize
+          port browser.content { ref = $target; html = $result } → _
+          let lineRef = concat($target, " .sp-line.highlight")
+          port dom.exists { selector = $lineRef } → hasLine
+          when $hasLine:
+            port browser.write { ref = $lineRef; name = "tabIndex"; value = -1 } → _
+          port browser.focus { ref = if($hasLine, $lineRef, "#viewer-authoring-heading") } → _
+          let message = null
+    catch fault:
+      let message = "Could not open the matching release source. Reload the excerpt and try again."
+    when $message:
+      port browser.write { ref = $status; name = "textContent"; value = $message } → _
+
+process managers.refreshServices:
+  let snapshot = null
+  port browser.write { ref = "#service-manager-status"; name = "textContent"; value = "Checking Front Gate…" } → _
+  port browser.write { ref = "#service-manager-refresh"; name = "disabled"; value = true } → _
+  try:
+    call frontGate.browserPort
+    let port = $result
+    port browser.frontGateStatus {} → response
+    when eq($response.status, 200):
+      let body = $response.body
+      call frontGate.snapshot
+      let snapshot = $result
+  catch fault:
+    let snapshot = null
+  port state.set { key = "service-manager-observations"; value = $snapshot } → _
+  call managers.showServices
+
+process managers.scheduledReceiptFiles:
+  let fileId = null
+  let relFilter = ""
+  call managers.readFiles
+  let result = or(at(at($result, "collections"), "Platform/Scheduled run receipts"), list())
+
+process managers.showServices:
+  let receiptFiles = list()
+  let returnRun = null
+  when includes(list("schedules", "runs"), $view):
+    call managers.scheduledReceiptFiles
+    let receiptFiles = $result
+  when eq($view, "runs"):
+    port state.get { key = "manager-return-run" } → pinned
+    let returnRun = if(and($selected, eq($selected, at($pinned, "id"))), $pinned, null)
+  let observation = if($snapshot, concat("Front Gate · Checked ", $snapshot.time, " AWST."),
+    "Live observations unavailable. Connect the Front Gate SSH tunnel, then refresh.")
+  let focusServiceIndex = $selected
+  call services.panel
+  let serviceView = $result
+  port state.set { key = "service-manager-selection"; value = { view = $view; selected = $serviceView.selected } } → _
+  port browser.write { ref = "#service-manager-status"; name = "textContent"; value = $observation } → _
+  port browser.write { ref = "#service-manager-refresh"; name = "disabled"; value = false } → _
+  port browser.content { ref = "#service-manager-tabs"; html = $serviceView.tabs } → _
+  port browser.content { ref = "#service-manager-index"; html = $serviceView.index } → _
+  port browser.content { ref = "#service-manager-detail"; html = $serviceView.detail } → _
+  let focus = if(and($focusServiceIndex, $serviceView.selected), "#service-manager-index [aria-pressed=true]", "#service-manager-tabs [aria-pressed=true]")
+  port browser.focus { ref = $focus } → _

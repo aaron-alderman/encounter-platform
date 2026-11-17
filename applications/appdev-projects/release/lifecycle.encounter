@@ -1,0 +1,83 @@
+process-module "temple/surface-process-module/1"
+
+# Compare inventories produced from two admitted, immutable releases.
+process release.lifecycleReport:
+  let request = $eventInput
+  let current = $request.current
+  let next = $request.candidate
+  assert and(isArray($current), isArray($next), not(eq(count($next), 0)))
+    otherwise "Expected current and candidate component inventories."
+  each append($current, $next) as component:
+    assert and($component.id, $component.digest, $component.interface, $component.stateProfile,
+      isArray($component.grants), isArray($component.imports))
+      otherwise "Components require id, digest, interface, state profile, grants, and imports."
+    each $component.imports as dependency:
+      assert and($dependency.id, $dependency.interface, not(eq($dependency.id, $component.id)),
+        or(not(at($dependency, "onChange")), includes(list("none", "reload", "drain", "replace"), at($dependency, "onChange"))))
+        otherwise "An import requires a separate component id, a compatible interface, and a declared lifecycle action."
+  fold $next as component; actions starts list():
+    let matches = filter($current, "old", eq($old.id, $component.id))
+    let old = at($matches, 0)
+    let duplicates = filter($next, "existing", eq($existing.id, $component.id))
+    assert and(eq(count($duplicates), 1), includes(list(0, 1), count($matches)), isArray($component.imports))
+      otherwise "Component ids must be unique and imports must be declared."
+    assert includes(list("presentation", "encounter", "transport", "host"), $component.kind)
+      otherwise "Expected an explicit component lifecycle kind."
+    let action = "none"
+    let reason = "unchanged"
+    when not($old):
+      let action = "review"
+      let reason = "component added"
+    when $old:
+      when not(eq($component.digest, $old.digest)):
+        let action = "reload"
+        let reason = "compatible module change"
+        when eq($component.kind, "transport"):
+          let action = "drain"
+          let reason = "compatible transport change"
+        when eq($component.kind, "host"):
+          let action = "replace"
+          let reason = "native host change"
+      when or(not(eq($component.kind, $old.kind)), not(eq($component.interface, $old.interface)),
+        not(eq($component.stateProfile, $old.stateProfile)), not(eq($component.grants, $old.grants)),
+        not(eq($component.imports, $old.imports))):
+        let action = "review"
+        let reason = "lifecycle, interface, state, grants, or imports changed"
+    fold $component.imports as dependency; decision starts { action = $action; reason = $reason }:
+      let providers = filter($next, "provider", eq($provider.id, $dependency.id))
+      let oldProviders = filter($current, "provider", eq($provider.id, $dependency.id))
+      let provider = at($providers, 0)
+      let oldProvider = at($oldProviders, 0)
+      let nextDecision = $decision
+      when not(and(eq(count($providers), 1), eq(at($provider, "interface"), $dependency.interface))):
+        let nextDecision = { action = "review"; reason = concat("incompatible or missing dependency ", $dependency.id) }
+      when and(eq(count($providers), 1), eq(count($oldProviders), 1), eq($provider.interface, $dependency.interface),
+        not(eq($provider.digest, $oldProvider.digest)), not(eq($nextDecision.action, "review"))):
+        let importAction = at($dependency, "onChange")
+        let stronger = or(and(eq($importAction, "replace"), not(eq($nextDecision.action, "replace"))),
+          and(eq($importAction, "drain"), includes(list("none", "reload"), $nextDecision.action)),
+          and(eq($importAction, "reload"), eq($nextDecision.action, "none")))
+        when $stronger:
+          let nextDecision = { action = $importAction; reason = concat("declared lifecycle action for changed dependency ", $dependency.id) }
+      yield $nextDecision → decision
+    yield append($actions, list({ component = $component.id; action = $decision.action; reason = $decision.reason })) → actions
+  fold $current as component; allActions starts $actions:
+    yield if(eq(count(filter($next, "candidate", eq($candidate.id, $component.id))), 0),
+      append($allActions, list({ component = $component.id; action = "review"; reason = "component removed" })),
+      $allActions) → allActions
+  call release.activation
+  let result = { mode = "report-only"; actions = $allActions; existingActions = $result.actions;
+    requiresReview = not(eq(count(filter($allActions, "item", eq($item.action, "review"))), 0)) }
+
+process cli.main:
+  port json.parse { text = at($eventInput, 0) } → request
+  port kernel.invoke { query = "release.lifecycleReport"; input = $request } → report
+  port json.stringify { value = $report } → result
+
+process release.modulePromotion:
+  let report = $eventInput.report
+  let component = $eventInput.component
+  let changes = filter($report.actions, "row", not(eq($row.action, "none")))
+  let change = at($changes, 0)
+  let result = and(eq($report.mode, "report-only"), eq($report.requiresReview, false),
+    eq(count($changes), 1), eq($change.component, $component), eq($change.action, "reload"))

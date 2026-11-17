@@ -1,0 +1,63 @@
+process-module "temple/surface-process-module/1"
+
+process previewBroker.configure:
+  port text.matches { value = $eventInput.steward; pattern = "\\A[a-z0-9][a-z0-9._+-]{0,63}@example[.]test\\z" } → synthetic
+  assert $synthetic
+    otherwise "The synthetic broker requires a steward address at example.test."
+  let result = {
+    steward = { id = "A"; email = $eventInput.steward; issuer = "https://accounts.google.com" };
+    member = { id = "B"; email = "member@example.test"; issuer = "https://accounts.google.com" }
+  }
+  assert not(eq($result.steward.email, $result.member.email))
+    otherwise "The synthetic steward and member must differ."
+
+process previewBroker.route:
+  let request = $eventInput
+  when not($request.localHost):
+    let result = { kind = "refuse"; status = 403 }
+  when and($request.localHost, not(eq($request.method, "GET"))):
+    let result = { kind = "refuse"; status = 405 }
+  when and($request.localHost, eq($request.method, "GET")):
+    let fields = $request.query
+    port record.entries { value = $fields } → entries
+    let size = count($entries)
+    let result = { kind = "refuse"; status = 404 }
+    when eq($request.path, "/v1/me"):
+      let result = if(and(eq($size, 0), $request.account),
+        { kind = "identity"; account = $request.account }, { kind = "refuse"; status = 401 })
+    when eq($request.path, "/identity/login"):
+      port text.matches { value = if($fields.return, $fields.return, ""); pattern = "\\A/identity-management/identity[?]returned=1&state=[A-Za-z0-9_-]{1,4096}\\z" } → safe
+      let result = { kind = "refuse"; status = 400 }
+      when and(eq($size, 1), $safe):
+        port text.replaceAll { value = $fields.return; search = "&"; replacement = "&amp;" } → link
+        let result = { kind = "login"; body = concat("<h1>Temple sign-in fixture</h1><a href=\"",
+          $link, "\">Continue as test user</a> <a href=\"", $link, "&amp;fixture=member\">Continue as member</a>") }
+    when eq($request.path, "/identity-management/identity"):
+      port text.matches { value = if($fields.state, $fields.state, ""); pattern = "\\A[A-Za-z0-9_-]{1,4096}\\z" } → valid
+      let returned = eq($fields.returned, "1")
+      let member = eq($fields.fixture, "member")
+      let complete = if($returned, if($member, eq($size, 3), eq($size, 2)), eq($size, 1))
+      let result = if(and($valid, $complete, or(not($fields.fixture), and($member, $returned))),
+        { kind = "gateway"; target = concat($request.path, "?state=", $fields.state, if($returned, "&returned=1", ""));
+          account = if($returned, if($member, "member", "steward"), null) },
+        { kind = "refuse"; status = 400 })
+
+process previewBroker.gatewayResponse:
+  let status = $eventInput.status
+  let statuses = { "303" = "303 See Other"; "400" = "400 Bad Request"; "403" = "403 Forbidden";
+    "404" = "404 Not Found"; "503" = "503 Service Unavailable" }
+  let line = at($statuses, $status)
+  assert $line
+    otherwise "Unexpected preview gateway status."
+  let location = $eventInput.location
+  when eq($status, "303"):
+    let port = $eventInput.preview
+    let pattern = concat("\\A(?:/identity/login[?]return=%2Fidentity-management%2Fidentity%3Freturned%3D1%26state%3D[A-Za-z0-9_-]{1,4096}|http://127[.]0[.]0[.]1:", $port,
+      "/identity-management/finish[?]code=[a-f0-9]{48})\\z")
+    port text.matches { value = if($location, $location, ""); pattern = $pattern } → admitted
+    assert $admitted
+      otherwise "The preview gateway returned an inadmissible redirect."
+  when not(eq($status, "303")):
+    assert eq($location, null)
+      otherwise "The preview gateway attached a redirect to an error response."
+  let result = { status = $line; location = $location }

@@ -1,0 +1,194 @@
+process-module "temple/surface-process-module/1"
+
+process browserEditor.bind:
+  let window = concat("#", $app.window)
+  let input = { action = "editor-command"; key = $app.key }
+  port browser.onMany { bindings = list(
+    { ref = $window; event = "click"; delegate = "button[data-editor-command]"; query = "desktop.event"; input = $input },
+    { ref = "#desktop-text-dialog"; event = "click"; delegate = ".dialog-actions button"; preventDefault = true;
+      query = "desktop.event"; input = { action = "editor-response"; key = $app.key } },
+    { ref = "#desktop-text-dialog"; event = "submit"; preventDefault = true;
+      query = "desktop.event"; input = { action = "editor-response"; key = $app.key } },
+    { ref = "#desktop-text-dialog"; event = "cancel"; preventDefault = true;
+      query = "desktop.event"; input = { action = "editor-cancel"; key = $app.key } }
+  ) } → _
+
+process browserEditor.current:
+  port state.get { key = "desktop-text-document" } → saved
+  let editor = concat("#", $app.window, " textarea[data-workspace-widget=text]")
+  port browser.property { ref = $editor; name = "value" } → draft
+  let contents = or($draft, "")
+  let result = { path = or(at($saved, "path"), ""); text = $contents;
+    saved = or(at($saved, "text"), ""); dirty = not(eq($contents, or(at($saved, "text"), ""))) }
+
+process browserEditor.present:
+  let document = { path = $path; text = $contents; dialog = 0; caret = 0; pathInput = "" }
+  port kernel.invoke { query = "desktopText.view"; input = $document } → view
+  port state.set { key = "desktop-text-document"; value = $document } → _
+  port browser.batch { steps = list(
+    { port = "browser.write"; args = { ref = "#desktop-text-path"; name = "textContent"; value = $view.heading } },
+    { port = "browser.write"; args = { ref = concat("#", $app.window, " textarea[data-workspace-widget=text]"); name = "value"; value = $view.text } },
+    { port = "browser.write"; args = { ref = "#desktop-text-status"; name = "textContent"; value = $notice } }
+  ) } → _
+
+process browserEditor.blank:
+  let path = ""
+  let contents = ""
+  let notice = $app.detail
+  call browserEditor.present
+
+process browserEditor.requestClose:
+  call browserEditor.current
+  let clean = not($result.dirty)
+  when not($clean):
+    let mode = 3
+    let relative = ""
+    call browserEditor.prompt
+  let result = $clean
+
+process browserEditor.prompt:
+  call windowWidget.dialogDefinitions
+  let definition = at(filter($result, "dialog", eq($dialog.code, $mode)), 0)
+  let dialogActions = filter(list($definition.primary, $definition.secondary), "button", $button)
+  call windowWidget.dialogActions
+  let actions = $result
+  let field = null
+  when eq(at($definition, "field"), "path"):
+    let field = { tag = "label"; children = list(concat($app.fileRoot, "/"),
+      { tag = "input"; attrs = { id = "desktop-text-relative-path"; type = "text"; value = $relative; autocomplete = "off";
+        "aria-label" = "Path from Documents"; autofocus = true; maxlength = "80"; form = "desktop-text-dialog-actions" } }) }
+  let actions = { tag = $actions.tag; attrs = { id = "desktop-text-dialog-actions"; method = "dialog"; class = $actions.attrs.class };
+    children = $actions.children }
+  let input = list(
+    { tag = "h2"; attrs = { id = "desktop-text-dialog-title"; class = "titlebar" }; children = list($definition.title) },
+    { tag = "div"; attrs = { class = "dialog-body" }; children = list($field) }, $actions)
+  call html.serialize
+  port state.set { key = "desktop-text-dialog-mode"; value = $mode } → _
+  port browser.dialog { ref = "#desktop-text-dialog"; open = true;
+    content = { ref = "#desktop-text-dialog-content"; html = $result } } → _
+  when $field:
+    port browser.focus { ref = "#desktop-text-relative-path" } → _
+
+process browserEditor.dismiss:
+  port state.set { key = "desktop-text-dialog-mode"; value = 0 } → _
+  port state.set { key = "desktop-text-associated-path"; value = "" } → _
+  port browser.dialog { ref = "#desktop-text-dialog"; open = false } → _
+
+process browserEditor.event:
+  when eq($action, "editor-command"):
+    let command = at($eventInput.matched.attributes, "data-editor-command")
+    call browserEditor.current
+    let document = $result
+    let relative = ""
+    when eq($command, "new"):
+      when $document.dirty:
+        let mode = 7
+        call browserEditor.prompt
+      when not($document.dirty):
+        call browserEditor.blank
+    when eq($command, "open"):
+      let mode = if($document.dirty, 8, 6)
+      call browserEditor.prompt
+    when includes(list("save", "save-as"), $command):
+      let mode = if(and(eq($command, "save"), $document.path), 1, 5)
+      call browserEditor.prompt
+  when eq($action, "editor-cancel"):
+    call browserEditor.dismiss
+  when eq($action, "editor-response"):
+    let response = at(at(at($eventInput, "matched"), "attributes"), "value")
+    when eq($response, "cancel"):
+      call browserEditor.dismiss
+    when not(eq($response, "cancel")):
+      port state.get { key = "desktop-text-dialog-mode" } → mode
+      when eq($mode, 3):
+        call browserEditor.dismiss
+        let action = "close"
+        call desktop.hide
+      when eq($mode, 7):
+        call browserEditor.dismiss
+        call browserEditor.blank
+      when eq($mode, 8):
+        port state.get { key = "desktop-text-associated-path" } → associated
+        when $associated:
+          let path = $associated
+          call browserEditor.readAssociated
+        when not($associated):
+          let mode = 6
+          let relative = ""
+          call browserEditor.prompt
+      when eq($mode, 2):
+        call browserEditor.dismiss
+      when includes(list(1, 5, 6, 9, 10), $mode):
+        call browserEditor.fileAction
+
+process browserEditor.association:
+  call browserEditor.current
+  let current = $result
+  when not(eq($current.path, $path)):
+    when $current.dirty:
+      port state.set { key = "desktop-text-associated-path"; value = $path } → _
+      let mode = 8
+      let relative = ""
+      call browserEditor.prompt
+    when not($current.dirty):
+      call browserEditor.readAssociated
+
+process browserEditor.readAssociated:
+  let scope = $app
+  port text.slice { value = $path; start = add(count($scope.fileRoot), 1); end = count($path) } → relative
+  call browserDocuments.path
+  let valid = and(not(eq($path, "")), eq($result, $path))
+  let opened = false
+  when $valid:
+    call browserDocuments.load
+    let file = $result.file
+    when $file:
+      let contents = $file.text
+      let notice = "Document opened."
+      call browserEditor.dismiss
+      call browserEditor.present
+      let opened = true
+  when not($opened):
+    call browserEditor.dismiss
+    let mode = 10
+    call browserEditor.prompt
+
+process browserEditor.fileAction:
+  call browserEditor.current
+  let document = $result
+  let replacing = eq($mode, 1)
+  let opening = includes(list(6, 10), $mode)
+  let relative = ""
+  let path = $document.path
+  let valid = not(eq($path, ""))
+  when not($replacing):
+    port browser.property { ref = "#desktop-text-relative-path"; name = "value" } → value
+    let relative = or($value, "")
+    let scope = $app
+    call browserDocuments.path
+    let path = $result
+    let valid = not(eq($path, ""))
+  let completed = false
+  when $valid:
+    call browserDocuments.load
+    let volume = $result
+    let file = $volume.file
+    when and($opening, $file):
+      let contents = $file.text
+      let notice = "Document opened."
+      call browserEditor.dismiss
+      call browserEditor.present
+      let completed = true
+    when not($opening):
+      let canSave = if($replacing, and($file, eq($file.text, $document.saved)), not($file))
+      when $canSave:
+        let contents = $document.text
+        call browserDocuments.save
+        when $result:
+          let notice = "Document saved."
+          call browserEditor.dismiss
+          call browserEditor.present
+          let completed = true
+  when not($completed):
+    let mode = if($replacing, 2, if($opening, 10, 9))
+    call browserEditor.prompt

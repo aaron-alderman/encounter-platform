@@ -1,0 +1,95 @@
+process-module "temple/surface-process-module/1"
+
+process game.desktopBind:
+  port browser.on { ref = "#notes-game-hub-content"; event = "click"; delegate = "[data-game-hub-reload]"; query = "game.desktopEvent"; input = {} } → _
+
+process game.desktopPrepare:
+  port dom.exists { selector = "#notes-game-hub-surface > [data-game-hub-catalogue]" } → ready
+  when not($ready):
+    call game.desktopLoad
+
+process game.desktopEvent:
+  call game.desktopLoad
+  let result = true
+
+process game.desktopLoad:
+  let target = "#notes-game-hub-surface"
+  let input = { tag = "p"; attrs = { role = "status" }; children = list("Loading Game Zone…") }
+  call html.serialize
+  port browser.content { ref = $target; html = $result } → _
+  let retry = { tag = "button"; attrs = { type = "button"; "data-game-hub-reload" = true }; children = list("Reload Game Zone") }
+  let notice = "Game Zone is unavailable."
+  let signIn = null
+  let catalogue = null
+  try:
+    port browser.request { path = "/game/?document=recent-folio"; fragment = "nav.navigation.pane" } → access
+    when and(eq($access.status, 200), $access.body):
+      call game.desktopCatalogue
+      let catalogue = $result
+    when includes(list(0, 401, 403), $access.status):
+      let notice = "Game Zone requires a Temple sign-in."
+      let signIn = list(
+        { tag = "a"; attrs = { href = "/game/"; target = "_blank"; rel = "noopener" }; children = list("Sign in to Game Zone (new tab)") },
+        " "
+      )
+  catch fault:
+    let notice = "Game Zone could not be loaded."
+  let input = if($catalogue, $catalogue, list(
+    { tag = "p"; attrs = { role = "status" }; children = list($notice) },
+    { tag = "p"; children = list($signIn, $retry) }
+  ))
+  call html.serialize
+  port browser.content { ref = $target; html = $result } → _
+
+process game.desktopCatalogue:
+  call hub.catalog
+  let documents = $result
+  let world = at(filter($documents, "doc", eq($doc.id, "one-world")), 0)
+  let folio = at(filter($documents, "doc", eq($doc.id, "recent-folio")), 0)
+  let tools = filter($documents, "doc", includes(list("asset-foundry", "landscape-foundry", "design-references"), $doc.id))
+  let cards = list(
+    { title = $world.title; icon = "globe"; detail = "Transport simulation"; href = "/game/one-world/"; label = "Play One World (new tab)" },
+    { title = "Game releases"; icon = "folder"; detail = "Browse games in Store"; store = true }
+  )
+  call game.cardGrid
+  let games = $result
+  let cards = map($folio.activities, "activity", {
+    title = $activity.title; icon = "game"; detail = "One World activity"; href = concat("/game", $activity.href); label = concat($activity.action, " (new tab)")
+  })
+  call game.cardGrid
+  let activities = $result
+  let cards = append(list({ title = "One World editor"; icon = "globe"; detail = "Rail and world editing"; href = "/game/one-world/#build-rail"; label = "Edit One World (new tab)" }),
+    map($tools, "doc", {
+      title = $doc.title; icon = at({ "asset-foundry" = "tools"; "landscape-foundry" = "land"; "design-references" = "folder" }, $doc.id);
+      detail = at({ "asset-foundry" = "Asset workbench"; "landscape-foundry" = "Terrain workbench"; "design-references" = "Game reference library" }, $doc.id);
+      href = concat("/game/", $doc.id, "/"); label = concat("Open ", $doc.title, " (new tab)")
+    }))
+  call game.cardGrid
+  let toolsGrid = $result
+  let cards = list(
+    { title = "Publish and install"; icon = "folder"; detail = "Releases and receipts in Store"; store = true },
+    { title = "One World simulation"; icon = "trace"; detail = "Dispatch and execution traces"; href = "/game/one-world/#dispatch"; label = "Open simulation controls (new tab)" },
+    { title = "Dedicated servers"; icon = "computer"; detail = "Hosting service required" }
+  )
+  call game.cardGrid
+  let operations = $result
+  let result = { tag = "div"; attrs = { "data-game-hub-catalogue" = true }; children = list(
+    { tag = "section"; attrs = { class = "program-group game-zone-pane"; "data-game-zone-pane" = "games"; "aria-label" = "Games" }; children = list(
+      $games, { tag = "h4"; children = list($folio.title) }, $activities) },
+    { tag = "section"; attrs = { class = "program-group game-zone-pane"; "data-game-zone-pane" = "tools"; "aria-label" = "Tools" }; children = list($toolsGrid) },
+    { tag = "section"; attrs = { class = "program-group game-zone-pane"; "data-game-zone-pane" = "operations"; "aria-label" = "Operations" }; children = list($operations) }
+  ) }
+
+process game.cardGrid:
+  fold $cards as entry; items starts list():
+    let card = { title = $entry.title; icon = $entry.icon; detail = if($entry.href, concat($entry.detail, " · New tab"), $entry.detail) }
+    call desktop.cardContents
+    let content = $result
+    let tile = { tag = "div"; attrs = { class = "app-link game-zone-status" }; children = $content }
+    when $entry.href:
+      let tile = { tag = "a"; attrs = { class = "app-link"; href = $entry.href; target = "_blank"; rel = "noopener"; "aria-label" = $entry.label }; children = $content }
+    when $entry.store:
+      let tile = { tag = "button"; attrs = { class = "app-link"; type = "button"; "data-desktop-launch" = "store"; "aria-controls" = "notes-store-window";
+        "data-launch-action" = "open"; "aria-label" = concat($entry.title, " · Open Store") }; children = $content }
+    yield append($items, list({ tag = "li"; children = list($tile) })) → items
+  let result = { tag = "ul"; children = $items }

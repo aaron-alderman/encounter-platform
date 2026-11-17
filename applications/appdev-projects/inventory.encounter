@@ -1,0 +1,218 @@
+process-module "temple/surface-process-module/1"
+
+process inventory.attributes:
+  let result = {
+    "data-key-inventory" = if(eq($view, "keys"), "true", null);
+    "data-certificate-inventory" = if(eq($view, "certificates"), "true", null)
+  }
+
+process inventory.page:
+  let view = $request.view
+  call inventory.attributes
+  let attrs = $result
+  when eq($view, "keys"):
+    call inventory.keys
+  when eq($view, "certificates"):
+    call inventory.certificates
+  let panels = $result
+  let renewal = null
+  when eq($view, "certificates"):
+    call inventory.renewal
+    let renewal = $result
+  let status = at($request, "message")
+  let input = { tag = "div"; attrs = $attrs; children = append(
+    list(if(eq($view, "keys"), { tag = "p"; children = list("Managed Super CRM · Read only") },
+      { tag = "h3"; children = list("Managed Super CRM") }),
+      if($status, { tag = "p"; attrs = { role = "status" }; children = list($status) }, null)),
+    append($panels, list($renewal))
+  ) }
+  call html.serialize
+
+process inventory.keys:
+  let headings = map(list("Key", "Algorithm", "Public key fingerprint (SHA-256)"), "title",
+    { tag = "th"; attrs = { scope = "col" }; children = list($title) })
+  let rows = map($request.inventory.keys, "key", { tag = "tr"; children = list(
+    { tag = "th"; attrs = { scope = "row" }; children = list($key.name) },
+    { tag = "td"; children = list($key.algorithm) },
+    { tag = "td"; children = list({ tag = "code"; children = list($key.fingerprint) }) }
+  ) })
+  let table = { tag = "table"; attrs = { class = "sourcery-data-table"; "data-table-layout" = "grid" }; children = list(
+    { tag = "caption"; children = list("Managed Super CRM public keys") },
+    { tag = "thead"; children = list({ tag = "tr"; children = $headings }) },
+    { tag = "tbody"; children = $rows }
+  ) }
+  let result = list({ tag = "div"; attrs = { class = "assurance-catalogue"; role = "region"; tabindex = "0";
+    "aria-label" = "Managed Super CRM public keys" }; children = list($table) })
+
+process inventory.certificates:
+  fold $request.inventory.certificates as certificate; panels starts list():
+    let date = $certificate.expires
+    call inventory.time
+    let leafExpiry = $result
+    let date = $certificate.issuerExpires
+    call inventory.time
+    let issuerExpiry = $result
+    let panel = { tag = "section"; attrs = { class = "panel"; "aria-label" = $certificate.name }; children = list(
+      { tag = "h4"; children = list($certificate.name) },
+      { tag = "dl"; attrs = { class = "decision-properties" }; children = list(
+        { tag = "dt"; children = list("Certificate expires") }, { tag = "dd"; children = list($leafExpiry) },
+        { tag = "dt"; children = list("Issuer expires") }, { tag = "dd"; children = list($issuerExpiry) }
+      ) },
+      { tag = "details"; attrs = { class = "formation-resource" }; children = list(
+        { tag = "summary"; children = list("Certificate details") },
+        { tag = "dl"; attrs = { class = "build-details" }; children = list(
+          { tag = "div"; children = list({ tag = "dt"; children = list("Subject") }, { tag = "dd"; children = list($certificate.subject) }) },
+          { tag = "div"; children = list({ tag = "dt"; children = list("Issuer") }, { tag = "dd"; children = list($certificate.issuer) }) },
+          { tag = "div"; children = list({ tag = "dt"; children = list("Serial number") },
+            { tag = "dd"; children = list({ tag = "code"; children = list($certificate.serial) }) }) },
+          { tag = "div"; children = list({ tag = "dt"; children = list("Fingerprint (SHA-256)") },
+            { tag = "dd"; children = list({ tag = "code"; children = list($certificate.fingerprint) }) }) }
+        ) }
+      ) }
+    ) }
+    yield append($panels, list($panel)) → panels
+  let result = list({ tag = "div"; attrs = { class = "panel-grid" }; children = $panels })
+
+process inventory.time:
+  port text.slice { value = $date; start = 0; end = 19 } → utc
+  port text.replaceAll { value = $utc; search = "T"; replacement = " " } → display
+  let result = { tag = "time"; attrs = { datetime = $date }; children = list(concat($display, " UTC")) }
+
+process inventory.notice:
+  let title = if(eq($view, "keys"), "Keys", "Certificates")
+  let message = if(eq($notice, "loading"), concat("Loading ", $title, "…"),
+    if(eq($notice, "sign-in"), concat("Sign in with your approved Temple identity to open ", $title, "."),
+      if(eq($notice, "steward"), concat("Act as Sourcery steward to view ", $title, "."),
+        concat("The managed Super CRM inventory is unavailable. Reopen ", $title, " to try again."))))
+  let link = null
+  when eq($notice, "sign-in"):
+    let link = { tag = "a"; attrs = { class = "button"; href = concat("/identity-management/?view=", $view) };
+      children = list("Continue with Google") }
+  when eq($notice, "steward"):
+    let link = { tag = "a"; attrs = { class = "button"; href = "/identity-management/?view=acting-as"; "data-open-acting-as" = "true" };
+      children = list("Steward") }
+  call inventory.attributes
+  let input = { tag = "div"; attrs = $result; children = list(
+    { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = if(eq($notice, "loading"), "info", if(eq($notice, "unavailable"), "error", "warning")); role = "status" }; children = list($message) }, $link
+  ) }
+  call html.serialize
+
+process inventory.renewal:
+  let action = "/identity-management/?view=certificates"
+  let review = at($request, "review")
+  let forms = list()
+  when at($request, "renewalAvailable"):
+    let forms = map(list({ key = "server"; title = "Review server renewal" }, { key = "desktop"; title = "Review desktop renewal" }), "target",
+      { tag = "form"; attrs = { method = "post"; action = $action; "data-certificate-renewal" = "true" }; children = list(
+        { tag = "input"; attrs = { type = "hidden"; name = "action"; value = "review" } },
+        { tag = "input"; attrs = { type = "hidden"; name = "target"; value = $target.key } },
+        { tag = "button"; attrs = { class = "button"; type = "submit" }; children = list($target.title) }
+      ) })
+  let reviewed = null
+  when $review:
+    let plan = $review.plan
+    let date = $plan.currentExpiry
+    call inventory.time
+    let currentExpiry = $result
+    let date = $plan.issuerExpiry
+    call inventory.time
+    let issuerExpiry = $result
+    let date = $plan.proposedExpiry
+    call inventory.time
+    let proposedExpiry = $result
+    let facts = list(
+      { label = "Certificate"; value = if(eq($plan.target, "server"), "Managed Super CRM server", "Managed desktop client") },
+      { label = "Current expiry"; value = $currentExpiry },
+      { label = "Issuer expiry"; value = $issuerExpiry },
+      { label = "Proposed expiry"; value = $proposedExpiry }
+    )
+    let identifiers = list(
+      { label = "Current certificate fingerprint (SHA-256)"; value = { tag = "code"; children = list($plan.currentFingerprint) } },
+      { label = "Issuer fingerprint (SHA-256)"; value = { tag = "code"; children = list($plan.issuerFingerprint) } },
+      { label = "Approval digest (SHA-256)"; value = { tag = "code"; children = list($review.digest) } }
+    )
+    fold $facts as fact; pairs starts list():
+      yield append($pairs, list({ tag = "dt"; children = list($fact.label) },
+        { tag = "dd"; children = list($fact.value) })) → pairs
+    fold $identifiers as fact; metadata starts list():
+      yield append($metadata, list({ tag = "div"; children = list({ tag = "dt"; children = list($fact.label) },
+        { tag = "dd"; children = list($fact.value) }) })) → metadata
+    let approval = null
+    when and($plan.eligible, at($review, "id")):
+      let approval = { tag = "form"; attrs = { method = "post"; action = $action; "data-certificate-renewal" = "true" }; children = list(
+        { tag = "input"; attrs = { type = "hidden"; name = "action"; value = "approve" } },
+        { tag = "input"; attrs = { type = "hidden"; name = "reviewId"; value = $review.id } },
+        { tag = "input"; attrs = { type = "hidden"; name = "digest"; value = $review.digest } },
+        { tag = "button"; attrs = { class = "button"; type = "submit" }; children = list("Approve this renewal") }
+      ) }
+    let reviewed = { tag = "section"; attrs = { class = "panel"; "aria-label" = "Renewal review" }; children = list(
+      { tag = "h3"; children = list("Renewal review") },
+      { tag = "dl"; attrs = { class = "decision-properties" }; children = $pairs },
+      if(not($plan.eligible), { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "warning"; role = "status" }; children = list("The current issuer cannot extend this certificate. Complete issuer rollover first.") }, null),
+      { tag = "details"; attrs = { class = "formation-resource" }; children = list(
+        { tag = "summary"; children = list("Renewal fingerprints and digest") },
+        { tag = "dl"; attrs = { class = "build-details" }; children = $metadata }) },
+      $approval
+    ) }
+  call inventory.rolloverApproval
+  let rolloverApproval = $result
+  let result = { tag = "section"; attrs = { class = "panel"; "aria-label" = "Certificate renewal" }; children = list(
+    { tag = "h3"; children = list("Certificate renewal") },
+    { tag = "p"; children = list("Review the target and expiry before approving. A renewal keeps the existing key and issuer, with validity capped at 30 days and at the issuer’s expiry.") },
+    if(not(at($request, "renewalAvailable")), { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "warning"; role = "status" }; children = list("The platform renewal service is unavailable.") }, null),
+    { tag = "div"; attrs = { class = "button-row" }; children = $forms },
+    $reviewed
+  ) }
+  let rollover = { tag = "section"; attrs = { class = "panel"; "aria-label" = "Issuer rollover" }; children = list(
+    { tag = "h3"; children = list("Issuer rollover") },
+    $rolloverApproval,
+    { tag = "details"; attrs = { class = "formation-resource" }; children = list(
+      { tag = "summary"; children = list("Super CRM issuer rollover plan") },
+      { tag = "ol"; children = list(
+        { tag = "li"; children = list("Before the earlier issuer expiry shown below, inventory the enrolled desktop and phone clients and approve replacement server and device issuers separately.") },
+        { tag = "li"; children = list("Install the new server issuer in enrolled client trust stores. Add the new device issuer alongside the old issuer at the loopback ingress while client certificate verification stays required.") },
+        { tag = "li"; children = list("Issue the new server and per-device certificates. Verify the server hostname and both trust chains in a private preview, then switch the server and enroll the desktop and phone.") },
+        { tag = "li"; children = list("Verify the Work shortcut, operator sign-in, and rejection of missing, untrusted, and revoked client certificates. Recheck the package gate and retain a rollback until enrolled clients have moved.") },
+        { tag = "li"; children = list("Remove the old device issuer after the overlap. Record the new issuer fingerprints, expiry, and approved cutover.") }
+      ) }
+    ) }
+  ) }
+  let result = { tag = "div"; children = list($result, $rollover) }
+
+process inventory.rolloverApproval:
+  let plan = at($request, "rollover")
+  let result = null
+  when $plan:
+    let date = $plan.overlapEnds
+    call inventory.time
+    let overlapEnds = $result
+    fold $plan.rows as row; facts starts list():
+      let date = $row.expires
+      call inventory.time
+      let expiry = $result
+      yield append($facts, list({ tag = "div"; children = list(
+        { tag = "dt"; children = list($row.label) },
+        { tag = "dd"; children = list({ tag = "code"; children = list($row.fingerprint) },
+          "Expires ", $expiry) }
+      ) })) → facts
+    let approval = null
+    when and($plan.available, not($plan.approved)):
+      let approval = { tag = "form"; attrs = { method = "post"; action = "/identity-management/?view=certificates"; "data-certificate-renewal" = "true" }; children = list(
+        { tag = "input"; attrs = { type = "hidden"; name = "action"; value = "approve-rollover" } },
+        { tag = "input"; attrs = { type = "hidden"; name = "digest"; value = $plan.digest } },
+        { tag = "button"; attrs = { class = "button"; type = "submit" }; children = list("Approve staged issuer rollover") }
+      ) }
+    let result = { tag = "section"; attrs = { "aria-label" = "Staged issuer rollover" }; children = list(
+      { tag = "h4"; children = list("Staged issuer rollover") },
+      { tag = "p"; children = list("Server trust overlap ends ", $overlapEnds, ".") },
+      if($plan.approved, { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "success"; role = "status" }; children = list("Steward approval recorded.") },
+        if(not($plan.available), { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "warning"; role = "status" }; children = list("Approval deadline passed.") },
+          { tag = "p"; children = list("Review the replacement certificates and trust settings before approving installation.") })),
+      { tag = "details"; attrs = { class = "formation-resource"; open = and($plan.available, not($plan.approved)) }; children = list(
+        { tag = "summary"; children = list("Replacement fingerprints and expiry") },
+        { tag = "dl"; attrs = { class = "build-details" }; children = append($facts, list(
+          { tag = "div"; children = list({ tag = "dt"; children = list("Plan digest (SHA-256)") },
+            { tag = "dd"; children = list({ tag = "code"; children = list($plan.digest) }) }) })) }
+      ) },
+      $approval
+    ) }

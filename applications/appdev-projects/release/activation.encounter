@@ -1,0 +1,73 @@
+process-module "temple/surface-process-module/1"
+
+process release.activation:
+  let services = list(
+    { kind = "restart"; units = list("life-board-workgarden.service") },
+    { kind = "restart"; units = list("appdev-workspace.service", "appdev-browser.service",
+      "appdev-life-board-browser.service", "appdev-life-board-gateway.service") },
+    { kind = "restart"; units = list("life-board-network.service") })
+  let services = if($eventInput.system,
+    append($services, list({ kind = "restart"; units = list("appdev-shop.service", "appdev-shop-gateway.service") })),
+    append(list({ kind = "stop"; units = list("appdev-shop-gateway.service", "appdev-shop.service") }), $services))
+  let actions = append($services, list({ kind = "validate-ingress"; units = list() },
+    { kind = "reload"; units = list("nginx.service"); requiresValidatedIngress = true }))
+  let ingress = list(
+    { target = "appdev"; path = "/workspace/home"; expected = list("200") },
+    { target = "appdev"; path = "/workspace/work"; expected = list("401", "303") })
+  when $eventInput.system:
+    let ingress = append($ingress, list(
+      { target = "appdev"; path = "/workspace/formation/records"; expected = list("401") },
+      { target = "appdev"; path = "/shop/"; expected = list("401", "303") },
+      { target = "mcp"; path = "/shop/identity"; expected = list("400", "403") }))
+  let ingress = map($ingress, "probe", { target = $probe.target; path = $probe.path; expected = $probe.expected;
+    attempts = 10; delayMs = 200 })
+  let probes = append($ingress, list({ target = "front-gate"; path = "/front-gate/ready";
+    expected = list("encounter/front-gate-ready/1"); attempts = 20; delayMs = 250 }))
+  let result = { actions = $actions; probes = $probes }
+
+process release.ready:
+  let input = $eventInput
+  let result = false
+  when $input.transportSucceeded:
+    when includes(list("appdev", "mcp"), $input.probe.target):
+      let result = includes($input.probe.expected, $input.status)
+    when eq($input.probe.target, "front-gate"):
+      port text.matches { value = $input.status; pattern = "\\A[23][0-9]{2}\\z" } → successful
+      let result = and($successful, includes($input.probe.expected, $input.body))
+
+process release.unitBindings:
+  let result = list(
+    { unit = "appdev-life-board-browser.service"; property = "ExecStart"; operation = "appdev-work-host" },
+    { unit = "appdev-life-board-gateway.service"; property = "ExecStart"; operation = "appdev-work-gateway" },
+    { unit = "life-board-workgarden.service"; property = "ExecStart"; operation = "appdev-workgarden" },
+    { unit = "appdev-shop.service"; property = "ExecStart"; operation = "appdev-shop-host" },
+    { unit = "appdev-shop-gateway.service"; property = "ExecStart"; operation = "appdev-shop-gateway" },
+    { unit = "life-board-network.service"; property = "Environment"; variable = "APPDEV_FRONT_GATE_ACTIVE_RELEASE" })
+
+process release.unitFollows:
+  let input = $eventInput
+  let binding = $input.binding
+  let result = { follows = false; standalonePolicy = null }
+  when and(eq($binding.property, "ExecStart"), isArray($input.observed), eq(count($input.observed), 1)):
+    let command = at($input.observed, 0)
+    let argv = at($command, "argv")
+    when isArray($argv):
+      port text.matches { value = at($argv, 3); pattern = "\\A[^\\s;]+\\z" } → argument
+      let follows = and(eq(at($command, "path"), $input.launcher), eq(at($command, "ignoreErrors"), false),
+        eq(at($argv, 0), $input.launcher), eq(at($argv, 1), $binding.operation),
+        eq(at($argv, 2), $input.active), $argument)
+      let result = { follows = $follows; standalonePolicy = null }
+      when and($follows, eq($binding.operation, "appdev-work-gateway")):
+        port text.matches { value = at($argv, 3); pattern = "\\A/[^\\s;]+\\z" } → config
+        let result = { follows = and($config, eq(count($argv), 4), not($input.needsStandalone)); standalonePolicy = null }
+        when and($config, eq(count($argv), 6), eq(at($argv, 4), "--standalone-policy")):
+          port text.matches { value = at($argv, 5); pattern = "\\A/[^\\s;]+\\z" } → path
+          when $path:
+            let result = { follows = true; standalonePolicy = at($argv, 5) }
+  when and(eq($binding.property, "Environment"), isArray($input.observed)):
+    let prefix = concat($binding.variable, "=")
+    let expected = concat($prefix, $input.active)
+    fold $input.observed as field; matches starts list():
+      port text.indexOf { value = $field; search = $prefix } → offset
+      yield if(eq($offset, 0), append($matches, list($field)), $matches) → matches
+    let result = { follows = eq($matches, list($expected)); standalonePolicy = null }

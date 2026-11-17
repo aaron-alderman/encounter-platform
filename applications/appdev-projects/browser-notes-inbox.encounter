@@ -1,0 +1,158 @@
+process-module "temple/surface-process-module/1"
+
+process inbox.notesBoot:
+  port dom.exists { selector = "#notes-inbox-window" } → available
+  when $available:
+    port browser.on { ref = "document"; event = "click"; delegate = "a[data-open-notes-inbox]";
+      unmodified = true; preventDefault = true; timing = "Inbox"; reveal = "#notes-inbox-window"; query = "inbox.event"; input = { action = "open" } } → _
+    port browser.on { ref = "#notes-inbox-content"; event = "click"; delegate = "button[data-inbox-refresh]";
+      query = "inbox.event"; input = { action = "refresh" } } → _
+    port browser.on { ref = "#notes-inbox-window"; event = "click"; delegate = "a[data-platform-view]";
+      unmodified = true; preventDefault = true; query = "inbox.event"; input = { action = "navigate" } } → _
+    port browser.on { ref = "#notes-inbox-content"; event = "submit"; delegate = "form";
+      preventDefault = true; query = "inbox.event"; input = { action = "submit" } } → _
+    port browser.on { ref = "#notes-inbox-close"; event = "click"; unmodified = true; preventDefault = true;
+      query = "inbox.event"; input = { action = "close" } } → _
+process inbox.startup:
+  port dom.exists { selector = "#notes-inbox-window" } → available
+  when $available:
+    let platform = eq($launch.path, "/workspace/platform")
+    let resume = false
+    when eq($launch.view, "aster"):
+      port storage.read { key = "sourcery.notes.inbox.return"; scope = "tab"; maxLength = 1 } → pending
+      let resume = eq($pending.value, "1")
+    let mode = if($platform, if($launch.view, $launch.view, "platform"), if(or($resume, eq($launch.view, "inbox")), "inbox", ""))
+    let item = $launch.item
+    when $resume:
+      port storage.read { key = "sourcery.notes.inbox.view"; scope = "tab"; maxLength = 14 } → saved
+      port storage.read { key = "sourcery.notes.inbox.item"; scope = "tab"; maxLength = 32 } → savedItem
+      port text.matches { value = if($savedItem.value, $savedItem.value, ""); pattern = "^[a-f0-9]{32}$" } → validItem
+      when includes(list("platform", "platform-inbox", "work-items"), $saved.value):
+        let mode = ""
+        port browser.navigate { path = concat("/workspace/platform?view=", $saved.value, if($validItem, concat("&item=", $savedItem.value), "")) } → _
+    when and(eq($mode, "platform"), $item):
+      let mode = "work-items"
+    when $mode:
+      let method = "GET"
+      let form = null
+      call inbox.load
+
+process inbox.event:
+  let action = $eventInput.action
+  port storage.read { key = "sourcery.notes.inbox.view"; scope = "tab"; maxLength = 14 } → saved
+  let mode = if(includes(list("platform", "platform-inbox", "work-items"), $saved.value), $saved.value, "inbox")
+  let item = ""
+  when includes(list("refresh", "submit"), $action):
+    port storage.read { key = "sourcery.notes.inbox.item"; scope = "tab"; maxLength = 32 } → savedItem
+    port text.match { value = $savedItem.value; pattern = "^[a-f0-9]{32}$" } → valid
+    let item = if($valid, $savedItem.value, "")
+  let method = "GET"
+  let form = null
+  when eq($action, "open"):
+    let mode = "inbox"
+  when includes(list("submit", "navigate"), $action):
+    port browser.target { ref = $eventInput.matched.ref } → destination
+    port text.match { value = $destination.path; pattern = "^/(?:workspace/platform)?[?]view=(platform-inbox|work-items|platform)&item=([a-f0-9]{32})$" } → jump
+    assert or(eq($destination.pathname, "/identity-management/aster/"), and(eq($action, "navigate"), $jump))
+      otherwise "Unexpected Platform route."
+    port text.match { value = $destination.path; pattern = "[?&]workspace=1(?:&|$)" } → workspace
+    let target = if($jump, at($jump.groups, 0), if($workspace, "work-items", "platform-inbox"))
+    let mode = if(eq($target, "platform"), "work-items", $target)
+    let item = if($jump, at($jump.groups, 1), if(eq($action, "submit"), $item, ""))
+    let method = if(eq($action, "submit"), "POST", "GET")
+    let form = if(eq($action, "submit"), $eventInput.matched.ref, null)
+  let switchToPlatform = false
+  when and(eq($action, "navigate"), $item):
+    port browser.location {} → location
+    when not(eq($location.path, "/workspace/platform")):
+      let switchToPlatform = true
+      port browser.navigate { path = concat("/workspace/platform?view=", $mode, "&item=", $item) } → _
+  when and(not($switchToPlatform), includes(list("open", "refresh", "submit", "navigate"), $action)):
+    call inbox.load
+  when eq($action, "close"):
+    when eq($mode, "inbox"):
+      port storage.write { key = "sourcery.notes.inbox.view"; scope = "tab"; value = "" } → _
+      port storage.write { key = "sourcery.notes.inbox.return"; scope = "tab"; value = "" } → _
+      port browser.write { ref = "#notes-inbox-window"; name = "hidden"; value = true } → _
+      port browser.write { ref = "main.desktop"; name = "hidden"; value = false } → _
+      port browser.focus { ref = "#start > summary" } → _
+    when includes(list("work-items", "platform-inbox"), $mode):
+      let mode = "platform"
+      call inbox.load
+  let result = true
+
+process inbox.load:
+  port storage.write { key = "sourcery.notes.inbox.view"; scope = "tab"; value = $mode } → _
+  let selected = if(includes(list("platform", "platform-inbox", "work-items"), $mode), $item, "")
+  port storage.write { key = "sourcery.notes.inbox.item"; scope = "tab"; value = $selected } → _
+  let launcher = eq($mode, "platform")
+  let platform = not(eq($mode, "inbox"))
+  port browser.write { ref = "#notes-inbox-content"; name = "className"; value = if(and(eq($mode, "work-items"), $selected), "dialog-body platform-split-mode", "dialog-body") } → _
+  port browser.write { ref = "#notes-inbox-title"; name = "textContent"; value = if($launcher, "Platform", if(eq($mode, "work-items"), "Work items", if($platform, "Platform Inbox", "Home Inbox"))) } → _
+  port browser.write { ref = "#notes-inbox-close"; name = "hidden"; value = $launcher } → _
+  port browser.write { ref = "#notes-inbox-close"; name = "textContent"; value = if($platform, "Back to Platform", "Close") } → _
+  port browser.write { ref = "#notes-platform-apps"; name = "hidden"; value = not($launcher) } → _
+  port browser.write { ref = "#notes-inbox-content"; name = "hidden"; value = $launcher } → _
+  port dom.exists { selector = "main.desktop" } → homeDesktop
+  when $homeDesktop:
+    port browser.write { ref = "main.desktop"; name = "hidden"; value = true } → _
+  port browser.write { ref = "#notes-inbox-window"; name = "hidden"; value = false } → _
+  port browser.attribute { ref = ".workspace-switch > a[href='/workspace/home']"; name = "aria-current"; value = if($platform, null, "page") } → _
+  port dom.exists { selector = ".workspace-switch > a[href='/workspace/platform']" } → platformLink
+  when $platformLink:
+    port browser.attribute { ref = ".workspace-switch > a[href='/workspace/platform']"; name = "aria-current"; value = if($platform, "page", null) } → _
+  port dom.exists { selector = "#start[open]" } → startOpen
+  when $startOpen:
+    port browser.write { ref = "#start"; name = "open"; value = false } → _
+  port dom.exists { selector = "#aster-panel:not([hidden])" } → asterVisible
+  when $asterVisible:
+    port browser.write { ref = "#aster-panel"; name = "hidden"; value = true } → _
+  port browser.focus { ref = "#notes-inbox-title" } → _
+  when $launcher:
+    port browser.content { ref = "#notes-inbox-content"; html = "" } → _
+  when not($launcher):
+    call inbox.fetch
+ 
+process inbox.fetch:
+  try:
+    let query = if(eq($mode, "work-items"), { support = "1"; workspace = "1"; fragment = "1" },
+      if(eq($mode, "inbox"), { support = "1"; inbox = "1"; home = "1"; fragment = "1" }, { support = "1"; inbox = "1"; fragment = "1" }))
+    when $selected:
+      port record.put { record = $query; key = "item"; value = $selected } → query
+    let projection = null
+    when and(eq($method, "GET"), or(eq($mode, "inbox"), and(eq($mode, "platform-inbox"), $selected))):
+      call tray.messageProjection
+      let projection = $result
+    port browser.request { path = "/identity-management/aster/"; query = $query; rows = $projection;
+      method = $method; form = $form; fragment = "[data-notes-inbox]" } → response
+    port browser.property { ref = "#notes-inbox-window"; name = "hidden" } → hidden
+    when not($hidden):
+      when and(includes(list(200, 400), $response.status), $response.body):
+        port storage.write { key = "sourcery.notes.inbox.return"; scope = "tab"; value = "" } → _
+        port browser.content { ref = "#notes-inbox-content"; html = $response.body } → _
+        when and(eq($response.status, 200), or(eq($mode, "inbox"), and(eq($mode, "platform-inbox"), $selected))):
+          call tray.markViewed
+        when $selected:
+          let request = concat("#platform-request-", $selected)
+          port dom.exists { selector = $request } → present
+          when $present:
+            port browser.focus { ref = $request } → _
+      when includes(list(0, 401), $response.status):
+        port storage.write { key = "sourcery.notes.inbox.return"; scope = "tab"; value = "1" } → _
+        let input = list(
+          { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "info" }; children = list("Sign in to open your Platform workspace.") },
+          { tag = "a"; attrs = { class = "button"; href = "/identity-management/aster/?notes=1" }; children = list("Continue with Google") }
+        )
+        call html.serialize
+        port browser.content { ref = "#notes-inbox-content"; html = $result } → _
+      when eq($response.status, 403):
+        port storage.write { key = "sourcery.notes.inbox.return"; scope = "tab"; value = "" } → _
+        let input = { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "warning"; role = "status" }; children = list("The Platform workspace and inbox are available to the platform steward.") }
+        call html.serialize
+        port browser.content { ref = "#notes-inbox-content"; html = $result } → _
+      assert or(and(includes(list(200, 400), $response.status), $response.body), includes(list(0, 401, 403), $response.status))
+        otherwise "The Inbox response is unavailable."
+  catch fault:
+    let input = { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "error"; role = "status" }; children = list("Platform is unavailable. Reopen it to try again.") }
+    call html.serialize
+    port browser.content { ref = "#notes-inbox-content"; html = $result } → _

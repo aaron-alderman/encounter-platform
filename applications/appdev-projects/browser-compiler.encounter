@@ -1,0 +1,73 @@
+process-module "temple/surface-process-module/1"
+
+process compilerBrowser.pathProblem:
+  port text.matches { value = $bounded; pattern = "\\A/(?:[a-z][a-z0-9-]*/)+\\z" } → valid
+  let result = null
+  when or(not($valid), not(eq($proposed, $bounded))):
+    let result = "Enter a local path of up to 160 characters. Use lowercase letters, digits and hyphens, with a trailing slash."
+  when not($result):
+    let reserved = append(list($case.current), list("/game/", "/store/", "/life-board/", "/encounter-pilot/"))
+    fold $reserved as entry; claimed starts null:
+      port text.indexOf { value = $proposed; search = $entry } → start
+      yield if(eq($start, 0), $entry, $claimed) → claimed
+    when $claimed:
+      let result = concat("That path is in the existing ", $claimed, " route namespace.")
+  when not($result):
+    port text.slice { value = $proposed; start = 0; end = add(count($proposed), -1) } → slashless
+    port kernel.invoke { query = "workspace.request"; input = { path = $proposed; method = "GET"; sameOrigin = true } } → route
+    port kernel.invoke { query = "workspace.request"; input = { path = $slashless; method = "GET"; sameOrigin = true } } → alternate
+    when or(not(eq($route.route, "missing")), not(eq($alternate.route, "missing"))):
+      let result = "That path is already used by Workspace."
+
+process compilerBrowser.result:
+  let different = not(eq($proposed, $case.published))
+  let follows = if($different, $case.follows, list())
+  let gaps = if($different, $case.fixed, list())
+  port number.calculate { operation = "subtract"; values = list($case.coverage.modeled, add(count($follows), count($gaps))) } → retained
+  let lost = add($case.coverage.uncovered, count($gaps))
+  port number.calculate { operation = "subtract"; values = list($case.coverage.observed, $lost) } → projected
+  fold $checks as check; passed starts 0:
+    yield add($passed, $check.requests) → passed
+  let result = list(
+    { tag = "p"; attrs = { role = "status" }; children = list(
+      if($different, "Proposal · ", "Current route · "), { tag = "code"; children = list($proposed) }, " · ",
+      $projected, " of ", $case.coverage.observed, " references covered in the projection · ", $passed, " route checks passed") },
+    { tag = "h4"; children = list("Moves · ", count($follows)) },
+    if(count($follows), { tag = "ul"; attrs = { class = "compiler-references" }; children = map($follows, "item", { tag = "li"; children = list(
+      { tag = "code"; children = list($item) }) }) },
+      { tag = "p"; children = list("The proposal matches the published overview.") }),
+    { tag = "h4"; children = list("Stays · ", $retained) },
+    { tag = "p"; children = list("The legacy overview GET at ", { tag = "code"; children = list($case.legacy) },
+      " remains an alias. Named management views, provider forms, gateway endpoints, and Aster preferences keep their existing coordinates.") },
+    { tag = "h4"; children = list("Coverage gaps · ", $lost) },
+    if(count($gaps), { tag = "ul"; attrs = { class = "compiler-references" }; children = map($gaps, "item", { tag = "li"; children = list(
+      { tag = "strong"; children = list(at($item, 0)) }, { tag = "p"; children = list({ tag = "code"; children = list(at($item, 1)) }) },
+      { tag = "p"; children = list("Still references ", { tag = "code"; children = list(at($item, 2)) }) }) }) },
+      { tag = "p"; children = list("No additional gaps for this route.") }),
+    { tag = "p"; children = list("The projection assumes identity-bound links and split contracts are regenerated. Ingress and authenticated browser behavior are outside these checks.") })
+
+process compilerBrowser.run:
+  let target = "#compiler-route-result"
+  let issue = null
+  try:
+    port browser.formFields { ref = "#compiler-route-form" } → fields
+    let submitted = at($fields, "proposed")
+    let proposed = if($submitted, $submitted, "")
+    port text.slice { value = $proposed; start = 0; end = 160 } → bounded
+    port browser.property { ref = "#compiler-route-basis"; name = "textContent" } → data
+    port json.parse { text = $data } → case
+    call compilerBrowser.pathProblem
+    let issue = $result
+    when not($issue):
+      port kernel.invoke { query = "compiler.routeChecks"; input = { current = $case.current; proposed = $proposed;
+        legacy = $case.legacy; asterPage = $case.asterPage } } → checks
+      call compilerBrowser.result
+      let input = $result
+      call html.serialize
+      port browser.content { ref = $target; html = $result } → _
+  catch fault:
+    let issue = "The Encounter route checks could not complete this proposal."
+  when $issue:
+    let input = { tag = "p"; attrs = { role = "alert" }; children = list($issue) }
+    call html.serialize
+    port browser.content { ref = $target; html = $result } → _

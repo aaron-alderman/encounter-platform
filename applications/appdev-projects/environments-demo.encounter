@@ -1,0 +1,284 @@
+process-module "temple/surface-process-module/1"
+
+process environments.boot:
+  let bindings = list(
+    { ref = "document"; event = "click"; delegate = "a[data-open-environments-demo]"; prevent = true; unmodified = true; action = "environments-open" },
+    { ref = "#environments-content"; event = "click"; delegate = "button[data-environment-action]"; action = "environments-action" },
+    { ref = "#environments-dialog"; event = "close"; action = "environments-close" }
+  )
+  call appdev.bind
+
+process environments.initial:
+  let state = { environment = "home"; previous = "home"; atEvent = false; reason = "Selected manually";
+    fast = false; locked = false; preview = false; role = "traveller"; minute = 0; request = null; approval = null }
+
+process environments.open:
+  when eq($hash, "#environments-demo"):
+    call environments.initial
+    let feedback = ""
+    call environments.render
+    port state.set { scope = "document"; key = "environments-demo"; value = $state } → _
+  when not(eq($hash, "#environments-demo")):
+    call environments.recipient
+  port browser.dialog { ref = "#environments-dialog"; open = true; close = "dialog[open]:not(#environments-dialog)";
+    content = { ref = "#environments-content"; html = $html } } → _
+
+process environments.event:
+  when eq($action, "environments-open"):
+    let hash = "#environments-demo"
+    call environments.open
+  when eq($action, "environments-close"):
+    port browser.property { ref = "#environments-dialog"; name = "open" } → open
+    when not($open):
+      port state.set { scope = "document"; key = "environments-demo"; value = null } → _
+      port browser.content { ref = "#environments-content"; html = "" } → _
+  when eq($action, "environments-action"):
+    port state.get { scope = "document"; key = "environments-demo" } → state
+    when $state:
+      let command = at($eventInput.matched.attributes, "data-environment-action")
+      let feedback = ""
+      call environments.access
+      call environments.apply
+      call environments.render
+      port state.set { scope = "document"; key = "environments-demo"; value = $state } → _
+      port browser.content { ref = "#environments-content"; html = $html } → _
+      port browser.focus { ref = "#environments-status"; preventScroll = true } → _
+
+process environments.access:
+  let traveller = eq($state.role, "traveller")
+  let temporary = false
+  when $state.approval:
+    port number.calculate { operation = "less"; values = list($state.minute, $state.approval.until) } → temporary
+  let blocked = and($state.locked, not($temporary))
+
+process environments.apply:
+  when includes(list("traveller", "recovery"), $command):
+    port record.put { record = $state; key = "role"; value = $command } → state
+  when and($traveller, includes(list("home", "office", "arrive", "leave"), $command)):
+    call environments.switch
+  when and($traveller, includes(list("fast", "preview"), $command)):
+    port record.put { record = $state; key = $command; value = not(at($state, $command)) } → state
+  when and($traveller, eq($command, "lock"), not($state.locked)):
+    port record.put { record = $state; key = "locked"; value = true } → state
+    let feedback = "Travel lock enabled."
+  when and($traveller, eq($command, "request"), $blocked, not($state.request)):
+    port record.put { record = $state; key = "request"; value = { minute = $state.minute } } → state
+    let feedback = "Unlock requested. Switch to Riley to review it."
+  when and(not($traveller), eq($command, "approve"), $blocked, $state.request):
+    let approval = { requested = $state.request.minute; approved = $state.minute; until = add($state.minute, 5) }
+    port record.put { record = $state; key = "approval"; value = $approval } → state
+    port record.put { record = $state; key = "request"; value = null } → state
+    let feedback = "Riley approved five demo minutes of access. Switch to Casey to try it."
+  when and($traveller, eq($command, "advance"), $temporary):
+    port record.put { record = $state; key = "minute"; value = add($state.minute, 5) } → state
+    let feedback = "Demo clock advanced five minutes. The work briefcase relocked."
+  when and($traveller, eq($command, "try-game")):
+    let feedback = if($state.fast, "Game Hub blocked by the app fast.", "Game Hub is available in this sample environment.")
+  when and($traveller, eq($command, "try-work")):
+    let feedback = if($blocked, "Work briefcase locked. External approval is required.",
+      if(eq($state.environment, "office"), "Work briefcase is available in Office.", "Switch to Office to open the work briefcase."))
+  when eq($command, "reset"):
+    call environments.initial
+
+process environments.switch:
+  let environment = $command
+  let reason = "Selected manually"
+  when and(eq($command, "arrive"), not($state.atEvent)):
+    let environment = "office"
+    let reason = "Simulated event arrival during the scheduled time"
+    port record.put { record = $state; key = "previous"; value = $state.environment } → state
+    port record.put { record = $state; key = "atEvent"; value = true } → state
+  when and(eq($command, "leave"), $state.atEvent):
+    let environment = $state.previous
+    let reason = "Restored after leaving the work event"
+    port record.put { record = $state; key = "atEvent"; value = false } → state
+  when includes(list("home", "office"), $environment):
+    port record.put { record = $state; key = "environment"; value = $environment } → state
+    port record.put { record = $state; key = "reason"; value = $reason } → state
+    port record.put { record = $state; key = "preview"; value = false } → state
+
+process environments.profile:
+  let name = if($office, "Office", "Home")
+  let profile = if($office, "Professional profile", "Personal profile")
+  let folio = if($office, "Design and research folio", "Photography and music folio")
+  let contact = if($office, "office@example.test", "home@example.test")
+  let fields = { tag = "dl"; attrs = { "data-environment-profile" = true }; children = list(
+      { tag = "dt"; children = list("Profile") },
+      { tag = "dd"; children = list($profile) },
+      { tag = "dt"; children = list("Folio") },
+      { tag = "dd"; children = list($folio) },
+      { tag = "dt"; children = list("Contact") },
+      { tag = "dd"; children = list($contact) }
+    ) }
+
+process environments.recipient:
+  let office = eq($hash, "#environments-demo-office")
+  call environments.profile
+  let html = list(
+    { tag = "aside"; attrs = { class = "handover-banner" }; children = list(
+      { tag = "p"; children = list(
+        { tag = "strong"; children = list("Demo mode") },
+        " · Sample profile"
+      ) }
+    ) },
+    { tag = "section"; attrs = { class = "panel"; "aria-label" = "Read-only recipient view" }; children = list(
+      { tag = "h3"; children = list(
+        $name,
+        " recipient view"
+      ) },
+      { tag = "p"; children = list("Read-only preview of what this QR shares.") },
+      $fields
+    ) }
+  )
+  let input = $html
+  call html.serialize
+  let html = $result
+
+process environments.render:
+  call environments.access
+  let office = eq($state.environment, "office")
+  call environments.profile
+  let feedback = or($feedback, concat($name, " active · ", $state.reason, "."))
+  let lockLabel = if($blocked, "Work locked", if($temporary, "Work temporarily unlocked", "Travel lock off"))
+  let fastLabel = if($state.fast, "Fast active", "Fast off")
+  let header = { tag = "div"; attrs = { class = "environments-summary" }; children = list(
+      { tag = "aside"; attrs = { class = "handover-banner"; "aria-label" = "Environments demo mode" }; children = list(
+        { tag = "p"; children = list(
+          { tag = "strong"; children = list("Demo mode") },
+          " · ",
+          $name,
+          " · ",
+          if($traveller, "Casey", "Riley")
+        ) }
+      ) },
+      { tag = "p"; attrs = { class = "environments-indicators" }; children = list(
+        { tag = "strong"; children = list($fastLabel) },
+        { tag = "strong"; children = list($lockLabel) }
+      ) },
+      { tag = "p"; attrs = { id = "environments-status"; role = "status"; tabindex = "-1" }; children = list($feedback) }
+    ) }
+  let roles = { tag = "div"; attrs = { class = "button-row environments-roles"; role = "group"; "aria-label" = "Demo role" }; children = list(
+      { tag = "button"; attrs = { class = "button"; type = "button"; "data-environment-action" = "traveller"; "aria-pressed" = if($traveller, "true", "false") }; children = list("Casey · traveller") },
+      " ",
+      { tag = "button"; attrs = { class = "button"; type = "button"; "data-environment-action" = "recovery"; "aria-pressed" = if($traveller, "false", "true") }; children = list("Riley · recovery contact") }
+    ) }
+  let panels = null
+  when $traveller:
+    call environments.traveller
+  call environments.approval
+  let html = list(
+    $header,
+    $roles,
+    $panels,
+    $decision,
+    { tag = "p"; children = list(
+      { tag = "button"; attrs = { type = "button"; class = "button"; "data-environment-action" = "reset" }; children = list("Reset demo") }
+    ) }
+  )
+  let input = $html
+  call html.serialize
+  let html = $result
+
+process environments.traveller:
+  let buttons = list(
+    { tag = "button"; attrs = { class = "button"; type = "button"; "data-environment-action" = "home"; "aria-pressed" = if($office, "false", "true") }; children = list("Home") },
+    " ",
+    { tag = "button"; attrs = { class = "button"; type = "button"; "data-environment-action" = "office"; "aria-pressed" = if($office, "true", "false") }; children = list("Office") }
+  )
+  let qr = null
+  when $state.preview:
+    call environments.qr
+    let qr = list(
+      { tag = "figure"; children = list(
+        { tag = "img"; embeddedPng = true; attrs = { width = "164"; height = "164"; alt = concat("Sample ", $name, " profile QR code"); src = $qrImage } },
+        { tag = "figcaption"; children = list("Scan to open the recipient view.") }
+      ) },
+      $fields,
+      { tag = "p"; children = list(
+        { tag = "a"; attrs = { class = "button"; href = concat("/workspace/home#environments-demo-", $state.environment); target = "_blank"; rel = "noopener" }; children = list("Open recipient view") }
+      ) }
+    )
+  let lockControl = if($state.locked, if($temporary, { tag = "button"; attrs = { class = "button"; type = "button"; "data-environment-action" = "advance" }; children = list("Advance demo clock 5 minutes") }, if($state.request, { tag = "p"; children = list("Waiting for Riley’s approval.") }, { tag = "button"; attrs = { class = "button"; type = "button"; "data-environment-action" = "request" }; children = list("Request temporary unlock") })), { tag = "button"; attrs = { class = "button"; type = "button"; "data-environment-action" = "lock" }; children = list("Enable travel lock") })
+  let lockDetail = if($blocked, "Locked in Home and Office · External approval required",
+    if($temporary, concat("Temporarily unlocked · Relocks at demo minute ", $state.approval.until), "Off"))
+  let panels = { tag = "div"; attrs = { class = "panel-grid" }; children = list(
+      { tag = "section"; attrs = { class = "panel"; "aria-label" = "Environment" }; children = list(
+        { tag = "h3"; children = list("Environment") },
+        { tag = "div"; attrs = { class = "button-row" }; children = list($buttons) },
+        { tag = "h4"; children = list(
+          "Available in ",
+          $name
+        ) },
+        { tag = "ul"; attrs = { class = "item-list" }; children = list(
+          { tag = "li"; children = list(if($office, "Project notes", "Personal notes")) },
+          if($state.fast, null, { tag = "li"; children = list("Game Hub") })
+        ) }
+      ) },
+      { tag = "section"; attrs = { class = "panel"; "aria-label" = "QR preview" }; children = list(
+        { tag = "h3"; children = list("QR preview") },
+        { tag = "button"; attrs = { type = "button"; class = "button"; "data-environment-action" = "preview" }; children = list(if($state.preview, "Hide QR preview", concat("Preview ", $name, " QR"))) },
+        $qr
+      ) },
+      { tag = "section"; attrs = { class = "panel"; "aria-label" = "Work event" }; children = list(
+        { tag = "h3"; children = list("Work event") },
+        { tag = "p"; children = list("Design meetup · Today, 6–8 pm") },
+        { tag = "p"; children = list(if($state.atEvent, "At the venue during the event", "Away from the venue")) },
+        { tag = "button"; attrs = { class = "button"; type = "button"; "data-environment-action" = if($state.atEvent, "leave", "arrive") }; children = list(if($state.atEvent, "Simulate leaving work event", "Simulate arriving at work event")) }
+      ) },
+      { tag = "section"; attrs = { class = "panel"; "aria-label" = "Covenants" }; children = list(
+        { tag = "h3"; children = list("Covenants") },
+        { tag = "dl"; children = list(
+          { tag = "dt"; children = list("App fast") },
+          { tag = "dd"; children = list(if($state.fast, "Active in Home and Office · Game Hub hidden and blocked", "Off")) },
+          { tag = "dt"; children = list("Travel lock") },
+          { tag = "dd"; children = list($lockDetail) }
+        ) },
+        { tag = "div"; attrs = { class = "button-row" }; children = list(
+          { tag = "button"; attrs = { class = "button"; type = "button"; "data-environment-action" = "fast" }; children = list(if($state.fast, "End app fast", "Start app fast")) },
+          " ",
+          $lockControl,
+          " ",
+          { tag = "button"; attrs = { class = "button"; type = "button"; "data-environment-action" = "try-game" }; children = list("Try opening Game Hub") },
+          " ",
+          { tag = "button"; attrs = { class = "button"; type = "button"; "data-environment-action" = "try-work" }; children = list("Try opening work briefcase") }
+        ) }
+      ) }
+    ) }
+
+process environments.approval:
+  let decision = null
+  when or($state.request, $state.approval, not($traveller)):
+    let request = if($state.request, { tag = "p"; children = list(
+        "Casey requested access to the work briefcase at demo minute ",
+        $state.request.minute,
+        "."
+      ) }, null)
+    let approve = if(and($state.request, not($traveller)), { tag = "button"; attrs = { type = "button"; class = "button"; "data-environment-action" = "approve" }; children = list("Approve 5-minute unlock") }, null)
+    let receipt = null
+    when $state.approval:
+      let receipt = list(
+        { tag = "p"; children = list(
+          "Riley, acting as recovery contact, approved Casey’s request for the work briefcase at demo minute ",
+          $state.approval.approved,
+          "."
+        ) },
+        { tag = "p"; children = list(
+          if($temporary, "Relocks at demo minute ", "Automatically relocked at demo minute "),
+          $state.approval.until,
+          "."
+        ) }
+      )
+    let decision = { tag = "section"; attrs = { class = "panel environments-approval"; "aria-label" = "Unlock decision" }; children = list(
+        { tag = "h3"; children = list("Unlock decision") },
+        if(or($state.request, $state.approval), null, { tag = "p"; children = list("No unlock requests awaiting review.") }),
+        $request,
+        $approve,
+        $receipt
+      ) }
+
+# Scans open the Home or Office sample preview by its Notes fragment.
+
+process environments.qr:
+  let qrImage = if($office,
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAC0AAAAtCAAAAAAfcb1GAAABP0lEQVR4nM2U0RbCMAhD+f+fxqNrkkvbB31z25luzSCE0OpfjvovdD3H+5crn6fyqtFc7hLuieDV3J7362rAubqhRUZPin1Hd5v4SuXv+uTty1VdeReynuemiUWrHpUWqDFBURZR6M5L6u2YVsaU1zXIB14pE3IXmMy26FztobCJvaJGtuWAUp+IRizJ2brXqFL6rRpVMLo+mVhv1R/KLT5QsPIXOiAMYtOC8XiR8YwdN7AfpQissjolNRPYLLOXkVRdNDkbI7wtL3XvAZ2uGj5pbQBQZho09osLw5OuEnEoHTXczRF7zKuEPFzF8dMWcZoUwsA8moG4bauS3immUprrzGe3GsaaVWY/4fAgz4hdiCyBO9xQgvU397504obOUGYbPbtjNFT1hzb3zhsjF/eercpQceIFPlz15fE/6BeKIygfHQjr4QAAAABJRU5ErkJggg==",
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAC0AAAAtCAAAAAAfcb1GAAABQklEQVR4nM1UW44DIQzL/S/tSkP8SIZKu3+lUkdASBzbUPjPqN+KrjOeyfMtnHlV7Cq6DxY64FmqXivMwJOlczGLF8C6MxrjFBe/RZ/MjRyzxBs3WKBndcctTq6/xYn5NHWC/Oab6Rt79AM37NxKEnspT4L3CTHeKSFUo0tY5M5KWtTMwk2tq6LocQ1uuQlHtpFkixNIedCFDS3a1Cl2JabFHxZuRFFDT8Qjt2s7R/lvapnGVg0Zh/4yJ8tCcScIevhb+8wsu8iARoJBWJjUh1MdbspKk/ublmJXQg62FyciclkK6kpI1CKLBX81cacJK5sS04NBcUpj22V+9SJ6vEDCXxzRZRpRz5UD8taabyvi67/YDEGppHvMd2vhtkppCBW8RecFjXqX6HUBK+i84A4yLX6adnJi1ML69uCfx+9EfwBInS4ZOZ9UAAAAAABJRU5ErkJggg==")

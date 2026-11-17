@@ -1,0 +1,54 @@
+process-module "temple/surface-process-module/1"
+
+process registryApproval.style:
+  let cssRules = list(
+    { selector = ".vm-access-page.vm-steward-approval"; declarations = list(
+      { property = "border"; value = "2px solid #917023" },
+      { property = "background"; value = "#fff9e8" }
+    ) },
+    { selector = ".vm-steward-approval > .vm-steward-warning"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = ".55rem" },
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = ".55rem 1rem" },
+      { property = "background"; value = "#ffe29a" },
+      { property = "color"; value = "#3b2704" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".vm-steward-approval > h1"; declarations = list(
+      { property = "background"; value = "#6c4210" },
+      { property = "color"; value = "#fff" }
+    ) },
+    { selector = ".vm-steward-acknowledgment"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "auto 1fr" },
+      { property = "align-items"; value = "start" },
+      { property = "gap"; value = ".6rem" },
+      { property = "min-height"; value = "44px" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = ".vm-steward-acknowledgment input"; declarations = list(
+      { property = "width"; value = "1.15rem" },
+      { property = "height"; value = "1.15rem" },
+      { property = "accent-color"; value = "#6c4210" }
+    ) },
+    { selector = ".vm-steward-actions"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = ".5rem 1rem" },
+      { property = "margin-top"; value = ".75rem" }
+    ) },
+    { selector = ".vm-steward-approval form:invalid button"; declarations = list(
+      { property = "visibility"; value = "hidden" }
+    ) },
+    { selector = ".vm-steward-approval button"; declarations = list(
+      { property = "background"; value = "#6c4210" },
+      { property = "border-color"; value = "#503008" },
+      { property = "box-shadow"; value = "none" }
+    ) },
+    { selector = ".vm-steward-approval button:hover"; declarations = list(
+      { property = "background"; value = "#8a5613" }
+    ) })
+  call css.renderRules

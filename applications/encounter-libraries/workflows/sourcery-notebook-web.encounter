@@ -1,0 +1,1276 @@
+process-module "temple/surface-process-module/1"
+
+process ui.presentationStyles:
+  port kernel.invoke { query = "sourcery.presentation.tokens"; input = null } → tokens
+  port kernel.invoke { query = "sourcery.notebook.documentStyles"; input = null } → document
+  port kernel.invoke { query = "sourcery.notebook.reviewStyles"; input = null } → review
+  port kernel.invoke { query = "sourcery.notebook.workbenchStyles"; input = null } → workbench
+  port kernel.invoke { query = "sourcery.notebook.decisionStyles"; input = null } → decisions
+  port kernel.invoke { query = "sourcery.notebook.editorStyles"; input = null } → editor
+  let result = concat($tokens, $document, $review, $workbench, $decisions, $editor)
+
+process sourcery.notebook.documentStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = ":root"; declarations = list(
+      { property = "color-scheme"; value = "light" },
+      { property = "font"; value = "14px/1.45 var(--sourcery-font)" },
+      { property = "color"; value = "var(--sourcery-ink)" },
+      { property = "accent-color"; value = "var(--sourcery-accent)" }
+    ) },
+    { selector = "*"; declarations = list(
+      { property = "box-sizing"; value = "border-box" }
+    ) },
+    { selector = "body"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "min-height"; value = "100dvh" },
+      { property = "background-color"; value = "#225b6e" },
+      { property = "background-image"; value = "var(--sourcery-desktop)" }
+    ) },
+    { selector = "main"; declarations = list(
+      { property = "max-width"; value = "86rem" },
+      { property = "min-width"; value = "0" },
+      { property = "margin"; value = "clamp(.55rem,2vw,1.5rem) auto" },
+      { property = "width"; value = "calc(100% - 2 * clamp(.55rem,2vw,1.5rem))" },
+      { property = "border"; value = "4px solid var(--sourcery-frame)" },
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "box-shadow"; value = "var(--sourcery-raised),var(--sourcery-shadow)" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = "h1,h2,h3,p"; declarations = list(
+      { property = "margin"; value = "0 0 .55rem" }
+    ) },
+    { selector = "h1"; declarations = list(
+      { property = "font-size"; value = "clamp(1.45rem,3vw,2.15rem)" },
+      { property = "line-height"; value = "1.16" }
+    ) },
+    { selector = "h2"; declarations = list(
+      { property = "font-size"; value = "1.22rem" }
+    ) },
+    { selector = "h3"; declarations = list(
+      { property = "font-size"; value = "1rem" }
+    ) },
+    { selector = "main>header,.nb1-title,.nr-board-title,.nr-inspection>header"; declarations = list(
+      { property = "background"; value = "var(--sourcery-title)" },
+      { property = "color"; value = "white" },
+      { property = "padding"; value = ".45rem .75rem" }
+    ) },
+    { selector = "main>header h1"; declarations = list(
+      { property = "font-size"; value = "1.2rem" }
+    ) },
+    { selector = "main>header p"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "font-size"; value = ".86rem" }
+    ) },
+    { selector = "main>header:has(+.feedback+.nb1)"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "main>header :is(a,small),.nr-board-title a,.nr-inspection>header a"; declarations = list(
+      { property = "color"; value = "inherit" }
+    ) },
+    { selector = "main>:where(section:not(.decision-form),article,form,p,nav,details,h2,div:not(.nb1,.task-workbench,.feedback,.project-explorer,.decision-workspace))"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = ".65rem .85rem" }
+    ) },
+    { selector = "main>table"; declarations = list(
+      { property = "width"; value = "calc(100% - 1.7rem)" },
+      { property = "margin"; value = "0 .85rem .65rem" }
+    ) },
+    { selector = "main>.nb1"; declarations = list(
+      { property = "background"; value = "var(--sourcery-frame)" }
+    ) },
+    { selector = "section,article,aside"; declarations = list(
+      { property = "min-width"; value = "0" }
+    ) },
+    { selector = "a"; declarations = list(
+      { property = "color"; value = "var(--sourcery-accent)" },
+      { property = "text-underline-offset"; value = ".16em" }
+    ) },
+    { selector = "summary"; declarations = list(
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = "button:not([hidden]),.nb1-primary,.project-decision-action,.nr-ed-request,.nr-inspection-nav a,.cb-shot-pager a,.cb-shot-pager span"; declarations = list(
+      { property = "display"; value = "inline-block" },
+      { property = "padding"; value = ".45rem .7rem" },
+      { property = "border"; value = "0" },
+      { property = "border-radius"; value = "0" },
+      { property = "background"; value = "var(--sourcery-frame)" },
+      { property = "box-shadow"; value = "var(--sourcery-raised)" },
+      { property = "color"; value = "var(--sourcery-accent)" },
+      { property = "font"; value = "inherit" },
+      { property = "text-decoration"; value = "none" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = ":where(button,.nb1-primary,.project-decision-action,.nr-ed-request,.nr-inspection-nav a,.cb-shot-pager a):hover"; declarations = list(
+      { property = "background"; value = "var(--sourcery-selected)" }
+    ) },
+    { selector = "button:disabled,.cb-shot-pager span"; declarations = list(
+      { property = "color"; value = "var(--sourcery-muted)" },
+      { property = "cursor"; value = "default" }
+    ) },
+    { selector = ":where(a,button,input,select,textarea,summary,[tabindex]):focus-visible"; declarations = list(
+      { property = "outline"; value = "2px dashed var(--sourcery-accent)" },
+      { property = "outline-offset"; value = "2px" }
+    ) },
+    { selector = "a[aria-current]"; declarations = list(
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = "form"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "align-items"; value = "end" },
+      { property = "gap"; value = ".6rem" },
+      { property = "margin"; value = ".55rem 0" }
+    ) },
+    { selector = "form.entry label"; declarations = list(
+      { property = "flex"; value = "1 1 13rem" }
+    ) },
+    { selector = "form.inline label"; declarations = list(
+      { property = "flex"; value = "1 1 8rem" }
+    ) },
+    { selector = "label"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "gap"; value = ".25rem" },
+      { property = "min-width"; value = "0" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = "label:has(input:is([type=checkbox],[type=radio]))"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" }
+    ) },
+    { selector = "input,select,textarea"; declarations = list(
+      { property = "max-width"; value = "100%" },
+      { property = "min-width"; value = "0" },
+      { property = "font"; value = "inherit" },
+      { property = "color"; value = "inherit" }
+    ) },
+    { selector = "input:not([type=checkbox],[type=radio],[type=range]),select,textarea"; declarations = list(
+      { property = "width"; value = "100%" },
+      { property = "padding"; value = ".45rem .55rem" },
+      { property = "border"; value = "0" },
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "box-shadow"; value = "var(--sourcery-inset)" }
+    ) },
+    { selector = "textarea"; declarations = list(
+      { property = "resize"; value = "vertical" }
+    ) },
+    { selector = "fieldset"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "border"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = "pre"; declarations = list(
+      { property = "max-width"; value = "100%" },
+      { property = "overflow"; value = "auto" },
+      { property = "white-space"; value = "pre-wrap" }
+    ) },
+    { selector = "code"; declarations = list(
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = "table"; declarations = list(
+      { property = "width"; value = "100%" },
+      { property = "border-collapse"; value = "collapse" }
+    ) },
+    { selector = "th,td"; declarations = list(
+      { property = "border"; value = "1px solid var(--sourcery-line)" },
+      { property = "padding"; value = ".3rem .45rem" },
+      { property = "text-align"; value = "start" }
+    ) },
+    { selector = "th"; declarations = list(
+      { property = "background"; value = "var(--sourcery-frame)" }
+    ) },
+    { selector = "ul,ol"; declarations = list(
+      { property = "padding-inline-start"; value = "1.35rem" }
+    ) },
+    { selector = "li"; declarations = list(
+      { property = "margin-block"; value = ".25rem" }
+    ) },
+    { selector = "ul:has(>li[data-attention])"; declarations = list(
+      { property = "padding"; value = "0" },
+      { property = "list-style"; value = "none" }
+    ) },
+    { selector = "li[data-attention]"; declarations = list(
+      { property = "padding"; value = ".35rem .45rem" },
+      { property = "background"; value = "var(--sourcery-panel)" },
+      { property = "border"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = "li[data-attention=critical]"; declarations = list(
+      { property = "border-inline-start"; value = "3px solid #992b30" }
+    ) },
+    { selector = ".feedback"; declarations = list(
+      { property = "margin"; value = "4px 0" },
+      { property = "padding"; value = ".55rem .75rem" },
+      { property = "color"; value = "var(--sourcery-accent)" },
+      { property = "background"; value = "var(--sourcery-selected)" }
+    ) },
+    { selector = ".feedback:empty"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".feedback.error"; declarations = list(
+      { property = "background"; value = "#fbe6e4" },
+      { property = "color"; value = "#712722" }
+    ) },
+    { selector = ".quiet,.nr-ed-muted,.nb1-label,.task-kicker"; declarations = list(
+      { property = "color"; value = "var(--sourcery-muted)" }
+    ) },
+    { selector = ".nb1-label,.task-kicker"; declarations = list(
+      { property = "font-weight"; value = "bold" },
+      { property = "font-size"; value = ".78rem" },
+      { property = "letter-spacing"; value = ".06em" },
+      { property = "text-transform"; value = "uppercase" }
+    ) },
+    { selector = ".task-reference,.task-status,.nb1-stamp"; declarations = list(
+      { property = "display"; value = "inline-block" },
+      { property = "margin-inline-end"; value = ".25rem" },
+      { property = "padding"; value = "2px 5px" },
+      { property = "color"; value = "var(--sourcery-accent)" },
+      { property = "background"; value = "var(--sourcery-selected)" },
+      { property = "font-size"; value = ".86rem" }
+    ) },
+    { selector = ".nb1-stamp"; declarations = list(
+      { property = "background"; value = "#ece3b9" },
+      { property = "color"; value = "#48380b" }
+    ) },
+    { selector = ".rich-positive,.task-checked"; declarations = list(
+      { property = "color"; value = "#235d2e" }
+    ) },
+    { selector = ".rich-negative"; declarations = list(
+      { property = "color"; value = "#932a23" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:34rem)"; rules = list(
+      { selector = "form.entry>button"; declarations = list(
+        { property = "width"; value = "100%" }
+      ) },
+      { selector = "form.entry label"; declarations = list(
+        { property = "flex-basis"; value = "100%" }
+      ) },
+      { selector = "th,td"; declarations = list(
+        { property = "padding"; value = ".2rem .3rem" }
+      ) }
+    ) }
+  )
+  call css.renderCompactRules
+
+
+process sourcery.notebook.reviewStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = ".task-workbench,.nb1"; declarations = list(
+      { property = "min-width"; value = "0" }
+    ) },
+    { selector = ".task-document,.nb1-paper"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "padding"; value = "clamp(.65rem,2vw,1.25rem)" },
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "box-shadow"; value = "var(--sourcery-inset)" }
+    ) },
+    { selector = ".nb1-paper header"; declarations = list(
+      { property = "margin-bottom"; value = ".75rem" },
+      { property = "border-bottom"; value = "1px solid var(--sourcery-line)" },
+      { property = "padding-bottom"; value = ".5rem" }
+    ) },
+    { selector = ".nr-board-title"; declarations = list(
+      { property = "margin-bottom"; value = ".65rem" }
+    ) },
+    { selector = ".task-panel,.task-evidence,.nb1-decision,.nr-ed-panel,.nr-board-card,.nr-board-inspector,.nr-preview,.implementation-evidence,.implementation-blocker"; declarations = list(
+      { property = "margin"; value = ".35rem 0" },
+      { property = "padding"; value = ".65rem" },
+      { property = "background"; value = "var(--sourcery-panel)" },
+      { property = "border"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = ".task-decision,.nb1-decision,.implementation-blocker"; declarations = list(
+      { property = "border-inline-start"; value = "4px solid var(--sourcery-accent)" }
+    ) },
+    { selector = ".task-decision[data-attention=critical],.implementation-blocker"; declarations = list(
+      { property = "border-inline-start-color"; value = "#992b30" }
+    ) },
+    { selector = ".nb1-decision[data-tone=saved]"; declarations = list(
+      { property = "border-inline-start-color"; value = "#235d2e" }
+    ) },
+    { selector = ".task-decision[data-attention=critical] .task-status"; declarations = list(
+      { property = "background"; value = "#fbe6e4" },
+      { property = "color"; value = "#712722" }
+    ) },
+    { selector = ".task-people,.task-live-notice,.task-handoff-actions,.nb1-actions,.nr-ed-actions,.nr-inspection-nav,.nr-ed-scenario-nav,.nr-review-primary,.nr-review-secondary"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = ".4rem .6rem" }
+    ) },
+    { selector = ".task-live-notice,.nb1-actions,.nr-ed-scenario-nav,.nr-inspection-nav"; declarations = list(
+      { property = "margin"; value = ".5rem 0" }
+    ) },
+    { selector = ".task-people:empty"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".task-template-label,.task-revision"; declarations = list(
+      { property = "color"; value = "var(--sourcery-muted)" },
+      { property = "font-size"; value = ".86rem" }
+    ) },
+    { selector = ".task-template-label"; declarations = list(
+      { property = "display"; value = "block" }
+    ) },
+    { selector = ".nb1-title,.nb1-path,.nb1-footer,.nb1-tabs"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = ".3rem .65rem" }
+    ) },
+    { selector = ".nb1-title,.nb1-footer"; declarations = list(
+      { property = "justify-content"; value = "space-between" }
+    ) },
+    { selector = ".nb1-book"; declarations = list(
+      { property = "display"; value = "inline-grid" },
+      { property = "place-items"; value = "center" },
+      { property = "width"; value = "19px" },
+      { property = "height"; value = "19px" },
+      { property = "margin-inline-end"; value = "6px" },
+      { property = "background"; value = "var(--sourcery-gold)" },
+      { property = "color"; value = "var(--sourcery-ink)" },
+      { property = "box-shadow"; value = "var(--sourcery-raised)" },
+      { property = "font-size"; value = "12px" }
+    ) },
+    { selector = ".nb1-path,.nb1-footer"; declarations = list(
+      { property = "padding"; value = ".3rem .65rem" },
+      { property = "background"; value = "var(--sourcery-frame)" },
+      { property = "color"; value = "var(--sourcery-muted)" },
+      { property = "font-size"; value = ".83rem" }
+    ) },
+    { selector = ".nb1-tabs"; declarations = list(
+      { property = "gap"; value = "3px" },
+      { property = "padding"; value = "4px 5px 0" }
+    ) },
+    { selector = ".nb1-tabs a"; declarations = list(
+      { property = "padding"; value = ".35rem .6rem" },
+      { property = "background"; value = "var(--sourcery-frame)" },
+      { property = "color"; value = "var(--sourcery-ink)" },
+      { property = "box-shadow"; value = "var(--sourcery-raised)" },
+      { property = "text-decoration"; value = "none" }
+    ) },
+    { selector = ".nb1-tabs a:hover,.nb1-tabs a[aria-current]"; declarations = list(
+      { property = "background"; value = "var(--sourcery-paper)" }
+    ) },
+    { selector = ".nb1-inspector"; declarations = list(
+      { property = "position"; value = "fixed" },
+      { property = "z-index"; value = "3" },
+      { property = "inset"; value = "clamp(.5rem,5vh,3rem) clamp(.5rem,5vw,3rem) auto auto" },
+      { property = "width"; value = "min(42rem,calc(100% - 2 * clamp(.5rem,5vw,3rem)))" },
+      { property = "max-height"; value = "85dvh" },
+      { property = "overflow"; value = "auto" },
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = ".75rem" },
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "border"; value = "4px solid var(--sourcery-frame)" },
+      { property = "box-shadow"; value = "var(--sourcery-raised),var(--sourcery-shadow)" }
+    ) },
+    { selector = ".nb1-inspector:not(:target),.task-inspector-heading,.task-inspector-close"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".nb1-inspector-head"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "justify-content"; value = "space-between" },
+      { property = "gap"; value = ".5rem" },
+      { property = "padding"; value = ".4rem .55rem" },
+      { property = "margin-bottom"; value = ".55rem" },
+      { property = "color"; value = "white" },
+      { property = "background"; value = "var(--sourcery-title)" }
+    ) },
+    { selector = ".nb1-inspector-head :is(h2,a)"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "color"; value = "inherit" }
+    ) },
+    { selector = ".nb1-inspector-group+.nb1-inspector-group"; declarations = list(
+      { property = "margin-top"; value = ".6rem" },
+      { property = "padding-top"; value = ".5rem" },
+      { property = "border-top"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = ".nr-ed-code,.nr-diff,.implementation-diff,.implementation-checks"; declarations = list(
+      { property = "max-width"; value = "100%" },
+      { property = "overflow"; value = "auto" },
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "box-shadow"; value = "var(--sourcery-inset)" },
+      { property = "padding"; value = ".4rem" }
+    ) },
+    { selector = ".nr-ed-code-line,.nr-diff-line"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "3.2rem minmax(0,1fr)" },
+      { property = "gap"; value = ".35rem" }
+    ) },
+    { selector = ".nr-ed-code-line code,.nr-diff-line code"; declarations = list(
+      { property = "white-space"; value = "pre-wrap" }
+    ) },
+    { selector = ".nr-token-keyword"; declarations = list(
+      { property = "color"; value = "#152a91" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".nr-token-string"; declarations = list(
+      { property = "color"; value = "#a22e1d" }
+    ) },
+    { selector = ".nr-token-reference"; declarations = list(
+      { property = "color"; value = "#713b82" }
+    ) },
+    { selector = ".nr-token-literal"; declarations = list(
+      { property = "color"; value = "#844900" }
+    ) },
+    { selector = ".nr-token-qualified"; declarations = list(
+      { property = "color"; value = "#20537e" }
+    ) },
+    { selector = ".nr-token-comment"; declarations = list(
+      { property = "color"; value = "#376340" },
+      { property = "font-style"; value = "italic" }
+    ) },
+    { selector = ".nr-flow"; declarations = list(
+      { property = "list-style"; value = "none" },
+      { property = "padding"; value = "0" }
+    ) },
+    { selector = ".nr-ed-stage-screen,.nr-flow li"; declarations = list(
+      { property = "padding"; value = ".35rem .45rem" },
+      { property = "border"; value = "1px solid var(--sourcery-line)" },
+      { property = "background"; value = "var(--sourcery-paper)" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:48rem)"; rules = list(
+      { selector = ".nr-ed-panel table"; declarations = list(
+        { property = "table-layout"; value = "fixed" }
+      ) }
+    ) }
+  )
+  call css.renderCompactRules
+
+
+process sourcery.notebook.workbenchStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = "body:has(>main>.cb-workbench)"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-rows"; value = "auto minmax(0,1fr)" },
+      { property = "height"; value = "100dvh" }
+    ) },
+    { selector = "body:has(>main:first-child>.cb-workbench)"; declarations = list(
+      { property = "grid-template-rows"; value = "minmax(0,1fr)" }
+    ) },
+    { selector = "main:has(>.cb-workbench)"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "min-height"; value = "0" },
+      { property = "max-width"; value = "none" }
+    ) },
+    { selector = ".cb-workbench"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-rows"; value = "auto minmax(0,1fr)" },
+      { property = "min-width"; value = "0" },
+      { property = "min-height"; value = "0" },
+      { property = "gap"; value = "4px" }
+    ) },
+    { selector = ".cb-workspace"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "clamp(8rem,14vw,13rem) minmax(0,1fr)" },
+      { property = "min-height"; value = "0" },
+      { property = "gap"; value = "4px" }
+    ) },
+    { selector = ".cb-folders,.cb-record-pane,.cb-shot-inspector,.cb-timeline,.cb-workbench #context"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "min-height"; value = "0" },
+      { property = "overflow"; value = "auto" },
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "box-shadow"; value = "var(--sourcery-inset)" },
+      { property = "padding"; value = "5px" }
+    ) },
+    { selector = ".cb-folder p"; declarations = list(
+      { property = "margin"; value = ".25rem" },
+      { property = "color"; value = "var(--sourcery-accent)" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".cb-folder a"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "padding"; value = ".2rem .4rem" },
+      { property = "text-decoration"; value = "none" }
+    ) },
+    { selector = ".cb-folder a[aria-current]"; declarations = list(
+      { property = "background"; value = "var(--sourcery-accent)" },
+      { property = "color"; value = "white" }
+    ) },
+    { selector = ".cb-workbench #context"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-direction"; value = "column" },
+      { property = "padding"; value = "3px" }
+    ) },
+    { selector = ".cb-workbench #context>header"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "4px 8px" },
+      { property = "padding"; value = "5px 7px" },
+      { property = "background"; value = "var(--sourcery-panel)" },
+      { property = "border-bottom"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = ".cb-workbench #context h1"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "font-size"; value = "1.06rem" }
+    ) },
+    { selector = ".cb-workbench #context .nb1-stamp"; declarations = list(
+      { property = "margin-inline-start"; value = "auto" }
+    ) },
+    { selector = ".cb-workbench #context [data-encounter-connection]"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".cb-document"; declarations = list(
+      { property = "flex"; value = "1" },
+      { property = "min-width"; value = "0" },
+      { property = "min-height"; value = "0" },
+      { property = "overflow"; value = "auto" },
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "5px" }
+    ) },
+    { selector = ".cb-document:has(.cb-film-view)"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-direction"; value = "column" }
+    ) },
+    { selector = ".cb-film-view"; declarations = list(
+      { property = "flex"; value = "1" },
+      { property = "min-height"; value = "0" },
+      { property = "min-width"; value = "0" },
+      { property = "display"; value = "grid" },
+      { property = "grid-template-rows"; value = "auto minmax(0,1fr) auto" },
+      { property = "gap"; value = "4px" },
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".cb-film-tabs"; declarations = list(
+      { property = "position"; value = "sticky" },
+      { property = "top"; value = "0" },
+      { property = "z-index"; value = "1" },
+      { property = "background"; value = "var(--sourcery-frame)" },
+      { property = "padding"; value = "3px" }
+    ) },
+    { selector = ".cb-film-tabs a"; declarations = list(
+      { property = "padding"; value = ".3rem .45rem" }
+    ) },
+    { selector = ".cb-review-grid,.cb-review-references"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "gap"; value = "5px" },
+      { property = "grid-template-columns"; value = "minmax(0,2fr) minmax(13rem,1fr)" },
+      { property = "min-width"; value = "0" },
+      { property = "min-height"; value = "0" }
+    ) },
+    { selector = ".cb-review-references"; declarations = list(
+      { property = "grid-template-columns"; value = "repeat(2,minmax(0,1fr))" }
+    ) },
+    { selector = ".cb-screening"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-rows"; value = "minmax(0,1fr)" },
+      { property = "min-width"; value = "0" },
+      { property = "min-height"; value = "0" },
+      { property = "overflow"; value = "hidden" },
+      { property = "background"; value = "#101720" }
+    ) },
+    { selector = ".cb-screening[data-canvas-stage]"; declarations = list(
+      { property = "grid-template-rows"; value = "minmax(0,1fr) auto auto" }
+    ) },
+    { selector = ".cb-screening :is(canvas,video),.cb-review-references video"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "width"; value = "100%" },
+      { property = "height"; value = "100%" },
+      { property = "min-height"; value = "0" },
+      { property = "object-fit"; value = "contain" }
+    ) },
+    { selector = ".cb-review-references video"; declarations = list(
+      { property = "height"; value = "auto" }
+    ) },
+    { selector = ".cb-screening [data-canvas-status]"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "0 .4rem" },
+      { property = "color"; value = "white" }
+    ) },
+    { selector = ".cb-screening [data-canvas-status]:empty"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".cb-canvas-transport"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = ".35rem .6rem" },
+      { property = "align-items"; value = "center" },
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = ".3rem .4rem" },
+      { property = "background"; value = "var(--sourcery-panel)" }
+    ) },
+    { selector = ".cb-canvas-form"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "minmax(0,1fr)" },
+      { property = "gap"; value = ".4rem" }
+    ) },
+    { selector = ".cb-canvas-control"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "minmax(0,1fr) auto" },
+      { property = "gap"; value = ".15rem .3rem" }
+    ) },
+    { selector = ".cb-canvas-control input"; declarations = list(
+      { property = "grid-column"; value = "1/-1" }
+    ) },
+    { selector = ".cb-shot-pager"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "auto minmax(0,1fr) auto" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "3px" }
+    ) },
+    { selector = ".cb-shot-pager p"; declarations = list(
+      { property = "text-align"; value = "center" },
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".cb-timeline svg"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "width"; value = "100%" },
+      { property = "height"; value = "20px" }
+    ) },
+    { selector = ".cb-timeline .nb1-tabs"; declarations = list(
+      { property = "gap"; value = "2px" },
+      { property = "padding"; value = "0" }
+    ) },
+    { selector = ".cb-timeline .nb1-tabs a"; declarations = list(
+      { property = "display"; value = "inline-grid" },
+      { property = "place-items"; value = "center" },
+      { property = "min-width"; value = "1.9rem" },
+      { property = "min-height"; value = "30px" },
+      { property = "padding"; value = ".15rem .25rem" },
+      { property = "font-size"; value = ".8rem" }
+    ) },
+    { selector = ".cb-workbench #ollama-notes"; declarations = list(
+      { property = "max-height"; value = "35%" },
+      { property = "overflow"; value = "auto" },
+      { property = "border-top"; value = "1px solid var(--sourcery-line)" },
+      { property = "padding"; value = ".3rem .45rem" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:50rem)"; rules = list(
+      { selector = ".cb-workspace"; declarations = list(
+        { property = "grid-template-columns"; value = "minmax(0,1fr)" },
+        { property = "grid-template-rows"; value = "auto minmax(0,1fr)" }
+      ) },
+      { selector = ".cb-folders,.cb-folder"; declarations = list(
+        { property = "display"; value = "flex" },
+        { property = "flex-wrap"; value = "wrap" },
+        { property = "gap"; value = "2px" }
+      ) },
+      { selector = ".cb-folder p,.cb-workspace:has(.cb-film-tabs) .cb-folder:last-child"; declarations = list(
+        { property = "display"; value = "none" }
+      ) },
+      { selector = ".cb-review-grid"; declarations = list(
+        { property = "grid-template-columns"; value = "minmax(0,1fr)" },
+        { property = "grid-template-rows"; value = "minmax(0,1.3fr) minmax(0,1fr)" }
+      ) },
+      { selector = ".cb-review-references"; declarations = list(
+        { property = "grid-template-columns"; value = "minmax(0,1fr)" }
+      ) },
+      { selector = ".cb-timeline .nb1-tabs"; declarations = list(
+        { property = "display"; value = "grid" },
+        { property = "grid-template-columns"; value = "repeat(auto-fit,minmax(2.45rem,1fr))" }
+      ) },
+      { selector = ".cb-timeline .nb1-tabs a"; declarations = list(
+        { property = "min-height"; value = "36px" }
+      ) },
+      { selector = ".cb-shot-pager a"; declarations = list(
+        { property = "min-height"; value = "2.25rem" },
+        { property = "display"; value = "inline-grid" },
+        { property = "place-items"; value = "center" }
+      ) }
+    ) }
+  )
+  call css.renderCompactRules
+
+
+process sourcery.notebook.decisionStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = ".project-explorer"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "background"; value = "var(--sourcery-frame)" }
+    ) },
+    { selector = ".project-command-bar"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "4px" },
+      { property = "padding"; value = "4px" },
+      { property = "border-bottom"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = ".project-command-bar a"; declarations = list(
+      { property = "padding"; value = "4px 8px" },
+      { property = "color"; value = "var(--sourcery-ink)" },
+      { property = "text-decoration"; value = "none" }
+    ) },
+    { selector = ".project-command-bar a:is(:hover,[aria-current])"; declarations = list(
+      { property = "background"; value = "var(--sourcery-selected)" }
+    ) },
+    { selector = ".project-panes"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "minmax(11rem,23%) minmax(0,1fr)" },
+      { property = "gap"; value = "4px" },
+      { property = "padding"; value = "4px" }
+    ) },
+    { selector = ".project-task-list,.project-selection"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "min-height"; value = "14rem" },
+      { property = "padding"; value = ".65rem" },
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "box-shadow"; value = "var(--sourcery-inset)" }
+    ) },
+    { selector = ".project-task-list h2,.project-task-list h3"; declarations = list(
+      { property = "margin"; value = ".2rem 0" },
+      { property = "font-size"; value = ".9rem" }
+    ) },
+    { selector = ".project-task-list ul"; declarations = list(
+      { property = "padding"; value = "0" },
+      { property = "margin"; value = ".25rem 0 .55rem" },
+      { property = "list-style"; value = "none" }
+    ) },
+    { selector = ".project-task-list li[data-attention]"; declarations = list(
+      { property = "padding"; value = "0" },
+      { property = "margin"; value = "0" },
+      { property = "border"; value = "0" },
+      { property = "background"; value = "none" }
+    ) },
+    { selector = ".project-task-list a"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "padding"; value = "5px 7px" },
+      { property = "text-decoration"; value = "none" },
+      { property = "color"; value = "var(--sourcery-ink)" }
+    ) },
+    { selector = ".project-task-list a:hover"; declarations = list(
+      { property = "background"; value = "var(--sourcery-selected)" }
+    ) },
+    { selector = ".project-task-list a[aria-current]"; declarations = list(
+      { property = "background"; value = "var(--sourcery-accent)" },
+      { property = "color"; value = "white" }
+    ) },
+    { selector = ".project-task-list a[aria-current] .task-reference"; declarations = list(
+      { property = "color"; value = "inherit" },
+      { property = "background"; value = "transparent" }
+    ) },
+    { selector = ".project-task-list small"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "font-size"; value = ".8rem" }
+    ) },
+    { selector = ".project-task-list .task-reference"; declarations = list(
+      { property = "padding"; value = "0" },
+      { property = "margin-inline-end"; value = ".3rem" },
+      { property = "background"; value = "transparent" }
+    ) },
+    { selector = ".project-selection"; declarations = list(
+      { property = "padding"; value = "clamp(.65rem,3vw,1.6rem)" }
+    ) },
+    { selector = ".project-selection h2"; declarations = list(
+      { property = "max-width"; value = "34ch" },
+      { property = "font-size"; value = "clamp(1.2rem,3vw,1.65rem)" }
+    ) },
+    { selector = ".decision-workspace"; declarations = list(
+      { property = "max-width"; value = "66rem" },
+      { property = "margin-inline"; value = "auto" }
+    ) },
+    { selector = ".decision-form"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "max-width"; value = "58rem" },
+      { property = "margin"; value = ".55rem auto" },
+      { property = "padding"; value = "clamp(.6rem,1.5vw,1rem)" },
+      { property = "border"; value = "1px solid var(--sourcery-line)" },
+      { property = "background"; value = "var(--sourcery-frame)" },
+      { property = "box-shadow"; value = "var(--sourcery-raised)" }
+    ) },
+    { selector = ".decision-form h2"; declarations = list(
+      { property = "margin"; value = "0 0 .55rem" },
+      { property = "font-size"; value = "1.15rem" }
+    ) },
+    { selector = ".decision-properties"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "minmax(6rem,22%) minmax(0,1fr)" },
+      { property = "margin"; value = "0 0 .65rem" },
+      { property = "border"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = ".decision-properties dt,.decision-properties dd"; declarations = list(
+      { property = "padding"; value = ".3rem .5rem" },
+      { property = "margin"; value = "0" },
+      { property = "border-bottom"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = ".decision-properties dt"; declarations = list(
+      { property = "font-weight"; value = "bold" },
+      { property = "background"; value = "var(--sourcery-panel)" }
+    ) },
+    { selector = ".decision-properties dd"; declarations = list(
+      { property = "background"; value = "var(--sourcery-paper)" }
+    ) },
+    { selector = ".decision-fields"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = ".5rem .65rem" },
+      { property = "border"; value = "1px solid #85837d" },
+      { property = "background"; value = "var(--sourcery-paper)" }
+    ) },
+    { selector = ".decision-fields legend"; declarations = list(
+      { property = "padding-inline"; value = ".3rem" },
+      { property = "color"; value = "var(--sourcery-accent)" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".decision-commands"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "justify-content"; value = "flex-end" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = ".45rem .65rem" },
+      { property = "margin-top"; value = ".65rem" }
+    ) },
+    { selector = ".decision-commands form"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".decision-default,.decision-command button[type=submit],.project-selection>.project-decision-action"; declarations = list(
+      { property = "outline"; value = "1px solid var(--sourcery-ink)" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".decision-default:focus-visible,.decision-command button[type=submit]:focus-visible,.project-selection>.project-decision-action:focus-visible"; declarations = list(
+      { property = "outline"; value = "2px dashed var(--sourcery-accent)" }
+    ) },
+    { selector = ".decision-inspector"; declarations = list(
+      { property = "padding"; value = ".35rem .55rem" },
+      { property = "margin"; value = ".45rem 0" },
+      { property = "border"; value = "1px solid var(--sourcery-line)" },
+      { property = "background"; value = "var(--sourcery-panel)" }
+    ) },
+    { selector = ".decision-inspector summary"; declarations = list(
+      { property = "font-weight"; value = "bold" },
+      { property = "color"; value = "var(--sourcery-accent)" }
+    ) },
+    { selector = ".decision-inspector[open] summary"; declarations = list(
+      { property = "margin-bottom"; value = ".5rem" }
+    ) },
+    { selector = ".decision-form[data-attention=critical],.decision-form[data-tone=critical]"; declarations = list(
+      { property = "border-inline-start"; value = "4px solid #992b30" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:37rem)"; rules = list(
+      { selector = ".task-question"; declarations = list(
+        { property = "max-block-size"; value = "7rem" },
+        { property = "overflow"; value = "auto" }
+      ) },
+      { selector = ".project-panes"; declarations = list(
+        { property = "grid-template-columns"; value = "minmax(0,1fr)" }
+      ) },
+      { selector = ".project-task-list,.project-selection"; declarations = list(
+        { property = "min-height"; value = "0" }
+      ) },
+      { selector = ".project-task-list section"; declarations = list(
+        { property = "display"; value = "inline-block" },
+        { property = "vertical-align"; value = "top" },
+        { property = "min-width"; value = "0" }
+      ) },
+      { selector = ".decision-commands"; declarations = list(
+        { property = "justify-content"; value = "flex-start" }
+      ) }
+    ) }
+  )
+  call css.renderCompactRules
+
+
+process sourcery.notebook.editorStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = "body:has(.nr-preview-comments)"; declarations = list(
+      { property = "background"; value = "var(--sourcery-frame)" }
+    ) },
+    { selector = "main:has(>.nr-preview-comments)"; declarations = list(
+      { property = "width"; value = "100%" },
+      { property = "margin"; value = "0" },
+      { property = "border"; value = "0" },
+      { property = "box-shadow"; value = "none" }
+    ) },
+    { selector = ".nr-preview-comments"; declarations = list(
+      { property = "padding"; value = ".65rem" }
+    ) },
+    { selector = ".nr-preview-comments form"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "align-items"; value = "stretch" },
+      { property = "margin"; value = "0 0 .65rem" }
+    ) },
+    { selector = ".nr-preview-comments button"; declarations = list(
+      { property = "justify-self"; value = "start" }
+    ) },
+    { selector = ".nr-preview-comments textarea"; declarations = list(
+      { property = "min-height"; value = "5rem" }
+    ) },
+    { selector = ".nr-preview-comments ol"; declarations = list(
+      { property = "padding-left"; value = "1.2rem" }
+    ) },
+    { selector = ".nr-preview-comments li"; declarations = list(
+      { property = "border-top"; value = "1px solid var(--sourcery-line)" },
+      { property = "padding"; value = ".45rem .2rem" }
+    ) },
+    { selector = ".nr-preview-comments li p"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".nr-preview-location"; declarations = list(
+      { property = "color"; value = "var(--sourcery-muted)" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".nr-ed-change-layout,.nr-ed-flow-layout"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "align-items"; value = "start" },
+      { property = "gap"; value = "6px" },
+      { property = "margin"; value = ".65rem 0" }
+    ) },
+    { selector = ".nr-ed-change-layout"; declarations = list(
+      { property = "grid-template-columns"; value = "minmax(12rem,29%) minmax(0,1fr)" }
+    ) },
+    { selector = ".nr-ed-flow-layout"; declarations = list(
+      { property = "grid-template-columns"; value = "minmax(0,2fr) minmax(13rem,1fr)" }
+    ) },
+    { selector = ".nr-ed-change-index,.nr-ed-flow-panel,.nr-source-workspace"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "background"; value = "var(--sourcery-frame)" },
+      { property = "padding"; value = "6px" },
+      { property = "box-shadow"; value = "var(--sourcery-raised)" }
+    ) },
+    { selector = ".nr-ed-change-index h2,.nr-ed-flow-panel h2"; declarations = list(
+      { property = "font-size"; value = "1rem" },
+      { property = "margin"; value = ".25rem .4rem .45rem" }
+    ) },
+    { selector = ".nr-change-document"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "scroll-margin-block-start"; value = ".5rem" },
+      { property = "padding"; value = "4px" },
+      { property = "background"; value = "var(--sourcery-frame)" },
+      { property = "box-shadow"; value = "var(--sourcery-raised)" }
+    ) },
+    { selector = ".nr-change-header"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = ".25rem" },
+      { property = "padding"; value = ".35rem .5rem" },
+      { property = "background"; value = "var(--sourcery-title)" },
+      { property = "color"; value = "white" }
+    ) },
+    { selector = ".nr-change-header h2"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "font-size"; value = "1.05rem" }
+    ) },
+    { selector = ".nr-change-body"; declarations = list(
+      { property = "padding"; value = ".65rem" },
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "box-shadow"; value = "var(--sourcery-inset)" }
+    ) },
+    { selector = ".nr-change-body .decision-properties ul"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "gap"; value = ".3rem .65rem" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "list-style"; value = "none" },
+      { property = "padding"; value = "0" },
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".nr-change-body .decision-properties li,.nr-change-body .decision-fields p"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".nr-change-body .decision-fields+*"; declarations = list(
+      { property = "margin-top"; value = ".65rem" }
+    ) },
+    { selector = ".nr-change-return"; declarations = list(
+      { property = "display"; value = "inline-flex" },
+      { property = "align-items"; value = "center" },
+      { property = "min-height"; value = "2.25rem" }
+    ) },
+    { selector = ".nr-ed-change-list a:focus-visible,.nr-ed-node>a:focus-visible"; declarations = list(
+      { property = "outline"; value = "2px dotted currentColor" },
+      { property = "outline-offset"; value = "-3px" }
+    ) },
+    { selector = ".nr-code-help"; declarations = list(
+      { property = "padding"; value = ".3rem .5rem" },
+      { property = "background"; value = "var(--sourcery-panel)" },
+      { property = "border-bottom"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = ".nr-code-help dl"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "max-content minmax(0,1fr)" },
+      { property = "gap"; value = ".25rem .65rem" },
+      { property = "margin"; value = ".4rem 0" }
+    ) },
+    { selector = ".nr-code-help dd"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".nr-source-line abbr"; declarations = list(
+      { property = "cursor"; value = "help" },
+      { property = "text-decoration"; value = "underline dotted" },
+      { property = "text-underline-offset"; value = "2px" }
+    ) },
+    { selector = ".nr-ed-change-list,.nr-ed-flow,.nr-ed-nodes,.nr-source-files ul"; declarations = list(
+      { property = "list-style"; value = "none" },
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "0" }
+    ) },
+    { selector = ".nr-ed-change-list li"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".nr-ed-change-list li+li"; declarations = list(
+      { property = "border-top"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = ".nr-ed-change-list a"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "1.7rem minmax(0,1fr)" },
+      { property = "gap"; value = ".4rem" },
+      { property = "align-items"; value = "start" },
+      { property = "padding"; value = ".45rem" },
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "text-decoration"; value = "none" }
+    ) },
+    { selector = ".nr-ed-change-list a:hover,.nr-ed-node>a:hover,.nr-source-files a:hover"; declarations = list(
+      { property = "background"; value = "var(--sourcery-selected)" }
+    ) },
+    { selector = ".nr-ed-change-list a[aria-current],.nr-ed-node>a[aria-current],.nr-source-files a[aria-current]"; declarations = list(
+      { property = "background"; value = "var(--sourcery-accent)" },
+      { property = "color"; value = "white" }
+    ) },
+    { selector = "#current-change-row"; declarations = list(
+      { property = "scroll-margin-block-start"; value = ".5rem" }
+    ) },
+    { selector = ".nr-ed-step-number"; declarations = list(
+      { property = "font"; value = "inherit" },
+      { property = "text-align"; value = "center" },
+      { property = "border"; value = "1px solid currentColor" }
+    ) },
+    { selector = ".nr-ed-change-caption small"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "font-weight"; value = "normal" }
+    ) },
+    { selector = ".nr-ed-flow"; declarations = list(
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "padding"; value = ".55rem" },
+      { property = "box-shadow"; value = "var(--sourcery-inset)" }
+    ) },
+    { selector = ".nr-ed-level"; declarations = list(
+      { property = "position"; value = "relative" },
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "0 0 .65rem .8rem" },
+      { property = "border-left"; value = "2px solid var(--sourcery-line)" }
+    ) },
+    { selector = ".nr-ed-level:last-child"; declarations = list(
+      { property = "padding-bottom"; value = "0" },
+      { property = "border-color"; value = "transparent" }
+    ) },
+    { selector = ".nr-ed-level h3"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = ".55rem" },
+      { property = "font-size"; value = ".9rem" },
+      { property = "margin"; value = "0 0 .3rem" }
+    ) },
+    { selector = ".nr-ed-level h3::before"; declarations = list(
+      { property = "content"; value = "\"\"" },
+      { property = "position"; value = "absolute" },
+      { property = "left"; value = "-5px" },
+      { property = "width"; value = "8px" },
+      { property = "height"; value = "8px" },
+      { property = "background"; value = "var(--sourcery-accent)" },
+      { property = "border"; value = "1px solid var(--sourcery-paper)" }
+    ) },
+    { selector = ".nr-ed-level h3 span"; declarations = list(
+      { property = "color"; value = "var(--sourcery-muted)" },
+      { property = "font-weight"; value = "normal" }
+    ) },
+    { selector = ".nr-ed-nodes"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "repeat(auto-fit,minmax(min(100%,10rem),1fr))" },
+      { property = "gap"; value = ".35rem" }
+    ) },
+    { selector = ".nr-ed-node"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "margin"; value = "0" },
+      { property = "border"; value = "1px solid var(--sourcery-line)" },
+      { property = "background"; value = "var(--sourcery-panel)" }
+    ) },
+    { selector = ".nr-ed-node>a"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "align-content"; value = "center" },
+      { property = "gap"; value = ".15rem" },
+      { property = "min-height"; value = "2.75rem" },
+      { property = "padding"; value = ".3rem .45rem" },
+      { property = "text-decoration"; value = "none" }
+    ) },
+    { selector = ".nr-ed-node>a small"; declarations = list(
+      { property = "font-size"; value = ".86rem" }
+    ) },
+    { selector = ".nr-ed-node>a[aria-current]"; declarations = list(
+      { property = "box-shadow"; value = "inset 3px 0 var(--sourcery-gold)" }
+    ) },
+    { selector = ".nr-ed-edge"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "baseline" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "0 .45rem" },
+      { property = "padding"; value = ".12rem .45rem" },
+      { property = "font-size"; value = ".86rem" },
+      { property = "border-top"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = ".nr-ed-edge span"; declarations = list(
+      { property = "color"; value = "var(--sourcery-muted)" }
+    ) },
+    { selector = ".nr-ed-edge ul"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "0 .55rem" },
+      { property = "list-style"; value = "none" },
+      { property = "padding"; value = "0" },
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".nr-ed-edge li"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".nr-ed-edge a"; declarations = list(
+      { property = "display"; value = "inline-flex" },
+      { property = "align-items"; value = "center" },
+      { property = "min-height"; value = "1.6rem" }
+    ) },
+    { selector = ".nr-ed-data-grid"; declarations = list(
+      { property = "max-width"; value = "100%" },
+      { property = "overflow"; value = "auto" },
+      { property = "overflow-wrap"; value = "normal" }
+    ) },
+    { selector = ".nr-ed-data-grid table"; declarations = list(
+      { property = "min-width"; value = "25rem" }
+    ) },
+    { selector = ".nr-ed-data-grid th,.nr-ed-data-grid td"; declarations = list(
+      { property = "padding"; value = ".4rem .5rem" }
+    ) },
+    { selector = ".nr-ed-data-scroll-hint"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:33rem)"; rules = list(
+      { selector = ".nr-ed-data-scroll-hint"; declarations = list(
+        { property = "display"; value = "inline" }
+      ) }
+    ) },
+    { selector = ".nr-change-body table[aria-label=\"Expected and observed\"]"; declarations = list(
+      { property = "table-layout"; value = "auto" },
+      { property = "overflow-wrap"; value = "normal" }
+    ) },
+    { selector = ".nr-change-body table[aria-label=\"Expected and observed\"] th"; declarations = list(
+      { property = "white-space"; value = "nowrap" }
+    ) },
+    { selector = ".nr-change-body table[aria-label=\"Expected and observed\"] th,.nr-change-body table[aria-label=\"Expected and observed\"] td"; declarations = list(
+      { property = "padding"; value = ".35rem .4rem" }
+    ) },
+    { selector = ".nr-ed-scenario-nav[aria-label=\"Scenario steps\"]"; declarations = list(
+      { property = "gap"; value = ".3rem" }
+    ) },
+    { selector = ".nr-ed-scenario-nav[aria-label=\"Scenario steps\"] a"; declarations = list(
+      { property = "display"; value = "inline-grid" },
+      { property = "place-items"; value = "center" },
+      { property = "min-width"; value = "2.5rem" },
+      { property = "min-height"; value = "2.5rem" },
+      { property = "background"; value = "var(--sourcery-frame)" },
+      { property = "box-shadow"; value = "var(--sourcery-raised)" },
+      { property = "font-weight"; value = "bold" },
+      { property = "text-decoration"; value = "none" }
+    ) },
+    { selector = ".nr-ed-scenario-nav[aria-label=\"Scenario steps\"] a[aria-current=step]"; declarations = list(
+      { property = "background"; value = "var(--sourcery-accent)" },
+      { property = "color"; value = "white" },
+      { property = "box-shadow"; value = "var(--sourcery-inset)" }
+    ) },
+    { selector = ".nr-ed-source nav"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = ".4rem .65rem" },
+      { property = "margin-block"; value = ".45rem" }
+    ) },
+    { selector = ".nr-ed-source-ref"; declarations = list(
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".nr-source-header"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "justify-content"; value = "space-between" },
+      { property = "gap"; value = ".45rem" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "padding"; value = ".35rem .5rem" },
+      { property = "background"; value = "var(--sourcery-title)" },
+      { property = "color"; value = "white" }
+    ) },
+    { selector = ".nr-source-header h2"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "font-size"; value = "1.1rem" }
+    ) },
+    { selector = ".nr-source-header a"; declarations = list(
+      { property = "color"; value = "inherit" }
+    ) },
+    { selector = ".nr-source-layout"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "minmax(10rem,24%) minmax(0,1fr)" },
+      { property = "gap"; value = "4px" },
+      { property = "margin-top"; value = "4px" }
+    ) },
+    { selector = ".nr-source-files,.nr-source-document"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "box-shadow"; value = "var(--sourcery-inset)" }
+    ) },
+    { selector = ".nr-source-files"; declarations = list(
+      { property = "padding"; value = ".5rem" }
+    ) },
+    { selector = ".nr-source-files h3"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".nr-source-files p"; declarations = list(
+      { property = "font-size"; value = ".86rem" },
+      { property = "color"; value = "var(--sourcery-muted)" }
+    ) },
+    { selector = ".nr-source-files a"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "padding"; value = ".3rem .4rem" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".nr-source-tab,.nr-source-location,.nr-source-status"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = ".35rem .5rem" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".nr-source-tab,.nr-source-status"; declarations = list(
+      { property = "background"; value = "var(--sourcery-panel)" }
+    ) },
+    { selector = ".nr-source-location,.nr-source-status"; declarations = list(
+      { property = "font-size"; value = ".85rem" }
+    ) },
+    { selector = ".nr-source-location"; declarations = list(
+      { property = "border-bottom"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = ".nr-source-buffer"; declarations = list(
+      { property = "max-height"; value = "clamp(16rem,54vh,36rem)" },
+      { property = "overflow"; value = "auto" },
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "font"; value = "13px/1.55 monospace" }
+    ) },
+    { selector = ".nr-source-line"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "3rem max-content" },
+      { property = "min-width"; value = "max-content" },
+      { property = "gap"; value = ".65rem" },
+      { property = "padding-right"; value = ".65rem" }
+    ) },
+    { selector = ".nr-source-line code"; declarations = list(
+      { property = "white-space"; value = "pre" }
+    ) },
+    { selector = ".nr-source-gutter"; declarations = list(
+      { property = "position"; value = "sticky" },
+      { property = "left"; value = "0" },
+      { property = "text-align"; value = "end" },
+      { property = "padding-right"; value = ".45rem" },
+      { property = "background"; value = "var(--sourcery-panel)" },
+      { property = "color"; value = "var(--sourcery-muted)" },
+      { property = "border-right"; value = "1px solid var(--sourcery-line)" },
+      { property = "user-select"; value = "none" }
+    ) },
+    { selector = ".nr-source-line[data-change-line]"; declarations = list(
+      { property = "background"; value = "var(--sourcery-selected)" }
+    ) },
+    { selector = ".nr-source-line:target"; declarations = list(
+      { property = "outline"; value = "1px solid var(--sourcery-accent)" },
+      { property = "outline-offset"; value = "-1px" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:47rem)"; rules = list(
+      { selector = ".nr-ed-change-layout,.nr-ed-flow-layout,.nr-source-layout"; declarations = list(
+        { property = "grid-template-columns"; value = "minmax(0,1fr)" }
+      ) },
+      { selector = ".nr-source-files ul"; declarations = list(
+        { property = "display"; value = "flex" },
+        { property = "gap"; value = ".2rem" },
+        { property = "flex-wrap"; value = "wrap" }
+      ) }
+    ) }
+  )
+  call css.renderCompactRules

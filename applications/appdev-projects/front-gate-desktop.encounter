@@ -1,0 +1,184 @@
+process-module "temple/surface-process-module/1"
+
+process frontGate.desktopMarkup:
+  let port = $tunnels.frontGate
+  let term = ""
+  let availability = "all"
+  let snapshot = null
+  call frontGate.catalogue
+  let catalogue = $result
+  call frontGate.refreshOptions
+  let refreshOptions = $result
+  let reading = { summary = "Waiting for a status check."; checked = ""; checkedHidden = true; staleHidden = true }
+  call frontGate.readingNodes
+  let readingNodes = $result
+  let input = list(
+    { tag = "input"; attrs = { id = "front-gate-status-address"; type = "hidden"; value = concat("http://localhost:", $port, "/front-gate/status-data") } },
+    { tag = "div"; attrs = { class = "front-gate-overview" }; children = list(
+      { tag = "div"; attrs = { class = "front-gate-overview-copy" }; children = list(
+        { tag = "span"; attrs = { class = "front-gate-overview-label" }; children = list("SSH service status") },
+        { tag = "div"; attrs = { id = "front-gate-live-status"; class = "front-gate-reading"; role = "status" }; children = $readingNodes }
+      ) },
+      { tag = "div"; attrs = { class = "front-gate-overview-actions" }; children = list(
+        { tag = "div"; attrs = { class = "front-gate-auto-refresh-control" }; children = list(
+          { tag = "label"; attrs = { for = "front-gate-auto-refresh" }; children = list(
+            "Auto-refresh",
+            { tag = "select"; attrs = { id = "front-gate-auto-refresh"; "aria-controls" = "front-gate-live-status"; "aria-describedby" = "front-gate-countdown" }; children = map($refreshOptions, "option", {
+              tag = "option"; attrs = { value = $option.value; selected = at($option, "default") }; children = list($option.label)
+            }) }
+          ) },
+          { tag = "span"; attrs = { id = "front-gate-countdown"; role = "timer"; "aria-live" = "off" } }
+        ) },
+        { tag = "button"; attrs = { id = "front-gate-refresh"; class = "button"; type = "button"; "aria-controls" = "front-gate-live-status" }; children = list("Refresh status") }
+      ) }
+    ) },
+    { tag = "div"; attrs = { class = "front-gate-filters" }; children = list(
+      { tag = "label"; attrs = { for = "front-gate-search" }; children = list(
+        "Search directory",
+        { tag = "input"; attrs = { id = "front-gate-search"; type = "search"; maxlength = "120"; autocomplete = "off"; placeholder = "Service or host unit"; "aria-controls" = "front-gate-services" } }
+      ) },
+      { tag = "label"; attrs = { for = "front-gate-availability" }; children = list(
+        "Availability",
+        { tag = "select"; attrs = { id = "front-gate-availability"; "aria-controls" = "front-gate-services" }; children = list(
+          { tag = "option"; attrs = { value = "all" }; children = list("All services") },
+          { tag = "option"; attrs = { value = "Listening" }; children = list("Listening") },
+          { tag = "option"; attrs = { value = "Offline" }; children = list("Offline") },
+          { tag = "option"; attrs = { value = "HTTPS pilot" }; children = list("HTTPS pilot") }
+        ) }
+      ) }
+    ) },
+    { tag = "div"; attrs = { id = "front-gate-services" }; children = $catalogue }
+  )
+  call html.serialize
+
+process frontGate.readingNodes:
+  let result = list(
+    { tag = "strong"; attrs = { id = "front-gate-summary" }; children = list($reading.summary) },
+    { tag = "span"; attrs = { id = "front-gate-stale"; class = "front-gate-badge"; "data-state" = "Stale"; hidden = $reading.staleHidden }; children = list("Stale") },
+    { tag = "span"; attrs = { id = "front-gate-checked"; hidden = $reading.checkedHidden }; children = list($reading.checked) }
+  )
+
+process frontGate.refreshOptions:
+  let result = list(
+    { value = "paused"; label = "Paused"; milliseconds = 0 },
+    { value = "15"; label = "15 seconds"; milliseconds = 15000 },
+    { value = "30"; label = "30 seconds"; milliseconds = 30000; default = true },
+    { value = "60"; label = "1 minute"; milliseconds = 60000 }
+  )
+
+process frontGate.catalogue:
+  call frontGate.catalogueView
+  let view = $result
+  let unitsOpen = false
+  call frontGate.renderCatalogue
+
+process frontGate.catalogueView:
+  let services = list()
+  when $snapshot:
+    let services = $snapshot.services
+  when not($snapshot):
+    call gate.apps
+    let services = map($result, "service", { group = $service.group; name = $service.name; detail = $service.detail;
+      href = concat("http://", $service.id, ".localhost:", $port, "/"); status = null })
+  when not(eq($availability, "all")):
+    let services = filter($services, "service", eq($service.status, $availability))
+  when $term:
+    fold $services as service; matches starts list():
+      port text.lowerCase { value = concat($service.name, " ", $service.detail, " ", $service.group, " ", or($service.status, "")) } → search
+      yield if(includes($search, $term), append($matches, list($service)), $matches) → matches
+    let services = $matches
+  let units = list()
+  when and($snapshot, eq($availability, "all")):
+    call frontGate.filterUnits
+    let units = $result
+  let empty = ""
+  when and(not(count($services)), not(count($units))):
+    let empty = if(eq($availability, "all"), "No matching services or host units.", "No services match these filters.")
+  let result = { services = $services; units = $units; empty = $empty; expandUnits = and(not(eq($term, "")), not(eq(count($units), 0))) }
+
+process frontGate.filterUnits:
+  fold $snapshot.units as group; groups starts list():
+    let names = $group.names
+    when $term:
+      fold $names as name; matching starts list():
+        port text.lowerCase { value = $name } → lowered
+        yield if(includes($lowered, $term), append($matching, list($name)), $matching) → matching
+      let names = $matching
+    let visible = { scope = $group.scope; names = $names; empty = if(count($names), "", $group.empty) }
+    yield if(or(not($term), count($names)), append($groups, list($visible)), $groups) → result
+
+process frontGate.renderCatalogue:
+  let services = $view.services
+  fold $services as service; groups starts list():
+    yield if(includes($groups, $service.group), $groups, append($groups, list($service.group))) → groups
+  fold $groups as group; cards starts list():
+    let entries = filter($services, "service", eq($service.group, $group))
+    let section = { tag = "section"; attrs = { class = "front-gate-group" }; children = list(
+      { tag = "h3"; children = list($group, " ", { tag = "small"; children = list(count($entries)) }) },
+      { tag = "ul"; attrs = { class = "front-gate-grid" }; children = map($entries, "service", {
+        tag = "li"; attrs = { class = "front-gate-card" }; children = list(
+          { tag = "div"; attrs = { class = "front-gate-card-heading" }; children = list(
+            if($service.href, { tag = "a"; attrs = { href = $service.href; target = "_blank"; rel = "noopener" }; children = list($service.name) }, { tag = "strong"; children = list($service.name) }),
+            if($service.status, { tag = "span"; attrs = { class = "front-gate-badge"; "data-state" = $service.status }; children = list($service.status) }, null)
+          ) },
+          { tag = "p"; children = list($service.detail) }
+        )
+      }) }
+    ) }
+    yield append($cards, list($section)) → cards
+  let host = map($view.units, "units", {
+    tag = "section"; children = list({ tag = "h3"; children = list($units.scope, " units") },
+      if(count($units.names), { tag = "ul"; children = map($units.names, "name", { tag = "li"; children = list($name) }) },
+        { tag = "p"; children = list($units.empty) }))
+  })
+  let result = list(
+    if($view.empty, { tag = "p"; attrs = { class = "front-gate-empty"; role = "status" }; children = list($view.empty) }, null),
+    $cards,
+    if(count($host), { tag = "details"; attrs = { class = "front-gate-units"; open = if(or($view.expandUnits, $unitsOpen), true, null) }; children = list(
+      { tag = "summary"; children = list("Running host service units") },
+      { tag = "div"; attrs = { class = "front-gate-unit-groups" }; children = $host }
+    ) }, null)
+  )
+
+process frontGate.snapshot:
+  port json.parse { text = $body } → status
+  port text.matches { value = $status.time; pattern = "^[0-9]{2}:[0-9]{2}:[0-9]{2}$" } → checkedTime
+  assert and(eq($status.schema, "encounter/front-gate-status/1"), $checkedTime, isArray($status.services), isArray($status.timers))
+    otherwise "The gateway did not return a live Front Gate reading."
+  assert and(isArray($status.units), eq(count($status.units), 2),
+    some($status.units, "group", eq($group.scope, "system")), some($status.units, "group", eq($group.scope, "user")))
+    otherwise "The Front Gate host-unit readings were incomplete."
+  let pilot = { group = "Encounter platform"; name = "North River"; detail = "Open the Encounter pilot and sign in with your approved account.";
+    status = "HTTPS pilot"; href = "https://appdev.sourcerytech.com.au/encounter-pilot/" }
+  fold $status.services as service; services starts list($pilot):
+    port text.matches { value = $service.id; pattern = "^[a-z][a-z0-9-]*$" } → validId
+    port value.type { value = $service.online } → onlineType
+    assert and($validId, eq($onlineType, "boolean"))
+      otherwise "The gateway returned an invalid Front Gate service."
+    let href = if($service.online, concat("http://", $service.id, ".localhost:", $port, "/"), null)
+    yield append($services, list({ group = $service.group; name = $service.name; detail = $service.detail;
+      status = if($service.online, "Listening", "Offline"); href = $href })) → services
+  let units = map($status.units, "group", { scope = $group.scope; names = or($group.names, list());
+    empty = if(eq($group.names, null), "Status unavailable.", "No running units.") })
+  fold $status.timers as group; schedules starts list():
+    let scope = $group.scope
+    yield append($schedules, map(or($group.timers, list()), "timer", {
+      id = concat($scope, "-", $timer.name); name = $timer.name; state = "Timer";
+      detail = concat("Observed systemd ", $scope, " timer. Times are AWST.");
+      next = $timer.next; last = $timer.last;
+      service = at($timer, "service"); scope = $scope
+    })) → schedules
+  fold $status.timers as group; runs starts list():
+    let scope = $group.scope
+    yield append($runs, map(or($group.runs, list()), "run", {
+      id = if(at($run, "invocationId"), concat("systemd-invocation:", $run.invocationId), concat($scope, "-run-", $run.name, "@", $run.started));
+      name = $run.name; scope = $scope;
+      state = if(eq($run.result, "success"), "Succeeded", concat("Failed · ", $run.result));
+      detail = concat("Latest completed execution observed for this ", $scope, " service.");
+      started = concat($run.started, " AWST"); duration = concat($run.duration, " seconds")
+    })) → runs
+  let available = some($status.timers, "group", not(eq($group.timers, null)))
+  let timerStatus = if($available, "No timers were reported by the available systemd scopes.", "Timer observations are unavailable from this Front Gate connection.")
+  let result = { services = $services; units = $units;
+    online = count(filter($status.services, "service", $service.online)); total = count($status.services);
+    time = $status.time; schedules = $schedules; runs = $runs; timerStatus = $timerStatus }

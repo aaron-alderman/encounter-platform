@@ -1,0 +1,7 @@
+process-module "temple/surface-process-module/1"
+
+process registryApproval.view:
+  let result = { title = "Approve steward access for Registry Demo Display";
+    message = "You are signed in. This approval grants access to Registry Demo Display for up to one hour.";
+    warning = "Elevated access";
+    acknowledgment = "I understand this grants elevated access to Registry Demo Display only." }

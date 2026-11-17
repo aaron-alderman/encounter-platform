@@ -1,0 +1,15 @@
+process-module "temple/surface-process-module/1"
+
+process gateway.route:
+  let request = $eventInput
+  let status = if(not(eq($request.path, "/")), 404,
+    if($request.upgrade, 403, if(includes(list("GET", "POST"), $request.method), 200, 405)))
+  let result = { path = "/identity-management/"; status = $status }
+  when and(eq($request.path, "/terminal"), eq($request.method, "GET"), not($request.upgrade)):
+    let result = { status = 200; workspaceTerminalApproval = true }
+  when and(eq($request.path, "/aster/"), eq($request.mount, "/")):
+    let status = if($request.upgrade, 403, if(includes(list("GET", "POST"), $request.method), 200, 405))
+    let result = { path = "/chat"; mounted = true; status = $status }
+
+process gateway.page:
+  let result = $eventInput.html

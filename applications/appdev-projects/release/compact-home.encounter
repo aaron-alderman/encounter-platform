@@ -1,0 +1,340 @@
+process-module "temple/surface-process-module/1"
+
+process sourcery.compact.home:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = "body:has(#aster-codex-window[data-active=true]:not([hidden])) #aster-desktop"; declarations = list(
+      { property = "display"; value = "none"; important = true }
+    ) },
+    { selector = ".banner [data-build-edition]"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "justify-items"; value = "end" },
+      { property = "gap"; value = "2px" },
+      { property = "border"; value = "0" },
+      { property = "padding"; value = "3px 0" },
+      { property = "background"; value = "transparent" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = ".banner [data-build-edition] .build-label::after"; declarations = list(
+      { property = "content"; value = "'›'" },
+      { property = "display"; value = "inline-block" },
+      { property = "margin-inline-start"; value = "5px" },
+      { property = "color"; value = "var(--sourcery-banner-highlight)" }
+    ) },
+    { selector = ".banner [data-build-edition]:focus-visible .build-label,.banner [data-build-edition]:hover .build-label"; declarations = list(
+      { property = "text-decoration"; value = "underline" }
+    ) },
+    { selector = "#chat-back"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "#chat-list"; declarations = list(
+      { property = "padding"; value = "5px 7px" }
+    ) },
+    { selector = "#chat-list>header"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "3px 6px" }
+    ) },
+    { selector = "#chat-list>header h2,#chat-list h3"; declarations = list(
+      { property = "font-size"; value = "1rem" },
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = "#chat-list>header nav,#chat-list ul,#chat-list>p"; declarations = list(
+      { property = "margin-block"; value = "3px" }
+    ) },
+    { selector = "#chat-list ul"; declarations = list(
+      { property = "padding-inline-start"; value = "0" },
+      { property = "list-style"; value = "none" }
+    ) },
+    { selector = "#chat-list .chat-group>summary"; declarations = list(
+      { property = "padding-block"; value = "3px" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = "#chat-list .custom-service-item"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "padding"; value = "2px 4px" }
+    ) },
+    { selector = "#chat-search"; declarations = list(
+      { property = "display"; value = "contents" }
+    ) },
+    { selector = "#chat-search summary"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "place-items"; value = "center" },
+      { property = "min-width"; value = "34px" },
+      { property = "min-height"; value = "32px" },
+      { property = "cursor"; value = "pointer" },
+      { property = "font-size"; value = "1.4rem" },
+      { property = "list-style"; value = "none" }
+    ) },
+    { selector = "#chat-search summary::-webkit-details-marker"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "#chat-search form"; declarations = list(
+      { property = "padding"; value = "4px" },
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "4px" }
+    ) },
+    { selector = "#chat-search:not([open]) form"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "#chat-search form input[type=search]"; declarations = list(
+      { property = "max-width"; value = "100%" },
+      { property = "min-width"; value = "0" }
+    ) },
+    { selector = "#conversation>.manager-location"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "nowrap" },
+      { property = "gap"; value = "5px" }
+    ) },
+    { selector = "#conversation-title"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "flex"; value = "1" },
+      { property = "overflow"; value = "hidden" },
+      { property = "text-overflow"; value = "ellipsis" },
+      { property = "white-space"; value = "nowrap" },
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = "#conversation .pin-chat"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = "#conversation .pin-chat button"; declarations = list(
+      { property = "min-inline-size"; value = "33px" }
+    ) },
+    { selector = "#aster-live-status"; declarations = list(
+      { property = "width"; value = "146px" },
+      { property = "height"; value = "36px" },
+      { property = "border"; value = "0" },
+      { property = "flex"; value = "none" }
+    ) },
+    { selector = "#chat-messages article.user"; declarations = list(
+      { property = "background"; value = "var(--sourcery-info-paper,#e6edfc)" },
+      { property = "border-inline-start"; value = "3px solid var(--sourcery-info-ink,#39508d)" }
+    ) },
+    { selector = "#aster-live-output"; declarations = list(
+      { property = "margin-block"; value = "5px" }
+    ) },
+    { selector = "#aster-live-output summary"; declarations = list(
+      { property = "padding-block"; value = "4px" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = "#aster-live-stream"; declarations = list(
+      { property = "max-width"; value = "100%" }
+    ) },
+    { selector = "#chat-composer"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "minmax(0,1fr) auto" },
+      { property = "align-items"; value = "end" },
+      { property = "gap"; value = "3px 6px" },
+      { property = "padding"; value = "5px 7px" },
+      { property = "margin"; value = "0" },
+      { property = "background"; value = "var(--sourcery-panel)" },
+      { property = "border-block-start"; value = "1px solid var(--sourcery-line)" },
+      { property = "flex"; value = "none" }
+    ) },
+    { selector = "#chat-composer>label,#chat-composer>.composer-notice"; declarations = list(
+      { property = "grid-column"; value = "1/-1" },
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = "#chat-composer textarea"; declarations = list(
+      { property = "box-sizing"; value = "border-box" },
+      { property = "width"; value = "100%" },
+      { property = "min-height"; value = "44px" },
+      { property = "max-height"; value = "34dvh" },
+      { property = "resize"; value = "vertical" },
+      { property = "font"; value = "inherit" },
+      { property = "color"; value = "var(--sourcery-ink)" },
+      { property = "background"; value = "var(--sourcery-paper)" }
+    ) },
+    { selector = "#chat-composer .composer-actions"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "gap"; value = "4px" },
+      { property = "align-items"; value = "center" }
+    ) },
+    { selector = "#chat-composer .composer-actions button"; declarations = list(
+      { property = "min-height"; value = "44px" }
+    ) },
+    { selector = "#chat-composer iframe"; declarations = list(
+      { property = "width"; value = "78px" },
+      { property = "height"; value = "44px" },
+      { property = "border"; value = "0" }
+    ) },
+    { selector = "body#aster-status-document"; declarations = list(
+      { property = "box-sizing"; value = "border-box" },
+      { property = "height"; value = "auto" },
+      { property = "min-height"; value = "0" },
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "padding"; value = "3px" },
+      { property = "color"; value = "var(--ink)" }
+    ) },
+    { selector = "#aster-status-document p,#aster-status-document form"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = "#aster-status-document form button"; declarations = list(
+      { property = "width"; value = "100%" },
+      { property = "min-height"; value = "38px" }
+    ) },
+    { selector = "#aster-status-document p"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "font-size"; value = "11px" }
+    ) },
+    { selector = "#aster-status-document .connection-dot"; declarations = list(
+      { property = "width"; value = "7px" },
+      { property = "height"; value = "7px" },
+      { property = "border-radius"; value = "50%" },
+      { property = "margin-inline-end"; value = "4px" },
+      { property = "background"; value = "#326844" }
+    ) },
+    { selector = "#aster-status-document p[data-state=unavailable] .connection-dot"; declarations = list(
+      { property = "background"; value = "#963c35" }
+    ) },
+    { selector = "#aster-status-document .running-dots"; declarations = list(
+      { property = "animation"; value = "aster-running 1.4s ease-in-out infinite" },
+      { property = "font-family"; value = "monospace" }
+    ) },
+    { atRule = "keyframes"; prelude = " aster-running"; rules = list(
+      { selector = "50%"; declarations = list(
+        { property = "opacity"; value = ".35" }
+      ) }
+    ) },
+    { atRule = "media"; prelude = "(prefers-reduced-motion:reduce)"; rules = list(
+      { selector = "#aster-status-document .running-dots"; declarations = list(
+        { property = "animation"; value = "none" }
+      ) }
+    ) },
+    { atRule = "media"; prelude = "(max-height:300px)"; rules = list(
+      { selector = "#chat-composer textarea"; declarations = list(
+        { property = "height"; value = "44px" }
+      ) },
+      { selector = "#chat-composer>label"; declarations = list(
+        { property = "position"; value = "absolute" },
+        { property = "clip-path"; value = "inset(50%)" },
+        { property = "width"; value = "1px" },
+        { property = "height"; value = "1px" },
+        { property = "overflow"; value = "hidden" }
+      ) }
+    ) },
+    { atRule = "media"; prelude = " (max-width:680px) and (pointer:coarse),(max-height:500px) and (pointer:coarse)"; rules = list(
+      { selector = "main.desktop"; declarations = list(
+        { property = "padding"; value = "0" },
+        { property = "overflow"; value = "hidden" }
+      ) },
+      { selector = "main.desktop>.shortcuts,main.desktop>.wallpaper,main.desktop>.desktop-identity"; declarations = list(
+        { property = "display"; value = "none" }
+      ) },
+      { selector = "main.desktop>#workspace.window,#workspace-maximized:checked~main.desktop>#workspace"; declarations = list(
+        { property = "position"; value = "absolute" },
+        { property = "inset"; value = "0" },
+        { property = "inline-size"; value = "auto" },
+        { property = "block-size"; value = "auto" },
+        { property = "max-block-size"; value = "none" },
+        { property = "margin"; value = "0" },
+        { property = "isolation"; value = "isolate" }
+      ) },
+      { selector = "#workspace>.titlebar,#workspace .banner,#workspace .statusbar,#home-getting-started:not([open]),#workspace .window-controls,#aster-desktop"; declarations = list(
+        { property = "display"; value = "none"; important = true }
+      ) },
+      { selector = "#workspace>.menu-bar"; declarations = list(
+        { property = "position"; value = "absolute" },
+        { property = "inset-block-start"; value = "0" },
+        { property = "inset-inline-end"; value = "0" },
+        { property = "min-block-size"; value = "44px" },
+        { property = "z-index"; value = "2" }
+      ) },
+      { selector = "#workspace>.menu-bar summary"; declarations = list(
+        { property = "display"; value = "flex" },
+        { property = "align-items"; value = "center" },
+        { property = "justify-content"; value = "center" },
+        { property = "min-block-size"; value = "44px" },
+        { property = "min-inline-size"; value = "44px" }
+      ) },
+      { selector = "#workspace .tabs"; declarations = list(
+        { property = "padding-inline-end"; value = "52px" }
+      ) },
+      { selector = "#workspace .program-switcher"; declarations = list(
+        { property = "margin"; value = "0" },
+        { property = "min-block-size"; value = "0" }
+      ) },
+      { selector = "#workspace .tabs"; declarations = list(
+        { property = "flex-wrap"; value = "wrap" }
+      ) },
+      { selector = "#workspace .tabs>label,.sourcery-os-taskbar .task-button,#start>summary"; declarations = list(
+        { property = "min-block-size"; value = "44px" }
+      ) },
+      { selector = "#workspace .tabs>label"; declarations = list(
+        { property = "display"; value = "inline-flex" },
+        { property = "align-items"; value = "center" }
+      ) },
+      { selector = ".sourcery-os-taskbar"; declarations = list(
+        { property = "min-block-size"; value = "46px" }
+      ) },
+      { selector = "#start-flyout-tools .app-link"; declarations = list(
+        { property = "min-block-size"; value = "44px" }
+      ) },
+      { selector = "#aster-codex-window[data-manager-maximized=true]"; declarations = list(
+        { property = "inset"; value = "0" },
+        { property = "inline-size"; value = "auto" },
+        { property = "block-size"; value = "auto" },
+        { property = "max-block-size"; value = "none" }
+      ) },
+      { selector = "#aster-codex-window>[data-window-slot=banner],#aster-codex-window>[data-window-slot=menu],#aster-codex-maximize,#aster-codex-minimize"; declarations = list(
+        { property = "display"; value = "none"; important = true }
+      ) },
+      { selector = "#aster-codex-window>.titlebar"; declarations = list(
+        { property = "min-block-size"; value = "44px" }
+      ) },
+      { selector = "#aster-codex-close"; declarations = list(
+        { property = "min-inline-size"; value = "44px" },
+        { property = "min-block-size"; value = "44px" }
+      ) }
+    ) },
+    { atRule = "media"; prelude = " (max-width:680px),(max-height:500px) and (pointer:coarse)"; rules = list(
+      { selector = "#main[data-aster-view]"; declarations = list(
+        { property = "grid-template-columns"; value = "minmax(0,1fr)" },
+        { property = "grid-template-rows"; value = "minmax(0,1fr)" }
+      ) },
+      { selector = "#main[data-aster-view=list] #conversation,#main[data-aster-view=chat] #chat-list"; declarations = list(
+        { property = "display"; value = "none" }
+      ) },
+      { selector = "#chat-list .custom-service-item"; declarations = list(
+        { property = "min-block-size"; value = "44px" },
+        { property = "padding-block"; value = "4px" }
+      ) },
+      { selector = "#conversation"; declarations = list(
+        { property = "padding"; value = "0" }
+      ) },
+      { selector = "#conversation>.manager-location"; declarations = list(
+        { property = "flex-wrap"; value = "nowrap" },
+        { property = "min-block-size"; value = "44px" },
+        { property = "padding-block"; value = "0" },
+        { property = "gap"; value = "8px" }
+      ) },
+      { selector = "#conversation-title"; declarations = list(
+        { property = "font-size"; value = "1rem" },
+        { property = "margin"; value = "0" },
+        { property = "min-inline-size"; value = "0" },
+        { property = "overflow-wrap"; value = "anywhere" }
+      ) },
+      { selector = "#chat-back"; declarations = list(
+        { property = "display"; value = "inline-flex" },
+        { property = "align-items"; value = "center" },
+        { property = "min-block-size"; value = "44px" },
+        { property = "min-inline-size"; value = "44px" },
+        { property = "flex"; value = "none" }
+      ) },
+      { selector = "#chat-messages"; declarations = list(
+        { property = "padding-inline"; value = "8px" }
+      ) },
+      { selector = "#chat-search summary,#conversation .pin-chat button"; declarations = list(
+        { property = "min-block-size"; value = "44px" },
+        { property = "min-inline-size"; value = "44px" }
+      ) },
+      { selector = "#aster-live-status"; declarations = list(
+        { property = "width"; value = "104px" }
+      ) }
+    ) }
+  )
+  call css.renderCompactRules

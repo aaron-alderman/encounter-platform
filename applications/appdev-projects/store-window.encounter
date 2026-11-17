@@ -1,0 +1,14 @@
+process-module "temple/surface-process-module/1"
+
+process store.desktopMarkup:
+  let input = list(
+    { tag = "nav"; attrs = { class = "project-command-bar"; "aria-label" = "Store views" }; children = list(
+      { tag = "a"; attrs = { id = "notes-store-catalog"; href = "/store/" }; children = list("Catalog") },
+      { tag = "a"; attrs = { id = "notes-store-execution"; href = "/store/?view=execution" }; children = list("Trace") },
+      { tag = "a"; attrs = { id = "notes-store-trace"; href = "/store/?view=trace" }; children = list("Trace map") },
+      { tag = "a"; attrs = { id = "notes-store-receipts"; href = "/store/?view=receipts" }; children = list("Receipts") }
+    ) },
+    { tag = "p"; attrs = { id = "notes-store-status"; role = "status" } },
+    { tag = "div"; attrs = { id = "notes-store-surface" } }
+  )
+  call html.serialize

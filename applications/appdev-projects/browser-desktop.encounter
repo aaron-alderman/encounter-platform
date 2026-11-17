@@ -1,0 +1,532 @@
+process-module "temple/surface-process-module/1"
+
+process desktop.bind:
+  port browser.batch { steps = list(
+    { port = "dom.exists"; args = { selector = "main.desktop > .desktop-app-window" }; save = "available" },
+    { port = "dom.exists"; args = { selector = "#front-gate-window" }; save = "hasFrontGate" },
+    { port = "dom.exists"; args = { selector = "#first-run-dialog" }; save = "hasEditors" }
+  ) } → desktop
+  when $desktop.available:
+    let hasFrontGate = $desktop.hasFrontGate
+    port state.set { key = "desktop-has-front-gate"; value = $hasFrontGate } → _
+    call desktop.apps
+    let apps = filter($result, "entry", or($hasFrontGate, not(eq($entry.key, "front-gate"))))
+    let members = append(list("#workspace"), map($apps, "app", concat("#", $app.window)))
+    port browser.activeGroup { ref = "main.desktop"; members = $members } → _
+    port browser.onMany { bindings = list(
+      { ref = "#workspace-open"; event = "change"; query = "desktop.event"; input = { action = "check-isolation" }; dispatchLabel = "check-isolation · Sourcery Workspace" },
+      { ref = "#start"; event = "click"; delegate = ".start-menu a"; query = "desktop.event"; input = { action = "dismiss-start" }; dispatchLabel = "dismiss-start · Start menu" },
+      { ref = "#start"; event = "animationend"; delegate = ".start-group[id^=start-flyout-]"; query = "desktop.event"; input = { action = "start-hover" }; dispatchLabel = "Hover · Start flyout" },
+      { ref = "#start"; event = "keydown"; query = "desktop.event"; input = { action = "start-key" }; dispatchLabel = "start-key · Start menu" },
+      { ref = "#start"; event = "toggle"; query = "desktop.event"; input = { action = "start-toggle" }; dispatchLabel = "start-toggle · Start menu" },
+      { ref = "#start"; event = "click"; delegate = "#start-all-apps"; query = "desktop.event"; input = { action = "all-apps"; key = "workspace" }; dispatchLabel = "all-apps · Sourcery Workspace" },
+      { ref = "document"; event = "click"; delegate = "a[data-open-workspaces]"; prevent = true; unmodified = true; query = "desktop.event";
+        input = { action = "open-workspaces" }; dispatchLabel = "Open · Environments" }
+    ) } → _
+    fold $apps as app; registrations starts list():
+      call desktop.defaultAction
+      let open = { action = $app.defaultAction; key = $app.key }
+      let window = concat("#", $app.window)
+      let timing = if(eq($app.key, "performance"), null, $app.title)
+      let shortcut = includes(list("hosted", "desktop"), $app.group)
+      let label = concat($app.defaultAction, " · ", $app.title)
+      let bindings = list(
+        if(or($shortcut, $app.start), { ref = "document"; event = "click"; delegate = concat("button[data-desktop-launch=", $app.key, "]"); query = "desktop.event"; input = $open; dispatchLabel = $label; timing = $timing; reveal = $window }, null),
+        if(not($shortcut), { ref = concat("#", $app.id); event = "click"; query = "desktop.event"; input = $open; dispatchLabel = $label; timing = $timing; reveal = $window }, null),
+        if(includes(list("file-manager", "file-viewer", "service-manager"), $app.key),
+          { ref = $window; event = "click"; delegate = "button:is([data-manager-action], [data-document-command])"; query = "desktop.event";
+            input = { action = "manager"; key = $app.key }; dispatchLabel = concat("manager · ", $app.title) }, null),
+        if($app.managedCommands, { ref = $window; event = "click"; delegate = "button[data-managed-key]"; query = "desktop.event";
+          input = { action = "managed-key"; key = $app.key }; dispatchLabel = concat("Command · ", $app.title) }, null),
+        if(eq($app.key, "system-catalogue"), { ref = $window; event = "click"; delegate = "button[data-catalogue-source]";
+          query = "desktop.event"; input = { action = "catalogue-source"; key = "file-viewer" }; dispatchLabel = "Open Catalogue source" }, null),
+        if(eq($app.key, "temple-manager"), { ref = $window; event = "click"; delegate = "button[data-document-command=temple-refresh]"; query = "desktop.event";
+          input = { action = "temple-refresh"; key = $app.key }; dispatchLabel = "Refresh saved records · Temple Manager" }, null),
+        if(and(eq($app.key, "temple-manager"), $desktop.hasEditors), { ref = "#first-run-dialog"; event = "close"; query = "desktop.event";
+          input = { action = "temple-editor-closed"; key = $app.key }; dispatchLabel = "Return from editor · Temple Manager" }, null),
+        if(eq($app.key, "service-manager"), { ref = $window; event = "change"; delegate = "#service-manager-density"; query = "desktop.event";
+          input = { action = "manager"; key = $app.key }; dispatchLabel = "Density · Service Manager" }, null),
+        if(eq($app.key, "file-manager"), { ref = $window; event = "submit"; delegate = "#file-rel-filter"; preventDefault = true;
+          query = "desktop.event"; input = { action = "manager"; key = $app.key }; dispatchLabel = "Filter REL facts" }, null),
+        if(eq($app.key, "file-viewer"), { ref = $window; event = "submit"; delegate = "#viewer-rel-filter"; preventDefault = true;
+          query = "desktop.event"; input = { action = "manager"; key = $app.key }; dispatchLabel = "Filter REL facts" }, null),
+        if($app.maximize, { ref = $window; event = "click"; delegate = "button[data-desktop-close]"; query = "desktop.event";
+          input = { action = "close"; key = $app.key }; dispatchLabel = concat("close · ", $app.title) }, null),
+        if($app.maximize, { ref = concat("#", $app.maximize); event = "click"; query = "desktop.event";
+          input = { action = "maximize"; key = $app.key }; dispatchLabel = concat("maximize · ", $app.title) }, null),
+        if(eq($app.key, "certificates"), { ref = $window; event = "submit"; delegate = "form[data-certificate-renewal]"; preventDefault = true; query = "desktop.event";
+          input = { action = "certificate-submit"; key = $app.key }; dispatchLabel = concat("certificate-submit · ", $app.title) }, null),
+        { ref = concat("#", $app.task); event = "click"; query = "desktop.event"; input = $open; dispatchLabel = $label; timing = $timing; reveal = $window },
+        { ref = concat("#", $app.minimize); event = "click"; query = "desktop.event"; input = { action = "minimize"; key = $app.key }; dispatchLabel = concat("minimize · ", $app.title) },
+        { ref = concat("#", $app.close); event = "click"; query = "desktop.event"; input = { action = "close"; key = $app.key }; dispatchLabel = concat("close · ", $app.title) }
+      )
+      yield append($registrations, filter($bindings, "binding", $binding)) → registrations
+    fold $registrations as binding; pending starts list():
+      let batch = append($pending, list($binding))
+      let full = eq(count($batch), 32)
+      when $full:
+        port browser.onMany { bindings = $batch } → _
+      yield if($full, list(), $batch) → pending
+    when count($pending):
+      port browser.onMany { bindings = $pending } → _
+    each $apps as app:
+      let window = concat("#", $app.window)
+      when eq($app.fileRole, "text"):
+        call browserEditor.bind
+      when eq($app.key, "service-manager"):
+        call managers.restoreDensity
+      when eq($app.key, "semantic-compiler"):
+        port browser.on { ref = "#compiler-route-form"; event = "submit"; preventDefault = true;
+          query = "compilerBrowser.run"; dispatchLabel = "Simulate Identity Management move" } → _
+      when eq($app.key, "store"):
+        call store.desktopBind
+      when eq($app.key, "game"):
+        call game.desktopBind
+      when eq($app.key, "front-gate"):
+        port browser.on { ref = "#front-gate-search"; event = "input"; query = "desktop.event"; input = { action = "filter-services"; key = $app.key; filter = "search" }; dispatchLabel = concat("filter-services · ", $app.title) } → _
+        port dom.exists { selector = "#front-gate-availability" } → hasAvailability
+        when $hasAvailability:
+          port browser.on { ref = "#front-gate-availability"; event = "change"; query = "desktop.event"; input = { action = "filter-services"; key = $app.key; filter = "availability" }; dispatchLabel = concat("filter-services · ", $app.title) } → _
+        call frontGate.bindFilters
+        port dom.exists { selector = "#front-gate-refresh" } → hasStatus
+        port state.set { key = "front-gate-status-available"; value = $hasStatus } → _
+        when $hasStatus:
+          call frontGate.browserPort
+          call frontGate.bindReading
+          port browser.on { ref = "#front-gate-refresh"; event = "click"; query = "desktop.event"; input = { action = "refresh-status"; key = $app.key }; dispatchLabel = concat("refresh-status · ", $app.title); timing = "Front Gate refresh" } → _
+          call frontGate.bindRefreshClock
+    port dom.exists { selector = "#notes-assurance-history > section" } → returned
+    when $returned:
+      port browser.navigate { path = "/"; historyOnly = true } → _
+      let app = at(filter($apps, "entry", eq($entry.key, "assurance")), 0)
+      call desktop.open
+    port dom.exists { selector = "#acting-as-content [data-acting-as]" } → actingAsReturned
+    when $actingAsReturned:
+      port browser.navigate { path = "/workspace/home"; historyOnly = true } → _
+      let app = at(filter($apps, "entry", eq($entry.key, "acting-as")), 0)
+      let returned = true
+      call desktop.open
+    each filter($apps, "entry", at($entry, "inventory")) as app:
+      port dom.exists { selector = concat("#", $app.content, " ", $app.inventory) } → inventoryReturned
+      when $inventoryReturned:
+        port browser.navigate { path = "/"; historyOnly = true } → _
+        let returned = true
+        call desktop.open
+
+process desktop.browserApps:
+  port state.get { key = "desktop-has-front-gate" } → hasFrontGate
+  call desktop.apps
+  let result = filter($result, "entry", or($hasFrontGate, not(eq($entry.key, "front-gate"))))
+
+process desktop.event:
+  call desktop.browserApps
+  let apps = $result
+  let action = $eventInput.action
+  let managerHandoff = false
+  let storeLaunch = false
+  let key = at($eventInput, "key")
+  let app = at(filter($apps, "entry", eq($entry.key, $key)), 0)
+  when eq($action, "check-isolation"):
+    call desktop.checkIsolation
+  when eq($action, "dismiss-start"):
+    port browser.write { ref = "#start"; name = "open"; value = false } → _
+  when eq($action, "start-hover"):
+    let group = at($eventInput.matched.attributes, "id")
+    when includes(list("start-flyout-account", "start-flyout-workspaces", "start-flyout-tools", "start-flyout-apps"), $group):
+      port dom.exists { selector = concat("#start[open] #", $group, " > summary:hover") } → hovered
+      when $hovered:
+        port browser.write { ref = $eventInput.matched.ref; name = "open"; value = true } → _
+  when eq($action, "start-toggle"):
+    port browser.batch { steps = list(
+      { port = "dom.exists"; args = { selector = "html:not(:has(#start:not([open]) .start-group[open]))" }; save = "nothingToClose" },
+      { port = "browser.write"; args = { ref = "#start:not([open]) .start-group[open]"; name = "open"; value = false }; unless = "nothingToClose" }
+    ) } → _
+  when eq($action, "all-apps"):
+    port browser.write { ref = "#start"; name = "open"; value = false } → _
+    port browser.write { ref = "#workspace-open"; name = "checked"; value = true } → _
+    port browser.write { ref = "#tab-hosted"; name = "checked"; value = true } → _
+    call appdev.shortcutCount
+    port browser.activate { group = "main.desktop"; member = "#workspace" } → _
+    port browser.focus { ref = "#workspace .programs" } → _
+  when eq($action, "open-workspaces"):
+    call desktop.openWorkspaces
+  when and(eq($action, "start-key"), eq(at(at($eventInput, "event"), "key"), "Escape")):
+    port browser.write { ref = "#start"; name = "open"; value = false } → _
+    port browser.focus { ref = "#start > summary" } → _
+  when $app:
+    when and(eq($action, "maximize"), $app.maximize):
+      let window = concat("#", $app.window)
+      port dom.exists { selector = concat($window, "[data-manager-maximized=true]") } → maximized
+      port browser.attribute { ref = $window; name = "data-manager-maximized"; value = not($maximized) } → _
+      port browser.attribute { ref = concat("#", $app.maximize); name = "aria-pressed"; value = not($maximized) } → _
+    when and(eq($key, "file-viewer"), eq($action, "catalogue-source")):
+      let sourcePath = at($eventInput.matched.attributes, "data-catalogue-source")
+      let sourceProcess = at($eventInput.matched.attributes, "data-catalogue-process")
+      let sourceName = at($eventInput.matched.attributes, "data-catalogue-file")
+      let managerHandoff = true
+      let returned = false
+      call desktop.open
+      let fileId = null
+      let relFilter = ""
+      call managers.showViewer
+    when eq($action, "manager"):
+      call managers.event
+    when and(eq($action, "managed-key"), $app.managedCommands):
+      let selection = at($eventInput.matched.attributes, "data-managed-key")
+      let command = at(filter($app.managedCommands, "command", eq(concat("", $command.key), $selection)), 0)
+      when $command:
+        let managedKind = 1
+        let managedKey = $command.key
+        call desktop.managedEvent
+    when and(eq($app.fileRole, "text"), includes(list("editor-command", "editor-response", "editor-cancel"), $action)):
+      call browserEditor.event
+    when and(eq($key, "temple-manager"), eq($action, "temple-refresh")):
+      call desktop.templeRecords
+    when and(eq($key, "temple-manager"), eq($action, "temple-editor-closed")):
+      port dom.exists { selector = "#temple-manager-window:not([hidden])" } → visible
+      when $visible:
+        call desktop.templeRecords
+    when and(eq($key, "certificates"), eq($action, "certificate-submit")):
+      let form = $eventInput.matched.ref
+      call inventory.open
+    when eq($action, $app.defaultAction):
+      let returned = false
+      call desktop.open
+    when includes(list("minimize", "close"), $action):
+      let allowed = true
+      when and(eq($action, "close"), eq($app.fileRole, "text")):
+        call browserEditor.requestClose
+        let allowed = $result
+      when $allowed:
+        call desktop.hide
+    when and(eq($app.key, "front-gate"), eq($action, "filter-services")):
+      call frontGate.changeFilter
+    when and(eq($app.key, "front-gate"), eq($action, "refresh-status")):
+      call frontGate.refreshStatus
+  let result = true
+
+process desktop.hide:
+  let task = concat("#", $app.task)
+  let window = concat("#", $app.window)
+  call desktop.readVisibility
+  let windowVisibility = $result
+  let windowAction = $action
+  call windowShell.nextVisibility
+  let nextVisibility = $result
+  port browser.write { ref = $window; name = "hidden"; value = not(eq($nextVisibility, "visible")) } → _
+  port browser.write { ref = $task; name = "hidden"; value = eq($nextVisibility, "closed") } → _
+  when eq($key, "file-manager"):
+    call managers.clearFiles
+  when eq($key, "file-viewer"):
+    port browser.content { ref = "#file-viewer-detail"; html = "" } → _
+  when eq($action, "minimize"):
+    port browser.focus { ref = $task } → _
+  when eq($action, "close"):
+    when $app.managedCommands:
+      port state.set { key = concat("desktop-managed-", $app.key); value = 0 } → _
+    when eq($key, "store"):
+      call store.cancelIntent
+    when or($app.inventory, eq($key, "acting-as")):
+      port browser.content { ref = concat("#", $app.content); html = "" } → _
+    let shortcut = includes(list("hosted", "desktop"), $app.group)
+    let launch = if($shortcut, concat("main.desktop .shortcuts [data-desktop-launch=", $app.key, "]"), concat("#", $app.id))
+    let visible = if($shortcut, concat("main.desktop:not([hidden]) .shortcuts [data-desktop-launch=", $app.key, "]"),
+      concat("#workspace-open:checked ~ main.desktop:not([hidden]) #tab-operations:checked ~ .programs ", $launch))
+    when eq($app.group, "banner"):
+      let visible = concat("#workspace-open:checked ~ main.desktop:not([hidden]) ", $launch)
+    port dom.exists { selector = $visible } → launchVisible
+    port browser.focus { ref = if($launchVisible, $launch, "#start > summary") } → _
+
+process desktop.managedEvent:
+  let storageKey = concat("desktop-managed-", $app.key)
+  let target = concat("#", $app.window, "-view")
+  try:
+    port state.get { key = $storageKey } → previous
+    let source = concat("process-module \"temple/surface-process-module/1\"\n\n", $app.source)
+    port kernel.prepare { text = $source; entry = $app.entry } → prepared
+    port kernel.execute { admission = $prepared.admission;
+      input = { kind = $managedKind; value = $managedKey; state = or($previous, 0); control = 0 } } → view
+    assert and(not(eq(at($view, "state"), null)), includes(list(1, 2), count($view.view)))
+      otherwise "Invalid desktop app view"
+    let input = map($view.view, "label", { tag = "p"; children = list(concat("", $label)) })
+    call html.serialize
+    port browser.content { ref = $target; html = $result } → _
+    port state.set { key = $storageKey; value = $view.state } → _
+  catch fault:
+    port browser.write { ref = $target; name = "textContent"; value = "The app could not process this event." } → _
+
+process frontGate.browserPort:
+  port state.get { key = "front-gate-browser-port" } → port
+  when not($port):
+    port state.get { scope = "document"; key = "front-gate-browser-port" } → port
+    when not($port):
+      port state.get { key = "front-gate-status-available" } → hasStatus
+      let href = ""
+      when $hasStatus:
+        port browser.property { ref = "#front-gate-status-address"; name = "value" } → href
+      when not($hasStatus):
+        port browser.property { ref = "#front-gate-live-status"; name = "href" } → href
+      port text.match { value = $href; pattern = "^http://localhost:([0-9]{4,5})/(?:front-gate/status(?:-data)?)?$" } → address
+      assert $address
+        otherwise "Front Gate requires a published SSH port."
+      let port = at($address.groups, 0)
+      port state.set { scope = "document"; key = "front-gate-browser-port"; value = $port } → _
+    port state.set { key = "front-gate-browser-port"; value = $port } → _
+  let result = $port
+
+process frontGate.bindReading:
+  port dom.exists { selector = "#front-gate-summary" } → currentMarkup
+  when $currentMarkup:
+    port browser.batch { steps = list(
+      { port = "browser.property"; args = { ref = "#front-gate-summary"; name = "textContent" }; save = "summary" },
+      { port = "browser.property"; args = { ref = "#front-gate-checked"; name = "textContent" }; save = "checked" },
+      { port = "browser.property"; args = { ref = "#front-gate-checked"; name = "hidden" }; save = "checkedHidden" },
+      { port = "browser.property"; args = { ref = "#front-gate-stale"; name = "hidden" }; save = "staleHidden" }
+    ) } → reading
+    port state.set { key = "front-gate-reading"; value = $reading } → _
+
+process frontGate.updateReading:
+  port state.get { key = "front-gate-reading" } → previousReading
+  let reading = { summary = $summary; checked = $detail; checkedHidden = false; staleHidden = not($stale) }
+  when not($previousReading):
+    # An open tab from an earlier release can reconnect before reloading Home.
+    call frontGate.readingNodes
+    let input = $result
+    call html.serialize
+    port browser.content { ref = "#front-gate-live-status"; html = $result; diagnosticLabel = "Initialize Front Gate reading targets" } → _
+    port state.set { key = "front-gate-reading"; value = $reading } → _
+  when $previousReading:
+    let fields = list(
+      { key = "summary"; ref = "#front-gate-summary"; name = "textContent" },
+      { key = "checked"; ref = "#front-gate-checked"; name = "textContent" },
+      { key = "checkedHidden"; ref = "#front-gate-checked"; name = "hidden" },
+      { key = "staleHidden"; ref = "#front-gate-stale"; name = "hidden" }
+    )
+    let changed = filter($fields, "field", not(eq(at($previousReading, $field.key), at($reading, $field.key))))
+    when count($changed):
+      let steps = map($changed, "field", { port = "browser.write"; args = { ref = $field.ref; name = $field.name; value = at($reading, $field.key) } })
+      let label = if(and(eq(count($changed), 1), eq(at(at($changed, 0), "key"), "checked")), "Update Front Gate check time", "Update Front Gate reading")
+      port browser.batch { steps = $steps; diagnosticLabel = $label } → _
+      port state.set { key = "front-gate-reading"; value = $reading } → _
+
+process frontGate.bindRefreshClock:
+  port dom.exists { selector = "#front-gate-auto-refresh" } → hasPreference
+  port dom.exists { selector = "#front-gate-countdown" } → hasCountdown
+  when and($hasPreference, $hasCountdown):
+    call frontGate.refreshOptions
+    port browser.countdown { ref = "#front-gate-countdown"; control = "#front-gate-auto-refresh";
+      surface = "#front-gate-window"; container = "main.desktop"; choices = $result;
+      storageKey = "sourcery.front-gate.auto-refresh"; query = "frontGate.refreshFromClock"; dispatchLabel = "refresh-due · Front Gate" } → _
+
+process frontGate.refreshFromClock:
+  call frontGate.refreshStatus
+  let result = true
+
+process frontGate.refreshStatus:
+  call frontGate.browserPort
+  let port = $result
+  port state.get { key = "front-gate-snapshot" } → previous
+  port state.get { key = "front-gate-refresh-attempted" } → attempted
+  let snapshot = null
+  try:
+    port browser.frontGateStatus { countdown = "#front-gate-countdown" } → response
+    when eq($response.status, 200):
+      let body = $response.body
+      call frontGate.snapshot
+      let snapshot = $result
+  catch fault:
+    let snapshot = null
+  let fresh = $snapshot
+  let snapshot = or($fresh, $previous)
+  port state.set { key = "front-gate-refresh-attempted"; value = true } → _
+  port state.set { key = "front-gate-snapshot"; value = $snapshot } → _
+  let summary = "Live status unavailable"
+  let detail = "Open your SSH tunnels in Connect to Temple, allow local network access if prompted, then refresh."
+  when $snapshot:
+    let summary = concat($snapshot.online, " of ", $snapshot.total, " app ports listening")
+    let detail = concat("Checked ", $snapshot.time, " AWST")
+  let stale = and($snapshot, not($fresh))
+  when $stale:
+    let detail = concat("Last checked ", $snapshot.time, " AWST. Live status unavailable. Check the SSH tunnel and refresh.")
+  call frontGate.updateReading
+  let changed = or(not(eq(at($previous, "services"), at($snapshot, "services"))), not(eq(at($previous, "units"), at($snapshot, "units"))))
+  when or(not($attempted), $changed):
+    let preserveUnits = true
+    call frontGate.filterServices
+
+process frontGate.bindFilters:
+  let steps = list({ port = "browser.property"; args = { ref = "#front-gate-search"; name = "value" }; save = "search" })
+  when $hasAvailability:
+    let steps = append($steps, list({ port = "browser.property"; args = { ref = "#front-gate-availability"; name = "value" }; save = "availability" }))
+  port browser.batch { steps = $steps } → filters
+  port text.trim { value = $filters.search } → search
+  port text.lowerCase { value = $search } → term
+  port state.set { key = "front-gate-term"; value = $term } → _
+  port state.set { key = "front-gate-availability"; value = or(at($filters, "availability"), "all") } → _
+
+process frontGate.changeFilter:
+  let value = $eventInput.event.target.value
+  when eq($eventInput.filter, "search"):
+    port text.trim { value = $value } → search
+    port text.lowerCase { value = $search } → term
+    port state.set { key = "front-gate-term"; value = $term } → _
+  when eq($eventInput.filter, "availability"):
+    port state.set { key = "front-gate-availability"; value = or($value, "all") } → _
+  let preserveUnits = false
+  call frontGate.filterServices
+
+process frontGate.filterServices:
+  port state.get { key = "front-gate-snapshot" } → snapshot
+  let port = null
+  when not($snapshot):
+    call frontGate.browserPort
+    let port = $result
+  port state.get { key = "front-gate-term" } → term
+  port state.get { key = "front-gate-availability" } → availability
+  call frontGate.catalogueView
+  let view = $result
+  port state.get { key = "front-gate-catalogue-view" } → previousView
+  when not(eq($previousView, $view)):
+    let unitsOpen = false
+    when and($preserveUnits, count($view.units), not($view.expandUnits)):
+      port dom.exists { selector = "#front-gate-services details[open]" } → unitsOpen
+    call frontGate.renderCatalogue
+    let input = $result
+    call html.serialize
+    port browser.content { ref = "#front-gate-services"; html = $result; diagnosticLabel = "Update Front Gate catalogue" } → _
+    port state.set { key = "front-gate-catalogue-view"; value = $view } → _
+
+process desktop.readVisibility:
+  port browser.batch { steps = list(
+    { port = "browser.property"; args = { ref = $task; name = "hidden" }; save = "closed" },
+    { port = "browser.property"; args = { ref = $window; name = "hidden" }; save = "minimized" }
+  ); diagnosticLabel = "Read window state" } → visibility
+  let result = if($visibility.closed, "closed", if($visibility.minimized, "minimized", "visible"))
+
+process desktop.open:
+  call desktop.defaultAction
+  let key = $app.key
+  let window = concat("#", $app.window)
+  let task = concat("#", $app.task)
+  let heading = concat("#", $app.heading)
+  let closeStart = and(eq(at($eventInput, "action"), $app.defaultAction), eq(at($eventInput, "key"), $key))
+  when $closeStart:
+    port browser.write { ref = "#start"; name = "open"; value = false } → _
+  call desktop.readVisibility
+  let windowVisibility = $result
+  let closed = eq($windowVisibility, "closed")
+  let minimized = eq($windowVisibility, "minimized")
+  when and($closed, $app.managedCommands):
+    let managedKind = 3
+    let managedKey = 0
+    call desktop.managedEvent
+  when and($closed, eq($app.fileRole, "text")):
+    call browserEditor.blank
+  when eq($key, "design"):
+    call design.workspacePrepare
+  let windowAction = "open"
+  call windowShell.nextVisibility
+  let nextVisibility = $result
+  let steps = list(
+    { port = "browser.write"; args = { ref = $task; name = "hidden"; value = eq($nextVisibility, "closed") } },
+    { port = "browser.write"; args = { ref = $window; name = "hidden"; value = not(eq($nextVisibility, "visible")) } },
+    { port = "browser.activate"; args = { group = "main.desktop"; member = $window } },
+    { port = "browser.focus"; args = { ref = $heading } },
+    { port = "dom.exists"; args = { selector = concat("main.desktop > ", $window, ":not([hidden])[data-active=true] ", $heading, ":focus") }; save = "focused" },
+    { port = "dom.exists"; args = { selector = concat(".taskbar > ", $task, ":not([hidden])") }; save = "listed" }
+  )
+  port browser.batch { steps = $steps; diagnosticLabel = "Open and raise window" } → opened
+  when and($closed, $app.startMaximized):
+    port browser.batch { steps = list(
+      { port = "browser.attribute"; args = { ref = $window; name = "data-manager-maximized"; value = true } },
+      { port = "browser.attribute"; args = { ref = concat("#", $app.maximize); name = "aria-pressed"; value = true } }
+    ); diagnosticLabel = "Start in maximized document window" } → _
+  let check = if($closed, "open", if($minimized, "restore", "repeat"))
+  let passed = and($opened.focused, $opened.listed)
+  call desktop.launchObservation
+  when includes(list("file-manager", "file-viewer", "service-manager"), $key):
+    when and(not($managerHandoff), or(includes(list("file-manager", "file-viewer"), $key), $closed)):
+      call managers.open
+  when and(eq($key, "front-gate"), $closed):
+    port state.get { key = "front-gate-status-available" } → hasStatus
+    when $hasStatus:
+      call frontGate.refreshStatus
+  when and(eq($key, "assurance"), $closed, not($returned)):
+    call tools.assurance
+  when and(eq($key, "performance"), $minimized):
+    call tools.performance
+  when and(eq($key, "store"), not($storeLaunch)):
+    call store.desktopPrepare
+  when eq($key, "game"):
+    call game.desktopPrepare
+  when and(eq($key, "acting-as"), $closed, not($returned)):
+    call actingAs.load
+  when and(eq($key, "temple-manager"), $closed):
+    call desktop.templeRecords
+  when and($app.inventory, not($returned)):
+    let form = null
+    call inventory.open
+
+process desktop.openWorkspaces:
+  port browser.write { ref = "#start"; name = "open"; value = true } → _
+  port browser.write { ref = "#start-flyout-workspaces"; name = "open"; value = true } → _
+  port browser.focus { ref = "#start-flyout-workspaces > summary" } → _
+
+process desktop.templeRecords:
+  let custody = { mode = "loading" }
+  call desktop.renderTempleRecords
+  call formation.loadRecords
+  let custody = $result
+  call desktop.renderTempleRecords
+
+process desktop.renderTempleRecords:
+  call managers.templeDetails
+  let input = $result
+  call html.serialize
+  port browser.content { ref = "#temple-manager-detail"; html = $result } → result
+
+process actingAs.open:
+  call desktop.browserApps
+  let apps = $result
+  let app = at(filter($apps, "entry", eq($entry.key, "acting-as")), 0)
+  let returned = false
+  port dom.exists { selector = "dialog[open]" } → modal
+  when $modal:
+    port browser.dialog { ref = "dialog[open]"; open = false } → _
+  call desktop.open
+
+process actingAs.load:
+  let programme = { id = "acting-as"; label = "Steward"; launch = "?view=acting-as"; fragment = "acting-as-program"; settings = "data-acting-as" }
+  let content = "#acting-as-content"
+  let action = if(eq(at($eventInput, "action"), "acting-as-submit"), "programme-submit", "programme-refresh")
+  port state.get { scope = "document"; key = "handover-demo" } → demo
+  when $demo:
+    call demo.programme
+  when not($demo):
+    call appdev.loadProgramme
+
+process desktop.checkIsolation:
+  port browser.property { ref = "#workspace-open"; name = "checked" } → workspaceOpen
+  when $workspaceOpen:
+    port browser.activate { group = "main.desktop"; member = "#workspace" } → _
+  when not($workspaceOpen):
+    each $apps as app:
+      port browser.property { ref = concat("#", $app.window); name = "hidden" } → hidden
+      when not($hidden):
+        port dom.exists { selector = concat("#workspace-open:not(:checked) ~ main.desktop:not([hidden]) > #", $app.window, ":not([hidden])") } → independent
+        let check = "isolation"
+        let passed = $independent
+        call desktop.launchObservation
+
+process desktop.launchObservation:
+  let target = concat("#desktop-launch-check-", $app.key, "-", $check)
+  port browser.write { ref = $target; name = "textContent"; value = if($passed, "Pass", "Fail") } → _
+
+process store.showWindow:
+  call desktop.browserApps
+  let apps = $result
+  let key = "store"
+  let app = at(filter($apps, "entry", eq($entry.key, $key)), 0)
+  let storeLaunch = true
+  let returned = false
+  call desktop.open

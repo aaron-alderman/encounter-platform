@@ -1,0 +1,9 @@
+process-module "temple/surface-process-module/1"
+
+process cli.main:
+  let home = at($eventInput, 0)
+  port text.matchAll { value = $home; pattern = "<style>([\\s\\S]*?)</style>" } → styles
+  assert eq(count($styles), 1)
+    otherwise "Expected one shared stylesheet in the rendered Home document."
+  let style = at($styles, 0)
+  let result = at($style.groups, 0)

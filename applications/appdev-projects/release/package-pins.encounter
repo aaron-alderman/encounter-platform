@@ -1,0 +1,91 @@
+process-module "temple/surface-process-module/1"
+
+process release.packagePins:
+  let input = $eventInput
+  let artifacts = $input.artifacts
+  let package = $input.package
+  when $input.system:
+    let facts = $package
+    let prefix = ""
+    call packagePins.verify
+    let homePaths = $result
+    when at($artifacts, "browser-wasm.rel"):
+      assert includes($homePaths, "browser-wasm.rel")
+        otherwise "Missing Home browser Wasm catalog pin."
+    when at($artifacts, "standalone-browser-wasm.rel"):
+      assert includes($homePaths, "standalone-browser-wasm.rel")
+        otherwise "Missing standalone browser Wasm catalog pin."
+    let facts = $input.work
+    let prefix = "work/"
+    call packagePins.verify
+    let workPaths = $result
+    when at($artifacts, "work/browser-wasm.rel"):
+      assert includes($workPaths, "browser-wasm.rel")
+        otherwise "Missing Work browser Wasm catalog pin."
+    each append(list("encounter", "package-receipt.rel"), $workPaths) as path:
+      assert includes($homePaths, concat($prefix, $path))
+        otherwise "Missing bundled Work artifact pin."
+  let dataset = filter($input.browser, "row", eq($row, list("application", "dataset", "assurance-catalogue")))
+  when count($dataset):
+    port rel.decode { text = $input.descriptor; kind = "ApplicationData" } → digest
+    port text.matches { value = $digest; pattern = "\\A[0-9a-f]{64}\\z" } → valid
+    assert $valid
+      otherwise "Expected a versioned Mobile Assurance catalogue digest."
+    let facts = $package
+    let subject = "artifact"
+    let property = $input.descriptorPath
+    call facts.one
+    assert eq($result, at($artifacts, $property))
+      otherwise "Pin the Mobile Assurance catalogue descriptor in the release receipt."
+    let property = concat("browser-assets/assurance-catalogue/", $digest, ".html")
+    call facts.one
+    assert and(eq($result, $digest), eq(at($artifacts, $property), $digest))
+      otherwise "Mobile Assurance catalogue hash or release pin differs."
+  let result = true
+
+process packagePins.verify:
+  let pins = filter($facts, "row", eq(at($row, 0), "artifact"))
+  fold $pins as pin; paths starts list():
+    let path = at($pin, 1)
+    let observed = at($artifacts, concat($prefix, $path))
+    assert and(not(includes($paths, $path)), eq($observed, at($pin, 2)))
+      otherwise "Package artifact pin is duplicate, missing, or changed."
+    yield append($paths, list($path)) → paths
+  let subject = "package"
+  let property = "runtimeSha256"
+  call facts.one
+  assert eq($result, at($artifacts, concat($prefix, "encounter")))
+    otherwise "Package runtime pin differs."
+  let result = $paths
+
+process release.runtimeBoundImages:
+  let result = list(list("workgarden/board.rel", "products/workgarden/application.rel"),
+    list("shop/shop.rel", "sourcery-shop/application.rel"))
+
+process release.browserWasmReceipt:
+  let receipt = $eventInput.receipt
+  let newRuntimePin = $eventInput.newRuntimePin
+  let rebuilt = or($eventInput.rebuilt, {})
+  port record.entries { value = $rebuilt } → artifacts
+  each $artifacts as artifact:
+    let matching = filter($receipt, "row", and(eq(at($row, 0), "artifact"), eq(at($row, 1), at($artifact, 0))))
+    assert eq(count($matching), 1)
+      otherwise "Expected an existing pin for the rebuilt AppDev artifact."
+  let receipt = map($receipt, "row",
+    if(and($newRuntimePin, eq(at($row, 0), "package"), eq(at($row, 1), "runtimeSha256")),
+      list("package", "runtimeSha256", $newRuntimePin),
+      if(and(eq(at($row, 0), "artifact"), at($rebuilt, at($row, 1))),
+        list("artifact", at($row, 1), at($rebuilt, at($row, 1))), $row)))
+  let catalogPin = $eventInput.catalogPin
+  let workCatalogPin = $eventInput.workCatalogPin
+  let workReceiptPin = $eventInput.workReceiptPin
+  let regenerated = if($workReceiptPin, list("browser-wasm.rel", "work/browser-wasm.rel", "work/package-receipt.rel",
+    "standalone-browser-wasm.rel"),
+    list("browser-wasm.rel"))
+  let updated = filter($receipt, "row", not(and(eq(at($row, 0), "artifact"), includes($regenerated, at($row, 1)))))
+  let result = append($updated, list(list("artifact", "browser-wasm.rel", $catalogPin)))
+  when $workReceiptPin:
+    let result = append($result, list(list("artifact", "work/browser-wasm.rel", $workCatalogPin),
+      list("artifact", "work/package-receipt.rel", $workReceiptPin)))
+  when $eventInput.standalonePin:
+    let result = append($result, list(list("artifact", "standalone-browser-wasm.rel", $eventInput.standalonePin)))

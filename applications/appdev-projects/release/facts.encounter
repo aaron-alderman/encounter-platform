@@ -1,0 +1,12 @@
+process-module "temple/surface-process-module/1"
+
+process facts.values:
+  fold $facts as fact; values starts list():
+    let selected = and(eq(at($fact, 0), $subject), eq(at($fact, 1), $property))
+    yield if($selected, append($values, list(at($fact, 2))), $values) → result
+
+process facts.one:
+  call facts.values
+  assert eq(count($result), 1)
+    otherwise "Expected one value for a required REL fact."
+  let result = at($result, 0)

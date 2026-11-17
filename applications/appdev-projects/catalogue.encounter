@@ -1,0 +1,40 @@
+process-module "temple/surface-process-module/1"
+
+process desktop.shortcuts:
+  let tunnels = $input
+  let result = list(
+    { id = "north-river"; defaultAction = "open"; href = "/encounter-pilot/"; name = "North River"; detail = "Timesheet proposal and approval pilot."; group = "hosted"; signIn = true; icon = "notes" },
+    { id = "hosted-super-crm"; defaultAction = "open"; href = "/life-board/super-crm/"; name = "Super CRM"; detail = "Customer accounts, cases and appointment reviews"; group = "hosted"; signIn = true; icon = "notes" },
+    { id = "hosted-workgarden"; defaultAction = "open"; href = "/life-board/workgarden/"; name = "Workgarden"; detail = "Open and complete work items"; group = "hosted"; signIn = true; icon = "folder" },
+    { id = "hosted-decompiler"; defaultAction = "open"; href = "/life-board/decompiler/"; name = "Semantic Decompiler"; detail = "Read retained replies, traces and Encounter source"; group = "hosted"; signIn = true; icon = "trace" },
+    { id = "semantic-compiler"; defaultAction = "open"; name = "Semantic Compiler"; detail = "Inspect stable identities, contracts and coverage"; group = "hosted"; icon = "trace" },
+    { id = "game"; defaultAction = "open"; href = "#notes-game-hub-window"; name = "Game Zone"; detail = "Play, build and manage games"; group = "hosted"; signIn = true; icon = "game" },
+    { id = "store"; defaultAction = "open"; href = "#notes-store-window"; name = "Store"; detail = "Encounter apps, games and assets"; group = "hosted"; signIn = true; icon = "folder" },
+    { id = "shop"; defaultAction = "open"; href = "/shop/"; name = "Shop"; detail = "Browse the catalogue, request items and track orders"; group = "hosted"; signIn = true; icon = "folder"; sameTab = true },
+    { id = "one-world"; defaultAction = "open"; href = "/game/one-world/"; name = "One World"; detail = "Transport simulation"; group = "hosted"; signIn = true; icon = "globe" },
+    { id = "asset-foundry"; defaultAction = "open"; href = "/game/asset-foundry/"; name = "Asset Foundry"; detail = "Asset workbench"; group = "hosted"; signIn = true; icon = "tools" },
+    { id = "landscape-foundry"; defaultAction = "open"; href = "/game/landscape-foundry/"; name = "Landscape Foundry"; detail = "Terrain workbench"; group = "hosted"; signIn = true; icon = "land" },
+    { id = "design-references"; defaultAction = "open"; href = "/game/design-references/"; name = "Design References"; detail = "Game reference library"; group = "hosted"; signIn = true; icon = "folder" },
+    { id = "game-folio"; defaultAction = "open"; href = "/game/recent-folio/"; name = "Recent Folio"; detail = "Playable activities in the One World simulation."; group = "hosted"; signIn = true; icon = "notes" },
+    { id = "handover-demo"; defaultAction = "open"; href = "/identity-management/?view=acting-as"; name = "Steward handover"; detail = "Offer or review an office transfer"; group = "hosted"; icon = "workspace"; signIn = true },
+    { id = "environments-demo"; defaultAction = "open"; href = "/workspace/home#start-flyout-workspaces"; name = "Environments"; detail = "Switch workspaces or save your default"; group = "hosted"; icon = "workspace"; signIn = true },
+    { id = "claimipedia-notes"; defaultAction = "open"; href = "/identity-management/?view=claimipedia"; name = "Claimipedia"; detail = "Released claims, evidence and ecology"; group = "hosted"; signIn = true; icon = "notes"; notes = "claimipedia" },
+    { id = "aster-codex"; defaultAction = "open"; href = "#aster-codex-window"; name = "Aster Codex"; detail = "Read private aaron-dev chats"; group = "hosted"; signIn = true; icon = "trace" },
+    { id = "vm-manager"; defaultAction = "open"; href = "#vm-manager-window"; name = "VM Manager"; detail = "Open a development VM console"; group = "hosted"; signIn = true; icon = "computer" },
+    { id = "registry-demo"; defaultAction = "open"; href = "#registry-demo-window"; name = "Registry Demo"; detail = "Open the native Sourcery OS desktop"; group = "hosted"; signIn = true; icon = "computer" },
+    { id = "aster"; defaultAction = "open"; href = "/identity-management/?view=aster"; name = "Ask Aster"; detail = "Chat or get three next steps with a Temple steward account."; group = "hosted"; signIn = true; icon = "trace"; notes = "aster" },
+    { id = "x-inbox"; defaultAction = "open"; href = "/identity-management/?view=mentions#x-inbox"; name = "X Inbox"; detail = "Read and refresh received mentions"; group = "x"; signIn = true; icon = "notes" },
+    { id = "x-mentions"; defaultAction = "open"; href = "/identity-management/?view=mentions"; name = "X Mentions"; detail = "Manage the X connection and mention delivery"; group = "x"; signIn = true; icon = "notes" },
+    { id = "decompiler"; defaultAction = "open"; href = concat("http://localhost:", $tunnels.frontGate, "/decompiler"); name = "Semantic Decompiler"; detail = "Trace, replies and source"; group = "platform"; local = true; icon = "trace" },
+    { id = "front-gate"; defaultAction = "open"; href = "#front-gate-window"; name = "Front Gate"; detail = "Private service directory"; group = "hosted"; icon = "computer" }
+  )
+
+process desktop.previewApps:
+  let tunnels = $input
+  call gate.apps
+  let result = map($result, "app", {
+    id = $app.id; defaultAction = at($app, "defaultAction"); href = concat("http://", $app.id, ".localhost:", $tunnels.frontGate, "/"); name = if(eq($app.id, "claimipedia"), "Claimipedia · Editorial preview", $app.name); detail = $app.detail;
+    local = true; signIn = eq($app.id, "claimipedia"); production = at($app, "production");
+    group = if(eq($app.group, "Encounter platform"), "platform", if(eq($app.group, "Encounter portfolio"), "portfolio", "previews"));
+    icon = if(eq($app.group, "Encounter platform"), "computer", if(eq($app.group, "Encounter portfolio"), "notes", "folder"))
+  })

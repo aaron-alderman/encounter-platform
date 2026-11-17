@@ -1,0 +1,705 @@
+process-module "temple/surface-process-module/1"
+
+process customization.windows:
+  let result = list(
+    { id = "workspace"; kind = "document"; title = "Workspace"; icon = "workspace" },
+    { id = "file-manager"; kind = "document"; title = "File Manager"; icon = "folder" },
+    { id = "service-manager"; kind = "document"; title = "Service Manager"; icon = "computer" },
+    { id = "temple-manager"; kind = "document"; title = "Temple Manager"; icon = "notes" },
+    { id = "utility"; kind = "compact"; title = "Utility window"; icon = "tools" },
+    { id = "dialog"; kind = "compact"; title = "Settings dialog"; icon = "tools" }
+  )
+
+process customization.catalog:
+  let result = list(
+    { id = "desktop"; label = "Desktop surface"; selector = ".desktop"; target = ".custom-preview"; policy = "Shared token";
+      usage = "Home and Work desktop backdrops"; note = "Use the desktop token for wallpaper and solid modes."; tokens = list("desktop", "backdrop", "font") },
+    { id = "frame"; label = "Window frame"; selector = ".window, .desktop-app-window"; target = ".custom-window"; policy = "Shared · first pass";
+      usage = "Workspace, independent windows and specimens"; note = "Frame padding, surface and shadow use the same role. Workspace keeps its radio-driven maximization. Manager windows keep document sizing and independent controls."; tokens = list("frame", "raised", "inset", "shadow", "paper", "ink") },
+    { id = "title"; label = "Window title bar"; selector = ".titlebar"; target = "[data-window-slot=title]"; slot = "title"; policy = "Shared role";
+      usage = "Workspace, managers, utilities and dialogs"; note = "Share title colors and controls. Focus and disabled states should come from the common control styles."; tokens = list("title-start", "title-end", "title-ink", "raised") },
+    { id = "menu"; label = "Command menu"; selector = ".menu-bar, .document-menu-bar"; target = "[data-window-slot=menu]"; slot = "menu"; policy = "Shared · first pass";
+      usage = "Workspace File and Help, manager File and Help"; note = "Triggers and menu surfaces share typography and colors. Workspace keeps disclosure panels for settings. Managers keep anchored popovers and document commands."; tokens = list("frame", "ink", "accent", "raised") },
+    { id = "banner"; label = "Window banner"; selector = ".banner, .manager-banner"; target = "[data-window-slot=banner]"; slot = "banner"; policy = "Shared · first pass";
+      usage = "Workspace, manager identity and build badges"; note = "Heading hierarchy and the banner palette are shared. Workspace keeps the interactive build badge and its narrow-screen layout. Manager banners retain a shorter title scale."; tokens = list("banner-start", "banner-end", "banner-ink", "banner-highlight", "gold") },
+    { id = "tabs"; label = "View switcher"; selector = ".tabs, .manager-tabs"; target = ":is(.tabs,.manager-tabs)"; policy = "Shared · first pass";
+      usage = "Workspace categories and manager views"; note = "The control and selected surfaces are shared. Workspace keeps its connected tab edge and radio state. Manager view buttons wrap and use their pressed state."; windows = list("workspace", "file-manager", "service-manager"); tokens = list("view-control", "paper", "ink", "raised") },
+    { id = "card"; label = "Launcher card"; selector = ".workspace-app-card, .program-group .app-link"; target = ".custom-app-grid .app-link"; policy = "Shared card";
+      usage = "Apps, Folio and Tools cards"; note = "The shared Encounter app card owns the alternate action. Keep the Workspace catalogue grid and card density as layout rules."; windows = list("workspace"); tokens = list("paper", "panel", "selected", "line", "ink", "muted") },
+    { id = "index"; label = "Index pane"; selector = ".manager-tree.desktop-scroll-pane"; target = ".manager-tree"; policy = "Shared role";
+      usage = "File contexts and Service Manager records"; note = "The pane shares surface, separator and selection tokens. Keep file trees and service indexes specific to their data, with no index in Temple Manager."; windows = list("file-manager", "service-manager"); tokens = list("panel", "line", "selected", "ink") },
+    { id = "reading"; label = "Reading pane"; selector = ".programs, .manager-panel, .desktop-app-content, .desktop-scroll-pane"; target = ":is(.manager-main,.custom-reading)"; policy = "Shared · first pass";
+      usage = "Workspace catalogue, manager panes and utility content"; note = "Reading surfaces share paper, inset and scroll containment. Workspace keeps the edge gutter. Document layouts keep named, independently scrolling panes and mobile stacking."; tokens = list("paper", "ink", "muted", "inset") },
+    { id = "source"; label = "Encounter source"; selector = ".sp-code, .source-widget"; target = ".custom-source"; policy = "Shared role";
+      usage = "Encounter source presentation and File Manager preview"; note = "Use the shared lexer, line numbering and syntax roles. Source text and highlighting are separately editable."; windows = list("file-manager", "utility"); tokens = list("paper", "ink", "inset", "syntax") },
+    { id = "status"; label = "Status and feedback"; selector = ".sourcery-feedback, .statusbar, .manager-location"; target = ":is(.sourcery-feedback,.statusbar,.manager-location)"; policy = "Shared feedback · retain local behavior";
+      usage = "Workspace, File Manager, Assurance, Performance, inventory and Inbox"; note = "Share information, success, warning and error colors and spacing. Retain local connection and path bars, Assurance’s persistent decision-history announcements, Performance thresholds, and sign-in and receipt actions."; windows = list("workspace", "file-manager", "service-manager", "utility", "dialog"); tokens = list("frame", "muted", "info-paper", "info-ink", "success-paper", "success-ink", "warning-paper", "warning-ink", "error-paper", "error-ink") },
+    { id = "table"; label = "Data table"; selector = ".sourcery-data-table"; target = ".service-observations"; policy = "Shared table · retain local layout";
+      usage = "Service Manager, File Manager, Assurance, Performance and public key inventory"; note = "Share headers, row dividers, grid borders and cell spacing. Retain File Manager’s file actions, Assurance and inventory’s sticky headers and scroll regions, and Performance’s tabular numerals and mobile column visibility."; windows = list("service-manager"); tokens = list("table-header", "table-frame", "table-grid-line", "line") },
+    { id = "actions"; label = "Command controls"; selector = ".dialog-actions"; target = "[data-window-slot=actions]"; slot = "actions"; policy = "Shared tokens · local sizing";
+      usage = "Commands in the window actions slot"; note = "Share frame, ink and raised edge tokens. Title-bar controls belong to the title slot."; tokens = list("frame", "accent", "ink", "raised") },
+    { id = "placement"; label = "Utility placement"; selector = "#notes-performance-window, #notes-assurance-window"; target = ".custom-window"; policy = "Retain local placement";
+      usage = "Performance width and Assurance offsets"; note = "Keep room for Performance tables and the Assurance offset used when comparing windows. Revisit sizes when a second app needs the same layout."; windows = list("utility"); tokens = list("shadow") },
+    { id = "inspection"; label = "Inspector affordance"; selector = ".custom-inspected"; target = null; policy = "Local by design";
+      usage = "Semantic selection in this customization preview"; note = "Keep the selection outline and token editors scoped to inspection."; tokens = list("accent") }
+  )
+
+process customization.properties:
+  let result = list(
+    { id = "desktop-size"; role = "desktop"; label = "Text size"; values = list("14px", "12px", "18px"); variable = "--custom-desktop-size" },
+    { id = "frame-width"; role = "frame"; label = "Frame width"; values = list("4px", "2px", "6px"); variable = "--sourcery-window-frame-width"; token = "--sourcery-window-frame-width" },
+    { id = "title-text"; role = "title"; label = "Window title"; kind = "text"; default = ""; limit = 80 },
+    { id = "title-padding"; role = "title"; label = "Title bar padding"; values = list("4px", "2px", "8px"); variable = "--custom-title-padding" },
+    { id = "title-size"; role = "title"; label = "Title text size"; values = list("14px", "12px", "17px"); variable = "--custom-title-size" },
+    { id = "menu-gap"; role = "menu"; label = "Menu spacing"; values = list("4px", "2px", "8px"); variable = "--custom-menu-gap" },
+    { id = "banner-padding"; role = "banner"; label = "Banner padding"; values = list("12px", "8px", "20px"); variable = "--custom-banner-padding" },
+    { id = "tab-padding"; role = "tabs"; label = "View switcher padding"; values = list("6px", "4px", "10px"); variable = "--custom-tab-padding" },
+    { id = "card-padding"; role = "card"; label = "Card padding"; values = list("8px", "4px", "12px"); variable = "--custom-card-padding" },
+    { id = "index-width"; role = "index"; label = "Index pane width"; values = list("30%", "25%", "40%"); variable = "--custom-index-width" },
+    { id = "reader-padding"; role = "reading"; label = "Reading pane padding"; values = list("12px", "6px", "20px"); variable = "--custom-reader-padding" },
+    { id = "source-size"; role = "source"; label = "Source text size"; values = list("13px", "11px", "17px"); variable = "--custom-source-size" },
+    { id = "line-numbers"; role = "source"; label = "Line numbers"; values = list("On", "Off") },
+    { id = "source-wrap"; role = "source"; label = "Source wrapping"; values = list("Off", "On") },
+    { id = "feedback"; role = "status"; label = "Feedback state"; values = list("Ready", "Information", "Warning", "Error") },
+    { id = "status-padding"; role = "status"; label = "Feedback padding"; values = list("7px", "3px", "10px"); variable = "--sourcery-feedback-padding" },
+    { id = "cell-padding"; role = "table"; label = "Table cell padding"; values = list("6px", "3px", "10px"); variable = "--custom-cell-padding"; token = "--sourcery-table-cell-padding" },
+    { id = "table-layout"; role = "table"; label = "Table borders"; values = list("Grid", "Rows") },
+    { id = "button-state"; role = "actions"; label = "Command state"; values = list("Enabled", "Disabled") },
+    { id = "command-label"; role = "actions"; label = "Primary command label"; kind = "text"; default = "Apply preview"; limit = 40 },
+    { id = "utility-width"; role = "placement"; label = "Utility width"; values = list("34rem", "26rem", "44rem"); variable = "--custom-utility-width" }
+  )
+
+process customization.fonts:
+  let result = list(
+    { name = "Inter"; file = "inter"; weight = "100 900" },
+    { name = "Atkinson Hyperlegible Next"; file = "atkinson-hyperlegible-next"; weight = "200 800" },
+    { name = "Instrument Sans"; file = "instrument-sans"; weight = "400 700" },
+    { name = "Bricolage Grotesque"; file = "bricolage-grotesque"; weight = "200 800" },
+    { name = "Source Sans 3"; file = "source-sans-3"; weight = "200 900" }
+  )
+
+process customization.tokens:
+  call customization.fonts
+  let typefaces = append(append(list("Standard"), map($result, "font", $font.name)), list("System", "Serif", "Monospace"))
+  call sourcery.presentation.tokens
+  let tokens = $result
+  call design.colors
+  let colorFields = append($result, list(
+    { id = "banner-start"; label = "Banner gradient start" }, { id = "banner-end"; label = "Banner gradient end" },
+    { id = "banner-ink"; label = "Banner text" }, { id = "banner-highlight"; label = "Banner highlight" },
+    { id = "view-control"; label = "Inactive view control" },
+    { id = "table-header"; label = "Table header surface" }, { id = "table-frame"; label = "Table frame" }, { id = "table-grid-line"; label = "Table grid border" },
+    { id = "info-paper"; label = "Information surface" }, { id = "info-ink"; label = "Information text and border" },
+    { id = "success-paper"; label = "Success surface" }, { id = "success-ink"; label = "Success text and border" },
+    { id = "warning-paper"; label = "Warning surface" }, { id = "warning-ink"; label = "Warning text and border" }
+  ))
+  fold $colorFields as color; colors starts list():
+    let default = if(includes(list("title-ink", "error-paper", "error-ink"), $color.id), null, at($color, "default"))
+    when not($default):
+      call design.tokenColor
+      let default = $result
+    let css = concat(if(includes(list("title-start", "title-end", "backdrop"), $color.id), "--design-", "--sourcery-"), $color.id)
+    let token = if(includes(list("title-start", "title-end"), $color.id), "--sourcery-title", if(eq($color.id, "backdrop"), "--sourcery-desktop", $css))
+    yield append($colors, list({ id = $color.id; label = $color.label; token = $token; css = $css; default = $default; kind = "color" })) → colors
+  let palette = at(at(at($spPolicy, "themes"), 0), "roles")
+  port record.entries { value = $palette } → syntaxRoles
+  let syntaxColors = map($syntaxRoles, "role", {
+    id = concat("syntax-", at($role, 0)); label = concat("Syntax ", at($role, 0));
+    token = concat("--sp-light-", at($role, 0)); css = concat("--sp-light-", at($role, 0)); default = at($role, 1); kind = "color"; syntax = true
+  })
+  let result = append(append($colors, list(
+    { id = "font"; label = "Preview typeface"; token = "--sourcery-font"; css = "--sourcery-font"; values = $typefaces },
+    { id = "desktop"; label = "Desktop texture"; token = "--sourcery-desktop"; css = "--sourcery-desktop"; values = list("Standard", "Solid") },
+    { id = "raised"; label = "Raised edge"; token = "--sourcery-raised"; css = "--sourcery-raised"; values = list("Raised", "Flat") },
+    { id = "inset"; label = "Inset edge"; token = "--sourcery-inset"; css = "--sourcery-inset"; values = list("Inset", "Flat") },
+    { id = "shadow"; label = "Window shadow"; token = "--sourcery-window-shadow"; css = "--sourcery-window-shadow"; values = list("Standard", "None") }
+  )), $syntaxColors)
+
+process customization.control:
+  let label = $field.label
+  let input = { tag = "select"; attrs = { name = $field.id }; children = map(or(at($field, "values"), list()), "choice", {
+    tag = "option"; attrs = { selected = eq($choice, at($settings, $field.id)) }; children = list($choice)
+  }) }
+  when eq(at($field, "kind"), "color"):
+    let input = { tag = "input"; attrs = { type = "color"; name = $field.id; value = at($settings, $field.id); form = if(at($field, "syntax"), "design-syntax-controls", null) } }
+  when eq(at($field, "kind"), "text"):
+    let input = { tag = "input"; attrs = { name = $field.id; value = at($settings, $field.id); maxlength = $field.limit } }
+  let result = { tag = "label"; children = list($label, if(at($field, "token"), { tag = "code"; children = list($field.token) }, null),
+    $input, if(eq(at($field, "kind"), "color"), { tag = "small"; children = list(at($settings, $field.id)) }, null)) }
+
+process customization.page:
+  let fields = $eventInput.fields
+  let expanded = $eventInput.expanded
+  call source.encounterLightPolicy
+  let spPolicy = $result.presentation
+  let lexPolicy = $result.lexical
+  let lexGrammar = $result.grammar
+  call windowShell.types
+  let windowTypes = $result
+  call customization.windows
+  let windows = $result
+  call customization.catalog
+  let catalog = $result
+  call customization.properties
+  let properties = $result
+  call customization.tokens
+  let tokens = $result
+  let selectedType = at($fields, "window-type")
+  let examples = filter($windows, "specimen", or(not($selectedType), eq($specimen.kind, $selectedType)))
+  let window = or(at(filter($examples, "specimen", eq($specimen.id, at($fields, "window"))), 0), at($examples, 0), at($windows, 0))
+  let picked = at(filter($catalog, "entry", eq($entry.id, at($eventInput, "pick"))), 0)
+  when $picked:
+    let pickedSlot = at($picked, "slot")
+    let eligibleTypes = map(filter($windowTypes, "kind", or(not($pickedSlot), some($kind.slots, "slot", eq($slot.id, $pickedSlot)))), "kind", $kind.id)
+    let eligible = filter($windows, "specimen", and(
+      includes($eligibleTypes, $specimen.kind),
+      or(not(at($picked, "windows")), includes(or(at($picked, "windows"), list()), $specimen.id))))
+    let window = or(at(filter($eligible, "specimen", eq($specimen.id, $window.id)), 0), at($eligible, 0), $window)
+  let windowType = at(filter($windowTypes, "kind", eq($kind.id, $window.kind)), 0)
+  let examples = filter($windows, "specimen", eq($specimen.kind, $windowType.id))
+  let slots = map($windowType.slots, "slot", $slot.id)
+  let roles = filter($catalog, "entry", and(
+    or(not(at($entry, "slot")), includes($slots, at($entry, "slot"))),
+    or(not(at($entry, "windows")), includes(or(at($entry, "windows"), list()), $window.id))))
+  let selection = or(at($picked, "id"), at($fields, "role"))
+  let role = or(at(filter($roles, "entry", eq($entry.id, $selection)), 0), at($roles, 1))
+  call managers.densities
+  let editable = append(append($properties, $tokens), list({ id = "density"; values = map($result, "mode", $mode.id) }))
+  fold $editable as field; values starts {}:
+    let chosen = at($fields, $field.id)
+    let options = or(at($field, "values"), list())
+    let value = if(includes($options, $chosen), $chosen, at($options, 0))
+    when eq(at($field, "kind"), "color"):
+      port text.matches { value = if($chosen, $chosen, ""); pattern = "^#[0-9A-Fa-f]{6}$" } → valid
+      let value = if($valid, $chosen, $field.default)
+    when eq(at($field, "kind"), "text"):
+      port text.slice { value = if($chosen, $chosen, $field.default); start = 0; end = $field.limit } → value
+    port record.put { record = $values; key = $field.id; value = $value } → next
+    yield $next → settings
+  let defaultSource = concat("process-module \"temple/surface-process-module/1\"\n\n",
+    "# A retained release review\nprocess review.status:\n  let release = $eventInput\n  let result = if($release.approved, \"Ready\", \"Needs review\")\n")
+  let sourceText = at($fields, "sample-source")
+  port value.describe { value = $sourceText } → sourceKind
+  port text.slice { value = if(eq($sourceKind.type, "string"), $sourceText, $defaultSource); start = 0; end = 2048 } → sample
+  let activeFields = filter($properties, "field", eq($field.role, $role.id))
+  fold $activeFields as field; controls starts list():
+    call customization.control
+    yield append($controls, list($result)) → propertyControls
+  let inactive = map(filter($properties, "field", not(eq($field.role, $role.id))), "field", {
+    tag = "input"; attrs = { type = "hidden"; name = $field.id; value = at($settings, $field.id) }
+  })
+  let typeface = at(filter($tokens, "field", eq($field.id, "font")), 0)
+  let density = at($settings, "density")
+  let densityLabel = "Preview density"
+  let densityAttrs = { name = "density"; form = "design-controls" }
+  call managers.densityControl
+  let densityControl = $result
+  let roleTokens = filter($tokens, "field", or(includes($role.tokens, $field.id), and(at($field, "syntax"), includes($role.tokens, "syntax"))))
+  let panelTokens = filter($tokens, "field", not(eq($field.id, "font")))
+  fold $panelTokens as field; controls starts { shared = list(); syntax = list() }:
+    call customization.control
+    let group = if(at($field, "syntax"), "syntax", "shared")
+    port record.put { record = $controls; key = $group; value = append(at($controls, $group), list($result)) } → next
+    yield $next → tokenControls
+  let attrs = map($editable, "field", list(concat("data-", $field.id), at($settings, $field.id)))
+  port record.fromEntries { entries = append($attrs, list(list("id", "design-preview"), list("class", "custom-preview"), list("data-role", $role.id), list("tabindex", "-1"), list("aria-label", concat($window.title, " preview")))) } → previewAttrs
+  call customization.specimen
+  let specimen = $result
+  let renderedSlots = map($specimen.children, "node", at($node.attrs, "data-window-slot"))
+  let visibleSlots = filter($windowType.slots, "slot", includes($renderedSlots, $slot.id))
+  port text.join { values = map($visibleSlots, "slot", $slot.label); separator = " · " } → slotLabels
+  call customization.catalogTable
+  let table = $result
+  let sourceEditor = if(eq($role.id, "source"), { tag = "label"; children = list("Encounter source", {
+    tag = "textarea"; attrs = { name = "sample-source"; rows = "6"; maxlength = "2048"; spellcheck = "false" }; children = list($sample) }) },
+    { tag = "input"; attrs = { type = "hidden"; name = "sample-source"; value = $sample } })
+  let result = { tag = "div"; attrs = { class = "customization" }; children = list(
+    { tag = "div"; attrs = { class = "custom-choices" }; children = list(
+      { tag = "label"; children = list("Window type", { tag = "select"; attrs = { name = "window-type"; form = "design-controls" }; children = map($windowTypes, "entry", {
+        tag = "option"; attrs = { value = $entry.id; selected = eq($entry.id, $windowType.id) }; children = list($entry.title)
+      }) }) },
+      { tag = "label"; children = list("Preview example", { tag = "select"; attrs = { name = "window"; form = "design-controls" }; children = map($examples, "entry", {
+        tag = "option"; attrs = { value = $entry.id; selected = eq($entry.id, $window.id) }; children = list($entry.title)
+      }) }) },
+      { tag = "label"; children = list("Semantic element", { tag = "select"; attrs = { name = "role"; form = "design-controls" }; children = map($roles, "entry", {
+        tag = "option"; attrs = { value = $entry.id; selected = eq($entry.id, $role.id) }; children = list($entry.label)
+      }) }) },
+      { tag = "label"; children = list($typeface.label, { tag = "select"; attrs = { name = $typeface.id; form = "design-controls" }; children = map($typeface.values, "choice", {
+        tag = "option"; attrs = { selected = eq($choice, at($settings, "font")) }; children = list($choice)
+      }) }) },
+      $densityControl,
+      { tag = "p"; attrs = { class = "custom-window-slots" }; children = list($slotLabels) }
+    ) },
+    { tag = "form"; attrs = { id = "design-syntax-controls"; hidden = true } },
+    { tag = "form"; attrs = { id = "design-controls"; class = "custom-controls"; "aria-label" = "Sourcery OS customization" }; children = list(
+      { tag = "section"; attrs = { class = "custom-inspector"; "aria-label" = "Semantic inspection" }; children = list(
+        { tag = "h3"; children = list($role.label) },
+        { tag = "p"; children = list($role.policy, " · ", $role.usage) },
+        { tag = "code"; children = list($role.selector) },
+        { tag = "p"; children = list($role.note) },
+        $propertyControls, $sourceEditor, $inactive,
+        { tag = "details"; children = list({ tag = "summary"; children = list("Tokens used by this element") },
+          { tag = "ul"; attrs = { class = "custom-role-tokens" }; children = map($roleTokens, "field", {
+            tag = "li"; children = list({ tag = "code"; children = list($field.token) }, " ", at($settings, $field.id))
+          }) }
+        ) }
+      ) },
+      { tag = "details"; attrs = { class = "custom-token-panel"; open = at($expanded, "tokens") }; children = list(
+        { tag = "summary"; children = list("Design tokens") },
+        { tag = "div"; attrs = { class = "custom-token-grid" }; children = $tokenControls.shared },
+        { tag = "details"; attrs = { open = at($expanded, "syntax") }; children = list({ tag = "summary"; children = list("Encounter syntax colors") },
+          { tag = "div"; attrs = { class = "custom-token-grid" }; children = $tokenControls.syntax }) }
+      ) },
+      { tag = "div"; attrs = { class = "custom-actions" }; children = list(
+        { tag = "button"; attrs = { type = "submit" }; children = list("Apply to preview") },
+        { tag = "button"; attrs = { type = "button"; "data-design-reset" = true }; children = list("Reset to standard") }
+      ) }
+    ) },
+    { tag = "section"; attrs = $previewAttrs; children = list($specimen) },
+    $table
+  ) }
+
+process customization.catalogTable:
+  let result = { tag = "details"; attrs = { class = "custom-catalog"; open = at($expanded, "catalog") }; children = list(
+    { tag = "summary"; children = list("Style catalog") },
+    { tag = "div"; attrs = { class = "custom-catalog-scroll"; tabindex = "0"; role = "region"; "aria-label" = "Style catalog" }; children = list(
+      { tag = "table"; attrs = { class = "sourcery-data-table" }; children = list(
+        { tag = "thead"; children = list({ tag = "tr"; children = map(list("Semantic element", "Current selectors", "Where it appears", "Consolidation"), "label", {
+          tag = "th"; attrs = { scope = "col" }; children = list($label)
+        }) }) },
+        { tag = "tbody"; children = map($catalog, "entry", { tag = "tr"; children = list(
+          { tag = "th"; attrs = { scope = "row" }; children = list({ tag = "button"; attrs = { type = "button"; "data-design-role" = $entry.id }; children = list($entry.label) }) },
+          { tag = "td"; children = list({ tag = "code"; children = list($entry.selector) }) },
+          { tag = "td"; children = list($entry.usage) },
+          { tag = "td"; children = list({ tag = "strong"; children = list($entry.policy) }, { tag = "p"; children = list($entry.note) }) }
+        ) }) }
+      ) }
+    ) }
+  ) }
+
+process customization.source:
+  port digest.sha256 { text = $sample } → hash
+  port kernel.invoke { query = "sp.present"; input = { text = $sample; expectedHash = $hash;
+    file = "review.encounter"; language = "encounter"; theme = "light"; lineNumbers = eq(at($settings, "line-numbers"), "On") } } → source
+  let result = { tag = "section"; attrs = { class = "custom-source source-widget"; "aria-label" = "Encounter source preview" }; children = list(
+    { tag = "h4"; children = list("review.encounter") },
+    { tag = "pre"; children = list($source.tree) }
+  ) }
+
+process customization.feedback:
+  let states = {
+    Ready = { tone = "success"; message = "Ready for review." };
+    Information = { tone = "info"; message = "Loading observations…" };
+    Warning = { tone = "warning"; message = "Some observations need attention." };
+    Error = { tone = "error"; message = "The observations could not be loaded." }
+  }
+  let state = at($states, $settings.feedback)
+  let result = { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = $state.tone; role = "status" };
+    children = list($state.message) }
+
+process customization.document:
+  let file = eq($window.id, "file-manager")
+  let service = eq($window.id, "service-manager")
+  let detail = { tag = "p"; children = list("Temple Manager opens your signed-in Memory and Journal records.") }
+  let index = list()
+  when $file:
+    call customization.source
+    let detail = $result
+    let index = list({ tag = "h4"; children = list("Published files") }, { tag = "p"; children = list("review.encounter") })
+  when $service:
+    let entry = { state = "Connected"; detail = "The browser host accepted the workspace connection and loaded the Home browser programme." }
+    let observationView = "services"
+    let runOutcomeAction = null
+    let lastTriggerAction = null
+    call services.observationFacts
+    let facts = $result
+    let tableLayout = if(eq(at($settings, "table-layout"), "Grid"), "grid", null)
+    call services.observationTable
+    let detail = list({ tag = "h3"; children = list("Home browser host") }, $result)
+    let index = list({ tag = "section"; children = list({ tag = "h4"; children = list("Service records") },
+      { tag = "ul"; children = map(list("Home browser host", "Store gateway", "File index"), "serviceName",
+        { tag = "li"; children = list({ tag = "span"; attrs = { class = "custom-service-item"; "aria-current" = if(eq($serviceName, "Home browser host"), "true", null) }; children = list($serviceName) }) }) }) })
+  call customization.feedback
+  let feedback = if(eq($role.id, "status"), $result, null)
+  let document = { preview = true; description = if($file, "Browse and preview published files.", if($service, "Inspect services, schedules and receipts.", "Memory and journal"));
+    help = "A preview of the shared document window."; build = "Preview"; index = $index;
+    status = if(eq($settings.feedback, "Error"), "Observation unavailable", if($file, "Apps › Source", "Current observations"));
+    indexLabel = if($file, "File contexts", if($service, "Service records", null));
+    detailLabel = if($file, "File contents", if($service, "Service details", "Temple Manager status"));
+    tabs = map(if($file, list("Files"), list("Services", "Schedules", "Runs")), "tab", {
+      tag = "span"; attrs = { "aria-pressed" = if(includes(list("Files", "Services"), $tab), "true", "false") }; children = list($tab)
+    });
+    detail = list($feedback, $detail) }
+  let result = $document
+
+process customization.workspace:
+  let result = list({ tag = "div"; attrs = { class = "tabs" }; children = map(list("Apps", "Encounters", "Workspaces", "Operations"), "tab", {
+    tag = "span"; attrs = { "aria-current" = if(eq($tab, "Apps"), "true", null) }; children = list($tab)
+  }) }, { tag = "section"; attrs = { class = "program-group custom-app-grid"; "aria-label" = "Apps" }; children = list(
+    { tag = "ul"; children = map(list(
+      { name = "File Manager"; icon = "folder"; detail = "Browse published files" },
+      { name = "Service Manager"; icon = "computer"; detail = "Inspect services and schedules" },
+      { name = "Temple Manager"; icon = "notes"; detail = "Memory and journal" }
+    ), "entry", { tag = "li"; children = list({ tag = "div"; attrs = { class = "app-link" }; children = list(
+      { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" };
+        children = list({ tag = "use"; attrs = { href = concat("#icon-", $entry.icon) } }) },
+      { tag = "span"; attrs = { class = "app-label" }; children = list({ tag = "strong"; children = list($entry.name) },
+        { tag = "small"; children = list($entry.detail) }) }
+    ) }) }) }
+  ) })
+
+process customization.specimen:
+  let body = list()
+  let menu = null
+  let banner = null
+  let status = null
+  when eq($windowType.id, "document"):
+    let app = { key = concat("custom-", $window.id); title = $window.title; icon = $window.icon }
+    let document = { preview = true; help = "Use the Workspace to open apps and switch environments."; description = "Apps and workspaces"; build = "Preview" }
+    when eq($window.id, "workspace"):
+      call customization.workspace
+      let body = list({ tag = "div"; attrs = { class = "custom-reading" }; children = $result })
+      call customization.feedback
+      let status = { tag = "footer"; attrs = { class = "statusbar" }; children = list($result) }
+    when not(eq($window.id, "workspace")):
+      call customization.document
+      let document = $result
+      call desktop.documentBody
+      let body = list($result)
+    call desktop.documentMenus
+    let menu = $result
+    call desktop.documentBanner
+    let banner = $result
+  when eq($window.id, "utility"):
+    call customization.feedback
+    let feedback = $result
+    call customization.source
+    let body = list({ tag = "section"; attrs = { class = "custom-reading" }; children = list($feedback, $result) })
+  when eq($window.id, "dialog"):
+    call customization.feedback
+    let body = list({ tag = "section"; attrs = { class = "custom-reading" }; children = list($result,
+      { tag = "label"; children = list("Workspace name", { tag = "input"; attrs = { value = "Home"; readonly = true } }) }
+    ) })
+  let disabled = eq(at($settings, "button-state"), "Disabled")
+  let specimenControl = { tag = "button"; attrs = { type = "button"; disabled = true } }
+  let controlTarget = concat($window.title, " specimen")
+  let controlBindings = if(eq($window.id, "dialog"), {}, {
+    maximize = if(eq($windowType.id, "document"), $specimenControl, null);
+    minimize = $specimenControl;
+    close = if(eq($window.id, "workspace"), null, $specimenControl)
+  })
+  call windowShell.titleControls
+  let specimenControls = $result
+  let title = { tag = "header"; attrs = { class = "titlebar" }; children = list(
+    { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" };
+      children = list({ tag = "use"; attrs = { href = concat("#icon-", $window.icon) } }) },
+    { tag = "h3"; children = list(or(at($settings, "title-text"), $window.title)) },
+    $specimenControls
+  ) }
+  let content = { tag = "div"; attrs = { class = "desktop-app-content custom-window-body" }; children = $body }
+  let actions = { tag = "footer"; attrs = { class = "dialog-actions" }; children = list(
+    { tag = "button"; attrs = { type = "submit"; form = "design-controls"; disabled = $disabled }; children = list(at($settings, "command-label")) }
+  ) }
+  let slots = if(eq($windowType.id, "document"),
+    { title = $title; menu = $menu; banner = $banner; content = $content; status = $status; actions = $actions },
+    { title = $title; content = $content; actions = $actions })
+  let frame = { tag = "article"; attrs = { class = concat("custom-window custom-window-", $window.id);
+    "aria-label" = concat($window.title, " specimen") } }
+  call windowShell.frame
+
+process customization.styles:
+  call source.encounterLightPolicy
+  let spPolicy = $result.presentation
+  call sp.style
+  port text.replaceAll { value = $result; search = ":root"; replacement = ".custom-preview,.file-encounter-viewer" } → syntaxStyles
+  call customization.tokens
+  let colors = map(filter($result, "field", eq(at($field, "kind"), "color")), "field",
+    { property = $field.css; value = concat("attr(data-", $field.id, " type(<color>),", $field.default, ")") })
+  call customization.properties
+  let properties = map(filter($result, "field", at($field, "variable")), "field",
+    { property = $field.variable; value = concat("attr(data-", $field.id, " type(<length-percentage>),", at($field.values, 0), ")") })
+  let attributes = append($colors, $properties)
+  call customization.catalog
+  let outlines = map(filter($result, "entry", $entry.target), "entry", {
+    selector = if(eq($entry.id, "desktop"), ".custom-preview[data-role=desktop]", concat(".custom-preview[data-role=", $entry.id, "] ", $entry.target));
+    declarations = list(
+      { property = "outline"; value = "2px dashed #4156a5" },
+      { property = "outline-offset"; value = if(eq($entry.id, "desktop"), "-4px", "-3px") }
+    )
+  })
+  call customization.fonts
+  fold $result as font; cssRules starts list():
+    yield append($cssRules, list(
+      { selector = "@font-face"; declarations = list(
+        { property = "font-family"; value = concat("\"", $font.name, "\"") },
+        { property = "src"; value = concat("url(/workspace/fonts/", $font.file, ".woff2) format(\"woff2\")") },
+        { property = "font-style"; value = "normal" },
+        { property = "font-weight"; value = $font.weight },
+        { property = "font-display"; value = "swap" }
+      ) },
+      { selector = concat(".custom-preview[data-font=\"", $font.name, "\"]"); declarations = list(
+        { property = "--sourcery-font"; value = concat("\"", $font.name, "\",Tahoma,Verdana,sans-serif") }
+      ) }
+    )) → cssRules
+  let cssRuleSeparator = ""
+  call css.renderCompactRules
+  let fontStyles = $result
+  call customization.renderPreviewStyles
+  let result = concat($syntaxStyles, $fontStyles, $result)
+
+process customization.renderPreviewStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = ".customization"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "minmax(13rem,18rem) minmax(0,1fr)" },
+      { property = "grid-template-areas"; value = "\"choices preview\" \"controls preview\" \"catalog catalog\"" },
+      { property = "grid-template-rows"; value = "auto 1fr auto" },
+      { property = "align-items"; value = "start" },
+      { property = "gap"; value = "12px" },
+      { property = "color"; value = "var(--sourcery-ink)" },
+      { property = "font"; value = "14px/1.45 var(--sourcery-font)" }
+    ) },
+    { selector = ".custom-controls,.custom-choices,.custom-inspector,.custom-token-grid"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "gap"; value = "8px" },
+      { property = "min-width"; value = "0" }
+    ) },
+    { selector = ".custom-choices"; declarations = list(
+      { property = "grid-area"; value = "choices" }
+    ) },
+    { selector = ".custom-window-slots"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "color"; value = "var(--sourcery-muted)" },
+      { property = "font-size"; value = "12px" }
+    ) },
+    { selector = ".custom-controls"; declarations = list(
+      { property = "grid-area"; value = "controls" }
+    ) },
+    { selector = ".customization label"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "gap"; value = "3px" },
+      { property = "min-width"; value = "0" }
+    ) },
+    { selector = ".customization :is(select,textarea,input:not([type=hidden]))"; declarations = list(
+      { property = "max-width"; value = "100%" },
+      { property = "font"; value = "inherit" }
+    ) },
+    { selector = ".customization :is(select,textarea)"; declarations = list(
+      { property = "width"; value = "100%" }
+    ) },
+    { selector = ".custom-controls textarea"; declarations = list(
+      { property = "font-family"; value = "monospace" }
+    ) },
+    { selector = ".custom-controls code,.custom-catalog code"; declarations = list(
+      { property = "overflow-wrap"; value = "anywhere" },
+      { property = "font-size"; value = "11px" }
+    ) },
+    { selector = ".custom-inspector,.custom-token-panel,.custom-catalog"; declarations = list(
+      { property = "padding"; value = "9px" },
+      { property = "background"; value = "var(--sourcery-panel)" },
+      { property = "border"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = ".custom-inspector :is(h3,p),.custom-role-tokens"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".custom-role-tokens"; declarations = list(
+      { property = "list-style"; value = "none" },
+      { property = "padding"; value = "0" },
+      { property = "font-size"; value = "12px" }
+    ) },
+    { selector = ".custom-token-grid"; declarations = list(
+      { property = "grid-template-columns"; value = "repeat(2,minmax(0,1fr))" },
+      { property = "margin-block"; value = "8px" }
+    ) },
+    { selector = ".custom-token-grid input"; declarations = list(
+      { property = "width"; value = "100%" },
+      { property = "height"; value = "27px" }
+    ) },
+    { selector = ".custom-actions"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "7px" }
+    ) },
+    { selector = ".customization summary"; declarations = list(
+      { property = "font-weight"; value = "bold" },
+      { property = "list-style"; value = "revert" }
+    ) },
+    { selector = ".custom-catalog"; declarations = list(
+      { property = "grid-area"; value = "catalog" }
+    ) },
+    { selector = ".custom-catalog-scroll"; declarations = list(
+      { property = "overflow"; value = "auto" }
+    ) },
+    { selector = ".custom-catalog .sourcery-data-table"; declarations = list(
+      { property = "min-width"; value = "34rem" }
+    ) },
+    { selector = ".custom-catalog p"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".custom-preview"; declarations = list(
+      { property = "grid-area"; value = "preview" },
+      { property = "min-width"; value = "0" },
+      { property = "padding"; value = "clamp(8px,2vw,16px)" },
+      { property = "background"; value = "var(--sourcery-desktop)" },
+      { property = "color"; value = "var(--sourcery-ink)" },
+      { property = "font"; value = "var(--custom-desktop-size,14px)/1.45 var(--sourcery-font)" },
+      { property = "--gray"; value = "var(--sourcery-frame)" },
+      { property = "--ink"; value = "var(--sourcery-ink)" },
+      { property = "--navy"; value = "var(--sourcery-accent)" },
+      { property = "--gold"; value = "var(--sourcery-gold)" },
+      { property = "--raised"; value = "var(--sourcery-raised)" },
+      { property = "--sunken"; value = "var(--sourcery-inset)" },
+      { property = "--custom-title-padding"; value = "4px" },
+      { property = "--custom-title-size"; value = "14px" },
+      { property = "--custom-menu-gap"; value = "4px" },
+      { property = "--custom-banner-padding"; value = "12px" },
+      { property = "--custom-tab-padding"; value = "6px" },
+      { property = "--custom-card-padding"; value = "8px" },
+      { property = "--custom-index-width"; value = "30%" },
+      { property = "--custom-reader-padding"; value = "12px" },
+      { property = "--custom-source-size"; value = "13px" },
+      { property = "--sourcery-feedback-padding"; value = "7px" },
+      { property = "--sourcery-table-cell-padding"; value = "6px" },
+      { property = "--custom-utility-width"; value = "34rem" }
+    ) },
+    { atRule = "supports"; prelude = "(color:attr(data-ink type(<color>),black))"; rules = list(
+      { selector = ".custom-preview"; declarations = append($attributes, list(
+        { property = "--sourcery-title"; value = "linear-gradient(90deg,var(--design-title-start),#173994 73%,var(--design-title-end))" }
+      )) },
+      { selector = ".custom-preview[data-desktop=Solid]"; declarations = list(
+        { property = "--sourcery-desktop"; value = "var(--design-backdrop)" }
+      ) }
+    ) },
+    { selector = ".custom-preview[data-font=System]"; declarations = list(
+      { property = "--sourcery-font"; value = "system-ui,sans-serif" }
+    ) },
+    { selector = ".custom-preview[data-font=Serif]"; declarations = list(
+      { property = "--sourcery-font"; value = "Georgia,serif" }
+    ) },
+    { selector = ".custom-preview[data-font=Monospace]"; declarations = list(
+      { property = "--sourcery-font"; value = "monospace" }
+    ) },
+    { selector = ".custom-preview[data-raised=Flat]"; declarations = list(
+      { property = "--sourcery-raised"; value = "0 0 transparent" }
+    ) },
+    { selector = ".custom-preview[data-inset=Flat]"; declarations = list(
+      { property = "--sourcery-inset"; value = "0 0 transparent" }
+    ) },
+    { selector = ".custom-preview[data-shadow=None]"; declarations = list(
+      { property = "--sourcery-window-shadow"; value = "0 0 transparent" }
+    ) },
+    { selector = ".custom-window-utility"; declarations = list(
+      { property = "width"; value = "min(100%,var(--custom-utility-width))" },
+      { property = "margin-inline"; value = "auto" }
+    ) },
+    { selector = ".custom-window-dialog"; declarations = list(
+      { property = "width"; value = "min(100%,24rem)" },
+      { property = "margin-inline"; value = "auto" }
+    ) },
+    { selector = ".custom-window>.titlebar"; declarations = list(
+      { property = "gap"; value = "5px" },
+      { property = "padding"; value = "var(--custom-title-padding)" },
+      { property = "font-size"; value = "var(--custom-title-size)" }
+    ) },
+    { selector = ".custom-window>.titlebar h3"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "font"; value = "inherit" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".custom-window .banner"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "min-height"; value = "0" },
+      { property = "gap"; value = "8px" },
+      { property = "padding"; value = "var(--custom-banner-padding)" }
+    ) },
+    { selector = ".custom-window .banner .manager-title"; declarations = list(
+      { property = "color"; value = "inherit" },
+      { property = "font-size"; value = "1.55em" }
+    ) },
+    { selector = ".custom-window .banner-icon"; declarations = list(
+      { property = "width"; value = "40px" },
+      { property = "height"; value = "40px" }
+    ) },
+    { selector = ".custom-window .banner-icon .icon"; declarations = list(
+      { property = "width"; value = "28px" },
+      { property = "height"; value = "28px" }
+    ) },
+    { selector = ".custom-window .banner .edition"; declarations = list(
+      { property = "max-width"; value = "none" },
+      { property = "flex"; value = "none" },
+      { property = "font-size"; value = "10px" },
+      { property = "white-space"; value = "nowrap" }
+    ) },
+    { selector = ".custom-window .banner .edition>*"; declarations = list(
+      { property = "display"; value = "block" }
+    ) },
+    { selector = ".custom-window .menu-bar"; declarations = list(
+      { property = "gap"; value = "var(--custom-menu-gap)" }
+    ) },
+    { selector = ".custom-window .custom-window-body"; declarations = list(
+      { property = "padding"; value = "4px" }
+    ) },
+    { selector = ".custom-window :is(.tabs,.manager-tabs)>span"; declarations = list(
+      { property = "padding"; value = "var(--custom-tab-padding)" }
+    ) },
+    { selector = ".custom-window .custom-app-grid"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "padding"; value = "4px" }
+    ) },
+    { selector = ".custom-window .custom-app-grid .app-link"; declarations = list(
+      { property = "padding"; value = "var(--custom-card-padding)" },
+      { property = "background"; value = "var(--sourcery-panel)" },
+      { property = "border-color"; value = "var(--sourcery-line)" }
+    ) },
+    { selector = ".custom-window .app-link small"; declarations = list(
+      { property = "color"; value = "var(--sourcery-muted)" }
+    ) },
+    { selector = ".custom-window .manager-panes:not(.manager-single-pane)"; declarations = list(
+      { property = "grid-template-columns"; value = "minmax(0,var(--custom-index-width)) minmax(0,1fr)" }
+    ) },
+    { selector = ".custom-window :is(.manager-main,.custom-reading)"; declarations = list(
+      { property = "padding"; value = "var(--custom-reader-padding)" },
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "color"; value = "var(--sourcery-ink)" }
+    ) },
+    { selector = ".custom-source h4"; declarations = list(
+      { property = "margin"; value = "0 0 4px" }
+    ) },
+    { selector = ".custom-source pre"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "6px" },
+      { property = "overflow"; value = "auto" },
+      { property = "tab-size"; value = "2" },
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "box-shadow"; value = "var(--sourcery-inset)" },
+      { property = "font"; value = "var(--custom-source-size)/1.55 monospace" }
+    ) },
+    { selector = ".custom-preview[data-source-wrap=On] .custom-source pre"; declarations = list(
+      { property = "white-space"; value = "pre-wrap" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".custom-window :is(.sourcery-feedback,.manager-location)"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".custom-window .dialog-actions button"; declarations = list(
+      { property = "color"; value = "var(--sourcery-ink)" },
+      { property = "box-shadow"; value = "var(--sourcery-raised)" }
+    ) }
+  )
+  let cssRules = append(append($cssRules, $outlines), list(
+    { atRule = "media"; prelude = "(max-width:720px)"; rules = list(
+      { selector = ".customization"; declarations = list(
+        { property = "grid-template-columns"; value = "minmax(0,1fr)" },
+        { property = "grid-template-areas"; value = "\"choices\" \"preview\" \"controls\" \"catalog\"" },
+        { property = "grid-template-rows"; value = "auto" }
+      ) },
+      { selector = ".custom-choices"; declarations = list(
+        { property = "grid-template-columns"; value = "repeat(2,minmax(0,1fr))" }
+      ) },
+      { selector = ".custom-window .manager-panes:not(.manager-single-pane)"; declarations = list(
+        { property = "grid-template-columns"; value = "minmax(0,1fr)" }
+      ) }
+    ) }
+  ))
+  call css.renderCompactRules

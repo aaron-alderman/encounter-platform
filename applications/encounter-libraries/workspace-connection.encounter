@@ -1,0 +1,240 @@
+process-module "temple/surface-process-module/1"
+
+process workspace.connectionMarkup:
+  let connectionMarker = "data-encounter-connection"
+  let connectionOpening = if(eq($input, "Work"), "Opening Work…", "Connecting…")
+  call workspace.connectionStatusMarkup
+
+process workspace.homeConnectionMarkup:
+  let connectionMarker = "data-home-connection"
+  let connectionOpening = "Connecting…"
+  call workspace.connectionStatusMarkup
+
+process workspace.connectionStatusMarkup:
+  let workspaceName = $input
+  let attrs = {
+    class = "workspace-connection-status"; "data-connection-name" = $workspaceName;
+    "data-state" = "connecting"; role = "group"; "aria-label" = "Workspace connection";
+    "aria-describedby" = "workspace-connection-reason"; tabindex = "0";
+    "data-encounter-connection" = eq($connectionMarker, "data-encounter-connection");
+    "data-home-connection" = eq($connectionMarker, "data-home-connection")
+  }
+  let input = { tag = "div"; attrs = $attrs; children = list(
+    { tag = "span"; attrs = { class = "connection-light"; "aria-hidden" = "true" } },
+    { tag = "span"; attrs = { "data-connection-label" = true; role = "status" }; children = list(
+      { tag = "span"; attrs = { class = "connection-name" }; children = list(concat($workspaceName, " · ")) },
+      { tag = "span"; attrs = { "data-connection-state" = true }; children = list($connectionOpening) }
+    ) },
+    { tag = "span"; attrs = { "data-connection-countdown" = true; "aria-hidden" = "true" } },
+    { tag = "button"; attrs = { type = "button"; "data-encounter-retry" = true; hidden = true; disabled = true }; children = list("Try again") },
+    { tag = "span"; attrs = { id = "workspace-connection-reason"; "data-connection-reason" = true } }
+  ) }
+  call html.serialize
+
+process workspace.connectionStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = ".workspace-connection-status"; declarations = list(
+      { property = "position"; value = "relative" },
+      { property = "z-index"; value = "6" },
+      { property = "display"; value = "flex" },
+      { property = "flex"; value = "none" },
+      { property = "align-items"; value = "center" },
+      { property = "justify-content"; value = "center" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "6px 9px" },
+      { property = "min-height"; value = "30px" },
+      { property = "padding"; value = "5px 10px" },
+      { property = "background"; value = "#e9e6dc" },
+      { property = "color"; value = "#20263a" },
+      { property = "font"; value = "12px Tahoma,Verdana,sans-serif" },
+      { property = "border-bottom"; value = "1px solid #aaa69b" }
+    ) },
+    { selector = ".connection-light"; declarations = list(
+      { property = "width"; value = "9px" },
+      { property = "height"; value = "9px" },
+      { property = "flex"; value = "none" },
+      { property = "border"; value = "1px solid #665425" },
+      { property = "background"; value = "#edc65c" },
+      { property = "border-radius"; value = "50%" }
+    ) },
+    { selector = ".workspace-connection-status[data-state=ready] .connection-light"; declarations = list(
+      { property = "background"; value = "#3b9861" },
+      { property = "border-color"; value = "#245d3d" }
+    ) },
+    { selector = ".workspace-connection-status[data-state=disconnected] .connection-light"; declarations = list(
+      { property = "background"; value = "#c54848" },
+      { property = "border-color"; value = "#873434" }
+    ) },
+    { selector = "[data-connection-countdown]:empty"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "[data-connection-reason]"; declarations = list(
+      { property = "position"; value = "absolute" },
+      { property = "top"; value = "100%" },
+      { property = "left"; value = "50%" },
+      { property = "transform"; value = "translateX(-50%)" },
+      { property = "width"; value = "max-content" },
+      { property = "max-width"; value = "min(25rem,calc(100vw - 16px))" },
+      { property = "padding"; value = "8px 10px" },
+      { property = "border"; value = "1px solid #7d7b76" },
+      { property = "background"; value = "#f6f3e9" },
+      { property = "overflow-wrap"; value = "anywhere" },
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".workspace-connection-status:is(:hover,:focus-within) [data-connection-reason]:not(:empty)"; declarations = list(
+      { property = "display"; value = "block" }
+    ) },
+    { selector = ".workspace-connection-status button"; declarations = list(
+      { property = "padding"; value = "4px 9px" },
+      { property = "border"; value = "1px solid #7d7b76" },
+      { property = "background"; value = "#f6f3e9" },
+      { property = "color"; value = "#20263a" },
+      { property = "font"; value = "inherit" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = ".workspace-connection-status button:disabled"; declarations = list(
+      { property = "opacity"; value = ".6" },
+      { property = "cursor"; value = "default" }
+    ) },
+    { selector = ".workspace-connection-status button[hidden]"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".workspace-connection-status:focus-visible,.workspace-connection-status button:focus-visible"; declarations = list(
+      { property = "outline"; value = "2px solid #314bb9" },
+      { property = "outline-offset"; value = "-2px" }
+    ) }
+  )
+  call css.renderCompactRules
+
+
+process workspace.startMenu:
+  let start = $input
+  let markupSlot = "SOURCERY-WORKSPACE-RENDERED-FRAGMENT"
+  let renderedFragments = list($start.icon, $start.entries)
+  let input = { tag = "details"; attrs = { id = "start"; class = "shell-start-menu" }; children = list(
+    { tag = "summary"; attrs = { class = "start-button" }; children = list($markupSlot, "Start") },
+    { tag = "div"; attrs = { class = "start-menu" }; children = list(
+      { tag = "div"; attrs = { class = "start-brand" }; children = list("Sourcery ", { tag = "b"; children = list("OS") }) },
+      { tag = "nav"; attrs = { "aria-label" = "Start menu" }; children = list($markupSlot) }
+    ) }
+  ) }
+  call workspace.assembleMarkup
+
+process workspace.shellHeader:
+  let header = $input
+  let markupSlot = "SOURCERY-WORKSPACE-RENDERED-FRAGMENT"
+  let renderedFragments = list($header.navigation, or(at($header, "status"), ""))
+  let input = { tag = "header"; attrs = { class = concat("sourcery-os-header ", $header.class) }; children = list(
+    { tag = "strong"; children = list("Sourcery OS") }, $markupSlot, $markupSlot
+  ) }
+  call workspace.assembleMarkup
+
+process workspace.shellTaskbar:
+  let taskbar = $input
+  let markupSlot = "SOURCERY-WORKSPACE-RENDERED-FRAGMENT"
+  let renderedFragments = list($taskbar.start, $taskbar.tasks)
+  let tray = { tag = "div"; attrs = { class = "sourcery-os-tray" }; children = list(
+    { tag = "span"; attrs = { "aria-hidden" = "true" } }, $taskbar.environment
+  ) }
+  when $taskbar.tray:
+    let renderedFragments = append($renderedFragments, list($taskbar.tray))
+    let tray = { tag = "div"; attrs = { class = "home-system-tray" }; children = list($markupSlot) }
+  let input = { tag = "footer"; attrs = { class = "taskbar sourcery-os-taskbar"; "aria-label" = "Workspace taskbar" };
+    children = list($markupSlot, $markupSlot, $tray) }
+  call workspace.assembleMarkup
+
+process workspace.shellStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = "html[data-temple-embedded] .sourcery-os-header,html[data-temple-embedded] .sourcery-os-tray"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".sourcery-os-header"; declarations = list(
+      { property = "flex"; value = "none" },
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "align-items"; value = "center" },
+      { property = "justify-content"; value = "space-between" },
+      { property = "gap"; value = "5px 12px" },
+      { property = "padding"; value = "5px 8px" },
+      { property = "background"; value = "var(--gray,var(--chrome,#d4d0c8))" },
+      { property = "box-shadow"; value = "inset 0 1px #fff,inset 0 -1px #7b797e" }
+    ) },
+    { selector = ".sourcery-os-header>strong"; declarations = list(
+      { property = "color"; value = "#141d58" }
+    ) },
+    { selector = ".sourcery-os-header .workspace-switch"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "3px" },
+      { property = "margin-inline"; value = "auto" }
+    ) },
+    { selector = ".sourcery-os-header .workspace-switch>a,.sourcery-os-header .workspace-switch>span[aria-current],.sourcery-os-header #work-platform-link>a"; declarations = list(
+      { property = "display"; value = "inline-block" },
+      { property = "padding"; value = "5px 9px" },
+      { property = "background"; value = "var(--gray,var(--chrome,#d4d0c8))" },
+      { property = "color"; value = "var(--ink,#191b27)" },
+      { property = "box-shadow"; value = "inset 1px 1px #fff,inset -1px -1px #7b797e" },
+      { property = "text-decoration"; value = "none" }
+    ) },
+    { selector = ".sourcery-os-header .workspace-switch [aria-current=page]"; declarations = list(
+      { property = "font-weight"; value = "bold" },
+      { property = "box-shadow"; value = "inset 1px 1px #7b797e,inset -1px -1px #fff" }
+    ) },
+    { selector = ".sourcery-os-header .workspace-switch>span[hidden]"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".sourcery-os-header #work-platform-link:not([hidden])"; declarations = list(
+      { property = "display"; value = "contents" }
+    ) },
+    { selector = ".sourcery-os-taskbar"; declarations = list(
+      { property = "min-height"; value = "40px" }
+    ) },
+    { selector = "body:has(.sourcery-os-taskbar) #aster-kernel-menu"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "body:has(.sourcery-os-taskbar) #aster-kernel-shared #aster-desktop"; declarations = list(
+      { property = "bottom"; value = "calc(44px + env(safe-area-inset-bottom))" }
+    ) },
+    { selector = ".sourcery-os-taskbar>.shell-start-menu"; declarations = list(
+      { property = "position"; value = "relative" },
+      { property = "z-index"; value = "8" },
+      { property = "flex"; value = "none" }
+    ) },
+    { selector = ".sourcery-os-taskbar>.shell-start-menu>.start-menu"; declarations = list(
+      { property = "bottom"; value = "calc(100% + 4px)" },
+      { property = "left"; value = "0" }
+    ) },
+    { selector = ":is(.sourcery-os-tray,.home-system-tray)"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "5px" },
+      { property = "margin-inline-start"; value = "auto" },
+      { property = "min-height"; value = "28px" },
+      { property = "padding"; value = "3px 8px" },
+      { property = "white-space"; value = "nowrap" },
+      { property = "font"; value = "12px Tahoma,Verdana,sans-serif" },
+      { property = "box-shadow"; value = "inset 1px 1px #7b797e,inset -1px -1px #fff" }
+    ) },
+    { selector = ".sourcery-os-tray>span"; declarations = list(
+      { property = "width"; value = "7px" },
+      { property = "height"; value = "7px" },
+      { property = "background"; value = "#27803e" },
+      { property = "border"; value = "1px solid #18592b" }
+    ) }
+  )
+  call css.renderCompactRules
+
+# Fragment inputs come from existing presentation processes. Serialize the
+# typed document before inserting these already-rendered fragments.
+process workspace.assembleMarkup:
+  call html.serialize
+  port text.split { value = $result; pattern = "SOURCERY-WORKSPACE-RENDERED-FRAGMENT" } → markupParts
+  assert eq(count($markupParts), add(count($renderedFragments), 1))
+    otherwise "Workspace markup fragment count did not match its typed document."
+  fold $renderedFragments as fragment; markup starts { index = 0; text = at($markupParts, 0) }:
+    let index = add($markup.index, 1)
+    yield { index = $index; text = concat($markup.text, $fragment, at($markupParts, $index)) } → markupRest
+  let result = if(count($renderedFragments), $markupRest.text, at($markupParts, 0))

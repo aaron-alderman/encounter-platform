@@ -1,0 +1,55 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process css.renderPlan:
+  let imports = fold($cssPlan.imports, "cssFont", "imports", "", concat($imports, $cssFont.statement))
+  let tokens = fold(
+    $cssPlan.tokens,
+    "cssToken",
+    "tokens",
+    "",
+    concat($tokens, "--", $cssToken.name, ":", $cssToken.value, ";")
+  )
+  let cssRules = $cssPlan.rules
+  call css.renderRules
+  let css = concat($imports, ":root{", $tokens, "}", $result)
+  assert includes($css, ":focus-visible")
+    otherwise "Visible focus rule missing"
+  let result = $css
+
+process css.renderRules:
+  let cssCompact = false
+  let cssSeparator = ""
+  call css.renderRuleList
+
+process css.renderCompactRules:
+  let cssCompact = true
+  let cssSeparator = or($cssRuleSeparator, "")
+  call css.renderRuleList
+
+process css.renderRuleList:
+  fold $cssRules as cssRule; rules starts "":
+    let ruleText = ""
+    when at($cssRule, "rules"):
+      fold $cssRule.rules as cssChild; cssGroup starts "":
+        let cssLeaf = $cssChild
+        call css.renderRule
+        yield concat($cssGroup, $result) → cssGroup
+      let ruleText = concat("@", $cssRule.atRule, $cssRule.prelude, "{", or(at($cssRule, "prefixCss"), ""), $cssGroup, "}")
+    when not(at($cssRule, "rules")):
+      let cssLeaf = $cssRule
+      call css.renderRule
+      let ruleText = if($cssRule.context, concat("@media", $cssRule.context, "{", $result, "}"), $result)
+    yield concat($rules, if(and($rules, not(at($cssRule, "joinPrevious"))), $cssSeparator, ""), $ruleText) → rules
+  let result = $rules
+
+process css.renderRule:
+  let declarations = fold(
+    $cssLeaf.declarations,
+    "cssDeclaration",
+    "declarations",
+    "",
+    concat($declarations, if($declarations, ";", ""), $cssDeclaration.property, ":", $cssDeclaration.value, if(at($cssDeclaration, "important"), "!important", ""))
+  )
+  let end = if(and($declarations, or(not($cssCompact), at($cssLeaf, "endSemicolon"))), ";", "")
+  let result = concat($cssLeaf.selector, "{", $declarations, $end, "}")

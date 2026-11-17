@@ -1,0 +1,27 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = { sections = list({
+    subject = "application";
+    stateProfile = "encounter/appdev-browser/1";
+    dataset = "assurance-catalogue";
+    module = list("applications/appdev-projects/workspace-startup.encounter", "applications/appdev-projects/browser.encounter", "applications/appdev-projects/mobile.encounter", "applications/appdev-projects/first-run.encounter", "applications/appdev-projects/pairing.encounter",
+      "applications/appdev-projects/handover-demo.encounter", "applications/appdev-projects/environments-demo.encounter",
+      "applications/appdev-projects/browser-notes.encounter", "applications/appdev-projects/browser-stream.encounter", "applications/appdev-projects/browser-notes-inbox.encounter", "applications/appdev-projects/browser-tools.encounter", "applications/appdev-projects/browser-tray.encounter",
+      "applications/appdev-projects/browser-design.encounter", "applications/appdev-projects/browser-desktop.encounter", "applications/appdev-projects/browser-inventory.encounter", "applications/appdev-projects/inventory.encounter", "applications/appdev-projects/browser-store.encounter", "applications/appdev-projects/desktop-launch.encounter", "applications/platform-store/design.encounter",
+      "applications/appdev-projects/customization.encounter",
+      "applications/encounter-libraries/source-presentation/source-algebra.encounter",
+      "applications/encounter-libraries/source-presentation/encounter-light-policy.encounter",
+      "applications/appdev-projects/managers.encounter", "applications/appdev-projects/browser-managers.encounter",
+      "applications/appdev-projects/front-gate-desktop.encounter", "encounter-platform/applications/front-gate/services.encounter",
+      "applications/appdev-projects/browser-game-hub.encounter", "applications/game-hub/catalog.encounter",
+        "applications/encounter/algebra/css/css.renderPlan.encounter",
+      "applications/encounter-libraries/workflows/sourcery-presentation.encounter", "applications/encounter-libraries/source-presentation/source-widget.encounter",
+      "applications/encounter/algebra/html/html.escape.encounter", "applications/encounter/algebra/html/html.cssText.encounter", "applications/encounter/algebra/html/html.serialize.encounter");
+    entry = list("browser.boot", "appdev.event", "inbox.event", "onboarding.event", "onboarding.save", "onboarding.closed", "formation.helpOpen", "mobile.event", "aster.browserStream", "design.workspaceEvent", "desktop.event", "frontGate.refreshFromClock", "store.desktopEvent", "game.desktopEvent");
+    grant = list("html.select", "html.edit", "runtime.nonce", "runtime.clock", "browser.startup", "browser.asterStream", "browser.frontGateStatus", "browser.countdown", "browser.on", "browser.onMany", "browser.batch", "browser.activeGroup", "browser.appDescriptions", "browser.activate", "browser.property", "browser.write", "browser.content", "browser.focus", "browser.dialog", "browser.popover",
+      "browser.attribute", "browser.location", "browser.navigate", "browser.request", "browser.assuranceRefresh", "browser.requestOnExit", "browser.target",
+      "browser.guard", "dom.exists", "state.get", "state.set", "kernel.invoke", "application.data", "json.parse", "json.stringify", "digest.sha256", "text.join", "text.match", "runtime.telemetry", "runtime.environment", "browser.performance", "browser.copyText", "number.calculate",
+      "record.put", "storage.read", "storage.write", "text.trim", "text.utf8Length", "browser.formFields", "browser.formatFileSizes", "text.indexOf", "text.slice", "text.split",
+      "record.fromEntries", "record.entries", "value.describe", "value.string", "value.type", "text.matches", "text.replaceAll", "text.matchAll", "text.replace", "text.lowerCase", "number.parse")
+  }, { subject = "data.assurance-catalogue"; source = "applications/appdev-projects/assurance-catalogue-version.rel" }) }

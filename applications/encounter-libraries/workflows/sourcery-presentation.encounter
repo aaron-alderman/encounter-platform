@@ -1,0 +1,128 @@
+process-module "temple/surface-process-module/1"
+
+# Sourcery Notes desktop roles shared by the notebook and its entry chrome.
+process sourcery.presentation.tokens:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = ":root"; declarations = list(
+      { property = "--sourcery-font"; value = "Tahoma,Verdana,sans-serif" },
+      { property = "--sourcery-ink"; value = "#16172a" },
+      { property = "--sourcery-muted"; value = "#494b59" },
+      { property = "--sourcery-accent"; value = "#080c62" },
+      { property = "--sourcery-gold"; value = "#ffd54e" },
+      { property = "--sourcery-frame"; value = "#d4d0c8" },
+      { property = "--sourcery-paper"; value = "#fffef3" },
+      { property = "--sourcery-panel"; value = "#f4f2e7" },
+      { property = "--sourcery-line"; value = "#d7d3c0" },
+      { property = "--sourcery-selected"; value = "#dde5ff" },
+      { property = "--sourcery-table-header"; value = "#ece3b9" },
+      { property = "--sourcery-table-grid-line"; value = "#c5c3bf" },
+      { property = "--sourcery-table-frame"; value = "#827e74" },
+      { property = "--sourcery-info-paper"; value = "#eef2ff" },
+      { property = "--sourcery-info-ink"; value = "#39508d" },
+      { property = "--sourcery-success-paper"; value = "#e6f2e6" },
+      { property = "--sourcery-success-ink"; value = "#285c37" },
+      { property = "--sourcery-warning-paper"; value = "#fff1de" },
+      { property = "--sourcery-warning-ink"; value = "#79430e" },
+      { property = "--sourcery-error-paper"; value = "#fbe6e4" },
+      { property = "--sourcery-error-ink"; value = "#712722" },
+      { property = "--sourcery-title"; value = "linear-gradient(90deg,#080950,#173994 73%,#3974bc)" },
+      { property = "--sourcery-title-ink"; value = "#ffffff" },
+      { property = "--sourcery-banner-start"; value = "#111443" },
+      { property = "--sourcery-banner-end"; value = "#252b68" },
+      { property = "--sourcery-banner-ink"; value = "#f9f6e9" },
+      { property = "--sourcery-banner-highlight"; value = "#ffdf66" },
+      { property = "--sourcery-view-control"; value = "#c5c3bf" },
+      { property = "--sourcery-window-shadow"; value = "8px 9px 0 #10294156" },
+      { property = "--sourcery-window-frame-width"; value = "4px" },
+      { property = "--sourcery-desktop"; value = "repeating-linear-gradient(0deg,#ffffff06 0 1px,transparent 1px 4px),radial-gradient(ellipse at 45% 5%,#3c8292 0%,#296c7d 48%,#16495d 100%)" },
+      { property = "--sourcery-raised"; value = "inset 1px 1px #fff,inset -1px -1px #29282c,inset 2px 2px #efede8,inset -2px -2px #88868a" },
+      { property = "--sourcery-inset"; value = "inset 1px 1px #79777c,inset -1px -1px #fff" },
+      { property = "--sourcery-shadow"; value = "6px 7px #10294156" }
+    ) }
+  )
+  call css.renderCompactRules
+
+
+process sourcery.presentation.dataTableStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = ".sourcery-data-table"; declarations = list(
+      { property = "width"; value = "100%" },
+      { property = "border-collapse"; value = "collapse" },
+      { property = "font-size"; value = "var(--sourcery-table-font-size,12px)" }
+    ) },
+    { selector = ".sourcery-data-table caption"; declarations = list(
+      { property = "text-align"; value = "start" },
+      { property = "padding-block"; value = "4px" }
+    ) },
+    { selector = ".sourcery-data-table thead"; declarations = list(
+      { property = "background"; value = "var(--sourcery-table-header,#ece3b9)" }
+    ) },
+    { selector = ".sourcery-data-table :is(th,td)"; declarations = list(
+      { property = "padding"; value = "var(--sourcery-table-cell-padding,6px)" },
+      { property = "text-align"; value = "start" },
+      { property = "vertical-align"; value = "var(--sourcery-table-cell-align,top)" },
+      { property = "border-bottom"; value = "1px solid var(--sourcery-line,#d7d3c0)" }
+    ) },
+    { selector = ".sourcery-data-table[data-table-layout=grid]"; declarations = list(
+      { property = "border"; value = "2px solid var(--sourcery-table-frame,#827e74)" },
+      { property = "background"; value = "var(--sourcery-paper)" }
+    ) },
+    { selector = ".sourcery-data-table[data-table-layout=grid] :is(th,td)"; declarations = list(
+      { property = "border"; value = "1px solid var(--sourcery-table-grid-line,#c5c3bf)" }
+    ) },
+    { selector = ".sourcery-data-table[data-table-layout=grid] thead th"; declarations = list(
+      { property = "border-block-end"; value = "2px solid var(--sourcery-table-frame,#827e74)" }
+    ) },
+    { selector = ".sourcery-data-table[data-table-layout=grid] tbody th[scope=row]"; declarations = list(
+      { property = "background"; value = "var(--sourcery-panel)" }
+    ) }
+  )
+  call css.renderCompactRules
+
+
+process sourcery.presentation.feedbackStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = ":is(.sourcery-feedback,:where(#notes-inbox-content .platform-notice))"; declarations = list(
+      { property = "padding"; value = "var(--sourcery-feedback-padding,7px 9px)" },
+      { property = "overflow-wrap"; value = "anywhere" },
+      { property = "background"; value = "var(--sourcery-feedback-paper,var(--sourcery-info-paper))" },
+      { property = "color"; value = "var(--sourcery-feedback-ink,var(--sourcery-info-ink))" },
+      { property = "border-inline-start"; value = "3px solid currentColor" }
+    ) },
+    { selector = ".sourcery-feedback[data-feedback=success],#notes-inbox-content .platform-notice[role=status]"; declarations = list(
+      { property = "--sourcery-feedback-paper"; value = "var(--sourcery-success-paper)" },
+      { property = "--sourcery-feedback-ink"; value = "var(--sourcery-success-ink)" }
+    ) },
+    { selector = ".sourcery-feedback[data-feedback=warning]"; declarations = list(
+      { property = "--sourcery-feedback-paper"; value = "var(--sourcery-warning-paper)" },
+      { property = "--sourcery-feedback-ink"; value = "var(--sourcery-warning-ink)" }
+    ) },
+    { selector = ".sourcery-feedback[data-feedback=error],#notes-inbox-content .platform-notice[role=alert]"; declarations = list(
+      { property = "--sourcery-feedback-paper"; value = "var(--sourcery-error-paper)" },
+      { property = "--sourcery-feedback-ink"; value = "var(--sourcery-error-ink)" }
+    ) },
+    { selector = ".sourcery-feedback:empty"; declarations = list(
+      { property = "padding"; value = "0" },
+      { property = "border"; value = "0" },
+      { property = "margin"; value = "0" }
+    ) }
+  )
+  call css.renderCompactRules
+
+
+process sourcery.presentation.decision:
+  let panel = $eventInput
+  fold $panel.properties as property; rows starts list():
+    let pair = list({ tag = "dt"; attrs = {}; children = list($property.label) },
+      { tag = "dd"; attrs = { role = if(at($property, "status"), "status", null) }; children = list($property.value) })
+    yield append($rows, $pair) → rows
+  let result = { tag = "section"; attrs = $panel.attrs; children = list(
+    if($panel.title, { tag = "h2"; attrs = {}; children = list($panel.title) }, null),
+    if(count($rows), { tag = "dl"; attrs = { class = "decision-properties" }; children = $rows }, null),
+    { tag = "fieldset"; attrs = { class = "decision-fields" }; children = append(
+      list({ tag = "legend"; attrs = {}; children = list($panel.legend) }), $panel.body) },
+    if(count($panel.commands), { tag = "footer"; attrs = { class = "decision-commands" }; children = $panel.commands }, null)
+  ) }

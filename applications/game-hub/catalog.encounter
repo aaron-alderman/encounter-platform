@@ -1,0 +1,70 @@
+process-module "temple/surface-process-module/1"
+
+process hub.catalog:
+  let source = "https://github.com/sourcerytech/sourcery-game/tree/1174af7bfefc329fc57fcfc9103e04b988b314a8"
+  let result = list(
+    {
+      id = "one-world"; number = "01"; group = "Worlds & tools"; title = "One World"; icon = "world";
+      kind = "Simulation"; status = "EDITABLE SIMULATION"; heading = "From mine to port";
+      summary = "A transport and production simulation. Build rail infrastructure, route freight, operate facilities and move inventory from the mine to an export vessel.";
+      detail = "The simulation controls use the recovered One Shipment world and command authority. The images below are captures of the original 3D client.";
+      link = $source; linkLabel = "Open pinned source";
+      images = list(
+        { file = "sourcery-game-port.jpg"; bytes = 288804; sha256 = "da5e5326850c50bd31e6bc774616df441bceedf14f33854fc0d40d824e474323"; title = "Export port"; alt = "One World export port with rail receival, stockyards and a vessel at berth" },
+        { file = "sourcery-game-loadout.jpg"; bytes = 323497; sha256 = "b14a1e9271a173734c8d68211adcd3e3df29723132cc5e5519d9431768b8b0e5"; title = "Rail loadout"; alt = "One World rail loadout and dispatch view" },
+        { file = "sourcery-game-operations.jpg"; bytes = 187782; sha256 = "53e1be9a04d0a507fdd7931ba9706deee55caffcb79a801b9178676f54189645"; title = "Operations inspector"; alt = "One World semantic operations inspector" }
+      )
+    },
+    {
+      id = "asset-foundry"; number = "02"; group = "Worlds & tools"; title = "Asset Foundry"; icon = "asset";
+      kind = "Creation tool"; status = "EDITABLE WORKBENCH"; heading = "Build and validate game assets";
+      summary = "Build, validate and compare game assets.";
+      detail = "The recovered source assets and original compiler are used for intake, validation, and verified candidate builds. Drafts are kept in this workspace.";
+      images = list()
+    },
+    {
+      id = "landscape-foundry"; number = "03"; group = "Worlds & tools"; title = "Landscape Foundry"; icon = "land";
+      kind = "Creation tool"; status = "EDITABLE WORKBENCH"; heading = "Author terrain and civil landscapes";
+      summary = "Preview, commit and package terrain edits.";
+      detail = "The recovered coastal project supports previewed terrain edits, commits, undo and redo, and verified local packages.";
+      images = list()
+    },
+    {
+      id = "design-references"; number = "04"; group = "Worlds & tools"; title = "Design References"; icon = "folder";
+      kind = "Reference set"; status = "3 REFERENCE IMAGES"; heading = "Tycoon reference library";
+      summary = "Three retained visual references for looking at logistics, mining and urban transport at different scales.";
+      detail = "Open an image to inspect it at full size.";
+      images = list(
+        { file = "sourcery-game-reference-global-logistics-tycoon.png"; bytes = 2648311; sha256 = "fd28ee68189609d7ab0ad2cf9abb8fcf5c312aebd83a1aab0aa36d287c7e8a64"; title = "Global Logistics Tycoon"; alt = "Design reference labelled Global Logistics Tycoon" },
+        { file = "sourcery-game-reference-global-mining-tycoon.png"; bytes = 2537103; sha256 = "cd147d5674fc5ca450dcdb5b699532fb2e5d85f91caf64899bf00baf45aad594"; title = "Global Mining Tycoon"; alt = "Design reference labelled Global Mining Tycoon" },
+        { file = "sourcery-game-reference-urban-transport-tycoon.png"; bytes = 2882930; sha256 = "47c6125122a01b67121da5e83236a8dd6b517bbc24424caeaf3ee1fcd984920d"; title = "Urban Transport Tycoon"; alt = "Design reference labelled Urban Transport Tycoon" }
+      )
+    },
+    {
+      id = "store"; number = "05"; group = "Worlds & tools"; title = "Store"; icon = "asset";
+      kind = "Platform app"; status = "APPS, GAMES & ASSETS";
+      heading = "Private releases";
+      summary = "Publish and install Encounter apps, game releases and verified assets.";
+      detail = "The store uses the existing private Game Hub access. Releases pin their source revisions. Player progress stays in the current browser session.";
+      images = list()
+    },
+    {
+      id = "recent-folio"; number = "06"; title = "Recent Folio";
+      aliases = list("/north-river/", "/encounter/");
+      kind = "Playable examples"; status = "ONE WORLD";
+      summary = "Play these activities in the current One World workspace.";
+      activities = list(
+        {
+          title = "Dispatch an export shipment";
+          detail = "Choose a ready shipment, dispatch it, then advance the simulation clock to watch it move toward the port.";
+          href = "/one-world/#dispatch"; action = "Open dispatch controls"
+        },
+        {
+          title = "Build a mine rail spur";
+          detail = "Choose an unused project ID and build a spur at the Horizon mine using the suggested coordinates. Then revise its curve or design speed.";
+          href = "/one-world/#build-rail"; action = "Open rail construction"
+        }
+      );
+      images = list()
+    }
+  )

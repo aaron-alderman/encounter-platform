@@ -1,0 +1,183 @@
+process-module "temple/surface-process-module/1"
+
+process pairing.surfaceStatus:
+  port browser.write { ref = "#temple-state"; name = "textContent"; value = $message } → _
+  port browser.write { ref = "#temple-qr"; name = "hidden"; value = not(eq($phase, "waiting")) } → _
+  port browser.write { ref = "#temple-code"; name = "hidden"; value = not(eq($phase, "approval")) } → _
+  port browser.write { ref = "#temple-approve"; name = "hidden"; value = not(eq($phase, "approval")) } → _
+  port browser.write { ref = "#temple-disconnect"; name = "hidden"; value = not(eq($phase, "connected")) } → _
+  port browser.write { ref = "#connect-temple"; name = "textContent"; value = if(eq($phase, "connected"), "Temple connected", "Connect to Temple") } → _
+  when not(eq($phase, "waiting")):
+    port browser.attribute { ref = "#temple-qr"; name = "src"; value = null } → _
+
+process pairing.event:
+  port state.get { key = "temple-pair" } → pair
+  when eq($action, "pair-start"):
+    port browser.dialog { ref = "#temple-dialog"; open = true } → _
+    when not($pair):
+      call pairing.start
+  when $pair:
+    let endpoint = concat("/workspace/pair/", $pair.id)
+    when eq($action, "pair-poll"):
+      call pairing.surfacePoll
+    when eq($action, "pair-approve"):
+      call pairing.approve
+    when or(eq($action, "pair-disconnect"), and(eq($action, "pair-close"), not(eq($pair.phase, "connected")))):
+      call pairing.disconnect
+    when eq($action, "phone-poll"):
+      call pairing.phonePoll
+    when eq($action, "phone-command"):
+      call pairing.phoneCommand
+
+process pairing.start:
+  let phase = "loading"
+  let message = "Generating a QR code…"
+  call pairing.surfaceStatus
+  try:
+    port browser.request { path = "/workspace/pair"; method = "POST" } → response
+    assert eq($response.status, 201)
+      otherwise "QR request refused."
+    port json.parse { text = $response.body } → invitation
+    let pair = { id = $invitation.id; bearer = $invitation.surface; revision = 0; phase = "waiting" }
+    port state.set { key = "temple-pair"; value = $pair } → _
+    port browser.requestOnExit { path = concat("/workspace/pair/", $pair.id, "/disconnect"); bearer = $pair.bearer } → _
+    port browser.attribute { ref = "#temple-qr"; name = "src"; value = $invitation.qr } → _
+    let phase = "waiting"
+    let message = "Scan this QR code with your phone camera. The code expires in 3 minutes."
+    call pairing.surfaceStatus
+  catch fault:
+    let phase = "ended"
+    let message = "Could not create a QR code. Close this dialog and try again."
+    call pairing.surfaceStatus
+
+process pairing.surfacePoll:
+  try:
+    port browser.request { path = concat($endpoint, "?after=", $pair.revision); bearer = $pair.bearer } → response
+    when eq($response.status, 404):
+      port state.set { key = "temple-pair"; value = null } → _
+      port browser.requestOnExit { path = null } → _
+      let phase = "ended"
+      let message = "The connection ended. Close this dialog and open it again for a new QR code."
+      call pairing.surfaceStatus
+    when not(eq($response.status, 404)):
+      assert eq($response.status, 200)
+        otherwise "Pairing observation refused."
+      port json.parse { text = $response.body } → room
+      let phase = $room.status
+      when or(not(eq($pair.phase, "connected")), eq($phase, "connected")):
+        let message = if(eq($phase, "waiting"), "Scan this QR code with your phone camera. The code expires in 3 minutes.",
+          if(eq($phase, "approval"), "Check that both screens show the same code, then approve the phone.", "Your phone can now control this AppDev workspace."))
+        when eq($phase, "approval"):
+          port browser.write { ref = "#temple-code"; name = "textContent"; value = concat("Code on your phone: ", $room.code) } → _
+        call pairing.surfaceStatus
+        let commands = if($room.commands, $room.commands, list())
+        fold $commands as entry; revision starts $pair.revision:
+          port number.calculate { operation = "less"; values = list($revision, $entry.revision) } → fresh
+          when $fresh:
+            let command = $entry.command
+            call pairing.applyCommand
+          yield if($fresh, $entry.revision, $revision) → revision
+        port state.set { key = "temple-pair"; value = { id = $pair.id; bearer = $pair.bearer; revision = $revision; phase = $phase } } → _
+  catch fault:
+    port browser.write { ref = "#temple-state"; name = "textContent"; value = "Connection interrupted. Reconnecting…" } → _
+
+process pairing.approve:
+  try:
+    port browser.request { path = concat($endpoint, "/approve"); method = "POST"; bearer = $pair.bearer } → response
+    assert eq($response.status, 200)
+      otherwise "Approval refused."
+    let phase = "connected"
+    let message = "Your phone can now control this AppDev workspace."
+    port state.set { key = "temple-pair"; value = { id = $pair.id; bearer = $pair.bearer; revision = $pair.revision; phase = $phase } } → _
+    call pairing.surfaceStatus
+  catch fault:
+    port browser.write { ref = "#temple-state"; name = "textContent"; value = "Could not approve the phone. Try again." } → _
+
+process pairing.disconnect:
+  try:
+    port browser.request { path = concat($endpoint, "/disconnect"); method = "POST"; bearer = $pair.bearer } → response
+    assert includes(list(204, 404), $response.status)
+      otherwise "Disconnect refused."
+    port state.set { key = "temple-pair"; value = null } → _
+    port browser.requestOnExit { path = null } → _
+    let phase = "ended"
+    let message = "Phone disconnected."
+    call pairing.surfaceStatus
+  catch fault:
+    port browser.write { ref = "#temple-state"; name = "textContent"; value = "Could not disconnect the phone. Try again." } → _
+
+process pairing.applyCommand:
+  when includes(list("hosted", "platform", "portfolio", "previews"), $command):
+    port browser.write { ref = "#workspace-open"; name = "checked"; value = true } → _
+    port browser.write { ref = concat("#tab-", $command); name = "checked"; value = true } → _
+  when includes(list("show", "hide"), $command):
+    port browser.write { ref = "#workspace-open"; name = "checked"; value = eq($command, "show") } → _
+  when includes(list("maximize", "restore"), $command):
+    port browser.write { ref = "#workspace-open"; name = "checked"; value = true } → _
+    port browser.write { ref = "#workspace-maximized"; name = "checked"; value = eq($command, "maximize") } → _
+  when includes(list("north-river", "game"), $command):
+    port browser.navigate { path = if(eq($command, "game"), "/game/", "/encounter-pilot/") } → _
+
+process pairing.phoneBoot:
+  port browser.location {} → location
+  port text.match { value = $location.hash; pattern = "^#([A-Za-z0-9_-]{16})[.]([A-Za-z0-9_-]{43})$" } → invitation
+  port browser.navigate { path = $location.path; historyOnly = true } → _
+  when not($invitation):
+    port browser.write { ref = "#phone-state"; name = "textContent"; value = "Open Connect to Temple on the AppDev workspace and scan its QR code." } → _
+  when $invitation:
+    try:
+      let id = at($invitation.groups, 0)
+      port browser.request { path = concat("/workspace/pair/", $id, "/claim"); method = "POST"; bearer = at($invitation.groups, 1) } → response
+      assert eq($response.status, 200)
+        otherwise "Claim refused."
+      port json.parse { text = $response.body } → claim
+      port state.set { key = "temple-pair"; value = { id = $id; bearer = $claim.phone } } → _
+      port browser.write { ref = "#phone-state"; name = "textContent"; value = concat("Code: ", $claim.code, ". Approve this phone on the AppDev workspace.") } → _
+      let bindings = list(
+        { ref = "window"; event = "interval"; milliseconds = 1000; action = "phone-poll" },
+        { ref = "#phone-controls"; event = "click"; delegate = "button"; action = "phone-command" }
+      )
+      call appdev.bind
+    catch fault:
+      port browser.write { ref = "#phone-state"; name = "textContent"; value = "This QR code is unavailable. Open a new one on the AppDev workspace." } → _
+
+process pairing.phoneEnd:
+  port state.set { key = "temple-pair"; value = null } → _
+  port browser.write { ref = "#phone-controls"; name = "hidden"; value = true } → _
+  port browser.write { ref = "#phone-state"; name = "textContent"; value = "Connection ended. Scan a new QR code to reconnect." } → _
+
+process pairing.phonePoll:
+  try:
+    port browser.request { path = $endpoint; bearer = $pair.bearer } → response
+    when eq($response.status, 404):
+      call pairing.phoneEnd
+    when not(eq($response.status, 404)):
+      assert eq($response.status, 200)
+        otherwise "Pairing observation refused."
+      port json.parse { text = $response.body } → room
+      when eq($room.status, "connected"):
+        port browser.property { ref = "#phone-controls"; name = "hidden" } → hidden
+        port browser.property { ref = "#phone-state"; name = "textContent" } → current
+        when or($hidden, eq($current, "Connection interrupted. Reconnecting…")):
+          port browser.write { ref = "#phone-state"; name = "textContent"; value = "Connected to the AppDev workspace." } → _
+        port browser.write { ref = "#phone-controls"; name = "hidden"; value = false } → _
+      when not(eq($room.status, "connected")):
+        port browser.write { ref = "#phone-state"; name = "textContent"; value = concat("Code: ", $room.code, ". Approve this phone on the AppDev workspace.") } → _
+  catch fault:
+    port browser.write { ref = "#phone-state"; name = "textContent"; value = "Connection interrupted. Reconnecting…" } → _
+
+process pairing.phoneCommand:
+  let button = $eventInput.matched
+  let command = or(at($button.attributes, "data-command"), "disconnect")
+  port browser.write { ref = $button.ref; name = "disabled"; value = true } → _
+  try:
+    port browser.request { path = concat($endpoint, "/", $command); method = "POST"; bearer = $pair.bearer } → response
+    when or(eq($response.status, 404), and(eq($command, "disconnect"), eq($response.status, 204))):
+      call pairing.phoneEnd
+    when and(eq($response.status, 204), not(eq($command, "disconnect"))):
+      port browser.write { ref = "#phone-state"; name = "textContent"; value = concat("Sent to AppDev: ", $button.text, ".") } → _
+    assert includes(list(204, 404), $response.status)
+      otherwise "Phone control refused."
+  catch fault:
+    port browser.write { ref = "#phone-state"; name = "textContent"; value = "Could not send that control. Try again." } → _
+  port browser.write { ref = $button.ref; name = "disabled"; value = false } → _

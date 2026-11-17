@@ -1,0 +1,4 @@
+("application", "stateProfile", "encounter/appdev-preview-proxy/1")
+("application", "module", "proxy.encounter")
+("application", "entry", "cli.main")
+("application", "grant", "json.parse")

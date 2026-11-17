@@ -1,0 +1,74 @@
+process-module "temple/surface-process-module/1"
+
+process appCard.compose:
+  let card = $input
+  let launch = $card.launch
+  let attrs = at($launch, "attrs")
+  let action = at($card, "defaultAction")
+  assert and($action, eq($action, at($attrs, "data-launch-action")))
+    otherwise "An app card must explicitly declare its default launch action."
+  assert or(and(eq($launch.tag, "a"), not(not(at($attrs, "href")))),
+    and(eq($launch.tag, "button"), eq(at($attrs, "type"), "button"), not(not(at($attrs, "aria-controls")))))
+    otherwise "An app card default must name its launch destination."
+  port text.matches { value = $card.id; pattern = "^[a-z][a-z0-9-]*$" } → validId
+  assert $validId
+    otherwise "An app card needs a valid identifier."
+  when not($card.name):
+    let result = raise(concat("An app card needs a display name: ", $card.id))
+  let items = or(at($card, "items"), list())
+  let menu = null
+  let trigger = null
+  let menuId = null
+  when count($items):
+    let menuId = or(at($card, "menuId"), concat($card.id, "-actions"))
+    port text.matches { value = $menuId; pattern = "^[a-z][a-z0-9-]*$" } → validMenu
+    assert $validMenu
+      otherwise "An app card menu needs a valid identifier."
+    let label = concat($card.name, " actions")
+    let trigger = { tag = "button"; attrs = { type = "button"; id = concat($menuId, "-launch");
+      class = "workspace-action"; "aria-haspopup" = "menu"; "aria-controls" = $menuId;
+      "aria-label" = $label; "data-app-menu" = $menuId }; children = list("⋯") }
+    port record.put { record = $attrs; key = "class"; value = null } → primary
+    port record.put { record = $primary; key = "data-app-default"; value = "true" } → primary
+    let entries = append(list({ tag = $launch.tag; attrs = $primary; children = list(concat("Open ", $card.name, " (default)")) }), $items)
+    fold $entries as item; menuItems starts list():
+      port record.put { record = $item.attrs; key = "role"; value = "menuitem" } → attrs
+      port record.put { record = $attrs; key = "data-app-menu"; value = $menuId } → attrs
+      yield append($menuItems, list({ tag = $item.tag; attrs = $attrs; children = $item.children })) → menuItems
+    let menu = { tag = "div"; attrs = { id = $menuId; class = "context-menu"; popover = "auto"; role = "menu";
+      "aria-label" = $label }; children = $menuItems }
+  let description = at($card, "description")
+  let descriptionControl = null
+  let descriptionPanel = null
+  when $description:
+    let descriptionId = concat("app-card-description-", $card.id)
+    let descriptionControl = { tag = "button"; attrs = { type = "button"; class = "app-card-description-button";
+      popovertarget = $descriptionId; "aria-label" = concat("Show full description for ", $card.name); hidden = true };
+      children = list("…") }
+    let descriptionPanel = { tag = "div"; attrs = { id = $descriptionId; class = "app-card-description-panel"; popover = "auto" };
+      children = list($description) }
+  let result = { card = { tag = "div"; attrs = { class = if($menu, "app-menu-entry workspace-app-card", "workspace-app-card");
+    "data-app-card" = $card.id; "data-app-menu" = $menuId; id = at($card, "elementId") };
+    children = list($launch, $trigger, $descriptionControl, $descriptionPanel) }; menu = $menu }
+
+process appCard.styles:
+  let result = concat(".workspace-app-card{position:relative;height:100%;min-width:0}.workspace-app-card[data-app-menu] .app-label{padding-inline-end:28px}.workspace-app-card>.workspace-action{position:absolute;inset-block-start:3px;inset-inline-end:3px;min-height:20px;padding-block:0;line-height:16px}",
+    ".workspace-app-card{anchor-scope:--app-card-summary}.workspace-app-card .app-card-summary{display:block;max-block-size:3lh;overflow:hidden;overflow-wrap:anywhere;anchor-name:--app-card-summary}.workspace-app-card>.app-card-description-button{position:absolute;top:anchor(--app-card-summary bottom);right:anchor(--app-card-summary right);transform:translateY(-100%);min-inline-size:22px;padding:0 3px;border:0;background:#f4f2e7;color:#151944;font:inherit;font-size:12px;line-height:1.15;text-align:center;cursor:pointer}.workspace-app-card>.app-card-description-button:is(:hover,:focus-visible){background:#dde5ff;text-decoration:underline}.workspace-app-card>.app-card-description-panel{position-area:block-end span-inline-end;position-try-fallbacks:flip-block,flip-inline;inset:auto;margin:4px;max-inline-size:min(26rem,calc(100vw - 24px));max-block-size:50dvh;overflow:auto;overflow-wrap:anywhere;padding:10px;color:var(--ink,#16172a);background:#fffef3;border:1px solid #6e7db9;box-shadow:3px 3px #18233f60}")
+
+process appCard.admitRows:
+  let html = $input
+  port text.matchAll { value = $html; pattern = "<li>([\\s\\S]*?)</li>" } → rows
+  assert count($rows)
+    otherwise "The app card catalogue must contain launchers."
+  each $rows as row:
+    let card = at($row.groups, 0)
+    port text.match { value = $card; pattern = "^<div[^>]* data-app-card=\"([a-z][a-z0-9-]*)\"[^>]*><(a|button)\\b([^>]*)>" } → launch
+    assert $launch
+      otherwise "App catalogue rows must use the shared Encounter app card."
+    let attrs = at($launch.groups, 2)
+    port text.matches { value = $attrs; pattern = " data-launch-action=\"[a-z][a-z0-9-]*\"" } → explicit
+    let destination = if(eq(at($launch.groups, 1), "a"), " href=\"[^\"]+\"", " aria-controls=\"[^\"]+\"")
+    port text.matches { value = $attrs; pattern = $destination } → declared
+    assert and($explicit, $declared)
+      otherwise "An app card must explicitly declare its default launch action and destination."
+  let result = true

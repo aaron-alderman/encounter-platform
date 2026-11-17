@@ -1,0 +1,2672 @@
+process-module "temple/surface-process-module/1"
+
+process desktop.styles:
+  call desktop.documentStyles
+  let documentStyles = $result
+  call files.styles
+  let fileStyles = $result
+  call appCard.styles
+  let appCardStyles = $result
+  call sourcery.presentation.tokens
+  let presentationTokens = $result
+  call sourcery.presentation.feedbackStyles
+  let feedbackStyles = $result
+  call sourcery.compact.home
+  let compactStyles = $result
+  call tray.styles
+  let trayStyles = $result
+  call desktop.windowSizingStyles
+  let windowSizingStyles = $result
+  call desktop.layoutStyles
+  let layoutStyles = $result
+  let input = list(
+    $trayStyles,
+    $windowSizingStyles,
+    $presentationTokens,
+    $feedbackStyles,
+    $shellStyles,
+    $documentStyles,
+    $fileStyles,
+    $appCardStyles,
+    $layoutStyles,
+    $compactStyles
+  )
+  call html.cssText
+  let styles = $result
+  call workspace.connectionStyles
+  let connectionStyles = $result
+  call onboarding.styles
+  let onboardingStyles = $result
+  call design.workspaceFrameStyles
+  let designStyles = $result
+  call customization.styles
+  let customizationStyles = $result
+  call managers.densityStyles
+  let densityStyles = $result
+  call store.desktopStyles
+  let storeStyles = $result
+  call game.desktopStyles
+  let gameStyles = $result
+  call frontGate.styles
+  let frontGateStyles = $result
+  call inbox.styles
+  let inboxStyles = $result
+  call desktop.compilerStyles
+  let compilerStyles = $result
+  call desktop.environmentStyles
+  let environmentStyles = $result
+  let css = concat($styles, $connectionStyles, $onboardingStyles, $designStyles, $customizationStyles, $densityStyles,
+    $storeStyles, $gameStyles, $frontGateStyles, $inboxStyles, $compilerStyles, $environmentStyles)
+  let marker = "SOURCERY-GENERATED-DESKTOP-CSS"
+  let input = { tag = "style"; children = list($marker) }
+  call html.serialize
+  port text.replaceAll { value = $result; search = $marker; replacement = $css } → result
+
+process managers.densityStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = ".manager-location-controls"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "4px 8px" }
+    ) },
+    { selector = ".manager-location-controls .manager-density-control"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "5px" }
+    ) },
+    { selector = ".manager-density-control select"; declarations = list(
+      { property = "font"; value = "inherit" },
+      { property = "max-inline-size"; value = "100%" }
+    ) },
+    { selector = ".custom-service-item"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".custom-service-item[aria-current=true]"; declarations = list(
+      { property = "background"; value = "var(--sourcery-selected)" }
+    ) },
+    { selector = ":is(.custom-preview[data-density],.manager-panel[data-density-control])"; declarations = list(
+      { property = "--density-padding"; value = "8px" },
+      { property = "--density-gutter-adjustment"; value = "-4px" },
+      { property = "--density-row-padding"; value = "4px" },
+      { property = "--density-leading"; value = "1.35" },
+      { property = "--density-cell-adjustment"; value = "-2px" },
+      { property = "--density-cell-padding"; value = "4px" }
+    ) },
+    { selector = ":is(.custom-preview[data-density=roomier],.manager-panel[data-density-roomier=true])"; declarations = list(
+      { property = "--density-padding"; value = "clamp(12px,3vw,24px)" },
+      { property = "--density-gutter-adjustment"; value = "8px" },
+      { property = "--density-row-padding"; value = "7px" },
+      { property = "--density-leading"; value = "1.6" },
+      { property = "--density-cell-adjustment"; value = "3px" },
+      { property = "--density-cell-padding"; value = "9px" }
+    ) },
+    { selector = ":is(.custom-preview[data-density],.manager-panel[data-density-control]) :is(.manager-main,.custom-reading)"; declarations = list(
+      { property = "padding"; value = "var(--density-padding)" },
+      { property = "line-height"; value = "var(--density-leading)" }
+    ) },
+    { selector = ".custom-preview[data-density] :is(.manager-main,.custom-reading)"; declarations = list(
+      { property = "padding"; value = "max(2px,calc(var(--custom-reader-padding,12px) + var(--density-gutter-adjustment)))" }
+    ) },
+    { selector = ":is(.custom-preview[data-density],.manager-panel[data-density-control]) .manager-tree :is(button,.custom-service-item)"; declarations = list(
+      { property = "padding"; value = "var(--density-row-padding) 5px" }
+    ) },
+    { selector = ".service-observations"; declarations = list(
+      { property = "margin-block-end"; value = "10px" },
+      { property = "--sourcery-table-font-size"; value = "inherit" },
+      { property = "--sourcery-table-cell-padding"; value = "var(--density-cell-padding,6px)" }
+    ) },
+    { selector = ".service-observations tbody th[scope=row]"; declarations = list(
+      { property = "inline-size"; value = "28%" },
+      { property = "min-inline-size"; value = "5rem" }
+    ) },
+    { selector = ".service-observation-with-action"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "justify-content"; value = "space-between" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "4px 10px" }
+    ) },
+    { selector = ".service-observation-with-action>.button[data-manager-action]"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "3px 7px" },
+      { property = "max-inline-size"; value = "100%" },
+      { property = "text-align"; value = "start" }
+    ) },
+    { selector = ".service-observations [data-observation-tone]"; declarations = list(
+      { property = "background"; value = "var(--observation-paper)" },
+      { property = "color"; value = "var(--observation-ink)" }
+    ) },
+    { selector = ".service-observations [data-observation-tone=success]"; declarations = list(
+      { property = "--observation-paper"; value = "var(--sourcery-success-paper)" },
+      { property = "--observation-ink"; value = "var(--sourcery-success-ink)" }
+    ) },
+    { selector = ".service-observations [data-observation-tone=warning]"; declarations = list(
+      { property = "--observation-paper"; value = "var(--sourcery-warning-paper)" },
+      { property = "--observation-ink"; value = "var(--sourcery-warning-ink)" }
+    ) },
+    { selector = ".service-observations [data-observation-tone=error]"; declarations = list(
+      { property = "--observation-paper"; value = "var(--sourcery-error-paper)" },
+      { property = "--observation-ink"; value = "var(--sourcery-error-ink)" }
+    ) },
+    { selector = ".service-observations [data-observation-tone=muted]"; declarations = list(
+      { property = "--observation-paper"; value = "var(--sourcery-panel)" },
+      { property = "--observation-ink"; value = "var(--sourcery-muted)" }
+    ) },
+    { selector = ".service-observations [data-observation-role=next]"; declarations = list(
+      { property = "color"; value = "var(--sourcery-info-ink)" }
+    ) },
+    { selector = ".service-observations [data-observation-role=context]"; declarations = list(
+      { property = "color"; value = "var(--sourcery-muted)" }
+    ) },
+    { selector = ".custom-preview[data-density] .manager-main .sourcery-data-table"; declarations = list(
+      { property = "--sourcery-table-cell-padding"; value = "max(1px,calc(var(--custom-cell-padding,6px) + var(--density-cell-adjustment)))" }
+    ) },
+    { selector = ":is(.custom-preview[data-density=roomier],.manager-panel[data-density-roomier=true]) .manager-panes:not(.manager-single-pane)"; declarations = list(
+      { property = "grid-template-columns"; value = "minmax(0,1fr)" },
+      { property = "grid-template-rows"; value = "fit-content(8.5rem) minmax(0,1fr)" }
+    ) },
+    { selector = ":is(.custom-preview[data-density=roomier],.manager-panel[data-density-roomier=true]) .manager-tree"; declarations = list(
+      { property = "border-inline-end"; value = "0" },
+      { property = "border-block-end"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = ":is(.custom-preview[data-density=roomier],.manager-panel[data-density-roomier=true]) .manager-tree>section>ul"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "2px 6px" }
+    ) },
+    { selector = ":is(.custom-preview[data-density=roomier],.manager-panel[data-density-roomier=true]) .manager-tree>section>ul>li"; declarations = list(
+      { property = "min-inline-size"; value = "0" },
+      { property = "max-inline-size"; value = "100%" }
+    ) },
+    { selector = ":is(.custom-preview[data-density=roomier],.manager-panel[data-density-roomier=true]) .manager-main>p"; declarations = list(
+      { property = "max-inline-size"; value = "62ch" },
+      { property = "margin-block"; value = "8px 14px" }
+    ) },
+    { selector = ".manager-panel[data-density-roomier=true] .manager-main>h3"; declarations = list(
+      { property = "font-size"; value = "1.25em" }
+    ) },
+    { atRule = "media"; prelude = "(max-height:560px)"; rules = list(
+      { selector = ".manager-panel[data-density-roomier=true] .manager-panes:not(.manager-single-pane)"; declarations = list(
+        { property = "grid-template-rows"; value = "fit-content(5rem) minmax(0,1fr)" }
+      ) }
+    ) }
+  )
+  call css.renderCompactRules
+
+
+process files.styles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = "#file-viewer-window.desktop-app-window:not([data-manager-maximized=true])"; declarations = list(
+      { property = "width"; value = "min(64rem,calc(100% - 24px))" },
+      { property = "height"; value = "min(46rem,100%)" }
+    ) },
+    { selector = ".file-viewer-link"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "border"; value = "0" },
+      { property = "background"; value = "transparent" },
+      { property = "color"; value = "var(--sourcery-accent)" },
+      { property = "font"; value = "inherit" },
+      { property = "font-size"; value = ".85em" },
+      { property = "text-decoration"; value = "underline" },
+      { property = "padding"; value = "3px 0" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = ".file-viewer-video"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "max-width"; value = "100%" },
+      { property = "max-height"; value = "60vh" },
+      { property = "margin-inline"; value = "auto" }
+    ) },
+    { selector = ".file-viewer-video:focus-visible"; declarations = list(
+      { property = "outline"; value = "2px solid currentColor" }
+    ) },
+    { selector = "#file-manager-detail [data-file-type=image]"; declarations = list(
+      { property = "--file-type-color"; value = "#1b628a" }
+    ) },
+    { selector = ".file-list-hint"; declarations = list(
+      { property = "color"; value = "var(--sourcery-muted)" }
+    ) },
+    { selector = ".file-image-preview"; declarations = list(
+      { property = "margin-block"; value = "8px 16px" }
+    ) },
+    { selector = ".file-image-preview img"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "max-inline-size"; value = "100%" },
+      { property = "max-block-size"; value = "min(60vh,36rem)" },
+      { property = "inline-size"; value = "auto" },
+      { property = "block-size"; value = "auto" },
+      { property = "object-fit"; value = "contain" },
+      { property = "margin-inline"; value = "auto" }
+    ) },
+    { selector = "#file-manager-detail [data-file-type=encounter]"; declarations = list(
+      { property = "--file-type-color"; value = "#61458e" }
+    ) },
+    { selector = "#file-manager-detail [data-file-type=rel]"; declarations = list(
+      { property = "--file-type-color"; value = "#1b6455" }
+    ) },
+    { selector = "#file-manager-detail [data-file-type=receipt]"; declarations = list(
+      { property = "--file-type-color"; value = "#885015" }
+    ) },
+    { selector = "#file-manager-detail td[data-file-type]"; declarations = list(
+      { property = "color"; value = "var(--file-type-color)" },
+      { property = "font-weight"; value = "600" }
+    ) },
+    { selector = "#file-manager-detail .file-entry-name[data-file-type]"; declarations = list(
+      { property = "border-inline-start"; value = "3px solid var(--file-type-color)" },
+      { property = "padding-inline-start"; value = "5px" }
+    ) },
+    { selector = ".file-encounter-viewer"; declarations = list(
+      { property = "min-width"; value = "0" }
+    ) },
+    { selector = ".file-encounter-viewer pre"; declarations = list(
+      { property = "overflow"; value = "auto" },
+      { property = "tab-size"; value = "2" }
+    ) },
+    { selector = ".file-rel-viewer form"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "8px" }
+    ) },
+    { selector = ".file-rel-viewer input"; declarations = list(
+      { property = "flex"; value = "1 1 10rem" },
+      { property = "min-width"; value = "0" }
+    ) },
+    { selector = ".file-rel-viewer table"; declarations = list(
+      { property = "table-layout"; value = "fixed" }
+    ) },
+    { selector = ".file-rel-viewer th:last-child"; declarations = list(
+      { property = "width"; value = "5.5em" }
+    ) },
+    { selector = ".file-rel-viewer :is(td,th)"; declarations = list(
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".file-rel-viewer details"; declarations = list(
+      { property = "margin-block"; value = "12px" }
+    ) },
+    { selector = ".file-rel-viewer summary"; declarations = list(
+      { property = "width"; value = "fit-content" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = "#file-manager-window.desktop-app-window:not([data-manager-maximized=true])"; declarations = list(
+      { property = "width"; value = "min(64rem,calc(100% - 24px))" },
+      { property = "height"; value = "min(46rem,100%)" }
+    ) },
+    { selector = "#file-manager-index .file-tree ul"; declarations = list(
+      { property = "margin-inline-start"; value = "10px" },
+      { property = "padding-inline-start"; value = "12px" },
+      { property = "border-inline-start"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = ".file-tree ul > li"; declarations = list(
+      { property = "position"; value = "relative" }
+    ) },
+    { selector = ".file-tree ul > li::before"; declarations = list(
+      { property = "content"; value = "''" },
+      { property = "position"; value = "absolute" },
+      { property = "inset-inline-start"; value = "-12px" },
+      { property = "inset-block-start"; value = "17px" },
+      { property = "width"; value = "10px" },
+      { property = "border-block-start"; value = "1px solid var(--sourcery-line)" },
+      { property = "pointer-events"; value = "none" }
+    ) },
+    { selector = ".file-tree ul > li:last-child::after"; declarations = list(
+      { property = "content"; value = "''" },
+      { property = "position"; value = "absolute" },
+      { property = "inset-inline-start"; value = "-13px" },
+      { property = "inset-block"; value = "18px 0" },
+      { property = "width"; value = "1px" },
+      { property = "background"; value = "var(--sourcery-panel)" },
+      { property = "pointer-events"; value = "none" }
+    ) },
+    { selector = "#file-manager-index .file-tree summary"; declarations = list(
+      { property = "list-style"; value = "none" },
+      { property = "cursor"; value = "pointer" },
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "6px" },
+      { property = "min-height"; value = "34px" },
+      { property = "padding"; value = "0" }
+    ) },
+    { selector = "#file-manager-index .file-tree summary::-webkit-details-marker"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "#file-manager-index .file-tree summary::before"; declarations = list(
+      { property = "content"; value = "'+'" },
+      { property = "display"; value = "inline-grid" },
+      { property = "place-items"; value = "center" },
+      { property = "flex"; value = "0 0 14px" },
+      { property = "height"; value = "14px" },
+      { property = "border"; value = "1px solid var(--sourcery-line)" },
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "font"; value = "bold 12px monospace" }
+    ) },
+    { selector = "#file-manager-index .file-tree details[open] > summary::before"; declarations = list(
+      { property = "content"; value = "'−'" }
+    ) },
+    { selector = "#file-manager-index .file-tree-label"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "min-height"; value = "34px" },
+      { property = "overflow"; value = "hidden" },
+      { property = "text-overflow"; value = "ellipsis" },
+      { property = "white-space"; value = "nowrap" }
+    ) },
+    { selector = ".file-breadcrumbs"; declarations = list(
+      { property = "margin-block-end"; value = "8px" },
+      { property = "color"; value = "var(--sourcery-muted)" }
+    ) },
+    { selector = ".file-breadcrumbs ol"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "2px 7px" },
+      { property = "padding"; value = "0" },
+      { property = "margin"; value = "0" },
+      { property = "list-style"; value = "none" }
+    ) },
+    { selector = ".file-breadcrumbs li"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "min-width"; value = "0" },
+      { property = "max-width"; value = "100%" },
+      { property = "gap"; value = "7px" }
+    ) },
+    { selector = ".file-breadcrumbs li + li::before"; declarations = list(
+      { property = "content"; value = "'›'" },
+      { property = "flex"; value = "none" }
+    ) },
+    { selector = "#file-manager-detail .file-breadcrumbs button, #file-manager-detail .file-breadcrumbs span"; declarations = list(
+      { property = "overflow"; value = "hidden" },
+      { property = "text-overflow"; value = "ellipsis" },
+      { property = "white-space"; value = "nowrap" },
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = "#file-manager-detail .file-breadcrumbs button"; declarations = list(
+      { property = "color"; value = "var(--sourcery-accent)" },
+      { property = "border"; value = "0" },
+      { property = "background"; value = "transparent" },
+      { property = "font"; value = "inherit" },
+      { property = "padding"; value = "3px 0" },
+      { property = "cursor"; value = "pointer" },
+      { property = "text-decoration"; value = "underline" }
+    ) },
+    { selector = "#file-manager-detail .file-contents-table"; declarations = list(
+      { property = "table-layout"; value = "fixed" },
+      { property = "--sourcery-table-cell-padding"; value = "9px 8px" }
+    ) },
+    { selector = "#file-manager-detail .file-contents-table :is(th,td), #file-manager-detail .file-entry-name"; declarations = list(
+      { property = "overflow"; value = "hidden" },
+      { property = "text-overflow"; value = "ellipsis" },
+      { property = "white-space"; value = "nowrap" }
+    ) },
+    { selector = "#file-manager-detail .file-contents-table th:nth-child(2)"; declarations = list(
+      { property = "width"; value = "14%" }
+    ) },
+    { selector = "#file-manager-detail .file-contents-table th:nth-child(3)"; declarations = list(
+      { property = "width"; value = "16%" }
+    ) },
+    { selector = "#file-manager-detail .file-contents-table th:nth-child(4)"; declarations = list(
+      { property = "width"; value = "17%" }
+    ) },
+    { selector = "#file-manager-detail .file-contents-table th:nth-child(5)"; declarations = list(
+      { property = "width"; value = "21%" }
+    ) },
+    { selector = "#file-manager-detail .file-contents-table .file-size, #file-manager-detail .file-contents-table th:nth-child(3)"; declarations = list(
+      { property = "text-align"; value = "end" },
+      { property = "font-variant-numeric"; value = "tabular-nums" }
+    ) },
+    { selector = "#file-manager-detail .file-entry-name"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "width"; value = "100%" },
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "2px 0" },
+      { property = "border"; value = "0" },
+      { property = "background"; value = "transparent" },
+      { property = "color"; value = "var(--sourcery-accent)" },
+      { property = "font"; value = "inherit" },
+      { property = "text-align"; value = "start" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = "#file-manager-detail .file-entry-name:is(:hover,:focus-visible)"; declarations = list(
+      { property = "text-decoration"; value = "underline" }
+    ) },
+    { atRule = "media"; prelude = "(max-width: 740px)"; rules = list(
+      { selector = "#file-manager-detail .file-contents-table :is(th,td):nth-child(n+4)"; declarations = list(
+        { property = "display"; value = "none" }
+      ) }
+    ) },
+    { atRule = "media"; prelude = "(max-width: 540px)"; rules = list(
+      { selector = "#file-manager-detail .file-contents-table :is(th,td):nth-child(2)"; declarations = list(
+        { property = "display"; value = "none" }
+      ) }
+    ) },
+    { atRule = "media"; prelude = "(max-width: 540px)"; rules = list(
+      { selector = "#file-manager-detail .file-contents-table th:nth-child(3)"; declarations = list(
+        { property = "width"; value = "26%" }
+      ) }
+    ) }
+  )
+  call css.renderCompactRules
+  let result = concat("/* File Manager */", $result, "/* End File Manager */")
+
+
+process desktop.symbols:
+  let result = concat(
+    "<svg class=\"symbols\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><defs>",
+    "<symbol id=\"icon-workspace\" viewBox=\"0 0 32 32\"><path fill=\"#1b2040\" d=\"M5 3h22v3h2v22H4v-3H2V7h3z\"/><path fill=\"#a96b20\" d=\"M6 7h21v19H6z\"/><path fill=\"#ffce42\" d=\"M5 5h20v18H5z\"/><path fill=\"#fff0a5\" d=\"M5 5h20v2H7v16H5z\"/><path fill=\"#263575\" d=\"M10 10h3l5 7v-7h3v11h-3l-5-7v7h-3z\"/><path fill=\"#6f4d31\" d=\"M8 24h18v2H8z\"/></symbol>",
+    "<symbol id=\"icon-life-board\" viewBox=\"0 0 16 16\"><path fill=\"#283452\" d=\"M3 1h10v2h2v12H1V3h2z\"/><path fill=\"#6eb3a9\" d=\"M2 4h12v10H2z\"/><path fill=\"#f3c752\" d=\"M5 2h6v3H5z\"/><path fill=\"#edf4dd\" d=\"M4 7h3v5H4zm5 0h3v2H9zm0 3h3v2H9z\"/></symbol>",
+    "<symbol id=\"icon-notes\" viewBox=\"0 0 32 32\"><path fill=\"#24243c\" d=\"M5 3h22v25H5z\"/><path fill=\"#f5d25d\" d=\"M7 5h18v21H7z\"/><path fill=\"#fff1b0\" d=\"M10 6h14v18H10z\"/><path fill=\"#534c75\" d=\"M12 9h9v2h-9zm0 5h9v2h-9zm0 5h6v2h-6z\"/></symbol>",
+    "<symbol id=\"icon-game\" viewBox=\"0 0 32 32\"><path fill=\"#232339\" d=\"M7 8h18v3h4v5h2v9h-8v-3H9v3H1v-9h2v-5h4z\"/><path fill=\"#ded6bf\" d=\"M7 10h18v3h3v4h1v6h-5v-3H8v3H3v-6h1v-4h3z\"/><path fill=\"#363e68\" d=\"M8 12h3v3h3v3h-3v3H8v-3H5v-3h3z\"/><path fill=\"#a13d31\" d=\"M22 12h3v3h-3z\"/><path fill=\"#287448\" d=\"M19 16h3v3h-3z\"/></symbol>",
+    "<symbol id=\"icon-computer\" viewBox=\"0 0 32 32\"><path fill=\"#23243b\" d=\"M3 3h26v20H19v3h5v3H8v-3h5v-3H3z\"/><path fill=\"#d8d3be\" d=\"M5 5h22v16H5zm5 22h12v1H10z\"/><path fill=\"#263c69\" d=\"M7 7h18v11H7z\"/><path fill=\"#8dd9db\" d=\"M8 8h16v2H10v7H8z\"/><path fill=\"#457f69\" d=\"M23 19h2v1h-2z\"/></symbol>",
+    "<symbol id=\"icon-trace\" viewBox=\"0 0 32 32\"><path fill=\"#242641\" d=\"M3 4h26v23H3z\"/><path fill=\"#d6d3c7\" d=\"M5 6h22v19H5z\"/><path fill=\"#29376a\" d=\"M7 8h18v15H7z\"/><path fill=\"#a0f0bc\" d=\"M9 15h4v-4h3v8h3v-4h4v2h-3v4h-6v-8h-1v4H9z\"/></symbol>",
+    "<symbol id=\"icon-folder\" viewBox=\"0 0 32 32\"><path fill=\"#342945\" d=\"M2 6h12v3h15v17H2z\"/><path fill=\"#d89936\" d=\"M4 8h9v3h14v13H4z\"/><path fill=\"#ffdc62\" d=\"M5 13h24l-3 11H4z\"/><path fill=\"#fff1a0\" d=\"M5 13h23v2H5z\"/></symbol>",
+    "<symbol id=\"icon-globe\" viewBox=\"0 0 32 32\"><path fill=\"#23243c\" d=\"M10 2h12v3h5v5h3v12h-3v5h-5v3H10v-3H5v-5H2V10h3V5h5z\"/><path fill=\"#4778b5\" d=\"M10 4h12v3h3v3h3v12h-3v3h-3v3H10v-3H7v-3H4V10h3V7h3z\"/><path fill=\"#a9d179\" d=\"M10 5h8v4h5v4h-6v4h-4v-4H7v-3h3zm12 13h5v4h-4v4h-4v-5h3z\"/></symbol>",
+    "<symbol id=\"icon-tools\" viewBox=\"0 0 32 32\"><path fill=\"#2b2941\" d=\"M8 6h16v6h6v15H2V12h6zm3 2v4h10V8z\"/><path fill=\"#ab6946\" d=\"M4 14h24v11H4z\"/><path fill=\"#e4ae68\" d=\"M4 14h24v4H4z\"/><path fill=\"#ffe596\" d=\"M13 17h6v5h-6z\"/></symbol>",
+    "<symbol id=\"icon-land\" viewBox=\"0 0 32 32\"><path fill=\"#252845\" d=\"M2 5h28v23H2z\"/><path fill=\"#a9d9eb\" d=\"M4 7h24v19H4z\"/><path fill=\"#536b65\" d=\"M4 24l9-13 6 9 4-5 5 7v4H4z\"/><path fill=\"#f5f0cb\" d=\"M10 15l3-4 3 5-3-1z\"/><path fill=\"#84ab63\" d=\"M4 25l11-4 13 2v3H4z\"/></symbol>",
+    "<symbol id=\"badge-sign-in\" viewBox=\"0 0 14 14\"><path fill=\"#252845\" d=\"M0 0h14v14H0z\"/><path fill=\"#ffdc62\" d=\"M1 1h12v12H1z\"/><path fill=\"#252845\" d=\"M5 3h4v1h1v3h1v5H3V7h1V4h1zm1 2v2h2V5zm0 4v2h2V9z\"/></symbol>",
+    "<symbol id=\"badge-signed-in\" viewBox=\"0 0 14 14\"><path fill=\"#252845\" d=\"M0 0h14v14H0z\"/><path fill=\"#acdcb6\" d=\"M1 1h12v12H1z\"/><path fill=\"#252845\" d=\"M3 7h6v5H3zm3 2v2h1V9zm1-5h1V3h3v1h1v3h-2V5H9v1H7z\"/></symbol>",
+    "<symbol id=\"badge-local\" viewBox=\"0 0 14 14\"><path fill=\"#252845\" d=\"M0 0h14v14H0z\"/><path fill=\"#e4f3fc\" d=\"M1 1h12v12H1z\"/><path fill=\"#263c69\" d=\"M2 3h10v7H8v1h2v1H4v-1h2v-1H2zm2 2v3h6V5z\"/></symbol>",
+    "</defs></svg>"
+  )
+
+process desktop.documentStyles:
+  let rules = list(
+    { selector = ".desktop-app-window[data-desktop-layout=document]"; properties = list(list("height", "min(42rem, 100%)")) },
+    { selector = ".desktop-app-window[data-desktop-layout=document][data-manager-maximized=true]"; properties = list(list("height", "auto")) },
+    { selector = ".desktop-app-window[data-desktop-layout=document] > .desktop-app-content"; properties = list(list("display", "flex"),
+      list("flex", "1 1 auto"), list("flex-direction", "column"), list("overflow", "hidden"), list("padding", "0"), list("background", "var(--gray)"), list("box-shadow", "none")) },
+    { selector = ".desktop-app-window[data-window-type=document] > :is([data-window-slot=menu], [data-window-slot=banner])"; properties = list(list("flex", "none")) },
+    { selector = ".document-menu-bar > button"; properties = list(list("border", "0"), list("background", "transparent"), list("cursor", "pointer")) },
+    { selector = ".document-menu-panel"; properties = list(list("inset", "auto"), list("margin", "0"), list("position-area", "block-end span-inline-end"),
+      list("position-try-fallbacks", "flip-inline, flip-block"), list("justify-self", "start"), list("align-self", "start"),
+      list("width", "max-content"), list("max-width", "min(23rem, calc(100vw - 24px))"), list("max-height", "min(20rem, 70dvh)"),
+      list("border", "0"), list("padding", "4px"), list("color", "var(--sourcery-ink)"),
+      list("--sourcery-menu-shadow", "3px 4px #10294156")) },
+    { selector = ".document-menu-panel p"; properties = list(list("margin", "0"), list("padding", "6px 8px"), list("line-height", "1.45")) },
+    { selector = ".document-menu-panel button"; properties = list(list("display", "block"), list("width", "100%"), list("padding", "6px 8px"),
+      list("border", "0"), list("text-align", "start"), list("font", "inherit"), list("background", "transparent"), list("color", "inherit"), list("cursor", "pointer")) },
+    { selector = ".document-menu-panel button:is(:hover, :focus-visible)"; properties = list(list("background", "var(--navy)"), list("color", "white")) },
+    { selector = ".desktop-app-content > .manager-panel"; properties = list(list("display", "flex"), list("flex", "1 1 auto"),
+      list("flex-direction", "column"), list("min-height", "0"), list("margin", "0 3px 3px")) },
+    { selector = ".manager-panel > .manager-tabs"; properties = list(list("background", "var(--sourcery-frame)")) },
+    { selector = ".manager-location"; properties = list(list("flex", "none"), list("flex-wrap", "wrap"), list("align-items", "center"),
+      list("justify-content", "space-between"), list("--sourcery-status-gap", "4px 8px"), list("padding", "6px 10px"), list("border-bottom", "1px solid var(--sourcery-line)")) },
+    { selector = ".manager-panes"; properties = list(list("display", "grid"), list("flex", "1 1 auto"), list("min-height", "0"),
+      list("grid-template-columns", "minmax(0,3fr) minmax(0,7fr)"), list("grid-template-rows", "minmax(0,1fr)")) },
+    { selector = ".manager-panes.manager-single-pane"; properties = list(list("grid-template-columns", "minmax(0,1fr)")) },
+    { selector = ".manager-panes > textarea[data-workspace-widget=text]"; properties = list(
+      list("min-height", "0"), list("min-width", "0"), list("resize", "none"), list("padding", "10px"),
+      list("border", "1px solid var(--sourcery-line)"), list("background", "var(--sourcery-paper)"),
+      list("color", "var(--sourcery-ink)"), list("font", "14px/1.5 ui-monospace, monospace")) },
+    { selector = "#system-catalogue-detail"; properties = list(list("overflow-wrap", "anywhere")) },
+    { selector = ".catalogue-relationships"; properties = list(list("margin", "6px 0 0"), list("padding-inline-start", "1.4em")) },
+    { selector = ".catalogue-relationships > li"; properties = list(list("padding-block", "2px")) },
+    { selector = ".catalogue-tree"; properties = list(list("margin-block-end", "10px")) },
+    { selector = ".catalogue-tree > ul, .catalogue-tree details > ul"; properties = list(list("padding", "0"),
+      list("margin", "0"), list("list-style", "none")) },
+    { selector = ".catalogue-tree details > ul"; properties = list(list("border-inline-start", "1px solid var(--sourcery-line)"),
+      list("margin-inline-start", "9px"), list("padding-inline-start", "10px")) },
+    { selector = ".catalogue-tree summary"; properties = list(list("padding", "5px 6px"),
+      list("border-radius", "2px"), list("color", "var(--sourcery-ink)")) },
+    { selector = ".catalogue-tree details[open] > summary"; properties = list(list("background", "var(--sourcery-panel)")) },
+    { selector = "#system-catalogue-detail .catalogue-tree .catalogue-fields"; properties = list(list("background", "var(--sourcery-paper)"),
+      list("border", "1px solid var(--sourcery-line)"), list("margin", "2px 0 5px"), list("padding", "4px 7px")) },
+    { selector = ".catalogue-tree .catalogue-fields ul"; properties = list(list("margin", "0"), list("padding-inline-start", "1.2em")) },
+    { selector = "#system-catalogue-detail :is(.catalogue-groups > details, .catalogue-entry)"; properties = list(list("border", "1px solid var(--sourcery-line)"),
+      list("padding", "6px 9px"), list("margin-block-end", "6px"), list("background", "var(--sourcery-paper)")) },
+    { selector = "#system-catalogue-detail .catalogue-groups > details > summary"; properties = list(list("background", "var(--sourcery-panel)"),
+      list("padding", "7px 9px"), list("margin", "-6px -9px"), list("color", "var(--sourcery-ink)")) },
+    { selector = "#system-catalogue-detail .catalogue-groups > details[open] > summary"; properties = list(list("margin-block-end", "6px")) },
+    { selector = "#system-catalogue-detail summary > span"; properties = list(list("margin-inline-start", "9px"), list("color", "var(--sourcery-muted)")) },
+    { selector = "#system-catalogue-detail .catalogue-fields"; properties = list(list("display", "block"), list("margin", "6px 0 0")) },
+    { selector = "#system-catalogue-detail summary"; properties = list(list("display", "list-item"), list("list-style", "revert")) },
+    { selector = "#system-catalogue-detail .catalogue-fields > div"; properties = list(list("display", "grid"),
+      list("grid-template-columns", "minmax(5rem, 1fr) minmax(0, 3fr)"), list("gap", "6px"), list("padding-block", "2px")) },
+    { selector = "#system-catalogue-detail :is(dd, h4)"; properties = list(list("margin", "0")) },
+    { selector = "#system-catalogue-detail .catalogue-tokens"; properties = list(list("padding", "0"), list("list-style", "none")) },
+    { selector = "#system-catalogue-detail .catalogue-tokens > li"; properties = list(list("display", "flex"), list("flex-wrap", "wrap"),
+      list("gap", "2px 8px"), list("padding", "5px 4px"), list("border-bottom", "1px solid var(--sourcery-line)")) },
+    { selector = ".desktop-scroll-pane:focus-visible"; properties = list(list("outline", "2px dashed var(--navy)"), list("outline-offset", "-3px")) },
+    { selector = ".manager-panes:not(.manager-single-pane)"; context = "(max-width: 540px)";
+      properties = list(list("grid-template-columns", "minmax(0,1fr)"), list("grid-template-rows", "minmax(0,2fr) minmax(0,3fr)")) },
+    { selector = ".desktop-app-window[data-window-type=document] > .manager-banner"; context = "(max-height: 560px)"; properties = list(list("min-height", "0"), list("padding-block", "6px")) },
+    { selector = "#start .start-group button.app-link"; properties = list(list("width", "100%"), list("border", "0"), list("background", "transparent"),
+      list("font", "inherit"), list("color", "inherit"), list("text-align", "start"), list("cursor", "pointer")) },
+    { selector = "#start .start-group .app-link"; properties = list(list("padding", "6px 9px"), list("min-height", "33px")) },
+    { selector = "#start .start-group .app-link small"; properties = list(list("display", "none")) },
+    { selector = "#start .start-group .app-link:is(:hover, :focus-visible)"; properties = list(list("background", "#dde5ff")) },
+    { selector = ".shortcuts > button.app-link"; properties = list(list("background", "transparent"), list("border", "0"),
+      list("font-family", "inherit"), list("cursor", "pointer")) },
+    { selector = ".desktop:has(>.shortcuts [data-desktop-launch=file-manager])"; context = "(max-width: 360px)";
+      properties = list(list("grid-template-rows", "auto minmax(0,1fr)")) },
+    { selector = ".desktop > .shortcuts:has(>[data-desktop-launch=file-manager])"; context = "(max-width: 360px)";
+      properties = list(list("display", "grid"), list("grid-template-columns", "repeat(2,minmax(0,1fr))")) },
+    { selector = ".shortcuts:has(>[data-desktop-launch=file-manager]) > :not(.workspace-shortcut, [data-desktop-launch=file-manager])";
+      context = "(max-width: 360px)"; properties = list(list("display", "none")) }
+  )
+  call windowWidget.desktopSettings
+  let backgrounds = map($result.choices, "choice", {
+    selector = concat("body[data-desktop-background-", $choice.code, "='true'] main.desktop");
+    properties = list(list("--sourcery-desktop", concat("#", $choice.color))) })
+  let cssPlan = { imports = list(); tokens = list(); rules = map(append($rules, $backgrounds), "rule", {
+    selector = $rule.selector; context = at($rule, "context");
+    declarations = map($rule.properties, "pair", { property = at($pair, 0); value = at($pair, 1) })
+  }) }
+  call css.renderPlan
+
+process desktop.windowSizingStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = "#workspace"; declarations = list(
+      { property = "block-size"; value = "min(42rem,calc(100dvh - max(44px,clamp(22px,7vh,70px)) - 102px))" }
+    ) },
+    { selector = "#workspace .program-switcher,#workspace .programs"; declarations = list(
+      { property = "flex"; value = "1" }
+    ) },
+    { selector = "#workspace-maximized:checked~.desktop #workspace"; declarations = list(
+      { property = "block-size"; value = "auto" },
+      { property = "max-block-size"; value = "none" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:670px)"; rules = list(
+      { selector = "#workspace"; declarations = list(
+        { property = "block-size"; value = "100%" },
+        { property = "max-block-size"; value = "none" }
+      ) }
+    ) },
+    { selector = "#workspace .statusbar>span"; declarations = list(
+      { property = "display"; value = "inline-flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "4px" }
+    ) },
+    { selector = "#workspace .statusbar>span>svg"; declarations = list(
+      { property = "flex"; value = "none" }
+    ) },
+    { selector = "#workspace #status,#workspace #launch-sign-in"; declarations = list(
+      { property = "white-space"; value = "nowrap" }
+    ) },
+    { selector = "#workspace-sign-in-text"; declarations = list(
+      { property = "font-weight"; value = "inherit" }
+    ) },
+    { selector = ".workspace-unlocked,body[data-workspace-signed-in=true] .workspace-locked"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "body[data-workspace-signed-in=true] .workspace-unlocked"; declarations = list(
+      { property = "display"; value = "inline" }
+    ) }
+  )
+  call css.renderCompactRules
+
+process desktop.layoutStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { atRule = "media"; prelude = " (hover:hover) and (pointer:fine)"; rules = list(
+      { selector = "#start[open] .start-group>summary:hover"; declarations = list(
+        { property = "animation"; value = "start-flyout-hover 160ms linear" }
+      ) }
+    ) },
+    { atRule = "keyframes"; prelude = " start-flyout-hover"; rules = list(
+      { selector = "from"; declarations = list(
+        { property = "--start-flyout-hover-ready"; value = "0" }
+      ) },
+      { selector = "to"; declarations = list(
+        { property = "--start-flyout-hover-ready"; value = "1" }
+      ) }
+    ) },
+    { selector = "#start .start-menu nav:has(>.start-group)"; declarations = list(
+      { property = "--start-column-width"; value = "clamp(112px,34vw,180px)" },
+      { property = "position"; value = "relative" },
+      { property = "inline-size"; value = "var(--start-column-width)" },
+      { property = "min-inline-size"; value = "0" },
+      { property = "overflow"; value = "visible" }
+    ) },
+    { selector = "#start .start-group>summary"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "justify-content"; value = "space-between" },
+      { property = "gap"; value = "8px" },
+      { property = "min-block-size"; value = "33px" },
+      { property = "padding"; value = "6px 9px" },
+      { property = "color"; value = "var(--navy)" },
+      { property = "background"; value = "#eeece3" },
+      { property = "border-bottom"; value = "1px solid #adabb1" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = "#start .start-group>summary::after"; declarations = list(
+      { property = "content"; value = "'›'" }
+    ) },
+    { selector = "#start .start-group[open]>summary,#start .start-group>summary:is(:hover,:focus-visible)"; declarations = list(
+      { property = "background"; value = "#dde5ff" }
+    ) },
+    { selector = "#start .start-flyout"; declarations = list(
+      { property = "position"; value = "absolute" },
+      { property = "inset-block-end"; value = "0" },
+      { property = "inset-inline-start"; value = "calc(100% - 1px)" },
+      { property = "z-index"; value = "1" },
+      { property = "inline-size"; value = "min(235px,calc(100vw - var(--start-column-width) - 48px))" },
+      { property = "min-block-size"; value = "100%" },
+      { property = "max-block-size"; value = "calc(100dvh - 55px)" },
+      { property = "overflow"; value = "auto" },
+      { property = "overscroll-behavior"; value = "contain" },
+      { property = "background"; value = "var(--gray)" },
+      { property = "box-shadow"; value = "var(--raised),3px 3px #18233f60" },
+      { property = "padding"; value = "3px" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = "#start #start-flyout-account>.start-flyout"; declarations = list(
+      { property = "inset-block"; value = "0 auto" },
+      { property = "min-block-size"; value = "0" },
+      { property = "inline-size"; value = "min(214px,calc(100vw - var(--start-column-width) - 48px))" },
+      { property = "padding"; value = "2px" }
+    ) },
+    { selector = "#start #start-flyout-account #account-state"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "6px 9px" },
+      { property = "background"; value = "#e9ecf4" },
+      { property = "border-block-end"; value = "1px solid #adabb1" },
+      { property = "color"; value = "#3e4a63" },
+      { property = "font-size"; value = ".88em" },
+      { property = "line-height"; value = "1.3" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = "#start #start-flyout-account .app-link"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "inline-size"; value = "100%" },
+      { property = "min-block-size"; value = "32px" },
+      { property = "padding"; value = "5px 9px" },
+      { property = "color"; value = "var(--navy)" },
+      { property = "font"; value = "inherit" },
+      { property = "text-align"; value = "start" }
+    ) },
+    { selector = "#start #start-flyout-account .app-link[hidden]"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "#start #start-flyout-account .app-link:is(:hover,:focus-visible)"; declarations = list(
+      { property = "background"; value = "#dde5ff" }
+    ) },
+    { selector = "header.home-shell-header"; declarations = list(
+      { property = "position"; value = "relative" },
+      { property = "z-index"; value = "7" },
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "auto minmax(0,1fr) auto" },
+      { property = "gap"; value = "4px 10px" }
+    ) },
+    { selector = ".home-shell-header>.workspace-switch"; declarations = list(
+      { property = "grid-column"; value = "2" },
+      { property = "justify-self"; value = "center" }
+    ) },
+    { selector = ".home-shell-header>.workspace-connection-status"; declarations = list(
+      { property = "grid-column"; value = "3" },
+      { property = "justify-self"; value = "end" },
+      { property = "min-height"; value = "26px" },
+      { property = "padding"; value = "0" },
+      { property = "gap"; value = "5px" },
+      { property = "background"; value = "transparent" },
+      { property = "border"; value = "0" },
+      { property = "white-space"; value = "nowrap" }
+    ) },
+    { selector = ".home-shell-header [data-connection-reason]"; declarations = list(
+      { property = "left"; value = "auto" },
+      { property = "right"; value = "0" },
+      { property = "transform"; value = "none" }
+    ) },
+    { selector = "main.desktop"; declarations = list(
+      { property = "padding-block-start"; value = "max(44px,clamp(22px,7vh,70px))" }
+    ) },
+    { selector = "#workspace-maximized:checked~main.desktop>.window"; declarations = list(
+      { property = "inset-block-start"; value = "43px" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:780px)"; rules = list(
+      { selector = ".home-shell-header .connection-name"; declarations = list(
+        { property = "position"; value = "absolute" },
+        { property = "width"; value = "1px" },
+        { property = "height"; value = "1px" },
+        { property = "clip-path"; value = "inset(50%)" },
+        { property = "overflow"; value = "hidden" }
+      ) },
+      { selector = "header.home-shell-header:has([data-state=disconnected])"; declarations = list(
+        { property = "grid-template-columns"; value = "auto 1fr" }
+      ) },
+      { selector = ".home-shell-header:has([data-state=disconnected])>.workspace-switch"; declarations = list(
+        { property = "grid-column"; value = "2" },
+        { property = "justify-self"; value = "end" }
+      ) },
+      { selector = ".home-shell-header:has([data-state=disconnected])>.workspace-connection-status"; declarations = list(
+        { property = "grid-column"; value = "1/-1" },
+        { property = "grid-row"; value = "3" }
+      ) }
+    ) },
+    { atRule = "media"; prelude = "(max-width:480px)"; rules = list(
+      { selector = "header.home-shell-header"; declarations = list(
+        { property = "padding-inline"; value = "6px" },
+        { property = "gap"; value = "4px" },
+        { property = "font-size"; value = "12px" }
+      ) },
+      { selector = ".home-shell-header>.workspace-switch"; declarations = list(
+        { property = "gap"; value = "2px" }
+      ) },
+      { selector = ".home-shell-header>.workspace-switch>a"; declarations = list(
+        { property = "padding-inline"; value = "6px" }
+      ) },
+      { selector = ".home-shell-header>.workspace-connection-status"; declarations = list(
+        { property = "font-size"; value = "11px" }
+      ) }
+    ) },
+    { atRule = "media"; prelude = "(max-width:360px)"; rules = list(
+      { selector = ".home-shell-header:has(.workspace-switch a[href='/workspace/platform'])>.workspace-switch"; declarations = list(
+        { property = "grid-column"; value = "1/-1" },
+        { property = "grid-row"; value = "2" },
+        { property = "justify-self"; value = "center" }
+      ) },
+      { selector = ".home-shell-header:has(.workspace-switch a[href='/workspace/platform'])>.workspace-connection-status[data-state]:not([data-state=disconnected])"; declarations = list(
+        { property = "grid-row"; value = "1" }
+      ) }
+    ) },
+    { selector = ".desktop-identity"; declarations = list(
+      { property = "position"; value = "absolute" },
+      { property = "inset-block-start"; value = "8px" },
+      { property = "inset-inline-end"; value = "clamp(14px,4vw,62px)" },
+      { property = "z-index"; value = "1" },
+      { property = "max-inline-size"; value = "calc(100% - 28px)" },
+      { property = "padding"; value = "4px 9px" },
+      { property = "background"; value = "var(--gray)" },
+      { property = "box-shadow"; value = "var(--raised)" },
+      { property = "font-weight"; value = "bold" },
+      { property = "color"; value = "var(--ink)" },
+      { property = "text-decoration"; value = "none" },
+      { property = "white-space"; value = "nowrap" },
+      { property = "overflow"; value = "hidden" },
+      { property = "text-overflow"; value = "ellipsis" }
+    ) },
+    { selector = ".desktop-identity:is(:hover,:focus-visible)"; declarations = list(
+      { property = "background"; value = "var(--sourcery-selected)" }
+    ) },
+    { selector = ".workspace-preference"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "gap"; value = "5px" },
+      { property = "padding"; value = "6px" },
+      { property = "margin-block-start"; value = "4px" },
+      { property = "border-block-start"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = ".workspace-preference label"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "gap"; value = "4px" }
+    ) },
+    { selector = ".workspace-preference select"; declarations = list(
+      { property = "min-inline-size"; value = "0" },
+      { property = "width"; value = "100%" },
+      { property = "font"; value = "inherit" }
+    ) },
+    { selector = ".workspace-preference button"; declarations = list(
+      { property = "justify-self"; value = "start" }
+    ) },
+    { selector = ".workspace-preference [role=status]:empty"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".desktop-app-window[data-manager-maximized=true]"; declarations = list(
+      { property = "inset"; value = "5px" },
+      { property = "width"; value = "auto" },
+      { property = "max-height"; value = "none" }
+    ) },
+    { selector = ".desktop-app-window[data-manager-maximized=true] .desktop-app-content"; declarations = list(
+      { property = "flex"; value = "1" }
+    ) },
+    { selector = ".manager-banner"; declarations = list(
+      { property = "margin-block-end"; value = "4px" },
+      { property = "--sourcery-banner-title-max"; value = "35px" }
+    ) },
+    { selector = ".desktop-app-window[data-window-type=document]>.manager-banner"; declarations = list(
+      { property = "display"; value = "flex" }
+    ) },
+    { selector = ".manager-tabs"; declarations = list(
+      { property = "padding"; value = "6px 4px 0" },
+      { property = "flex-wrap"; value = "wrap" }
+    ) },
+    { selector = ".manager-tabs>*"; declarations = list(
+      { property = "padding"; value = "6px 12px" }
+    ) },
+    { selector = ".manager-panel"; declarations = list(
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".manager-tree"; declarations = list(
+      { property = "padding"; value = "8px" },
+      { property = "background"; value = "var(--sourcery-panel)" },
+      { property = "border-inline-end"; value = "1px solid var(--sourcery-line)" }
+    ) },
+    { selector = ".manager-tree summary"; declarations = list(
+      { property = "font-weight"; value = "bold" },
+      { property = "padding"; value = "4px" }
+    ) },
+    { selector = ".manager-tree summary::before"; declarations = list(
+      { property = "content"; value = "'▸ '" }
+    ); endSemicolon = true },
+    { selector = ".manager-tree details[open]>summary::before"; declarations = list(
+      { property = "content"; value = "'▾ '" }
+    ); endSemicolon = true },
+    { selector = ".manager-tree details details,.manager-tree details>ul"; declarations = list(
+      { property = "margin-inline-start"; value = "8px" }
+    ) },
+    { selector = ".manager-tree h4"; declarations = list(
+      { property = "margin"; value = "8px 0 3px" }
+    ) },
+    { selector = ".manager-tree ul"; declarations = list(
+      { property = "list-style"; value = "none" },
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "0" }
+    ) },
+    { selector = ".manager-tree button"; declarations = list(
+      { property = "border"; value = "0" },
+      { property = "background"; value = "transparent" },
+      { property = "text-align"; value = "left" },
+      { property = "width"; value = "100%" },
+      { property = "color"; value = "var(--ink)" },
+      { property = "font"; value = "inherit" },
+      { property = "padding"; value = "5px" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".manager-tree button:hover,.manager-tree [aria-pressed=true]"; declarations = list(
+      { property = "background"; value = "var(--sourcery-selected)" }
+    ) },
+    { selector = ".manager-main"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "padding"; value = "12px" }
+    ) },
+    { selector = ".manager-main h3,.manager-main h4"; declarations = list(
+      { property = "margin"; value = "0 0 8px" }
+    ) },
+    { selector = ".manager-main .file-contents-table"; declarations = list(
+      { property = "font-size"; value = "inherit" },
+      { property = "--sourcery-table-cell-padding"; value = "5px" }
+    ) },
+    { selector = ".manager-main dl"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "auto minmax(0,1fr)" },
+      { property = "gap"; value = "4px 12px" }
+    ) },
+    { selector = ".manager-main dd"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".manager-main pre"; declarations = list(
+      { property = "white-space"; value = "pre-wrap" },
+      { property = "overflow-wrap"; value = "anywhere" },
+      { property = "background"; value = "#efede6" },
+      { property = "padding"; value = "10px" }
+    ) },
+    { selector = ".manager-main [data-manager-action]"; declarations = list(
+      { property = "margin-bottom"; value = "4px" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:540px)"; rules = list(
+      { selector = ".manager-tree"; declarations = list(
+        { property = "border-inline-end"; value = "0" },
+        { property = "border-block-end"; value = "1px solid var(--sourcery-line)" }
+      ) },
+      { selector = ".manager-tree button,.manager-tabs button"; declarations = list(
+        { property = "min-height"; value = "40px" }
+      ) }
+    ) },
+    { selector = ".mobile-preparation img"; declarations = list(
+      { property = "max-width"; value = "100%" },
+      { property = "height"; value = "auto" }
+    ) },
+    { selector = ".mobile-preparation button"; declarations = list(
+      { property = "min-height"; value = "44px" }
+    ) },
+    { selector = ".mobile-preparation a"; declarations = list(
+      { property = "display"; value = "inline-block" },
+      { property = "min-height"; value = "44px" },
+      { property = "padding-block"; value = "10px" }
+    ) },
+    { selector = ".mobile-preparation fieldset label"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "6px" },
+      { property = "min-height"; value = "44px" }
+    ) },
+    { selector = ".mobile-copy"; declarations = list(
+      { property = "white-space"; value = "pre-wrap" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ":root"; declarations = list(
+      { property = "color-scheme"; value = "light" },
+      { property = "font"; value = "14px var(--sourcery-font)" },
+      { property = "--gray"; value = "var(--sourcery-frame)" },
+      { property = "--ink"; value = "var(--sourcery-ink)" },
+      { property = "--navy"; value = "var(--sourcery-accent)" },
+      { property = "--gold"; value = "var(--sourcery-gold)" },
+      { property = "--raised"; value = "var(--sourcery-raised)" },
+      { property = "--sunken"; value = "var(--sourcery-inset)" }
+    ) },
+    { selector = "*"; declarations = list(
+      { property = "box-sizing"; value = "border-box" }
+    ) },
+    { selector = "body"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "background"; value = "#225b6e" },
+      { property = "color"; value = "var(--ink)" },
+      { property = "display"; value = "flex" },
+      { property = "flex-direction"; value = "column" },
+      { property = "height"; value = "100vh" },
+      { property = "height"; value = "100dvh" }
+    ) },
+    { selector = "a"; declarations = list(
+      { property = "color"; value = "inherit" }
+    ) },
+    { selector = "summary,label"; declarations = list(
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = "summary"; declarations = list(
+      { property = "list-style"; value = "none" }
+    ) },
+    { selector = "summary::-webkit-details-marker"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "a:focus-visible,summary:focus-visible,.programs:focus-visible"; declarations = list(
+      { property = "outline"; value = "2px dashed #314bb9" },
+      { property = "outline-offset"; value = "-2px" }
+    ) },
+    { selector = ".desktop-toggle"; declarations = list(
+      { property = "position"; value = "absolute" },
+      { property = "width"; value = "1px" },
+      { property = "height"; value = "1px" },
+      { property = "opacity"; value = "0" },
+      { property = "margin"; value = "0" },
+      { property = "pointer-events"; value = "none" }
+    ) },
+    { selector = ".symbols"; declarations = list(
+      { property = "position"; value = "absolute" },
+      { property = "width"; value = "0" },
+      { property = "height"; value = "0" },
+      { property = "overflow"; value = "hidden" }
+    ) },
+    { selector = ".icon"; declarations = list(
+      { property = "width"; value = "32px" },
+      { property = "height"; value = "32px" },
+      { property = "flex"; value = "none" },
+      { property = "shape-rendering"; value = "crispEdges" }
+    ) },
+    { selector = ".desktop"; declarations = list(
+      { property = "position"; value = "relative" },
+      { property = "isolation"; value = "isolate" },
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "110px minmax(0,790px)" },
+      { property = "align-content"; value = "start" },
+      { property = "gap"; value = "clamp(14px,5vw,82px)" },
+      { property = "flex"; value = "1" },
+      { property = "min-height"; value = "0" },
+      { property = "padding"; value = "clamp(22px,7vh,70px) clamp(14px,4vw,62px) 22px" },
+      { property = "overflow"; value = "auto" },
+      { property = "background"; value = "var(--sourcery-desktop)" }
+    ) },
+    { selector = ".wallpaper"; declarations = list(
+      { property = "pointer-events"; value = "none" },
+      { property = "position"; value = "absolute" },
+      { property = "z-index"; value = "-1" },
+      { property = "right"; value = "clamp(18px,4vw,62px)" },
+      { property = "bottom"; value = "24px" },
+      { property = "text-align"; value = "right" },
+      { property = "color"; value = "#c1e2e755" },
+      { property = "font-family"; value = "monospace" },
+      { property = "letter-spacing"; value = ".3em" }
+    ) },
+    { selector = ".wallpaper b,.wallpaper span"; declarations = list(
+      { property = "display"; value = "block" }
+    ) },
+    { selector = ".wallpaper b"; declarations = list(
+      { property = "font"; value = "900 clamp(28px,7vw,100px)/.95 Tahoma,Verdana,sans-serif" },
+      { property = "letter-spacing"; value = ".06em" }
+    ) },
+    { selector = ".wallpaper span"; declarations = list(
+      { property = "margin-top"; value = "7px" }
+    ) },
+    { selector = ".shortcuts"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "align-content"; value = "start" },
+      { property = "gap"; value = "12px" }
+    ) },
+    { selector = ".app-link"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "10px" },
+      { property = "text-decoration"; value = "none" },
+      { property = "min-width"; value = "0" }
+    ) },
+    { selector = ".app-label"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "min-width"; value = "0" }
+    ) },
+    { selector = ".app-link strong,.app-link small"; declarations = list(
+      { property = "display"; value = "block" }
+    ) },
+    { selector = ".app-link small"; declarations = list(
+      { property = "margin-top"; value = "4px" }
+    ) },
+    { selector = ".shortcuts .app-link"; declarations = list(
+      { property = "flex-direction"; value = "column" },
+      { property = "justify-content"; value = "center" },
+      { property = "gap"; value = "5px" },
+      { property = "min-height"; value = "62px" },
+      { property = "padding"; value = "5px" },
+      { property = "color"; value = "#fff" },
+      { property = "text-align"; value = "center" },
+      { property = "text-shadow"; value = "1px 1px #132f46" },
+      { property = "font-size"; value = "12px" }
+    ) },
+    { selector = ".shortcuts .app-link small"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".shortcuts .icon"; declarations = list(
+      { property = "width"; value = "36px" },
+      { property = "height"; value = "36px" },
+      { property = "filter"; value = "drop-shadow(2px 2px 0 #173e55)" }
+    ) },
+    { selector = ".shortcuts .app-link:hover,.shortcuts .app-link:focus-visible"; declarations = list(
+      { property = "background"; value = "#101867b0" },
+      { property = "outline"; value = "1px dotted #e9e4b8" }
+    ) },
+    { selector = ".window"; declarations = list(
+      { property = "max-height"; value = "calc(100dvh - clamp(22px,7vh,70px) - 102px)" }
+    ) },
+    { selector = ".titlebar"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "7px" },
+      { property = "padding"; value = "4px 5px" },
+      { property = "color"; value = "var(--sourcery-title-ink)" },
+      { property = "background"; value = "var(--sourcery-title)" },
+      { property = "font-weight"; value = "bold" },
+      { property = "min-height"; value = "29px" }
+    ) },
+    { selector = ".titlebar .icon,.taskbar .icon"; declarations = list(
+      { property = "width"; value = "18px" },
+      { property = "height"; value = "18px" }
+    ) },
+    { selector = ".window-controls"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "gap"; value = "3px" },
+      { property = "margin-left"; value = "auto" }
+    ) },
+    { selector = ".window-controls label,.start-button,.task-button"; declarations = list(
+      { property = "background"; value = "var(--gray)" },
+      { property = "box-shadow"; value = "var(--raised)" },
+      { property = "color"; value = "var(--ink)" }
+    ) },
+    { selector = ".window-controls label"; declarations = list(
+      { property = "font"; value = "bold 15px/18px monospace" },
+      { property = "text-align"; value = "center" },
+      { property = "width"; value = "20px" },
+      { property = "height"; value = "19px" }
+    ) },
+    { selector = ".window-controls label:active,.start-button:active,.task-button:active,#start[open] .start-button,#workspace-open:checked~.taskbar .task-button"; declarations = list(
+      { property = "box-shadow"; value = "var(--sunken)" },
+      { property = "background"; value = "#e4e2dc" }
+    ) },
+    { selector = ".menu-bar"; declarations = list(
+      { property = "position"; value = "relative" },
+      { property = "display"; value = "flex" },
+      { property = "gap"; value = "3px" },
+      { property = "min-height"; value = "27px" },
+      { property = "align-items"; value = "center" },
+      { property = "font-size"; value = "12px" },
+      { property = "padding"; value = "2px 5px" }
+    ) },
+    { selector = ".menu-bar details"; declarations = list(
+      { property = "position"; value = "relative" }
+    ) },
+    { selector = ".menu-bar summary,.document-menu-bar>button"; declarations = list(
+      { property = "padding"; value = "4px 8px" },
+      { property = "font"; value = "inherit" },
+      { property = "color"; value = "inherit" }
+    ) },
+    { selector = ".menu-bar summary::first-letter,.document-menu-bar>button::first-letter"; declarations = list(
+      { property = "text-decoration"; value = "underline" }
+    ) },
+    { selector = ".menu-bar details[open]>summary,.menu-bar summary:is(:hover,:focus-visible),.document-menu-bar>button:is(:hover,:focus-visible,:has(+ :popover-open))"; declarations = list(
+      { property = "background"; value = "var(--sourcery-accent)" },
+      { property = "color"; value = "var(--sourcery-title-ink)" }
+    ) },
+    { selector = ":is(.menu-bar details>a,.help,.document-menu-panel)"; declarations = list(
+      { property = "background"; value = "var(--sourcery-frame)" },
+      { property = "box-shadow"; value = "var(--sourcery-raised),var(--sourcery-menu-shadow,0 0 transparent)" }
+    ) },
+    { selector = ".menu-bar details>a,.help"; declarations = list(
+      { property = "position"; value = "absolute" },
+      { property = "top"; value = "100%" },
+      { property = "left"; value = "0" },
+      { property = "z-index"; value = "3" },
+      { property = "padding"; value = "10px" },
+      { property = "min-width"; value = "max-content" }
+    ) },
+    { selector = ".help"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "width"; value = "min(360px,70vw)" },
+      { property = "line-height"; value = "1.5" }
+    ) },
+    { selector = ".help code"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "white-space"; value = "normal" },
+      { property = "overflow-wrap"; value = "anywhere" },
+      { property = "background"; value = "#f8f6e9" },
+      { property = "padding"; value = "7px" },
+      { property = "box-shadow"; value = "var(--sunken)" }
+    ) },
+    { selector = ".banner"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "18px" },
+      { property = "min-height"; value = "112px" },
+      { property = "margin"; value = "0 3px 10px" },
+      { property = "padding"; value = "14px 20px" },
+      { property = "background"; value = "repeating-linear-gradient(0deg,#ffffff06 0 1px,transparent 1px 4px),linear-gradient(110deg,var(--sourcery-banner-start),var(--sourcery-banner-end))" },
+      { property = "border"; value = "1px solid #0d1233" },
+      { property = "color"; value = "var(--sourcery-banner-ink)" }
+    ) },
+    { selector = ".banner .banner-glyph"; declarations = list(
+      { property = "color"; value = "var(--navy)" },
+      { property = "font-size"; value = "2rem" },
+      { property = "line-height"; value = "1" }
+    ) },
+    { selector = ".banner-icon"; declarations = list(
+      { property = "flex"; value = "none" },
+      { property = "display"; value = "grid" },
+      { property = "place-items"; value = "center" },
+      { property = "width"; value = "62px" },
+      { property = "height"; value = "62px" },
+      { property = "background"; value = "var(--gold)" },
+      { property = "box-shadow"; value = "inset 2px 2px #fff2a8,inset -2px -2px #b77d19,4px 4px #090d2f" }
+    ) },
+    { selector = ".banner-icon .icon"; declarations = list(
+      { property = "width"; value = "48px" },
+      { property = "height"; value = "48px" }
+    ) },
+    { selector = ".banner p"; declarations = list(
+      { property = "color"; value = "var(--sourcery-banner-highlight)" },
+      { property = "font"; value = "700 11px monospace" },
+      { property = "letter-spacing"; value = ".15em" },
+      { property = "margin"; value = "0 0 5px" }
+    ) },
+    { selector = ".banner :is(h1,.manager-title)"; declarations = list(
+      { property = "font-size"; value = "clamp(21px,4vw,var(--sourcery-banner-title-max,38px))" },
+      { property = "line-height"; value = "1.08" },
+      { property = "margin"; value = "0 0 4px" },
+      { property = "letter-spacing"; value = "-.045em" },
+      { property = "color"; value = "inherit" }
+    ) },
+    { selector = ".banner span"; declarations = list(
+      { property = "font-size"; value = "12px" },
+      { property = "color"; value = "#e0e4f6" }
+    ) },
+    { selector = ".banner .edition"; declarations = list(
+      { property = "margin-left"; value = "auto" },
+      { property = "color"; value = "#d5d7ed" },
+      { property = "font"; value = "10px monospace" },
+      { property = "letter-spacing"; value = ".14em" },
+      { property = "text-align"; value = "right" },
+      { property = "align-self"; value = "center" }
+    ) },
+    { selector = ".edition b"; declarations = list(
+      { property = "font"; value = "700 40px/1 monospace" },
+      { property = "color"; value = "var(--sourcery-banner-highlight)" }
+    ) },
+    { selector = ".program-switcher"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-direction"; value = "column" },
+      { property = "min-height"; value = "0" },
+      { property = "margin"; value = "0 3px 5px" }
+    ) },
+    { selector = ":is(.tabs,.manager-tabs)"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "gap"; value = "2px" },
+      { property = "flex"; value = "none" }
+    ) },
+    { selector = ".tabs"; declarations = list(
+      { property = "padding-inline-start"; value = "4px" }
+    ) },
+    { selector = ":is(.tabs>label,.tabs>span,.manager-tabs>*)"; declarations = list(
+      { property = "border"; value = "0" },
+      { property = "box-shadow"; value = "var(--sourcery-raised)" },
+      { property = "background"; value = "var(--sourcery-view-control)" },
+      { property = "color"; value = "var(--sourcery-ink)" },
+      { property = "font"; value = "inherit" }
+    ) },
+    { selector = ".tabs :is(label,span)"; declarations = list(
+      { property = "padding"; value = "7px clamp(8px,2vw,15px)" },
+      { property = "border-radius"; value = "4px 4px 0 0" },
+      { property = "box-shadow"; value = "inset 1px 1px #fff,inset -1px 0 #7b797e" },
+      { property = "font-size"; value = "12px" }
+    ) },
+    { selector = ".programs,.desktop-scroll-pane"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "min-height"; value = "0" },
+      { property = "overflow"; value = "auto" },
+      { property = "overscroll-behavior"; value = "contain" },
+      { property = "scrollbar-gutter"; value = "stable" }
+    ) },
+    { selector = ".program-group"; declarations = list(
+      { property = "display"; value = "none" },
+      { property = "padding"; value = "15px" }
+    ) },
+    { selector = ".program-group h2"; declarations = list(
+      { property = "font-size"; value = "15px" },
+      { property = "margin"; value = "0 0 4px" }
+    ) },
+    { selector = ".program-group h2 span"; declarations = list(
+      { property = "display"; value = "inline-block" },
+      { property = "vertical-align"; value = "middle" },
+      { property = "margin-left"; value = "4px" },
+      { property = "font"; value = "11px monospace" },
+      { property = "padding"; value = "2px 5px" },
+      { property = "background"; value = "#ece3b9" },
+      { property = "color"; value = "#48380b" }
+    ) },
+    { selector = ".program-group p"; declarations = list(
+      { property = "font-size"; value = "12px" },
+      { property = "margin"; value = "0 0 11px" },
+      { property = "color"; value = "#494b59" }
+    ) },
+    { selector = ".program-group ul"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "repeat(auto-fit,minmax(min(170px,100%),1fr))" },
+      { property = "gap"; value = "6px" },
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "0" },
+      { property = "list-style"; value = "none" }
+    ) },
+    { selector = ".program-group .app-link"; declarations = list(
+      { property = "background"; value = "#f4f2e7" },
+      { property = "border"; value = "1px solid #d7d3c0" },
+      { property = "min-height"; value = "62px" },
+      { property = "height"; value = "100%" },
+      { property = "padding"; value = "6px 8px" }
+    ) },
+    { selector = ".program-group .app-link:hover,.program-group .app-link:focus-visible,.start-menu .app-link:hover"; declarations = list(
+      { property = "background"; value = "#dde5ff" },
+      { property = "border-color"; value = "#6e7db9" }
+    ) },
+    { selector = ".program-group strong"; declarations = list(
+      { property = "font-size"; value = "12px" },
+      { property = "line-height"; value = "1.2" }
+    ) },
+    { selector = ".program-group small"; declarations = list(
+      { property = "font-size"; value = "11px" },
+      { property = "color"; value = "#494b59" },
+      { property = "line-height"; value = "1.25" }
+    ) },
+    { selector = ".program-group .icon"; declarations = list(
+      { property = "width"; value = "28px" },
+      { property = "height"; value = "28px" }
+    ) },
+    { selector = "#tab-hosted:checked~.programs .program-group:is([data-group=hosted],[data-group=portfolio],[data-group=getting-started]),#tab-encounters:checked~.programs .program-group:is([data-group=previews],[data-group=platform]),#tab-workspaces:checked~.programs [data-group=workspaces],#tab-operations:checked~.programs .notes-operations,#tab-x:checked~.programs [data-group=x]"; declarations = list(
+      { property = "display"; value = "block" }
+    ) },
+    { selector = "#tab-hosted:checked~.tabs [for=tab-hosted],#tab-encounters:checked~.tabs [for=tab-encounters],#tab-workspaces:checked~.tabs [for=tab-workspaces],#tab-operations:checked~.tabs [for=tab-operations],#tab-x:checked~.tabs [for=tab-x],.tabs>[aria-current],.manager-tabs>[aria-pressed=true],.manager-tabs>span:not([aria-pressed])"; declarations = list(
+      { property = "background"; value = "var(--sourcery-paper)" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = "#tab-hosted:focus-visible~.tabs [for=tab-hosted],#tab-encounters:focus-visible~.tabs [for=tab-encounters],#tab-workspaces:focus-visible~.tabs [for=tab-workspaces],#tab-operations:focus-visible~.tabs [for=tab-operations],#tab-x:focus-visible~.tabs [for=tab-x],#workspace-maximized:focus-visible~.desktop [for=workspace-maximized],#workspace-open:focus-visible~.taskbar [for=workspace-open]"; declarations = list(
+      { property = "outline"; value = "2px dotted var(--navy)" },
+      { property = "outline-offset"; value = "-4px" }
+    ) },
+    { selector = "#workspace-open:not(:checked)~.desktop .window"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "#workspace-maximized:checked~.desktop .window"; declarations = list(
+      { property = "position"; value = "absolute" },
+      { property = "inset"; value = "5px" },
+      { property = "max-height"; value = "none" }
+    ) },
+    { selector = "#workspace-maximized:checked~.desktop .program-switcher"; declarations = list(
+      { property = "flex"; value = "1" }
+    ) },
+    { selector = "#workspace-maximized:checked~.desktop .programs"; declarations = list(
+      { property = "flex"; value = "1" }
+    ) },
+    { selector = ":is(.statusbar,.manager-location)"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "gap"; value = "var(--sourcery-status-gap,4px)" },
+      { property = "color"; value = "var(--sourcery-muted)" }
+    ) },
+    { selector = ".statusbar"; declarations = list(
+      { property = "margin"; value = "0 3px 3px" },
+      { property = "font-size"; value = "11px" }
+    ) },
+    { selector = ".statusbar span"; declarations = list(
+      { property = "padding"; value = "4px 7px" },
+      { property = "box-shadow"; value = "var(--sunken)" }
+    ) },
+    { selector = ".statusbar span:first-child"; declarations = list(
+      { property = "flex"; value = "1" }
+    ) },
+    { selector = ".taskbar"; declarations = list(
+      { property = "z-index"; value = "5" },
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "6px" },
+      { property = "padding"; value = "4px" },
+      { property = "min-height"; value = "40px" },
+      { property = "background"; value = "var(--gray)" },
+      { property = "box-shadow"; value = "inset 0 2px #fff" }
+    ) },
+    { selector = ".start-button,.task-button,.tray"; declarations = list(
+      { property = "height"; value = "30px" },
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "5px" },
+      { property = "padding"; value = "3px 8px" },
+      { property = "white-space"; value = "nowrap" },
+      { property = "font-size"; value = "12px" }
+    ) },
+    { selector = ".start-button"; declarations = list(
+      { property = "font-size"; value = "14px" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".task-button"; declarations = list(
+      { property = "min-width"; value = "min(168px,48vw)" }
+    ) },
+    { selector = ".tray"; declarations = list(
+      { property = "margin-left"; value = "auto" },
+      { property = "box-shadow"; value = "var(--sunken)" }
+    ) },
+    { selector = ".tray-dot"; declarations = list(
+      { property = "width"; value = "7px" },
+      { property = "height"; value = "7px" },
+      { property = "background"; value = "#27803e" },
+      { property = "border"; value = "1px solid #18592b" }
+    ) },
+    { selector = ".start-menu"; declarations = list(
+      { property = "position"; value = "absolute" },
+      { property = "bottom"; value = "38px" },
+      { property = "left"; value = "4px" },
+      { property = "display"; value = "flex" },
+      { property = "background"; value = "var(--gray)" },
+      { property = "box-shadow"; value = "var(--raised),3px 3px #18233f60" },
+      { property = "padding"; value = "3px" },
+      { property = "max-width"; value = "calc(100vw - 8px)" }
+    ) },
+    { selector = ".start-brand"; declarations = list(
+      { property = "writing-mode"; value = "vertical-rl" },
+      { property = "rotate"; value = "180deg" },
+      { property = "background"; value = "linear-gradient(#184399,#0c1755)" },
+      { property = "color"; value = "white" },
+      { property = "padding"; value = "8px 4px" },
+      { property = "font-size"; value = "15px" },
+      { property = "font-weight"; value = "normal" }
+    ) },
+    { selector = ".start-menu nav"; declarations = list(
+      { property = "min-width"; value = "220px" },
+      { property = "max-height"; value = "calc(100dvh - 60px)" },
+      { property = "overflow-y"; value = "auto" }
+    ) },
+    { selector = ".start-menu .app-link"; declarations = list(
+      { property = "padding"; value = "8px 12px" }
+    ) },
+    { selector = ".start-menu .app-link+.app-link"; declarations = list(
+      { property = "border-top"; value = "1px solid #adabb1" }
+    ) },
+    { selector = ".start-menu .icon"; declarations = list(
+      { property = "width"; value = "24px" },
+      { property = "height"; value = "24px" }
+    ) },
+    { selector = ".start-menu small"; declarations = list(
+      { property = "font-size"; value = "11px" }
+    ) },
+    { selector = ".identity-bar"; declarations = list(
+      { property = "flex"; value = "none" },
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "align-items"; value = "center" },
+      { property = "justify-content"; value = "space-between" },
+      { property = "gap"; value = "5px 12px" },
+      { property = "padding"; value = "5px 8px" },
+      { property = "background"; value = "var(--gray)" },
+      { property = "box-shadow"; value = "var(--raised)" }
+    ) },
+    { selector = ".identity-bar>strong"; declarations = list(
+      { property = "color"; value = "var(--navy)" }
+    ) },
+    { selector = ".identity-actions,.dialog-actions"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "5px" }
+    ) },
+    { selector = ".identity-actions"; declarations = list(
+      { property = "font-size"; value = "12px" }
+    ) },
+    { selector = ".identity-actions [role=status]"; declarations = list(
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".identity-actions button,.dialog-actions button,.dialog-body .button,.phone-controls button"; declarations = list(
+      { property = "border"; value = "0" },
+      { property = "background"; value = "var(--gray)" },
+      { property = "color"; value = "var(--ink)" },
+      { property = "box-shadow"; value = "var(--raised)" },
+      { property = "padding"; value = "6px 10px" },
+      { property = "font"; value = "inherit" },
+      { property = "text-decoration"; value = "none" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = ".dialog-body .button"; declarations = list(
+      { property = "display"; value = "inline-block" }
+    ) },
+    { selector = ".dialog-body .button[hidden]"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".dialog-body button:disabled"; declarations = list(
+      { property = "opacity"; value = ".65" }
+    ) },
+    { selector = "button:focus-visible,.button:focus-visible"; declarations = list(
+      { property = "outline"; value = "2px dashed var(--navy)" },
+      { property = "outline-offset"; value = "-3px" }
+    ) },
+    { selector = "button:disabled"; declarations = list(
+      { property = "opacity"; value = ".6" },
+      { property = "cursor"; value = "default" }
+    ) },
+    { selector = "dialog"; declarations = list(
+      { property = "width"; value = "min(380px,calc(100vw - 20px))" },
+      { property = "max-height"; value = "calc(100dvh - 20px)" },
+      { property = "padding"; value = "4px" },
+      { property = "border"; value = "0" },
+      { property = "background"; value = "var(--gray)" },
+      { property = "color"; value = "var(--ink)" },
+      { property = "box-shadow"; value = "var(--raised),6px 7px #10294170" }
+    ) },
+    { selector = "dialog::backdrop"; declarations = list(
+      { property = "background"; value = "#10172b88" }
+    ) },
+    { selector = "dialog h2"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "font-size"; value = "14px" }
+    ) },
+    { selector = ".dialog-body"; declarations = list(
+      { property = "padding"; value = "0 10px 10px" }
+    ) },
+    { selector = ".dialog-actions"; declarations = list(
+      { property = "justify-content"; value = "flex-end" },
+      { property = "padding"; value = "4px" }
+    ) },
+    { selector = ".dialog-body img"; declarations = list(
+      { property = "max-width"; value = "100%" },
+      { property = "height"; value = "auto" },
+      { property = "image-rendering"; value = "pixelated" }
+    ) },
+    { selector = ".phone"; declarations = list(
+      { property = "overflow"; value = "auto" },
+      { property = "display"; value = "block" },
+      { property = "padding"; value = "12px" }
+    ) },
+    { selector = ".phone main"; declarations = list(
+      { property = "background"; value = "var(--gray)" },
+      { property = "box-shadow"; value = "var(--raised)" },
+      { property = "padding"; value = "8px" },
+      { property = "max-width"; value = "420px" },
+      { property = "margin"; value = "auto" }
+    ) },
+    { selector = ".phone h1"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "font-size"; value = "16px" }
+    ) },
+    { selector = ".phone-controls"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "gap"; value = "8px" }
+    ) },
+    { selector = ".phone-controls fieldset"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "8px" },
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".phone-controls button"; declarations = list(
+      { property = "min-height"; value = "44px" }
+    ) },
+    { selector = ".phone [hidden]"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".dialog-scroll[open]"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-direction"; value = "column" },
+      { property = "overflow"; value = "hidden" }
+    ) },
+    { selector = ".dialog-scroll>.titlebar,.dialog-scroll>.dialog-actions,.dialog-page>.button-row"; declarations = list(
+      { property = "flex"; value = "none" }
+    ) },
+    { selector = ".dialog-scroll>.dialog-body,.dialog-page,.panel-scroll"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-direction"; value = "column" },
+      { property = "min-height"; value = "0" }
+    ) },
+    { selector = ".dialog-page>.panel,.scroll-list"; declarations = list(
+      { property = "overflow"; value = "auto" }
+    ) },
+    { selector = ".dialog-page>.panel"; declarations = list(
+      { property = "overscroll-behavior"; value = "contain" }
+    ) },
+    { selector = ".scroll-list"; declarations = list(
+      { property = "min-height"; value = "4rem" }
+    ) },
+    { selector = ".scroll-list:focus-visible"; declarations = list(
+      { property = "outline"; value = "2px dashed var(--navy)" },
+      { property = "outline-offset"; value = "-2px" }
+    ) },
+    { selector = ".dialog-page"; declarations = list(
+      { property = "padding-top"; value = "8px" }
+    ) },
+    { selector = ".dialog-scroll>.dialog-body"; declarations = list(
+      { property = "padding-bottom"; value = "4px" }
+    ) },
+    { selector = ".dialog-scroll>.dialog-actions"; declarations = list(
+      { property = "padding"; value = "6px 10px 8px" }
+    ) },
+    { selector = ".dialog-page>.panel"; declarations = list(
+      { property = "padding"; value = "12px" },
+      { property = "margin-bottom"; value = "4px" }
+    ) },
+    { selector = ".panel-scroll>h3"; declarations = list(
+      { property = "margin"; value = "0 0 8px" }
+    ) },
+    { selector = ".panel-scroll>.banner,.panel-scroll>.search-form"; declarations = list(
+      { property = "flex"; value = "none" }
+    ) },
+    { selector = ".panel-scroll>.banner"; declarations = list(
+      { property = "margin"; value = "0 0 12px" }
+    ) },
+    { selector = ".search-form"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "gap"; value = "6px" },
+      { property = "margin"; value = "0 0 12px" }
+    ) },
+    { selector = ".search-controls"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "6px" }
+    ) },
+    { selector = ".search-controls input"; declarations = list(
+      { property = "flex"; value = "1 1 10rem" },
+      { property = "min-width"; value = "0" },
+      { property = "padding"; value = "5px 7px" },
+      { property = "border"; value = "0" },
+      { property = "box-shadow"; value = "var(--sunken)" },
+      { property = "font"; value = "inherit" }
+    ) },
+    { selector = ".search-controls button"; declarations = list(
+      { property = "flex"; value = "none" }
+    ) },
+    { selector = ".search-form>button"; declarations = list(
+      { property = "justify-self"; value = "start" }
+    ) },
+    { selector = ".search-form textarea"; declarations = list(
+      { property = "width"; value = "100%" },
+      { property = "min-width"; value = "0" },
+      { property = "padding"; value = "6px 8px" },
+      { property = "border"; value = "0" },
+      { property = "box-shadow"; value = "var(--sunken)" },
+      { property = "font"; value = "inherit" },
+      { property = "resize"; value = "vertical" }
+    ) },
+    { selector = ".item-list.scroll-list"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "8px 10px 8px 32px" },
+      { property = "box-shadow"; value = "var(--sunken)" },
+      { property = "background"; value = "white" },
+      { property = "scrollbar-gutter"; value = "stable" }
+    ) },
+    { selector = ".scroll-list li"; declarations = list(
+      { property = "padding-block"; value = "4px" },
+      { property = "line-height"; value = "1.4" }
+    ) },
+    { selector = ".results-pane"; declarations = list(
+      { property = "border-top"; value = "1px solid #85817c" },
+      { property = "padding-inline-end"; value = "8px" },
+      { property = "scrollbar-gutter"; value = "stable" }
+    ) },
+    { selector = "*::-webkit-scrollbar"; declarations = list(
+      { property = "width"; value = "16px" },
+      { property = "height"; value = "16px" }
+    ) },
+    { selector = "*::-webkit-scrollbar-track,*::-webkit-scrollbar-corner"; declarations = list(
+      { property = "background"; value = "#c1beb6" },
+      { property = "box-shadow"; value = "var(--sunken)" }
+    ) },
+    { selector = "*::-webkit-scrollbar-thumb"; declarations = list(
+      { property = "background"; value = "var(--gray)" },
+      { property = "box-shadow"; value = "var(--raised)" },
+      { property = "border"; value = "1px solid #85817c" }
+    ) },
+    { selector = "*::-webkit-scrollbar-thumb:hover"; declarations = list(
+      { property = "background"; value = "#e4e1da" }
+    ) },
+    { atRule = "supports"; prelude = " not selector(::-webkit-scrollbar)"; rules = list(
+      { selector = "*"; declarations = list(
+        { property = "scrollbar-color"; value = "#77736d #dedbd4" }
+      ) }
+    ) },
+    { selector = ".dialog-wide"; declarations = list(
+      { property = "width"; value = "min(760px,calc(100vw - 20px))" }
+    ) },
+    { selector = ".panel-grid"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "repeat(auto-fit,minmax(min(100%,245px),1fr))" },
+      { property = "gap"; value = "8px" }
+    ) },
+    { selector = ".panel"; declarations = list(
+      { property = "padding"; value = "10px" },
+      { property = "margin"; value = "8px 0" },
+      { property = "background"; value = "#fffef3" },
+      { property = "box-shadow"; value = "var(--sunken)" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".panel h3"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "color"; value = "var(--navy)" }
+    ) },
+    { selector = ".banner h3"; declarations = list(
+      { property = "color"; value = "inherit" }
+    ) },
+    { selector = ".panel-grid>.panel"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".item-list"; declarations = list(
+      { property = "padding-left"; value = "20px" },
+      { property = "margin"; value = "6px 0" }
+    ) },
+    { selector = ".item-list li+li"; declarations = list(
+      { property = "margin-top"; value = "6px" }
+    ) },
+    { selector = ".item-list [aria-current=true]"; declarations = list(
+      { property = "outline"; value = "2px solid var(--navy)" },
+      { property = "outline-offset"; value = "3px" }
+    ) },
+    { selector = ".button-row"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "6px" }
+    ) },
+    { selector = ".identity-page-main"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-direction"; value = "column" },
+      { property = "min-height"; value = "0" },
+      { property = "width"; value = "min(860px,calc(100% - 24px))" },
+      { property = "margin"; value = "clamp(12px,4vw,40px) auto" },
+      { property = "padding"; value = "4px" },
+      { property = "background"; value = "var(--gray)" },
+      { property = "box-shadow"; value = "var(--raised),6px 7px #10294170" }
+    ) },
+    { selector = ".identity-page-main h1"; declarations = list(
+      { property = "flex"; value = "none" },
+      { property = "margin"; value = "0" },
+      { property = "font-size"; value = "clamp(18px,4vw,24px)" },
+      { property = "padding"; value = "8px 10px" }
+    ) },
+    { selector = ".identity-page-content"; declarations = list(
+      { property = "min-height"; value = "0" },
+      { property = "overflow-y"; value = "auto" },
+      { property = "scrollbar-gutter"; value = "stable" },
+      { property = "padding"; value = "12px" }
+    ) },
+    { selector = ".identity-page-content:focus-visible,#acting-as-content:focus-visible"; declarations = list(
+      { property = "outline"; value = "2px dashed var(--navy)" },
+      { property = "outline-offset"; value = "-2px" }
+    ) },
+    { selector = ".identity-overview"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "repeat(auto-fit,minmax(min(300px,100%),1fr))" },
+      { property = "gap"; value = "10px" }
+    ) },
+    { selector = ".identity-overview section:last-child"; declarations = list(
+      { property = "grid-column"; value = "1/-1" }
+    ) },
+    { selector = ".identity-page-content section"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "12px" },
+      { property = "background"; value = "var(--cream)" },
+      { property = "box-shadow"; value = "var(--sunken)" },
+      { property = "min-width"; value = "0" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".identity-page-content section+section:not(.identity-overview section)"; declarations = list(
+      { property = "margin-top"; value = "10px" }
+    ) },
+    { selector = ".identity-page-content h2,.identity-page-content h3"; declarations = list(
+      { property = "margin"; value = "0 0 8px" },
+      { property = "color"; value = "var(--navy)" }
+    ) },
+    { selector = ".identity-page-content dl"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".identity-page-content dt"; declarations = list(
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".identity-page-content dd"; declarations = list(
+      { property = "margin"; value = "3px 0 9px" }
+    ) },
+    { selector = ".identity-page-content label"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "margin"; value = "10px 0 4px" }
+    ) },
+    { selector = ".identity-page-content input:not([type=checkbox])"; declarations = list(
+      { property = "width"; value = "100%" },
+      { property = "padding"; value = "5px" },
+      { property = "font"; value = "inherit" }
+    ) },
+    { selector = ".identity-page-content form .button"; declarations = list(
+      { property = "margin-top"; value = "10px" }
+    ) },
+    { selector = ".identity-page-content code"; declarations = list(
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".identity-page-actions"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "8px" }
+    ) },
+    { selector = "[data-handover-demo] [data-identity-page]"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "#x-mentions-dialog"; declarations = list(
+      { property = "width"; value = "min(580px,calc(100vw - 20px))" }
+    ) },
+    { selector = "#x-mentions-content label"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "margin"; value = "10px 0 4px" }
+    ) },
+    { selector = "#x-mentions-content input"; declarations = list(
+      { property = "box-sizing"; value = "border-box" },
+      { property = "width"; value = "100%" },
+      { property = "padding"; value = "5px" },
+      { property = "font"; value = "inherit" }
+    ) },
+    { selector = "#x-mentions-content form .button"; declarations = list(
+      { property = "margin-top"; value = "10px" }
+    ) },
+    { selector = ".mention-list"; declarations = list(
+      { property = "list-style"; value = "none" },
+      { property = "padding"; value = "0" }
+    ) },
+    { selector = ".mention-list li"; declarations = list(
+      { property = "margin"; value = "8px 0" },
+      { property = "padding"; value = "10px" },
+      { property = "background"; value = "var(--cream)" },
+      { property = "box-shadow"; value = "var(--sunken)" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".mention-list p"; declarations = list(
+      { property = "white-space"; value = "pre-wrap" }
+    ) },
+    { selector = ".identity-actions .identity-entry"; declarations = list(
+      { property = "background"; value = "var(--gray)" },
+      { property = "color"; value = "var(--ink)" },
+      { property = "box-shadow"; value = "var(--raised)" },
+      { property = "padding"; value = "6px 10px" },
+      { property = "text-decoration"; value = "none" }
+    ) },
+    { selector = "#acting-as-window"; declarations = list(
+      { property = "width"; value = "min(620px,calc(100% - 24px))" }
+    ) },
+    { selector = "#acting-as-content"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "overflow-y"; value = "auto" },
+      { property = "overscroll-behavior"; value = "contain" },
+      { property = "scrollbar-gutter"; value = "stable" }
+    ) },
+    { selector = "#acting-as-content section"; declarations = list(
+      { property = "margin"; value = "10px 0" },
+      { property = "padding"; value = "10px" },
+      { property = "background"; value = "var(--cream)" },
+      { property = "box-shadow"; value = "var(--sunken)" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = "#acting-as-content h3"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "color"; value = "var(--navy)" }
+    ) },
+    { selector = "#acting-as-content dt"; declarations = list(
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = "#acting-as-content dd"; declarations = list(
+      { property = "margin"; value = "0 0 8px" }
+    ) },
+    { selector = "#acting-as-content label"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "margin"; value = "8px 0 4px" }
+    ) },
+    { selector = "#acting-as-content input[type=email]"; declarations = list(
+      { property = "box-sizing"; value = "border-box" },
+      { property = "width"; value = "100%" },
+      { property = "padding"; value = "5px" },
+      { property = "font"; value = "inherit" }
+    ) },
+    { selector = "#acting-as-content input[type=email]+button"; declarations = list(
+      { property = "margin-top"; value = "8px" }
+    ) },
+    { selector = ".identity-receipts"; declarations = list(
+      { property = "padding-left"; value = "20px" }
+    ) },
+    { selector = ".identity-receipts li+li"; declarations = list(
+      { property = "margin-top"; value = "10px" }
+    ) },
+    { selector = "#acting-as-window .dialog-actions .button"; declarations = list(
+      { property = "background"; value = "var(--gray)" },
+      { property = "color"; value = "var(--ink)" },
+      { property = "box-shadow"; value = "var(--raised)" },
+      { property = "padding"; value = "6px 10px" },
+      { property = "text-decoration"; value = "none" }
+    ) },
+    { selector = ".handover-banner"; declarations = list(
+      { property = "padding"; value = "7px 10px" },
+      { property = "background"; value = "#fff2b8" },
+      { property = "color"; value = "#27203a" },
+      { property = "box-shadow"; value = "var(--sunken)" }
+    ) },
+    { selector = ".handover-banner[hidden]"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = ".handover-banner p"; declarations = list(
+      { property = "margin"; value = "0 0 5px" }
+    ) },
+    { selector = ".handover-controls"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "6px" }
+    ) },
+    { selector = ".handover-controls button,.handover-controls a"; declarations = list(
+      { property = "background"; value = "var(--gray)" },
+      { property = "color"; value = "var(--ink)" },
+      { property = "box-shadow"; value = "var(--raised)" },
+      { property = "border"; value = "0" },
+      { property = "padding"; value = "5px 8px" },
+      { property = "font"; value = "inherit" },
+      { property = "text-decoration"; value = "none" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = ".handover-controls button[aria-pressed=true]"; declarations = list(
+      { property = "box-shadow"; value = "var(--sunken)" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".handover-controls [data-demo-action=exit]"; declarations = list(
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = "[data-handover-demo] #acting-as-window .dialog-actions [data-open-handover-demo]"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "[data-handover-demo] #account-state,[data-handover-demo] #sign-in,[data-handover-demo] #sign-out"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "[data-handover-demo] .app-link:not([data-open-acting-as]):not([data-open-mentions])"; declarations = list(
+      { property = "opacity"; value = ".58" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:670px)"; rules = list(
+      { selector = ".desktop"; declarations = list(
+        { property = "grid-template-columns"; value = "minmax(0,1fr)" },
+        { property = "gap"; value = "10px" },
+        { property = "padding"; value = "9px 8px 13px" }
+      ) },
+      { selector = ".shortcuts"; declarations = list(
+        { property = "grid-template-columns"; value = "repeat(5,minmax(0,1fr))" },
+        { property = "gap"; value = "2px" }
+      ) },
+      { selector = ".shortcuts .app-link"; declarations = list(
+        { property = "font-size"; value = "10px" },
+        { property = "min-height"; value = "53px" },
+        { property = "padding"; value = "3px 0" }
+      ) },
+      { selector = ".shortcuts .icon"; declarations = list(
+        { property = "width"; value = "27px" },
+        { property = "height"; value = "27px" }
+      ) },
+      { selector = ".banner"; declarations = list(
+        { property = "gap"; value = "12px" },
+        { property = "padding"; value = "11px" },
+        { property = "min-height"; value = "85px" }
+      ) },
+      { selector = ".banner-icon"; declarations = list(
+        { property = "width"; value = "43px" },
+        { property = "height"; value = "43px" }
+      ) },
+      { selector = ".banner-icon .icon"; declarations = list(
+        { property = "width"; value = "34px" },
+        { property = "height"; value = "34px" }
+      ) },
+      { selector = ".banner .edition"; declarations = list(
+        { property = "display"; value = "none" }
+      ) },
+      { selector = ".program-group"; declarations = list(
+        { property = "padding"; value = "10px" }
+      ) },
+      { selector = ".program-group ul"; declarations = list(
+        { property = "grid-template-columns"; value = "repeat(2,minmax(0,1fr))" }
+      ) },
+      { selector = ".program-group .app-link"; declarations = list(
+        { property = "padding"; value = "5px" },
+        { property = "gap"; value = "5px" }
+      ) },
+      { selector = ".program-group .icon"; declarations = list(
+        { property = "width"; value = "22px" },
+        { property = "height"; value = "22px" }
+      ) }
+    ) },
+    { selector = ".workspace-switch"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "gap"; value = "3px" },
+      { property = "margin-inline"; value = "auto" }
+    ) },
+    { selector = ".workspace-switch a,.workspace-action"; declarations = list(
+      { property = "border"; value = "0" },
+      { property = "background"; value = "var(--gray)" },
+      { property = "color"; value = "var(--ink)" },
+      { property = "box-shadow"; value = "var(--raised)" },
+      { property = "font"; value = "inherit" },
+      { property = "padding"; value = "5px 9px" },
+      { property = "text-decoration"; value = "none" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = ".workspace-launch,.workspace-launch a"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "4px" }
+    ) },
+    { selector = ".workspace-launch .icon"; declarations = list(
+      { property = "width"; value = "16px" },
+      { property = "height"; value = "16px" }
+    ) },
+    { selector = ".workspace-launch .workspace-action"; declarations = list(
+      { property = "min-width"; value = "32px" },
+      { property = "align-self"; value = "stretch" },
+      { property = "padding-inline"; value = "7px" }
+    ) },
+    { selector = ".workspace-switch [aria-current=page]"; declarations = list(
+      { property = "box-shadow"; value = "var(--sunken)" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".crm-app-entry"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "gap"; value = "3px" },
+      { property = "align-items"; value = "flex-start" },
+      { property = "height"; value = "100%" }
+    ) },
+    { selector = ".crm-app-entry .app-link"; declarations = list(
+      { property = "flex"; value = "1" }
+    ) },
+    { selector = ".context-menu"; declarations = list(
+      { property = "inset"; value = "auto" },
+      { property = "margin"; value = "0" },
+      { property = "min-width"; value = "155px" },
+      { property = "max-width"; value = "calc(100vw - 16px)" },
+      { property = "border"; value = "0" },
+      { property = "background"; value = "var(--gray)" },
+      { property = "color"; value = "var(--ink)" },
+      { property = "box-shadow"; value = "var(--raised),4px 5px #18233f65" },
+      { property = "padding"; value = "3px" }
+    ) },
+    { selector = ".context-menu strong"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "padding"; value = "6px 9px" },
+      { property = "border-bottom"; value = "1px solid #949193" },
+      { property = "font-size"; value = "12px" }
+    ) },
+    { selector = ".context-menu :is(a,button)"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "width"; value = "100%" },
+      { property = "text-align"; value = "left" },
+      { property = "font"; value = "inherit" },
+      { property = "color"; value = "inherit" },
+      { property = "padding"; value = "7px 9px" },
+      { property = "border"; value = "0" },
+      { property = "background"; value = "transparent" },
+      { property = "text-decoration"; value = "none" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = ".context-menu :is(a,button):is(:hover,:focus-visible)"; declarations = list(
+      { property = "background"; value = "var(--navy)" },
+      { property = "color"; value = "#fff" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:520px)"; rules = list(
+      { selector = ".workspace-switch"; declarations = list(
+        { property = "margin-inline"; value = "0" }
+      ) }
+    ) },
+    { selector = "#versions-dialog[data-encounter-nonmodal][open]"; declarations = list(
+      { property = "z-index"; value = "24" }
+    ) },
+    { selector = ".notes-operations button.app-link"; declarations = list(
+      { property = "width"; value = "100%" },
+      { property = "font"; value = "inherit" },
+      { property = "text-align"; value = "left" },
+      { property = "color"; value = "var(--ink)" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = ".assurance-catalogue"; declarations = list(
+      { property = "overflow"; value = "auto" },
+      { property = "max-width"; value = "100%" },
+      { property = "max-height"; value = "45dvh" },
+      { property = "margin"; value = "12px 0 20px" }
+    ) },
+    { selector = ".assurance-catalogue .sourcery-data-table"; declarations = list(
+      { property = "--sourcery-table-cell-padding"; value = "8px" }
+    ) },
+    { selector = ".assurance-catalogue thead"; declarations = list(
+      { property = "position"; value = "sticky" },
+      { property = "top"; value = "0" }
+    ) },
+    { selector = "#notes-assurance-dialog>.dialog-body,#identity-management-dialog>.dialog-body,#network-dialog>.dialog-body"; declarations = list(
+      { property = "overflow-y"; value = "auto" },
+      { property = "overscroll-behavior"; value = "contain" }
+    ) },
+    { selector = "#notes-assurance-dialog>.dialog-body>section"; declarations = list(
+      { property = "flex"; value = "none" }
+    ) },
+    { selector = ".assurance-catalogue code"; declarations = list(
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = "#network-dialog"; declarations = list(
+      { property = "width"; value = "min(760px,calc(100vw - 20px))" },
+      { property = "max-height"; value = "calc(100dvh - 28px)" }
+    ) },
+    { selector = "#workspace"; declarations = list(
+      { property = "padding-inline-end"; value = "8px" },
+      { property = "padding-block-end"; value = "8px" }
+    ) },
+    { selector = "#workspace .programs"; declarations = list(
+      { property = "border"; value = "1px solid #8d8982" },
+      { property = "border-inline-end-width"; value = "3px" },
+      { property = "border-block-end-width"; value = "3px" }
+    ) },
+    { selector = "#workspace #home-getting-started[hidden]"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "#home-getting-started .onboarding-card"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "minmax(0,1fr) auto" },
+      { property = "align-items"; value = "start" },
+      { property = "gap"; value = "6px 10px" },
+      { property = "border"; value = "1px solid #bcb395" },
+      { property = "padding"; value = "10px 12px" }
+    ) },
+    { selector = "#first-run-pin"; declarations = list(
+      { property = "grid-column"; value = "1/-1" }
+    ) },
+    { selector = ".onboarding-dismiss"; declarations = list(
+      { property = "min-width"; value = "28px" },
+      { property = "min-height"; value = "26px" },
+      { property = "line-height"; value = "1" }
+    ) },
+    { selector = ".app-menu-entry"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "gap"; value = "3px" },
+      { property = "height"; value = "100%" },
+      { property = "min-width"; value = "0" }
+    ) },
+    { selector = ".app-menu-entry .app-link"; declarations = list(
+      { property = "flex"; value = "1" }
+    ) },
+    { selector = ".app-menu-entry>.workspace-action"; declarations = list(
+      { property = "flex"; value = "none" },
+      { property = "align-self"; value = "start" },
+      { property = "min-width"; value = "28px" },
+      { property = "padding-inline"; value = "6px" }
+    ) },
+    { selector = ".program-group li"; declarations = list(
+      { property = "min-width"; value = "0" }
+    ) },
+    { selector = "#workspace [data-group=hosted] ul"; declarations = list(
+      { property = "grid-auto-rows"; value = "1fr" }
+    ) },
+    { selector = ".banner .edition"; declarations = list(
+      { property = "max-width"; value = "35%" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".banner .edition b"; declarations = list(
+      { property = "font"; value = "700 clamp(12px,1.3vw,18px) monospace" }
+    ) },
+    { selector = ".banner .build-hash"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "margin-top"; value = "3px" },
+      { property = "color"; value = "#fff" },
+      { property = "opacity"; value = ".7" },
+      { property = "font"; value = "400 8px/1.25 monospace" },
+      { property = "letter-spacing"; value = ".04em" }
+    ) },
+    { selector = ".system-menu"; declarations = list(
+      { property = "position"; value = "absolute" },
+      { property = "top"; value = "100%" },
+      { property = "left"; value = "0" },
+      { property = "z-index"; value = "4" },
+      { property = "min-width"; value = "max-content" },
+      { property = "padding"; value = "3px" },
+      { property = "background"; value = "var(--gray)" },
+      { property = "box-shadow"; value = "var(--raised)" }
+    ) },
+    { selector = ".system-menu button"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "width"; value = "100%" },
+      { property = "padding"; value = "7px 10px" },
+      { property = "border"; value = "0" },
+      { property = "background"; value = "transparent" },
+      { property = "color"; value = "var(--ink)" },
+      { property = "font"; value = "inherit" },
+      { property = "text-align"; value = "left" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = ".system-menu button:hover,.system-menu button:focus-visible"; declarations = list(
+      { property = "background"; value = "var(--navy)" },
+      { property = "color"; value = "white" }
+    ) },
+    { selector = "#notes-performance-reading dl"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "auto 1fr" },
+      { property = "gap"; value = "7px 14px" }
+    ) },
+    { selector = "#notes-performance-reading dt"; declarations = list(
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = "#notes-performance-reading dd"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:670px)"; rules = list(
+      { selector = ".desktop"; declarations = list(
+        { property = "grid-template-rows"; value = "auto minmax(0,1fr)" },
+        { property = "align-content"; value = "stretch" },
+        { property = "padding-bottom"; value = "8px" }
+      ) },
+      { selector = ".window"; declarations = list(
+        { property = "max-height"; value = "none" }
+      ) },
+      { selector = ".program-switcher,.programs"; declarations = list(
+        { property = "flex"; value = "1" }
+      ) },
+      { selector = ".statusbar span"; declarations = list(
+        { property = "padding"; value = "3px 5px" }
+      ) }
+    ) },
+    { atRule = "media"; prelude = "(max-width:360px)"; rules = list(
+      { selector = ".desktop"; declarations = list(
+        { property = "grid-template-rows"; value = "minmax(0,1fr)" }
+      ) },
+      { selector = ".shortcuts,.banner"; declarations = list(
+        { property = "display"; value = "none" }
+      ) },
+      { selector = ".program-group ul"; declarations = list(
+        { property = "grid-template-columns"; value = "minmax(0,1fr)" }
+      ) },
+      { selector = ".workspace-launch .workspace-action"; declarations = list(
+        { property = "min-width"; value = "40px" }
+      ) }
+    ) },
+    { atRule = "media"; prelude = "(max-height:410px)"; rules = list(
+      { selector = ".search-form textarea"; declarations = list(
+        { property = "height"; value = "3em" }
+      ) },
+      { selector = ".banner"; declarations = list(
+        { property = "display"; value = "none" }
+      ) },
+      { selector = ".shortcuts"; declarations = list(
+        { property = "gap"; value = "2px" }
+      ) },
+      { selector = ".desktop"; declarations = list(
+        { property = "padding-top"; value = "8px" }
+      ) }
+    ) },
+    { atRule = "media"; prelude = "(min-width:671px) and (max-height:410px)"; rules = list(
+      { selector = ".window"; declarations = list(
+        { property = "max-height"; value = "calc(100dvh - 95px)" }
+      ) }
+    ) },
+    { selector = "#workspace .programs .program-group button.app-link"; declarations = list(
+      { property = "width"; value = "100%" },
+      { property = "font-family"; value = "inherit" },
+      { property = "text-align"; value = "left" },
+      { property = "color"; value = "var(--ink)" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = "#workspace .programs .app-menu-entry>.app-link"; declarations = list(
+      { property = "flex"; value = "1" },
+      { property = "min-width"; value = "0" }
+    ) },
+    { selector = "#workspace .tabs"; declarations = list(
+      { property = "flex-wrap"; value = "wrap" }
+    ) },
+    { selector = "#workspace .tabs label"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "white-space"; value = "nowrap" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:400px)"; rules = list(
+      { selector = "#workspace .tabs label"; declarations = list(
+        { property = "font-size"; value = "11px" },
+        { property = "padding-inline"; value = "5px" }
+      ) }
+    ) },
+    { selector = "#workspace .banner button.edition"; declarations = list(
+      { property = "border"; value = "0" },
+      { property = "padding"; value = "3px 0" },
+      { property = "background"; value = "transparent" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = "#workspace .banner button.edition .build-label::after"; declarations = list(
+      { property = "content"; value = "'›'" },
+      { property = "display"; value = "inline-block" },
+      { property = "margin-inline-start"; value = "5px" },
+      { property = "font"; value = "700 13px/1 monospace" },
+      { property = "color"; value = "var(--sourcery-banner-highlight)" }
+    ) },
+    { selector = "#workspace .banner button.edition:hover .build-label,#workspace .banner button.edition:focus-visible .build-label"; declarations = list(
+      { property = "text-decoration"; value = "underline" }
+    ) },
+    { selector = "#workspace .banner button.edition:focus-visible"; declarations = list(
+      { property = "outline-color"; value = "var(--sourcery-banner-highlight)" }
+    ) },
+    { selector = "#notes-performance-window.desktop-app-window"; declarations = list(
+      { property = "width"; value = "min(52rem,calc(100% - 56px))" }
+    ) },
+    { selector = "#notes-performance-content"; declarations = list(
+      { property = "scroll-padding-block"; value = "12px 58px" }
+    ) },
+    { selector = "#notes-performance-content section+section"; declarations = list(
+      { property = "border-top"; value = "1px solid #c5c3bf" },
+      { property = "margin-top"; value = "16px" },
+      { property = "padding-top"; value = "4px" }
+    ) },
+    { selector = "#notes-performance-launches .performance-table"; declarations = list(
+      { property = "overflow"; value = "auto" }
+    ) },
+    { selector = "#notes-performance-launches .sourcery-data-table"; declarations = list(
+      { property = "--sourcery-table-cell-align"; value = "middle" },
+      { property = "font-variant-numeric"; value = "tabular-nums" }
+    ) },
+    { selector = "#notes-performance-launches tbody th"; declarations = list(
+      { property = "font-weight"; value = "normal" }
+    ) },
+    { selector = "#notes-performance-launches button"; declarations = list(
+      { property = "white-space"; value = "normal" },
+      { property = "text-align"; value = "left" }
+    ) },
+    { selector = "#notes-performance-environment dl"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "auto 1fr" },
+      { property = "gap"; value = "6px 12px" }
+    ) },
+    { selector = "#notes-performance-environment dd"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = "#notes-performance-detail>section"; declarations = list(
+      { property = "border-top"; value = "1px solid #c5c3bf" },
+      { property = "margin-top"; value = "14px" },
+      { property = "padding-top"; value = "12px" }
+    ) },
+    { selector = "#notes-performance-detail h4"; declarations = list(
+      { property = "margin"; value = "0 0 8px" },
+      { property = "font-size"; value = "16px" }
+    ) },
+    { selector = "#notes-performance-detail h5"; declarations = list(
+      { property = "margin"; value = "16px 0 4px" },
+      { property = "font-size"; value = "14px" }
+    ) },
+    { selector = "#notes-performance-detail p"; declarations = list(
+      { property = "margin"; value = "6px 0" },
+      { property = "line-height"; value = "1.45" }
+    ) },
+    { selector = ".performance-copy"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "8px" },
+      { property = "margin"; value = "8px 0" }
+    ) },
+    { selector = ".performance-copy [role=status]"; declarations = list(
+      { property = "font-size"; value = "12px" }
+    ) },
+    { selector = ".performance-copy textarea"; declarations = list(
+      { property = "flex"; value = "1 0 100%" },
+      { property = "min-width"; value = "0" },
+      { property = "box-sizing"; value = "border-box" },
+      { property = "resize"; value = "vertical" },
+      { property = "font"; value = "12px monospace" }
+    ) },
+    { selector = ".performance-launch-summary"; declarations = list(
+      { property = "background"; value = "#f1eddd" },
+      { property = "padding"; value = "7px 9px" },
+      { property = "font-variant-numeric"; value = "tabular-nums" }
+    ) },
+    { selector = ".performance-timeline"; declarations = list(
+      { property = "list-style"; value = "none" },
+      { property = "padding"; value = "0" },
+      { property = "margin"; value = "8px 0 12px" }
+    ) },
+    { selector = ".performance-timeline li"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "6.4em minmax(0,1fr) minmax(12em,auto)" },
+      { property = "gap"; value = "4px 10px" },
+      { property = "padding"; value = "6px 8px" },
+      { property = "border-bottom"; value = "1px solid #dedbd0" },
+      { property = "font-size"; value = "12px" },
+      { property = "line-height"; value = "1.4" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".performance-timeline li:nth-child(odd)"; declarations = list(
+      { property = "background"; value = "#f3f1e8" }
+    ) },
+    { selector = ".performance-timeline li.performance-reveal"; declarations = list(
+      { property = "background"; value = "#e7edf9" },
+      { property = "border-inline-start"; value = "3px solid var(--navy)" },
+      { property = "padding-inline-start"; value = "5px" }
+    ) },
+    { selector = ".performance-reveal strong"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "color"; value = "var(--navy)" }
+    ) },
+    { selector = ".performance-offset,.performance-duration"; declarations = list(
+      { property = "font-variant-numeric"; value = "tabular-nums" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:670px)"; rules = list(
+      { selector = "#notes-performance-window.desktop-app-window"; declarations = list(
+        { property = "width"; value = "calc(100% - 16px)" }
+      ) },
+      { selector = "#notes-performance-launches .performance-secondary"; declarations = list(
+        { property = "display"; value = "none" }
+      ) },
+      { selector = ".performance-timeline li"; declarations = list(
+        { property = "grid-template-columns"; value = "5.2em minmax(0,1fr)" },
+        { property = "gap"; value = "1px 8px" }
+      ) },
+      { selector = ".performance-timeline .performance-duration"; declarations = list(
+        { property = "grid-column"; value = "2" }
+      ) },
+      { selector = ".performance-copy .button"; declarations = list(
+        { property = "min-height"; value = "34px" }
+      ) }
+    ) },
+    { selector = "#notes-about-build-window"; declarations = list(
+      { property = "width"; value = "min(31rem,calc(100% - 24px))" }
+    ) },
+    { selector = "#notes-about-build-content"; declarations = list(
+      { property = "padding"; value = "14px" }
+    ) },
+    { selector = ".build-about-heading"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "11px" },
+      { property = "padding"; value = "10px 12px" },
+      { property = "background"; value = "#e9edf8" },
+      { property = "border"; value = "1px solid #b5c0dc" },
+      { property = "color"; value = "#171d4b" }
+    ) },
+    { selector = ".build-about-heading .icon"; declarations = list(
+      { property = "width"; value = "34px" },
+      { property = "height"; value = "34px" }
+    ) },
+    { selector = ".build-about-heading span"; declarations = list(
+      { property = "font"; value = "700 10px monospace" },
+      { property = "letter-spacing"; value = ".1em" },
+      { property = "text-transform"; value = "uppercase" },
+      { property = "color"; value = "#42517f" }
+    ) },
+    { selector = ".build-about-heading h3"; declarations = list(
+      { property = "margin"; value = "2px 0 0" },
+      { property = "font-size"; value = "19px" },
+      { property = "line-height"; value = "1.15" }
+    ) },
+    { selector = ".build-details"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "gap"; value = "12px" },
+      { property = "margin"; value = "14px 0 0" }
+    ) },
+    { selector = ".build-details dt"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "baseline" },
+      { property = "justify-content"; value = "space-between" },
+      { property = "gap"; value = "8px" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".build-details dt span"; declarations = list(
+      { property = "font"; value = "11px monospace" },
+      { property = "color"; value = "#494b59" }
+    ) },
+    { selector = ".build-details dd"; declarations = list(
+      { property = "margin"; value = "4px 0 0" },
+      { property = "padding"; value = "7px 9px" },
+      { property = "background"; value = "#f4f2e7" },
+      { property = "box-shadow"; value = "var(--sunken)" },
+      { property = "color"; value = "#14194c" }
+    ) },
+    { selector = ".build-details code"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "max-inline-size"; value = "100%" },
+      { property = "overflow-wrap"; value = "anywhere" },
+      { property = "user-select"; value = "all" },
+      { property = "font-size"; value = "12px" },
+      { property = "line-height"; value = "1.45" }
+    ) },
+    { selector = ".build-details #about-build-fingerprint"; declarations = list(
+      { property = "inline-size"; value = "32ch" },
+      { property = "word-break"; value = "break-all" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:670px)"; rules = list(
+      { selector = "#notes-about-build-window"; declarations = list(
+        { property = "width"; value = "min(31rem,calc(100% - 16px))" }
+      ) },
+      { selector = "#notes-about-build-content"; declarations = list(
+        { property = "padding"; value = "11px" }
+      ) },
+      { selector = ".build-about-heading"; declarations = list(
+        { property = "padding"; value = "8px 10px" }
+      ) },
+      { selector = ".build-about-heading h3"; declarations = list(
+        { property = "font-size"; value = "17px" }
+      ) }
+    ) },
+    { selector = "#workspace .banner .build-label"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "color"; value = "inherit" },
+      { property = "font"; value = "inherit" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:670px)"; rules = list(
+      { selector = "#workspace .banner"; declarations = list(
+        { property = "display"; value = "grid" },
+        { property = "flex"; value = "none" },
+        { property = "grid-template-columns"; value = "43px minmax(0,1fr)" },
+        { property = "gap"; value = "7px 12px" }
+      ) },
+      { selector = "#workspace .banner .edition"; declarations = list(
+        { property = "display"; value = "grid" },
+        { property = "grid-column"; value = "1/-1" },
+        { property = "grid-template-columns"; value = "auto minmax(0,1fr)" },
+        { property = "align-items"; value = "baseline" },
+        { property = "column-gap"; value = "8px" },
+        { property = "max-width"; value = "none" },
+        { property = "margin"; value = "0" },
+        { property = "padding-top"; value = "5px" },
+        { property = "border-top"; value = "1px solid #fff3" },
+        { property = "text-align"; value = "start" }
+      ) },
+      { selector = "#workspace .banner .edition b"; declarations = list(
+        { property = "font-size"; value = "11px" }
+      ) },
+      { selector = "#workspace .banner .build-hash"; declarations = list(
+        { property = "grid-column"; value = "2" },
+        { property = "margin-top"; value = "1px" }
+      ) }
+    ) },
+    { atRule = "media"; prelude = "(max-width:360px),(max-height:410px)"; rules = list(
+      { selector = "#workspace .banner"; declarations = list(
+        { property = "display"; value = "block" },
+        { property = "flex"; value = "none" },
+        { property = "min-height"; value = "0" },
+        { property = "margin-bottom"; value = "5px" },
+        { property = "padding"; value = "4px 8px" }
+      ) },
+      { selector = "#workspace .banner>div"; declarations = list(
+        { property = "display"; value = "none" }
+      ) },
+      { selector = "#workspace .banner .edition"; declarations = list(
+        { property = "display"; value = "grid" },
+        { property = "grid-template-columns"; value = "auto minmax(0,1fr)" },
+        { property = "align-items"; value = "baseline" },
+        { property = "column-gap"; value = "8px" },
+        { property = "max-width"; value = "none" },
+        { property = "margin"; value = "0" },
+        { property = "padding"; value = "0" },
+        { property = "border"; value = "0" },
+        { property = "text-align"; value = "start" }
+      ) },
+      { selector = "#workspace .banner .edition b"; declarations = list(
+        { property = "font-size"; value = "11px" }
+      ) },
+      { selector = "#workspace .banner .build-hash"; declarations = list(
+        { property = "grid-column"; value = "2" },
+        { property = "margin-top"; value = "1px" }
+      ) }
+    ) }
+  )
+  call css.renderCompactRules
+
+process desktop.compilerStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = "#semantic-compiler-detail"; declarations = list(
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = "#semantic-compiler-detail .compiler-case"; declarations = list(
+      { property = "border-bottom"; value = "1px solid var(--gray)" },
+      { property = "padding-bottom"; value = "8px" }
+    ) },
+    { selector = "#semantic-compiler-detail :is(h3,h4,p)"; declarations = list(
+      { property = "margin"; value = "0 0 8px" }
+    ) },
+    { selector = "#semantic-compiler-detail h4"; declarations = list(
+      { property = "margin-top"; value = "14px" }
+    ) },
+    { selector = "#semantic-compiler-detail .compiler-views"; declarations = list(
+      { property = "position"; value = "relative" }
+    ) },
+    { selector = "#semantic-compiler-detail input[name=compiler-view]"; declarations = list(
+      { property = "position"; value = "absolute" },
+      { property = "opacity"; value = "0" },
+      { property = "inline-size"; value = "1px" },
+      { property = "block-size"; value = "1px" }
+    ) },
+    { selector = "#semantic-compiler-detail .manager-tabs label"; declarations = list(
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = "#semantic-compiler-detail [data-compiler-view]"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { selector = "#compiler-facts:checked~[data-compiler-view=facts],#compiler-contracts:checked~[data-compiler-view=contracts],#compiler-coverage:checked~[data-compiler-view=coverage],#compiler-dry-run:checked~[data-compiler-view=dry-run]"; declarations = list(
+      { property = "display"; value = "block" }
+    ) },
+    { selector = "#compiler-facts:checked~.manager-tabs [for=compiler-facts],#compiler-contracts:checked~.manager-tabs [for=compiler-contracts],#compiler-coverage:checked~.manager-tabs [for=compiler-coverage],#compiler-dry-run:checked~.manager-tabs [for=compiler-dry-run]"; declarations = list(
+      { property = "background"; value = "var(--paper)" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = "#compiler-facts:focus-visible~.manager-tabs [for=compiler-facts],#compiler-contracts:focus-visible~.manager-tabs [for=compiler-contracts],#compiler-coverage:focus-visible~.manager-tabs [for=compiler-coverage],#compiler-dry-run:focus-visible~.manager-tabs [for=compiler-dry-run]"; declarations = list(
+      { property = "outline"; value = "2px dashed var(--navy)" },
+      { property = "outline-offset"; value = "-3px" }
+    ) },
+    { selector = "#semantic-compiler-detail .compiler-group"; declarations = list(
+      { property = "border-bottom"; value = "1px solid var(--gray)" },
+      { property = "padding"; value = "7px 0" }
+    ) },
+    { selector = "#semantic-compiler-detail .compiler-group summary"; declarations = list(
+      { property = "cursor"; value = "pointer" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = "#semantic-compiler-detail .compiler-group>p"; declarations = list(
+      { property = "margin-top"; value = "8px" }
+    ) },
+    { selector = "#semantic-compiler-detail .compiler-references"; declarations = list(
+      { property = "padding-inline-start"; value = "20px" }
+    ) },
+    { selector = "#semantic-compiler-detail .compiler-references li"; declarations = list(
+      { property = "margin-block"; value = "6px" }
+    ) },
+    { selector = "#semantic-compiler-detail .compiler-references p"; declarations = list(
+      { property = "margin-block"; value = "3px" }
+    ) },
+    { selector = "#semantic-compiler-detail table"; declarations = list(
+      { property = "width"; value = "100%" },
+      { property = "table-layout"; value = "fixed" }
+    ) },
+    { selector = "#semantic-compiler-detail .compiler-evidence"; declarations = list(
+      { property = "white-space"; value = "pre-wrap" },
+      { property = "overflow-wrap"; value = "anywhere" },
+      { property = "margin"; value = "8px 0" }
+    ) },
+    { selector = "#compiler-route-form"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "8px" },
+      { property = "margin-block"; value = "12px" }
+    ) },
+    { selector = "#compiler-route-form input"; declarations = list(
+      { property = "flex"; value = "1 1 15rem" },
+      { property = "min-width"; value = "0" }
+    ) },
+    { selector = "#compiler-route-result [role=alert]"; declarations = list(
+      { property = "font-weight"; value = "bold" }
+    ) }
+  )
+  call css.renderCompactRules
+  let result = concat("/* Semantic Compiler */", $result, "")
+
+process desktop.environmentStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = "#environments-dialog>.dialog-body"; declarations = list(
+      { property = "overflow-y"; value = "auto" },
+      { property = "overscroll-behavior"; value = "contain" },
+      { property = "scroll-padding-top"; value = "8rem" }
+    ) },
+    { selector = "#environments-dialog>.dialog-actions"; declarations = list(
+      { property = "border-top"; value = "1px solid #808080" },
+      { property = "background"; value = "var(--gray)" }
+    ) },
+    { selector = ".environments-summary"; declarations = list(
+      { property = "position"; value = "sticky" },
+      { property = "top"; value = "0" },
+      { property = "z-index"; value = "1" },
+      { property = "background"; value = "var(--gray)" },
+      { property = "padding"; value = "0 0 6px" },
+      { property = "margin-bottom"; value = "6px" }
+    ) },
+    { selector = ".environments-summary .handover-banner"; declarations = list(
+      { property = "margin"; value = "0 0 5px" }
+    ) },
+    { selector = ".environments-summary p"; declarations = list(
+      { property = "margin"; value = "4px 0" }
+    ) },
+    { selector = ".environments-indicators"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "gap"; value = "5px" },
+      { property = "flex-wrap"; value = "wrap" }
+    ) },
+    { selector = ".environments-indicators strong"; declarations = list(
+      { property = "padding"; value = "2px 6px" },
+      { property = "background"; value = "var(--paper)" },
+      { property = "border"; value = "1px solid #808080" }
+    ) },
+    { selector = ".environments-roles"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "6px" },
+      { property = "margin"; value = "0 0 10px" }
+    ) },
+    { selector = "#environments-dialog button[aria-pressed=true]"; declarations = list(
+      { property = "font-weight"; value = "bold" },
+      { property = "box-shadow"; value = "var(--sunken)" },
+      { property = "background"; value = "#dce7ff" }
+    ) },
+    { selector = ".environments-approval"; declarations = list(
+      { property = "margin-top"; value = "10px" }
+    ) },
+    { selector = "#environments-dialog figure"; declarations = list(
+      { property = "margin"; value = "12px 0" }
+    ) },
+    { selector = "#environments-dialog figure img"; declarations = list(
+      { property = "max-width"; value = "100%" },
+      { property = "height"; value = "auto" },
+      { property = "image-rendering"; value = "pixelated" }
+    ) }
+  )
+  call css.renderCompactRules
+  let result = concat("/* Environments demo */", $result, "/* End environments demo */")

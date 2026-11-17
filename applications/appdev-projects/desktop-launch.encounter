@@ -1,0 +1,516 @@
+process-module "temple/surface-process-module/1"
+
+process desktop.workspaceDefinition:
+  let result = { id = "workspace"; title = "Sourcery Workspace"; type = "document"; owner = "Home shell";
+    maximizeToggle = "workspace-maximized"; visibilityToggle = "workspace-open";
+    startLabel = "Start"; appsLabel = "Apps";
+    controls = list("maximize", "minimize");
+    role = "Workspace launcher"; purpose = "Browse and launch the apps available in Home.";
+    lifecycle = "Minimize hides the launcher window. Its taskbar entry and desktop shortcut can show it again. Home stays open. This window has no Close control.";
+    source = "applications/appdev-projects/projects.encounter#desktop.workspaceWindow" }
+
+process desktop.openWindowContract:
+  let result = { open = { destination = "desktop"; surface = "independent-window"; repeat = "focus-or-restore" } }
+
+process desktopText.definition:
+  call desktop.openWindowContract
+  let result = { key = "text-editor"; title = "Text Editor"; id = "desktop-text-launch"; window = "desktop-text-window";
+    task = "desktop-text-task"; stem = "desktop-text"; layout = "document"; controls = list("maximize", "minimize", "close");
+    defaultAction = "open"; actions = $result; programme = "desktopText"; entry = "desktopText.event";
+    fileRole = "text"; fileRoot = "/documents"; extension = ".txt"; icon = "notes";
+    detail = "Edit text files saved in this browser"; group = "desktop"; start = "tools" }
+
+process desktop.sharedManagedApps:
+  call desktop.openWindowContract
+  let actions = $result
+  let source = concat(
+    "process counter.event:\n",
+    "  let key = if(eq($eventInput.kind, 1), $eventInput.value, 0)\n",
+    "  let state = $eventInput.state\n",
+    "  let step = if(and(eq($key, 57), not(eq($state, 999))), 1, 0)\n",
+    "  let next = if(eq($key, 14), 0, add($state, $step))\n",
+    "  let result = { state = $next; view = list(concat(\"Count: \", $next), \"Space / Backspace\") }\n")
+  let result = list(
+    { key = "counter"; title = "Counter"; id = "counter-launch"; window = "counter-window"; task = "counter-task";
+      stem = "counter"; layout = "compact"; controls = list("minimize", "close"); defaultAction = "open"; actions = $actions;
+      programme = "counter"; entry = "counter.event"; source = $source; icon = "tools"; detail = "Count and reset"; group = "desktop"; start = "tools";
+      managedCommands = list({ key = 57; label = "Count" }, { key = 14; label = "Reset" }) })
+
+process desktop.nativeApps:
+  call desktop.openWindowContract
+  let actions = $result
+  call desktopText.definition
+  let editor = $result
+  call desktop.sharedManagedApps
+  let shared = $result
+  let result = append(list(
+    { key = "encounter-ide"; title = "Encounter IDE"; id = "encounter-ide-launch"; window = "encounter-ide-window";
+      task = "encounter-ide-task"; layout = "document"; controls = list("maximize", "minimize", "close"); defaultAction = "open"; actions = $actions },
+    { key = "live-graphics"; title = "Live Graphics"; id = "live-graphics-launch"; window = "live-graphics-window";
+      task = "live-graphics-task"; layout = "document"; controls = list("maximize", "minimize", "close"); defaultAction = "open"; actions = $actions },
+    { key = "event-monitor"; title = "Event Monitor"; id = "event-monitor-launch"; window = "event-monitor-window";
+      task = "event-monitor-task"; layout = "compact"; controls = list("maximize", "minimize", "close"); defaultAction = "open"; actions = $actions;
+      programme = "eventMonitor"; entry = "eventMonitor.event"; timer = true },
+    { key = "file-manager"; title = "File Manager"; id = "desktop-files-launch"; window = "desktop-files-window";
+      task = "desktop-files-task"; layout = "document"; controls = list("maximize", "minimize", "close"); defaultAction = "open"; actions = $actions;
+      programme = "desktopFiles"; entry = "desktopFiles.event"; fileRole = "browse"; fileRoot = "/documents" },
+    $editor), $shared)
+
+process desktopFiles.event:
+  let key = if(eq($eventInput.kind, 1), $eventInput.value, 0)
+  let row = if(eq($eventInput.kind, 4), $eventInput.value, $eventInput.state)
+  when and(eq($key, 72), not(eq($row, 0))):
+    port number.calculate { operation = "subtract"; values = list($row, 1) } → row
+  when eq($key, 80):
+    let row = add($row, 1)
+  let copy = and(eq($key, 46), eq($eventInput.control, 1))
+  when or(or(eq($key, 14), eq($key, 28)), $copy):
+    port desktop.navigate { row = $row; parent = eq($key, 14); copy = $copy } → moved
+    when $moved:
+      let row = 0
+  port desktop.directory {} → directory
+  let length = count($directory.rows)
+  port number.calculate { operation = "less"; values = list($row, $length) } → in_range
+  when not($in_range):
+    let row = 0
+  let result = { state = $row; heading = $directory.path; selected = $row; view = $directory.rows }
+
+process desktopText.event:
+  let key = if(eq($eventInput.kind, 1), $eventInput.value, 0)
+  port desktop.document { key = $key } → document
+  port kernel.invoke { query = "desktopText.view"; input = $document } → result
+
+process desktopText.view:
+  let document = $eventInput
+  let result = { state = 0; heading = if(eq($document.path, ""), "Untitled", $document.path); text = $document.text;
+    dialog = $document.dialog; caret = $document.caret; pathInput = $document.pathInput }
+
+process eventMonitor.event:
+  let tick = eq($eventInput.kind, 2)
+  let state = add($eventInput.state, if($tick, 1, 0))
+  let result = { state = $state; view = list(concat("Timer events: ", $state), "Enter tests limit") }
+  when and(eq($eventInput.kind, 1), eq($eventInput.value, 28)):
+    port kernel.invoke { query = "eventMonitor.count"; input = 18 } → result
+  when and(eq($eventInput.kind, 1), eq($eventInput.value, 63)):
+    port kernel.invoke { query = "eventMonitor.missing"; input = 0 } → result
+
+process eventMonitor.count:
+  let result = 1
+  when not(eq($eventInput, 0)):
+    port number.calculate { operation = "subtract"; values = list($eventInput, 1) } → child
+    port kernel.invoke { query = "eventMonitor.count"; input = $child } → left
+    port kernel.invoke { query = "eventMonitor.count"; input = $child } → right
+    let result = add($left, $right)
+
+process desktop.apps:
+  call desktop.openWindowContract
+  let profile = $result
+  call desktopText.definition
+  let editor = $result
+  call desktop.sharedManagedApps
+  let shared = $result
+  let entries = list(
+    { key = "about"; stem = "notes-about-build"; id = "notes-about-build-launch"; title = "About this build"; detail = "Home build identity and fingerprint"; icon = "workspace"; defaultAction = "open"; layout = "compact"; group = "banner" },
+    { key = "assurance"; stem = "notes-assurance"; id = "notes-assurance-launch"; title = "Assurance"; detail = "App definitions, consistency and decision history"; icon = "trace"; defaultAction = "open"; layout = "compact" },
+    { key = "performance"; stem = "notes-performance"; id = "notes-performance-launch"; title = "Performance"; detail = "Slow or failed launches, launch timings, and server RAM and disk capacity."; icon = "computer"; defaultAction = "open"; layout = "compact" },
+    { key = "design"; stem = "notes-design-demo"; id = "notes-design-demo"; title = "Sourcery OS Customization"; detail = "Inspect shared window styles and customize the preview"; icon = "workspace"; defaultAction = "open"; layout = "compact" },
+    { key = "system-catalogue"; stem = "system-catalogue"; id = "system-catalogue-launch"; title = "System Catalogue"; detail = "Browse Home apps, window contracts and shared styles"; icon = "trace"; defaultAction = "open"; layout = "document" },
+    { key = "certificates"; stem = "notes-certificates"; id = "notes-settings-certificates"; title = "Certificates"; detail = "Managed Super CRM certificate and issuer expiry"; icon = "notes"; defaultAction = "open"; layout = "compact"; group = "administration"; inventory = "[data-certificate-inventory]" },
+    { key = "acting-as"; stem = "acting-as"; id = "notes-inspect-identity"; title = "Steward"; detail = "Acting roles, stewardship and delegation"; icon = "notes"; defaultAction = "open"; layout = "compact"; group = "administration" },
+    { key = "keys"; stem = "notes-keys"; id = "notes-settings-keys"; title = "Keys"; detail = "Managed Super CRM public key fingerprints"; icon = "tools"; defaultAction = "open"; layout = "compact"; group = "administration"; inventory = "[data-key-inventory]" },
+    { key = "store"; stem = "notes-store"; id = "store"; title = "Store"; detail = "Encounter apps, games and assets"; icon = "folder"; defaultAction = "open"; layout = "compact"; group = "hosted" },
+    { key = "game"; stem = "notes-game-hub"; id = "game"; title = "Game Zone"; detail = "Play, build and manage games"; icon = "game"; defaultAction = "open"; layout = "compact"; group = "hosted" },
+    { key = "file-manager"; stem = "file-manager"; id = "file-manager-launch"; title = "File Manager"; detail = "Browse and preview published files by context"; icon = "folder"; defaultAction = "open"; group = "desktop"; layout = "document"; start = "tools" },
+    { key = "file-viewer"; stem = "file-viewer"; id = "file-viewer-launch"; title = "File Viewer"; detail = "Read code and REL, view images, and play movies"; icon = "notes"; defaultAction = "open"; group = "desktop"; layout = "document"; start = "tools" },
+    { key = "semantic-compiler"; stem = "semantic-compiler"; id = "semantic-compiler-launch"; title = "Semantic Compiler"; detail = "Inspect stable identities, contracts and coverage"; icon = "trace"; defaultAction = "open"; group = "desktop"; layout = "document"; start = "tools" },
+    { key = "service-manager"; stem = "service-manager"; id = "service-manager-launch"; title = "Service Manager"; detail = "Inspect apps, services, schedules and run receipts"; icon = "computer"; defaultAction = "open"; group = "administration"; layout = "document"; start = "tools" },
+    { key = "temple-manager"; stem = "temple-manager"; id = "temple-manager-launch"; title = "Temple Manager"; detail = "Memory and journal"; icon = "notes"; defaultAction = "open"; group = "administration"; layout = "document"; start = "tools" },
+    { key = "aster-codex"; stem = "aster-codex"; id = "aster-codex-launch"; title = "Aster Codex"; detail = "Read private aaron-dev chats"; icon = "trace"; defaultAction = "open"; layout = "document"; group = "hosted"; startMaximized = true },
+    { key = "vm-manager"; stem = "vm-manager"; id = "vm-manager-launch"; title = "VM Manager"; detail = "Open a development VM console"; icon = "computer"; defaultAction = "open"; layout = "document"; group = "hosted"; startMaximized = true },
+    { key = "registry-demo"; stem = "registry-demo"; id = "registry-demo-launch"; title = "Registry Demo"; detail = "Open the native Sourcery OS desktop"; icon = "computer"; defaultAction = "open"; layout = "document"; group = "hosted"; startMaximized = true },
+    { key = "front-gate"; stem = "front-gate"; id = "front-gate"; title = "Front Gate"; detail = "Private service directory"; icon = "computer"; defaultAction = "open"; layout = "compact"; group = "hosted"; start = "tools" }
+  )
+  let result = map(append($entries, append(list($editor), $shared)), "entry", {
+    key = $entry.key; id = $entry.id; title = $entry.title; detail = $entry.detail; icon = $entry.icon;
+    fileRole = at($entry, "fileRole"); fileRoot = at($entry, "fileRoot"); extension = at($entry, "extension");
+    managedCommands = at($entry, "managedCommands"); entry = at($entry, "entry"); source = at($entry, "source");
+    defaultAction = $entry.defaultAction; actions = $profile; inventory = at($entry, "inventory"); group = or(at($entry, "group"), "quality");
+    window = concat($entry.stem, "-window"); task = concat($entry.stem, "-task");
+    heading = concat($entry.stem, "-title"); content = concat($entry.stem, "-content");
+    minimize = concat($entry.stem, "-minimize"); close = concat($entry.stem, "-close");
+    layout = if(eq(at($entry, "layout"), at({}, "missing")), null, $entry.layout); start = at($entry, "start"); startMaximized = at($entry, "startMaximized");
+    maximize = if(eq(at($entry, "layout"), "document"), concat($entry.stem, "-maximize"), null)
+  })
+
+process desktop.admitOperation:
+  let operation = $input
+  let controls = list(
+    { id = "notes-settings-identity"; target = "identity-management-dialog" },
+    { id = "notes-settings-network"; target = "network-dialog" },
+    { id = "desktop-settings-open"; target = "desktop-settings-dialog" }
+  )
+  let shellControl = some($controls, "control", and(eq($control.id, $operation.id), eq($control.target, $operation.target)))
+  when $shellControl:
+    assert not($operation.action)
+      otherwise "Home settings controls must use their declared shell dialog."
+  when not($shellControl):
+    call desktop.apps
+    let apps = filter($result, "entry", eq($entry.id, $operation.id))
+    assert eq(count($apps), 1)
+      otherwise "A Sourcery Operations app needs its own declared desktop window. Only registered Home settings controls may use a shell dialog."
+    let app = at($apps, 0)
+    assert not(eq($app.group, "hosted"))
+      otherwise "This app belongs in the Apps launcher."
+    call desktop.defaultAction
+    assert and(eq($operation.target, $app.window), eq($operation.action, $app.defaultAction))
+      otherwise "An Operations app must launch its own declared window with the standard default action."
+  let result = $shellControl
+
+process desktop.windowInventory:
+  call desktop.apps
+  let apps = $result
+  call windowShell.types
+  let types = $result
+  let ids = map($types, "kind", $kind.id)
+  let result = map($apps, "entry", {
+    path = list("Sourcery OS", "Home", "Desktop", $entry.key, "Window", "layout");
+    source = "applications/appdev-projects/desktop-launch.encounter#desktop.apps";
+    app = $entry.key; title = $entry.title; group = $entry.group;
+    window = $entry.window; task = $entry.task;
+    controls = if($entry.maximize, list("maximize", "minimize", "close"), list("minimize", "close"));
+    action = at($entry.actions, $entry.defaultAction); defaultAction = $entry.defaultAction;
+    declaredType = $entry.layout; layoutAdmitted = includes($ids, $entry.layout);
+    effectiveType = if(includes($ids, $entry.layout), $entry.layout, null)
+  })
+
+process desktop.refuseLayout:
+  let result = raise(concat("Sourcery OS > Home > Desktop > ", $layoutApp,
+    " > Window > layout: declare document or compact."))
+
+process desktop.admitHome:
+  call desktop.windowInventory
+  each $result as entry:
+    when not($entry.layoutAdmitted):
+      let layoutApp = $entry.app
+      call desktop.refuseLayout
+  let html = $eventInput.html
+  port text.matchAll { value = $html; pattern = "<button[^>]*data-build-edition=\"(home|aster-codex)\"[^>]*>([\\s\\S]*?)</button>" } → builds
+  assert eq(count($builds), 2)
+    otherwise "Home and Aster Codex must render the shared Build banner."
+  let firstBadge = at($builds, 0)
+  let otherBadge = at($builds, 1)
+  let homeBuild = at($firstBadge.groups, 1)
+  let asterBuild = at($otherBadge.groups, 1)
+  assert and(not(eq(at($firstBadge.groups, 0), at($otherBadge.groups, 0))),
+    eq($homeBuild, $asterBuild), includes($homeBuild, "build-label"), includes($homeBuild, "build-hash"))
+    otherwise "The Home and Aster Codex Build banners must match."
+  port text.matchAll { value = $html; pattern = "<section class=\"program-group\" data-group=\"(?:hosted|portfolio|previews|platform|x)\">([\\s\\S]*?)</section>" } → catalogues
+  assert eq(count($catalogues), 5)
+    otherwise "Expected the five Home app card groups."
+  each $catalogues as catalogue:
+    let input = at($catalogue.groups, 0)
+    call appCard.admitRows
+  port text.matchAll { value = $html; pattern = "<section class=\"program-group notes-operations\">([\\s\\S]*?)</section>" } → sections
+  assert eq(count($sections), 2)
+    otherwise "Expected the authored Sourcery Operations sections in the Home shell."
+  each $sections as section:
+    port text.matchAll { value = at($section.groups, 0); pattern = "<(?:button|a)\\b[^>]*>" } → launches
+    assert count($launches)
+      otherwise "An Operations section must contain declared launch controls."
+    each $launches as launch:
+      port text.match { value = $launch.text; pattern = " id=\"([a-z0-9-]+)\"" } → id
+      port text.match { value = $launch.text; pattern = " aria-controls=\"([a-z0-9-]+)\"" } → target
+      port text.match { value = $launch.text; pattern = " data-launch-action=\"([a-z0-9-]+)\"" } → action
+      assert and($id, $target)
+        otherwise "An Operations launcher must identify its own declared surface."
+      let input = { id = at($id.groups, 0); target = at($target.groups, 0); action = if($action, at($action.groups, 0), null) }
+      call desktop.admitOperation
+      when not($result):
+        let window = $input.target
+        port text.matches { value = $html; pattern = concat("<section id=\"", $window, "\" class=\"desktop-app-window\"") } → independent
+        port text.matches { value = $html; pattern = concat("<button[^>]+class=\"task-button desktop-app-task\"[^>]+aria-controls=\"", $window, "\"") } → task
+        assert and($independent, $task, not(includes($launch.text, "aria-haspopup=\"dialog\"")))
+          otherwise "An Operations app must render its own desktop window and task."
+  let result = true
+
+process desktop.defaultAction:
+  let action = at($app.actions, at($app, "defaultAction"))
+  assert $action
+    otherwise "A desktop app must explicitly declare its default launch action."
+  assert and(eq($action.destination, "desktop"), eq($action.surface, "independent-window"), eq($action.repeat, "focus-or-restore"))
+    otherwise "This app requires the independent desktop window and focus-or-restore launch profile."
+  let result = $action
+
+process desktop.inspectorCoverage:
+  let result = list("temple-manager", "about", "file-manager", "service-manager")
+
+process desktop.aboutBody:
+  let result = list(
+    { tag = "div"; attrs = { class = "build-about-heading" }; children = list(
+      { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" }; children = list({ tag = "use"; attrs = { href = "#icon-workspace" } }) },
+      { tag = "div"; children = list({ tag = "span"; children = list("Home") }, { tag = "h3"; children = list("Sourcery Workspace") }) }
+    ) },
+    { tag = "dl"; attrs = { class = "build-details" }; children = list(
+      { tag = "div"; children = list({ tag = "dt"; children = list("Build ID") },
+        { tag = "dd"; children = list({ tag = "code"; attrs = { id = "about-build-id" }; children = list($build) }) }) },
+      { tag = "div"; children = list({ tag = "dt"; children = list("Home fingerprint ", { tag = "span"; children = list("SHA-256") }) },
+        { tag = "dd"; children = list({ tag = "code"; attrs = { id = "about-build-fingerprint" }; children = list("sourcery-home-full-build-placeholder") }) }) }
+    ) }
+  )
+
+process desktop.appContent:
+  let result = { tag = "div"; attrs = { id = $app.content; class = "desktop-app-content"; "data-window-slot" = "content" } }
+  when $app.managedCommands:
+    let controls = map($app.managedCommands, "command", { tag = "button";
+      attrs = { type = "button"; "data-managed-key" = concat("", $command.key) }; children = list($command.label) })
+    let output = { tag = "div"; attrs = { id = concat($app.window, "-view"); role = "status" } }
+    let result = { tag = $result.tag; attrs = $result.attrs; children = list($output,
+      { tag = "p"; children = $controls }) }
+
+process desktop.appWindow:
+  let windowTypeId = $app.layout
+  call windowShell.typeById
+  when not($result):
+    let layoutApp = $app.key
+    call desktop.refuseLayout
+  let windowType = $result
+  let documentWindow = eq($windowType.id, "document")
+  call desktop.appContent
+  let content = $result
+  let menu = null
+  let banner = null
+  when $documentWindow:
+    let content = { tag = $content.tag; attrs = $content.attrs; children = list($documentSlots.content) }
+    let menu = $documentSlots.menu
+    let banner = $documentSlots.banner
+  let actions = null
+  when eq($app.key, "acting-as"):
+    let actions = { tag = "footer"; attrs = { class = "dialog-actions" }; children = list(
+      { tag = "a"; attrs = { class = "button"; href = "/settings/identity/"; "data-open-identity-management" = true; "data-identity-page" = true }; children = list("Identity Management") },
+      { tag = "a"; attrs = { class = "button"; href = "/workspace/home#handover-demo"; "data-open-handover-demo" = true }; children = list("Try the handover demo") }
+    ) }
+  let controlTarget = $app.title
+  let controlBindings = {
+    maximize = if($app.maximize, { tag = "button"; attrs = { id = $app.maximize; type = "button"; "aria-pressed" = if($app.startMaximized, "true", "false") } }, null);
+    minimize = { tag = "button"; attrs = { id = $app.minimize; type = "button" } };
+    close = { tag = "button"; attrs = { id = $app.close; type = "button" } }
+  }
+  call windowShell.titleControls
+  let title = { tag = "header"; attrs = { class = "titlebar" }; children = list(
+    { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" }; children = list({ tag = "use"; attrs = { href = concat("#icon-", $app.icon) } }) },
+    { tag = "h2"; attrs = { id = $app.heading; tabindex = "-1" }; children = list($app.title) },
+    $result
+  ) }
+  let slots = if($documentWindow, { title = $title; menu = $menu; banner = $banner; content = $content; actions = $actions },
+    { title = $title; content = $content; actions = $actions })
+  let frame = { tag = "section"; attrs = { id = $app.window; class = "desktop-app-window"; hidden = true; "data-desktop-layout" = $app.layout; "data-manager-maximized" = if($app.startMaximized, "true", null); "aria-labelledby" = $app.heading } }
+  call windowShell.frame
+
+process desktop.appTask:
+  let result = { tag = "button"; attrs = { id = $app.task; type = "button"; class = "task-button desktop-app-task"; title = $app.title; "aria-controls" = $app.window; hidden = true }; children = list(
+    { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" }; children = list({ tag = "use"; attrs = { href = concat("#icon-", $app.icon) } }) },
+    { tag = "span"; children = list($app.title) }
+  ) }
+
+process desktop.windowHtml:
+  call desktop.appWindow
+  let input = $result
+  call html.serialize
+  when and(eq($app.layout, "compact"), $body):
+    let slot = concat("id=\"", $app.content, "\" class=\"desktop-app-content\" data-window-slot=\"content\">")
+    port text.replaceAll { value = $result; search = $slot; replacement = concat($slot, $body) } → result
+
+process desktop.shortcutNode:
+  call desktop.apps
+  let app = at(filter($result, "entry", eq($entry.key, $shortcutKey)), 0)
+  let signIn = includes(list("store", "game", "aster-codex", "vm-manager", "registry-demo"), $app.key)
+  let card = { title = $app.title; detail = $app.detail; icon = $app.icon; signIn = $signIn }
+  call desktop.cardContents
+  let cardContents = $result
+  let result = { tag = "button"; attrs = { type = "button"; class = "app-link"; "data-desktop-launch" = $app.key; "aria-controls" = $app.window;
+    "data-launch-action" = $app.defaultAction; "aria-describedby" = if($signIn, "launch-sign-in", null) }; children = $cardContents }
+
+process desktop.hostedShortcut:
+  call desktop.shortcutNode
+  let input = $result
+  call html.serialize
+
+process desktop.cardContents:
+  let result = list(
+    { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true"; "shape-rendering" = "crispEdges" }; children = list(
+      { tag = "use"; attrs = { href = concat("#icon-", $card.icon) } },
+      if($card.signIn, { tag = "svg"; attrs = { x = "18"; y = "18"; width = "14"; height = "14" }; children = list(
+        { tag = "use"; attrs = { class = "workspace-locked"; href = "#badge-sign-in" } },
+      { tag = "use"; attrs = { class = "workspace-unlocked"; href = "#badge-signed-in" } }
+      ) }, null),
+      if($card.local, { tag = "svg"; attrs = { x = "0"; y = "18"; width = "14"; height = "14" }; children = list(
+        { tag = "title"; children = list("Opens locally via SSH tunnel") }, { tag = "use"; attrs = { href = "#badge-local" } }
+      ) }, null)
+    ) },
+    { tag = "span"; attrs = { class = "app-label" }; children = list({ tag = "strong"; children = list($card.title) },
+      { tag = "small"; attrs = { class = "app-card-summary" }; children = list($card.detail) }) }
+  )
+
+process desktop.storeShortcut:
+  let shortcutKey = "store"
+  call desktop.hostedShortcut
+
+# A document window fixes its chrome and gives scrolling to the named reading panes.
+process desktop.asterCodexSlots:
+  let document = {
+    description = "Private aaron-dev chat history";
+    help = "Browse current and archived chats. Refresh a transcript to see newly saved messages.";
+    detailLabel = "Aster Codex chat reader";
+    detail = list()
+  }
+  let embedded = "/aster-codex/"
+  call desktop.embeddedDocumentSlots
+
+process desktop.vmManagerSlots:
+  let document = {
+    description = "Development virtual machines";
+    help = "Select a VM and enter a command in its live guest console.";
+    detailLabel = "VM Manager";
+    detail = list()
+  }
+  let embedded = "/workspace/vm-manager"
+  call desktop.embeddedDocumentSlots
+
+process desktop.registryDemoSlots:
+  let document = {
+    description = "Native Sourcery OS desktop";
+    help = "Click to launch or focus an app. Drag a title bar to move its window.";
+    detailLabel = "Registry Demo";
+    detail = list()
+  }
+  let embedded = "/workspace/vm-manager?vm=sourcery-registry-demo&view=display"
+  call desktop.embeddedDocumentSlots
+
+process desktop.embeddedDocumentSlots:
+  call desktop.documentSlots
+  let slots = $result
+  let reader = { tag = "iframe"; attrs = { src = $embedded; title = $document.detailLabel;
+    loading = "lazy"; width = "100%"; height = "100%"; frameborder = "0" } }
+  let result = { menu = $slots.menu; banner = $slots.banner;
+    content = { tag = "div"; attrs = { class = "manager-panel" }; children = list(
+      { tag = "div"; attrs = { class = "manager-panes manager-single-pane" }; children = list($reader) }
+    ) } }
+
+process desktop.textEditorSlots:
+  call windowWidget.definitions
+  let commands = map($result.text.commands, "command", { tag = "button";
+    attrs = { type = "button"; "data-editor-command" = $command.id }; children = list($command.label) })
+  let textLabel = "Document"
+  let textValue = ""
+  let textEditable = true
+  call windowWidget.text
+  let editor = $result
+  let menu = { tag = "nav"; attrs = { class = "manager-menubar"; "aria-label" = "Text Editor commands" }; children = $commands }
+  let banner = { tag = "header"; attrs = { class = "banner manager-banner" }; children = list(
+    { tag = "div"; children = list({ tag = "h3"; attrs = { id = "desktop-text-path" }; children = list("Untitled") },
+      { tag = "p"; attrs = { id = "desktop-text-status"; role = "status" }; children = list($app.detail) }) }) }
+  let content = { tag = "div"; attrs = { class = "manager-panel" }; children = list(
+    { tag = "div"; attrs = { class = "manager-panes manager-single-pane" }; children = list($editor) },
+    { tag = "dialog"; attrs = { id = "desktop-text-dialog"; "aria-labelledby" = "desktop-text-dialog-title" };
+      children = list({ tag = "div"; attrs = { id = "desktop-text-dialog-content" } }) }) }
+  let result = { menu = $menu; banner = $banner; content = $content }
+
+process desktop.documentMenu:
+  let menuId = concat($app.key, "-menu-", $menu.id)
+  let result = list(
+    { tag = "button"; attrs = { type = "button"; popovertarget = $menuId; "aria-controls" = $menuId };
+      children = list($menu.label) },
+    { tag = "div"; attrs = { id = $menuId; class = "document-menu-panel"; popover = "auto"; role = "group"; "aria-label" = $menu.label };
+      children = append(map($menu.commands, "entry", { tag = "button"; attrs = {
+        type = "button"; popovertarget = $menuId; popovertargetaction = "hide";
+        "data-desktop-close" = if(and(not(at($document, "preview")), eq($entry.id, "close")), "true", null);
+        "data-document-command" = if(or(at($document, "preview"), eq($entry.id, "close")), null, $entry.id)
+      }; children = list($entry.label) }), $menu.content) }
+  )
+
+process desktop.documentMenus:
+  let fileCommands = append(or(at($document, "fileCommands"), list()), list({ id = "close"; label = concat("Close ", $app.title) }))
+  let menus = list({ id = "file"; label = "File"; commands = $fileCommands; content = list() },
+    { id = "help"; label = "Help"; commands = list(); content = list({ tag = "p"; children = list($document.help) }) })
+  fold $menus as menu; children starts list():
+    call desktop.documentMenu
+    yield append($children, $result) → children
+  let result = { tag = "nav"; attrs = { class = "menu-bar document-menu-bar"; "aria-label" = concat($app.title, " menus") }; children = $children }
+
+process desktop.documentPane:
+  let result = { tag = "section"; attrs = { id = $pane.id; class = concat("desktop-scroll-pane ", $pane.class);
+    "aria-label" = $pane.label; tabindex = "0" }; children = $pane.children }
+
+process desktop.documentBody:
+  let indexLabel = at($document, "indexLabel")
+  let pane = { id = concat($app.key, "-detail"); class = "manager-main"; label = $document.detailLabel; children = or(at($document, "detail"), list()) }
+  call desktop.documentPane
+  let detailPane = $result
+  let indexPane = null
+  when $indexLabel:
+    let pane = { id = concat($app.key, "-index"); class = "manager-tree"; label = $indexLabel; children = or(at($document, "index"), list()) }
+    call desktop.documentPane
+    let indexPane = $result
+  let result = { tag = "div"; attrs = { id = concat($app.key, "-panel"); class = "manager-panel"; "data-density-control" = if(at($document, "density"), "true", null) }; children = list(
+    if($indexLabel, { tag = "div"; attrs = { id = concat($app.key, "-tabs"); class = "manager-tabs";
+      role = "group"; "aria-label" = concat($app.title, " views") }; children = or(at($document, "tabs"), list()) }, null),
+    if(and($indexLabel, not(eq(at($document, "showLocation"), false))), { tag = "div"; attrs = { id = concat($app.key, "-location"); class = "manager-location" }; children = list(
+      { tag = "span"; attrs = { id = concat($app.key, "-status"); role = "status"; "aria-live" = "polite" }; children = list(or(at($document, "status"), "Opening…")) },
+      at($document, "locationAction")
+    ) }, null),
+    { tag = "div"; attrs = { class = if($indexLabel, "manager-panes", "manager-panes manager-single-pane") };
+      children = list($indexPane, $detailPane) }
+  ) }
+
+process desktop.documentSlots:
+  call desktop.documentMenus
+  let menu = $result
+  call desktop.documentBody
+  let content = $result
+  call desktop.documentBanner
+  let result = { menu = $menu; banner = $result; content = $content }
+
+process desktop.buildBadge:
+  let result = { tag = "button"; attrs = { type = "button"; id = $badgeId; class = "edition";
+    "data-build-edition" = $badgeOwner; "aria-label" = "About this build";
+    "aria-controls" = $about.window; "data-launch-action" = $about.defaultAction }; children = list(
+    { tag = "span"; attrs = { class = "build-label" }; children = list("BUILD") },
+    { tag = "b"; children = list($build) },
+    { tag = "small"; attrs = { class = "build-hash" }; children = list("sourcery-home-build-placeholder") }
+  ) }
+
+process desktop.documentBanner:
+  let glyph = { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" };
+    children = list({ tag = "use"; attrs = { href = concat("#icon-", $app.icon) } }) }
+  let badge = { tag = "div"; attrs = { class = "edition" }; children = list({ tag = "span"; children = list("BUILD") },
+    { tag = "b"; children = list(or(at($document, "build"), "Development")) }) }
+  when eq($app.key, "aster-codex"):
+    let badgeOwner = "aster-codex"
+    let badgeId = "aster-codex-build"
+    call desktop.buildBadge
+    let badge = $result
+  let result = { tag = "header"; attrs = { class = "banner manager-banner" }; children = list(
+    { tag = "div"; attrs = { class = "banner-icon" }; children = list($glyph) },
+    { tag = "div"; children = list({ tag = "p"; children = list("SOURCERY OS / HOME") },
+      { tag = "h3"; attrs = { class = "manager-title" }; children = list($app.title) }, { tag = "span"; children = list($document.description) }) },
+    $badge
+  ) }
+
+process desktop.workspaceEnvironments:
+  let result = list(
+    { key = "home"; name = "Home"; href = "/workspace/home"; detail = "Personal workspace and app launcher."; icon = "workspace";
+      type = "Personal desktop";
+      admission = "Home is the default entry. Sign in to save an environment preference. Home checks its app cards and Operations launchers before serving the build.";
+      rule = "desktop-launch.encounter#desktop.admitHome" },
+    { key = "work"; name = "Work"; href = "/workspace/work"; detail = "Work apps and project environments."; icon = "life-board";
+      type = "Work environment";
+      admission = "Work is an allowed environment choice. The Work gateway requires a signed-in Temple session to open Life Board.";
+      rule = "workspace.nginx.conf → Work gateway" },
+    { key = "platform"; name = "Platform"; href = "/workspace/platform"; detail = "Platform Inbox and development work items."; icon = "tools";
+      type = "Steward environment";
+      admission = "The signed-in Temple email must match the configured Platform steward.";
+      rule = "workspace.encounter#workspace.platformAllowed" },
+    { key = "mobile"; name = "Mobile"; href = "/workspace/mobile"; detail = "Pair a phone and prepare work for offline use."; icon = "computer";
+      type = "Mobile workspace";
+      admission = "Mobile is an allowed environment choice. Its page uses the Mobile route. Pairing and record access have their own checks.";
+      rule = "workspace.encounter#workspace.request" })

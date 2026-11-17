@@ -1,0 +1,105 @@
+process-module "temple/surface-process-module/1"
+
+process game.desktopStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = "#notes-game-hub-window"; declarations = list(
+      { property = "top"; value = "clamp(20px,7vh,62px)" },
+      { property = "right"; value = "24px" },
+      { property = "max-height"; value = "calc(100% - clamp(20px,7vh,62px) - 12px)" }
+    ) },
+    { selector = "#notes-game-hub-content"; declarations = list(
+      { property = "min-width"; value = "0" }
+    ) },
+    { selector = ".game-zone-banner h3"; declarations = list(
+      { property = "font-size"; value = "clamp(24px,4vw,38px)" },
+      { property = "line-height"; value = "1.08" },
+      { property = "letter-spacing"; value = "-.045em" },
+      { property = "margin"; value = "0 0 4px" }
+    ) },
+    { selector = ".game-zone-banner"; declarations = list(
+      { property = "margin-inline"; value = "0" }
+    ) },
+    { selector = ".game-zone-tabs"; declarations = list(
+      { property = "margin-inline"; value = "-7px" }
+    ) },
+    { selector = "#notes-game-hub-surface>p"; declarations = list(
+      { property = "margin"; value = "12px 15px" }
+    ) },
+    { selector = ".game-zone-pane h4"; declarations = list(
+      { property = "margin"; value = "15px 0 8px" }
+    ) },
+    { selector = "#game-zone-games:checked~.programs [data-game-zone-pane=games],#game-zone-tools:checked~.programs [data-game-zone-pane=tools],#game-zone-operations:checked~.programs [data-game-zone-pane=operations]"; declarations = list(
+      { property = "display"; value = "block" }
+    ) },
+    { selector = "#game-zone-games:checked~.tabs [for=game-zone-games],#game-zone-tools:checked~.tabs [for=game-zone-tools],#game-zone-operations:checked~.tabs [for=game-zone-operations]"; declarations = list(
+      { property = "background"; value = "#fffef3" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".game-zone-tabs .desktop-toggle:focus-visible~.tabs label"; declarations = list(
+      { property = "outline-offset"; value = "-3px" }
+    ) },
+    { selector = "#game-zone-games:focus-visible~.tabs [for=game-zone-games],#game-zone-tools:focus-visible~.tabs [for=game-zone-tools],#game-zone-operations:focus-visible~.tabs [for=game-zone-operations]"; declarations = list(
+      { property = "outline"; value = "2px dotted var(--navy)" }
+    ) },
+    { selector = "#workspace [data-group=hosted] ul,.game-zone-pane ul"; declarations = list(
+      { property = "grid-auto-rows"; value = "minmax(75px,1fr)" }
+    ) },
+    { selector = ".game-zone-pane button.app-link"; declarations = list(
+      { property = "width"; value = "100%" },
+      { property = "font"; value = "inherit" },
+      { property = "color"; value = "var(--ink)" },
+      { property = "text-align"; value = "left" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = ".game-zone-pane .game-zone-status:hover"; declarations = list(
+      { property = "background"; value = "#f4f2e7" },
+      { property = "border-color"; value = "#d7d3c0" }
+    ) },
+    { atRule = "media"; prelude = "(min-width:671px)"; rules = list(
+      { selector = "#workspace [data-group=hosted] ul,.game-zone-pane ul"; declarations = list(
+        { property = "grid-template-columns"; value = "repeat(auto-fill,minmax(min(170px,100%),1fr))" }
+      ) }
+    ) },
+    { atRule = "media"; prelude = "(max-width:670px)"; rules = list(
+      { selector = "#workspace [data-group=hosted] ul,.game-zone-pane ul"; declarations = list(
+        { property = "grid-auto-rows"; value = "minmax(86px,1fr)" }
+      ) },
+      { selector = "#notes-game-hub-window"; declarations = list(
+        { property = "top"; value = "8px" },
+        { property = "right"; value = "8px" },
+        { property = "width"; value = "calc(100% - 16px)" },
+        { property = "max-height"; value = "calc(100% - 16px)" }
+      ) }
+    ) }
+  )
+  call css.renderCompactRules
+
+
+process game.desktopShell:
+  let input = list(
+    { tag = "header"; attrs = { class = "banner game-zone-banner" }; children = list(
+      { tag = "div"; attrs = { class = "banner-icon" }; children = list(
+        { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" }; children = list(
+          { tag = "use"; attrs = { href = "#icon-game" } }
+        ) }
+      ) },
+      { tag = "div"; children = list(
+        { tag = "p"; children = list("APPDEV / GAME DEVELOPMENT") },
+        { tag = "h3"; children = list("Game Zone") },
+        { tag = "span"; children = list("Play games, build worlds, and manage releases.") }
+      ) }
+    ) },
+    { tag = "div"; attrs = { class = "game-zone-tabs"; role = "group"; "aria-label" = "Game Zone sections" }; children = list(
+      { tag = "input"; attrs = { class = "desktop-toggle"; type = "radio"; name = "game-zone-section"; id = "game-zone-games"; checked = true } },
+      { tag = "input"; attrs = { class = "desktop-toggle"; type = "radio"; name = "game-zone-section"; id = "game-zone-tools" } },
+      { tag = "input"; attrs = { class = "desktop-toggle"; type = "radio"; name = "game-zone-section"; id = "game-zone-operations" } },
+      { tag = "div"; attrs = { class = "tabs" }; children = list(
+        { tag = "label"; attrs = { for = "game-zone-games" }; children = list("Games") },
+        { tag = "label"; attrs = { for = "game-zone-tools" }; children = list("Tools") },
+        { tag = "label"; attrs = { for = "game-zone-operations" }; children = list("Operations") }
+      ) },
+      { tag = "div"; attrs = { id = "notes-game-hub-surface"; class = "programs"; tabindex = "0"; "aria-label" = "Game Zone content" } }
+    ) }
+  )
+  call html.serialize

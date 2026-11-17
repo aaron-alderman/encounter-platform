@@ -1,0 +1,177 @@
+process-module "temple/surface-process-module/1"
+
+process compiler.overviewRead:
+  let result = and(eq($eventInput.method, "GET"), not($eventInput.view), not($eventInput.hasQuery), not($eventInput.query))
+
+process compiler.projectRequest:
+  let request = $eventInput.request
+  port kernel.invoke { query = "compiler.overviewRead"; input = $request } → overview
+  let publicOverview = and($overview, not($request.gatewayUpstream))
+  let moved = and($publicOverview, eq($request.path, $eventInput.proposed))
+  let alias = and($publicOverview, eq($request.path, $eventInput.legacy))
+  port record.put { record = $request; key = "path"; value = if($moved, $eventInput.current, $request.path) } → dispatch
+  port kernel.invoke { query = "workspace.request"; input = $dispatch } → decision
+  let result = { destination = if($alias, $eventInput.proposed, $request.path); alias = $alias;
+    query = $dispatch.query; anchor = $dispatch.anchor; decision = $decision }
+
+process compiler.dialogDecision:
+  let request = $eventInput.request
+  port kernel.invoke { query = "compiler.overviewRead"; input = $request } → overview
+  let legacy = eq($request.path, $eventInput.current)
+  let canonical = and($overview, eq($request.path, $eventInput.proposed))
+  let admits = if(and($request.sameOrigin, or($legacy, $canonical)), true, false)
+  let intercepts = and($admits, eq($request.method, "GET"), not($request.modified),
+    not(includes(list("acting-as", "mentions", "auth"), $request.handler)))
+  let result = { admits = $admits; intercepts = $intercepts }
+
+process compiler.dialogChecks:
+  let current = $eventInput.current
+  let proposed = $eventInput.proposed
+  let cases = list(
+    { path = $current; method = "GET"; view = "providers"; hasQuery = true; sameOrigin = true; admits = true; intercepts = true },
+    { path = $current; method = "GET"; view = "acting-as"; hasQuery = true; sameOrigin = true; handler = "acting-as"; admits = true; intercepts = false },
+    { path = $current; method = "GET"; view = "mentions"; hasQuery = true; sameOrigin = true; handler = "mentions"; admits = true; intercepts = false },
+    { path = $current; method = "GET"; sameOrigin = true; handler = "auth"; admits = true; intercepts = false },
+    { path = $current; method = "POST"; view = "providers"; hasQuery = true; sameOrigin = true; admits = true; intercepts = false },
+    { path = $proposed; method = "GET"; sameOrigin = true; admits = true; intercepts = true },
+    { path = $proposed; method = "GET"; sameOrigin = true; modified = true; admits = true; intercepts = false },
+    { path = $proposed; method = "GET"; sameOrigin = false; admits = false; intercepts = false },
+    { path = $proposed; method = "GET"; view = "providers"; hasQuery = true; sameOrigin = true; admits = false; intercepts = false },
+    { path = $proposed; method = "GET"; hasQuery = true; sameOrigin = true; admits = false; intercepts = false },
+    { path = $proposed; method = "POST"; sameOrigin = true; admits = false; intercepts = false }
+  )
+  each $cases as request:
+    port kernel.invoke { query = "compiler.dialogDecision"; input = { request = $request; current = $current; proposed = $proposed } } → actual
+    assert and(eq($actual.admits, $request.admits), eq($actual.intercepts, $request.intercepts))
+      otherwise "The projected dialog destination or link interception changed."
+  let result = { check = "Projected dialog links and destination guard"; requests = count($cases); status = "pass" }
+
+process compiler.gatewayChecks:
+  let common = $eventInput
+  let methods = list("GET", "POST")
+  each $methods as method:
+    port kernel.invoke { query = "gateway.route"; input = { path = "/"; method = $method; upgrade = false } } → route
+    assert and(eq($route.status, 200), eq($route.path, $common.current))
+      otherwise "Identity gateway upstream changed."
+    let request = { path = $route.path; method = $method; sameOrigin = true; gatewayUpstream = true;
+      view = if(eq($method, "POST"), "providers", null); hasQuery = eq($method, "POST") }
+    port kernel.invoke { query = "compiler.projectRequest"; input = { request = $request; current = $common.current;
+      proposed = $common.proposed; legacy = $common.legacy } } → projected
+    assert and(not($projected.alias), eq($projected.destination, $route.path), eq($projected.decision.route, "management"),
+      eq($projected.decision.program, if(eq($method, "POST"), "identity-management", "identity-overview")))
+      otherwise "The public alias must leave authenticated upstream dispatch intact."
+  let result = { check = "Identity gateway upstream GET and POST"; requests = count($methods); status = "pass" }
+
+process compiler.qualifiedChecks:
+  let common = $eventInput
+  let current = $common.current
+  let aster = concat($current, "aster/")
+  let kernel = concat($current, "kernel/")
+  let cases = list(
+    { path = $current; method = "GET"; view = "certificates"; query = "view=certificates&fragment=1"; program = "certificates" },
+    { path = $current; method = "GET"; view = "claimipedia"; query = "view=claimipedia&claim=claim-1&evidence=evidence-1"; program = "claimipedia" },
+    { path = $current; method = "GET"; view = "mentions"; query = "view=mentions"; anchor = "x-inbox"; program = "x-mentions" },
+    { path = $current; method = "GET"; view = "mentions"; query = "view=mentions&result=failed"; program = "x-mentions" },
+    { path = $current; method = "POST"; view = "acting-as"; query = "view=acting-as"; program = "acting-as" },
+    { path = $current; method = "POST"; view = "certificates"; query = "view=certificates"; program = "certificates" },
+    { path = $current; method = "POST"; view = "mentions"; query = "view=mentions"; program = "x-mentions" },
+    { path = $current; method = "POST"; view = "versions"; query = "view=versions"; program = "versions" },
+    { path = $aster; method = "GET"; query = "thread=0123456789abcdef0123456789abcdef&fragment=1" },
+    { path = $aster; method = "GET"; query = "notes=1&app=claimipedia" },
+    { path = $aster; method = "GET"; query = "support=1&inbox=1" },
+    { path = $aster; method = "GET"; query = "support=1&workspace=1" },
+    { path = $aster; method = "POST"; query = "support=1" },
+    { path = $kernel; method = "GET"; query = "app=notes&page=%2F" },
+    { path = $kernel; method = "POST" },
+    { path = concat($current, "workspace-access"); method = "GET"; gatewayUpstream = true },
+    { path = concat($current, "workspace-sign-out"); method = "POST"; gatewayUpstream = true }
+  )
+  each $cases as case:
+    port record.put { record = $case; key = "sameOrigin"; value = true } → request
+    port kernel.invoke { query = "workspace.request"; input = $request } → before
+    port kernel.invoke { query = "compiler.projectRequest"; input = { request = $request; current = $current;
+      proposed = $common.proposed; legacy = $common.legacy } } → after
+    assert and(not($after.alias), eq($after.destination, $case.path), eq($after.query, $case.query), eq($after.anchor, $case.anchor),
+      eq($after.decision, $before), or(not($case.program), and(eq($before.route, "management"), eq($before.program, $case.program))))
+      otherwise "A qualified request lost its path, query, anchor or Workspace dispatch."
+  let result = { check = "Qualified routes and continuations stay outside the overview alias"; requests = count($cases); status = "pass" }
+
+process compiler.asterPreferencePage:
+  let context = $eventInput.context
+  let result = if(and(eq($context.app, "notes"), eq($context.page, $eventInput.proposed), not($context.query)),
+    $eventInput.asterPage, $context.page)
+
+process compiler.asterPreferenceChecks:
+  let current = $eventInput.current
+  let proposed = $eventInput.proposed
+  let asterPage = $eventInput.asterPage
+  let cases = list(
+    { app = "notes"; page = $current; expected = $asterPage },
+    { app = "notes"; page = $proposed; expected = $asterPage },
+    { app = "notes"; page = $proposed; query = "view=network"; expected = $proposed },
+    { app = "notes"; page = concat($current, "network"); expected = concat($current, "network") },
+    { app = "claimipedia"; page = "/claimipedia/claims/claim-1"; expected = "/claimipedia/claims/claim-1" })
+  each $cases as context:
+    port kernel.invoke { query = "compiler.asterPreferencePage"; input = { context = $context; proposed = $proposed; asterPage = $asterPage } } → page
+    assert eq($page, $context.expected)
+      otherwise "The overview move changed an Aster preference coordinate."
+  let result = { check = "Projected Aster preference coordinates"; requests = count($cases); status = "pass" }
+
+process compiler.routeChecks:
+  let current = $eventInput.current
+  let proposed = $eventInput.proposed
+  let legacy = $eventInput.legacy
+  let asterPage = $eventInput.asterPage
+  let common = { current = $current; proposed = $proposed; legacy = $legacy }
+  port kernel.invoke { query = "compiler.dialogChecks"; input = $common } → dialogChecks
+  port kernel.invoke { query = "compiler.gatewayChecks"; input = $common } → gatewayChecks
+  port kernel.invoke { query = "compiler.qualifiedChecks"; input = $common } → qualifiedChecks
+  port kernel.invoke { query = "compiler.asterPreferenceChecks"; input = { current = $current; proposed = $proposed; asterPage = $asterPage } } → preferenceChecks
+  let newRequest = { path = $proposed; method = "GET"; view = null; sameOrigin = true; fragment = true }
+  port kernel.invoke { query = "workspace.request"; input = $newRequest } → existing
+  assert eq($existing.route, "missing")
+    otherwise "Candidate path already dispatches in Workspace."
+  port record.put { record = $newRequest; key = "path"; value = $current } → original
+  port kernel.invoke { query = "workspace.request"; input = $original } → originalDecision
+  port record.put { record = $common; key = "request"; value = $newRequest } → probe
+  port kernel.invoke { query = "compiler.projectRequest"; input = $probe } → moved
+  assert and(eq($moved.decision, $originalDecision), eq($moved.destination, $proposed), not($moved.alias))
+    otherwise "The canonical GET changed its Workspace dispatch."
+  port record.put { record = $common; key = "request"; value = $original } → probe
+  port kernel.invoke { query = "compiler.projectRequest"; input = $probe } → redirected
+  assert and($redirected.alias, eq($redirected.destination, $proposed), eq($redirected.decision, $originalDecision))
+    otherwise "The legacy GET did not resolve to the same overview."
+  let outsideOverview = list(
+    { path = $proposed; method = "GET"; view = "providers"; hasQuery = true; sameOrigin = true },
+    { path = $proposed; method = "GET"; hasQuery = true; sameOrigin = true },
+    { path = $proposed; method = "POST"; sameOrigin = true },
+    { path = $proposed; method = "GET"; sameOrigin = true; gatewayUpstream = true })
+  each $outsideOverview as request:
+    port record.put { record = $common; key = "request"; value = $request } → probe
+    port kernel.invoke { query = "compiler.projectRequest"; input = $probe } → projected
+    assert and(not($projected.alias), eq($projected.destination, $proposed), eq($projected.decision.route, "missing"))
+      otherwise "The canonical path admitted a request outside the public overview contract."
+  let siblings = list(
+    { label = "Named GET views"; requests = map(list("providers", "program", "assurance", "assurance-program", "acting-as", "acting-as-program",
+      "claimipedia", "aster", "mentions", "mentions-program", "versions", "versions-program", "certificates", "keys", "network"), "view",
+      { path = $current; method = "GET"; view = $view; hasQuery = true; sameOrigin = true; fragment = true }) },
+    { label = "POST and origin guard"; requests = list(
+      { path = $current; method = "POST"; view = "providers"; hasQuery = true; sameOrigin = true },
+      { path = $current; method = "POST"; view = "providers"; hasQuery = true; sameOrigin = false },
+      { path = $current; method = "POST"; view = "aster"; hasQuery = true; sameOrigin = true },
+      { path = $current; method = "POST"; sameOrigin = true }) },
+    { label = "Unclassified query and HEAD"; requests = list(
+      { path = $current; method = "GET"; hasQuery = true; sameOrigin = true },
+      { path = $current; method = "HEAD"; sameOrigin = true }) }
+  )
+  fold $siblings as group; checks starts list():
+    each $group.requests as request:
+      port kernel.invoke { query = "workspace.request"; input = $request } → before
+      port record.put { record = $common; key = "request"; value = $request } → probe
+      port kernel.invoke { query = "compiler.projectRequest"; input = $probe } → after
+      assert and(not($after.alias), eq($after.destination, $current), eq($after.decision, $before))
+        otherwise "Sibling request changed."
+    yield append($checks, list({ check = $group.label; requests = count($group.requests); status = "pass" })) → checks
+  let result = append(list({ check = "Canonical overview and legacy GET"; requests = 2; status = "pass" },
+      { check = "Canonical path rejects non-overview requests"; requests = count($outsideOverview); status = "pass" },
+      $dialogChecks, $gatewayChecks, $qualifiedChecks, $preferenceChecks), $checks)

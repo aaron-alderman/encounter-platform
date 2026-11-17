@@ -1,0 +1,455 @@
+process-module "temple/surface-process-module/1"
+
+process tools.boot:
+  let bindings = list(
+    { ref = "#notes-assurance-history"; event = "click"; delegate = "#notes-assurance-sign-in"; action = "tools-open-app"; path = "/identity-management/?view=assurance" },
+    { ref = "#notes-assurance-refresh"; event = "click"; action = "tools-assurance" },
+    { ref = "#notes-performance-refresh"; event = "click"; action = "tools-performance" },
+    { ref = "#performance-workloads"; event = "toggle"; action = "tools-workloads" },
+    { ref = "#performance-workload-sort"; event = "change"; action = "tools-workloads" },
+    { ref = "main.desktop:not([hidden]) #notes-performance-window:not([hidden]) #performance-workloads[open]"; event = "interval"; milliseconds = 10000; action = "tools-workloads" },
+    { ref = "#notes-performance-launches"; event = "click"; delegate = "button[data-performance-launch]"; action = "tools-performance-detail" }
+  )
+  call appdev.bind
+  port browser.copyText { trigger = "#copy-recent-launches"; source = "#recent-launches-copy-text"; status = "#recent-launches-copy-status" } → _
+  port browser.copyText { trigger = "#copy-launch-details"; source = "#launch-details-copy-text"; status = "#launch-details-copy-status" } → _
+  each list(
+    { id = "identity-management"; label = "Identity Management"; launch = "#notes-settings-identity"; path = "/settings/identity/"; fragment = ".identity-page-content" },
+    { id = "network"; label = "Network Settings"; launch = "#notes-settings-network"; path = "/identity-management/?view=network"; fragment = "[data-network-settings]" }
+  ) as operation:
+    let content = concat("#", $operation.id, "-content")
+    let bindings = list(
+      { ref = $operation.launch; event = "click"; action = "tools-operation-open"; operation = $operation; timing = $operation.label; reveal = concat("#", $operation.id, "-dialog") },
+      { ref = $content; event = "click"; delegate = "a:is([href*='/identity-management/'],[data-identity-overview]):not([data-open-acting-as]):not([data-open-mentions]):not([data-operation-auth])"; prevent = true; unmodified = true; action = "tools-operation-link"; operation = $operation },
+      { ref = $content; event = "submit"; delegate = "form"; prevent = true; action = "tools-operation-submit"; operation = $operation },
+      { ref = concat("#", $operation.id, "-dialog"); event = "close"; action = "tools-operation-close"; operation = $operation }
+    )
+    call appdev.bind
+  let bindings = list({ ref = "document"; event = "click"; delegate = "a[data-open-identity-management]"; prevent = true; unmodified = true; action = "tools-operation-open"; timing = "Identity Management"; reveal = "#identity-management-dialog";
+    operation = { id = "identity-management"; path = "/settings/identity/"; fragment = ".identity-page-content" } })
+  call appdev.bind
+  call desktop.bind
+  port dom.exists { selector = "#desktop-settings-dialog" } → hasSettings
+  when $hasSettings:
+    let bindings = list(
+      { ref = "#desktop-settings-open"; event = "click"; action = "tools-desktop-settings" },
+      { ref = "#desktop-settings-dialog"; event = "click"; delegate = "button[data-desktop-color]"; action = "tools-desktop-color" })
+    call appdev.bind
+    port storage.read { key = "sourcery.desktop.background"; maxLength = 1 } → palette
+    call windowWidget.desktopSettings
+    let choice = or(at(filter($result.choices, "choice", eq(concat("", $choice.code), $palette.value)), 0), at($result.choices, 0))
+    call tools.desktopColor
+
+process tools.event:
+  when eq($action, "tools-desktop-settings"):
+    port browser.write { ref = "#start"; name = "open"; value = false } → _
+    call windowWidget.desktopSettings
+    port browser.write { ref = "#desktop-settings-status"; name = "textContent"; value = $result.help } → _
+    port browser.dialog { ref = "#desktop-settings-dialog"; open = true } → _
+  when eq($action, "tools-desktop-color"):
+    let value = at($eventInput.matched.attributes, "data-desktop-color")
+    call windowWidget.desktopSettings
+    let preferences = $result
+    let choice = at(filter($preferences.choices, "choice", eq(concat("", $choice.code), $value)), 0)
+    when $choice:
+      port storage.write { key = "sourcery.desktop.background"; value = $value } → saved
+      when $saved.ok:
+        call tools.desktopColor
+        port browser.dialog { ref = "#desktop-settings-dialog"; open = false } → _
+      when not($saved.ok):
+        port browser.write { ref = "#desktop-settings-status"; name = "textContent"; value = $preferences.error } → _
+  when includes(list("tools-operation-open", "tools-operation-link", "tools-operation-submit", "tools-operation-close"), $action):
+    call tools.operation
+  when eq($action, "tools-open-app"):
+    port browser.navigate { path = $eventInput.path } → _
+  when eq($action, "tools-assurance"):
+    call tools.assurance
+  when eq($action, "tools-performance"):
+    port dom.exists { selector = "main.desktop:not([hidden]) > #notes-performance-window:not([hidden])" } → open
+    when $open:
+      call tools.performance
+  when eq($action, "tools-workloads"):
+    call tools.workloads
+  when eq($action, "tools-performance-detail"):
+    call tools.performanceDetail
+
+process tools.desktopColor:
+  call windowWidget.desktopSettings
+  each $result.choices as entry:
+    let selected = eq($entry.code, $choice.code)
+    port browser.attribute { ref = "body"; name = concat("data-desktop-background-", $entry.code); value = $selected } → _
+    port browser.attribute { ref = concat("#desktop-settings-dialog button[data-desktop-color='", $entry.code, "']");
+      name = "aria-pressed"; value = $selected } → _
+
+process tools.assurance:
+  let target = "#notes-assurance-history"
+  let statusTarget = "#notes-assurance-history-status"
+  let input = { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "info" }; children = list("Loading decision history…") }
+  call html.serialize
+  let loading = $result
+  let input = { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "error" }; children = list("Decision history is unavailable. Try refreshing.") }
+  call html.serialize
+  let unavailable = $result
+  port dom.exists { selector = $statusTarget; diagnosticLabel = "Find the decision-history status area" } → hasStatus
+  when $hasStatus:
+    port browser.content { ref = $target; html = ""; diagnosticLabel = "Clear the previous decision history" } → _
+    port browser.content { ref = $statusTarget; html = $loading; diagnosticLabel = "Show the loading status" } → _
+  when not($hasStatus):
+    port browser.content { ref = $target; html = $loading } → _
+  let html = ""
+  let feedback = $unavailable
+  try:
+    port browser.request { path = "/identity-management/?view=assurance-program"; fragment = "section[aria-label='Decision history']"; diagnosticLabel = "Request the decision history" } → response
+    when and(eq($response.status, 200), $response.body):
+      let html = $response.body
+      let feedback = ""
+    when includes(list(0, 401, 403), $response.status):
+      let input = list(
+        { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "info" }; children = list("Sign in with your Temple identity to see the decisions available to your role.") },
+        { tag = "p"; children = list(
+          { tag = "button"; attrs = { class = "button"; type = "button"; id = "notes-assurance-sign-in" }; children = list("Continue with Google") }
+        ) }
+      )
+      call html.serialize
+      let html = $result
+      when $mobileAssurance:
+        let input = { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "info" }; children = list(
+            "Sign in from ",
+            { tag = "a"; attrs = { href = "/workspace/home" }; children = list("Home") },
+            ", then return to Mobile to see the decisions available to your role."
+          ) }
+        call html.serialize
+        let html = $result
+      let feedback = ""
+  catch fault:
+    let feedback = $unavailable
+  when $hasStatus:
+    port browser.content { ref = $statusTarget; html = $feedback; diagnosticLabel = "Update the decision-history status" } → _
+  when and(not($hasStatus), $feedback):
+    let html = $feedback
+  port browser.content { ref = $target; html = $html; diagnosticLabel = "Insert the decision history or sign-in prompt" } → _
+
+process tools.performance:
+  call tools.performanceLaunches
+  call tray.resources
+  call tools.workloads
+  try:
+    port runtime.telemetry {} → sample
+    port state.get { key = "notes-performance-sample" } → prior
+    let cpu = "Refresh to collect a second sample."
+    when $prior:
+      port number.calculate { operation = "subtract"; values = list($sample.elapsedMs, $prior.elapsedMs) } → elapsed
+      when $elapsed:
+        port number.calculate { operation = "subtract"; values = list($sample.cpuMicros, $prior.cpuMicros) } → micros
+        port number.calculate { operation = "divide"; values = list($elapsed, 10) } → divisor
+        port number.calculate { operation = "divide"; values = list($micros, $divisor) } → percent
+        port number.calculate { operation = "round"; values = list($percent) } → rounded
+        let cpu = concat($rounded, "%")
+    port number.calculate { operation = "divide"; values = list($sample.peakResidentBytes, 1048576) } → memory
+    port number.calculate { operation = "round"; values = list($memory) } → megabytes
+    port state.set { key = "notes-performance-sample"; value = $sample } → _
+    let input = { tag = "dl"; attrs = { "data-elapsed-ms" = $sample.elapsedMs }; children = list(
+        { tag = "dt"; children = list("CPU") },
+        { tag = "dd"; children = list($cpu) },
+        { tag = "dt"; children = list("Peak memory") },
+        { tag = "dd"; children = list(
+          $megabytes,
+          " MiB"
+        ) },
+        { tag = "dt"; children = list("Browser connections") },
+        { tag = "dd"; children = list(
+          $sample.activeSessions,
+          " of ",
+          $sample.sessionLimit
+        ) },
+        { tag = "dt"; children = list("Completed dispatches") },
+        { tag = "dd"; children = list($sample.completedDispatches) },
+        { tag = "dt"; children = list("Failed dispatches") },
+        { tag = "dd"; children = list($sample.faultedDispatches) }
+      ) }
+    call html.serialize
+    let html = $result
+    port browser.content { ref = "#notes-performance-reading"; html = $html } → _
+  catch fault:
+    let input = { tag = "p"; children = list("Performance readings are unavailable.") }
+    call html.serialize
+    port browser.content { ref = "#notes-performance-reading"; html = $result } → _
+
+process tools.capacity:
+  let result = "Unavailable"
+  when $reading:
+    port number.calculate { operation = "divide"; values = list($reading.totalBytes, 107374182.4) } → totalTenths
+    port number.calculate { operation = "round"; values = list($totalTenths) } → totalRounded
+    port number.calculate { operation = "divide"; values = list($totalRounded, 10) } → total
+    port number.calculate { operation = "divide"; values = list($reading.availableBytes, 107374182.4) } → availableTenths
+    port number.calculate { operation = "round"; values = list($availableTenths) } → availableRounded
+    port number.calculate { operation = "divide"; values = list($availableRounded, 10) } → available
+    let result = concat($available, " GiB available of ", $total, " GiB total")
+
+process tools.performanceLaunches:
+  try:
+    port browser.performance {} → launches
+    let input = { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "info" }; children = list("No slow or failed launches in this tab.") }
+    call html.serialize
+    let alerts = $result
+    let input = { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "info" }; children = list("No measured launches yet.") }
+    call html.serialize
+    let rows = $result
+    fold $launches as launch; findings starts list():
+      port number.calculate { operation = "less"; values = list($launch.totalMs, 1000) } → withinThreshold
+      yield if(and($withinThreshold, eq($launch.outcome, "Completed")), $findings, append($findings, list($launch))) → findings
+    when count($findings):
+      let input = { tag = "ul"; children = map($findings, "launch", { tag = "li"; attrs = { class = "sourcery-feedback"; "data-feedback" = if(eq($launch.outcome, "Completed"), "warning", "error") }; children = list(
+        concat($launch.label, " · ", if(eq($launch.outcome, "Completed"), "Slow launch", $launch.outcome),
+          " · ", $launch.totalMs, " ms · ", $launch.ageSeconds, " s ago")) }) }
+      call html.serialize
+      let alerts = $result
+    when count($launches):
+      let columns = list(
+        { label = "Launch" }, { label = "Age"; secondary = true }, { label = "Queue" }, { label = "Window" },
+        { label = "Response"; secondary = true }, { label = "Request"; secondary = true }, { label = "Total" }, { label = "Outcome" }
+      )
+      let headings = map($columns, "column", { tag = "th"; attrs = { scope = "col"; class = if($column.secondary, "performance-secondary", null) }; children = list($column.label) })
+      fold $launches as launch; items starts { rows = list(); report = "Launch\tAge\tQueue (ms)\tWindow (ms)\tResponse (ms)\tRequest (ms)\tTotal (ms)\tOutcome" }:
+        call tools.performanceSummary
+        let metrics = $result
+        let row = { tag = "tr"; children = append(
+          list({ tag = "th"; attrs = { scope = "row" }; children = list({ tag = "button"; attrs = { type = "button"; class = "button";
+            "data-performance-launch" = $launch.id; "aria-label" = concat("Inspect ", $launch.label, " launch") }; children = list($launch.label) }) }),
+          map(list(
+            { value = concat($launch.ageSeconds, " s ago"); secondary = true }, { value = $launch.queueMs }, { value = $metrics.window },
+            { value = $metrics.response; secondary = true }, { value = $metrics.request; secondary = true },
+            { value = $launch.totalMs }, { value = $metrics.outcome }
+          ), "cell", { tag = "td"; attrs = { class = if($cell.secondary, "performance-secondary", null) }; children = list($cell.value) })
+        ) }
+        let line = concat($launch.label, "\t", $launch.ageSeconds, " s ago\t", $launch.queueMs, "\t", $metrics.window, "\t",
+          $metrics.response, "\t", $metrics.request, "\t", $launch.totalMs, "\t", $metrics.outcome)
+        yield { rows = append($items.rows, list($row)); report = concat($items.report, "\n", $line) } → items
+      let prefix = "recent-launches"
+      let button = "Copy recent launches"
+      let report = $items.report
+      call tools.performanceCopyControl
+      let input = list($result, { tag = "div"; attrs = { class = "performance-table" }; children = list(
+        { tag = "table"; attrs = { class = "sourcery-data-table"; "data-table-layout" = "grid"; "aria-label" = "Recent launch timings" }; children = list(
+          { tag = "thead"; children = list({ tag = "tr"; children = $headings }) },
+          { tag = "tbody"; children = $items.rows }) }) })
+      call html.serialize
+      let rows = $result
+    port browser.content { ref = "#notes-performance-alerts"; html = $alerts } → _
+    port browser.content { ref = "#notes-performance-launches"; html = $rows } → _
+  catch fault:
+    let input = { tag = "p"; attrs = { class = "sourcery-feedback"; "data-feedback" = "error" }; children = list("Launch diagnostics are unavailable.") }
+    call html.serialize
+    port browser.content { ref = "#notes-performance-alerts"; html = $result } → _
+    port browser.content { ref = "#notes-performance-launches"; html = "" } → _
+
+process tools.performanceSummary:
+  let result = {
+    window = if(eq($launch.revealMs, null), "—", $launch.revealMs);
+    response = if(eq($launch.status, null), "—", $launch.responseMs);
+    request = if($launch.requests, $launch.requestMs, "—");
+    outcome = concat($launch.outcome, if(eq($launch.status, null), "", if(eq($launch.status, 0), " · Redirect", concat(" · HTTP ", $launch.status))))
+  }
+
+process tools.performanceCopyControl:
+  let result = { tag = "div"; attrs = { class = "performance-copy" }; children = list(
+    { tag = "button"; attrs = { id = concat("copy-", $prefix); class = "button"; type = "button" }; children = list($button) },
+    { tag = "span"; attrs = { id = concat($prefix, "-copy-status"); role = "status" } },
+    { tag = "textarea"; attrs = { id = concat($prefix, "-copy-text"); "aria-label" = $button; readonly = true; hidden = true; rows = "5" }; children = list($report) }
+  ) }
+
+process tools.performanceDetail:
+  let id = at($eventInput.matched.attributes, "data-performance-launch")
+  let target = "#notes-performance-detail"
+  let input = { tag = "p"; children = list("This launch has expired. Refresh readings and choose a recent launch.") }
+  call html.serialize
+  let html = $result
+  try:
+    port browser.performance { id = $id } → launch
+    when $launch:
+      let detail = $launch.detail
+      call tools.performanceSummary
+      let metrics = $result
+      let title = concat($launch.label, " launch details")
+      let summary = concat("Queue ", $launch.queueMs, " ms · Window ", $metrics.window, " ms · Total ", $launch.totalMs, " ms · ", $metrics.outcome)
+      let request = if($launch.requests, concat("Response ", $metrics.response, " ms · Request ", $metrics.request, " ms"), "")
+      let before = concat($detail.inputMs, " ms before the browser handler ran. ", $detail.blockedMs, " ms waiting behind other actions.")
+      let after = if(eq($detail.dispatchMs, null), "This action did not reach the host.",
+        concat($detail.dispatchMs, " ms from dispatch to completion. ", $detail.browserMs, " ms spent running browser steps."))
+      let host = if(eq($detail.hostMs, null), "Host timing unavailable.",
+        concat("Host dispatch took ", $detail.hostMs, " ms, including ", $detail.nativeMs, " ms outside browser exchanges and ",
+          $detail.exchangeMs, " ms in browser round trips. Round trips include browser work."))
+      let noBlockers = "No earlier dispatch overlapped this launch."
+      let blockers = map($detail.blockers, "blocker", concat($blocker.label, " · +", $blocker.atMs, " ms · ", $blocker.ms, " ms ahead of this launch"))
+      let extraBlockers = if($detail.omittedBlockers, concat($detail.omittedBlockers, " additional actions omitted."), "")
+      let extraEffects = if($detail.omittedEffects, concat($detail.omittedEffects, " additional steps omitted."), "")
+      let timeline = "Timeline offsets are from the click."
+      fold $detail.effects as step; effects starts { rows = list(); report = "" }:
+        let offset = concat("+", $step.atMs, " ms")
+        let operation = concat(or($step.label, $step.port), if($step.process, concat(" (", $step.process, ")"), ""))
+        let activation = at($step, "activationWrites")
+        let duration = concat($step.browserMs, " ms in browser", if(eq($step.exchangeMs, null), "", concat(" · ", $step.exchangeMs, " ms round trip")),
+          if(eq($activation, at({}, "absent")), "", if(eq($activation, null), "", concat(" · ", $activation, " activation writes"))))
+        let outcome = concat(if($step.ok, "", " · Failed"),
+          if(eq($step.status, null), "", if(eq($step.status, 0), " · Redirect", concat(" · HTTP ", $step.status))))
+        let row = { tag = "li"; attrs = { class = if($step.revealed, "performance-reveal", null) }; children = list(
+          { tag = "span"; attrs = { class = "performance-offset" }; children = list($offset) },
+          { tag = "span"; children = list($operation, if($step.revealed, { tag = "strong"; children = list("Window shown") }, null)) },
+          { tag = "span"; attrs = { class = "performance-duration" }; children = list($duration, $outcome) }
+        ) }
+        yield { rows = append($effects.rows, list($row)); report = concat($effects.report, "\n", $offset, " · ", $operation, " · ",
+          $duration, if($step.revealed, " · Window shown", ""), $outcome) } → effects
+      port text.join { values = $blockers; separator = "\n" } → blockerReport
+      let report = concat($title, "\n", $summary, if($request, concat("\n", $request), ""),
+        "\n\nBefore dispatch\n", $before, "\n", if(count($blockers), $blockerReport, $noBlockers), if($extraBlockers, concat("\n", $extraBlockers), ""),
+        "\n\nAfter dispatch\n", $after, "\n", $host, "\n\n", $timeline, $effects.report, if($extraEffects, concat("\n", $extraEffects), ""))
+      let prefix = "launch-details"
+      let button = "Copy launch details"
+      call tools.performanceCopyControl
+      let input = { tag = "section"; attrs = { "aria-labelledby" = "performance-detail-heading" }; children = list(
+        { tag = "h4"; attrs = { id = "performance-detail-heading"; tabindex = "-1" }; children = list($title) },
+        $result,
+        { tag = "p"; attrs = { class = "performance-launch-summary" }; children = list($summary, if($request, list({ tag = "br" }, $request), null)) },
+        { tag = "h5"; children = list("Before dispatch") },
+        { tag = "p"; children = list($before) },
+        if(count($blockers), { tag = "ol"; children = map($blockers, "blocker", { tag = "li"; children = list($blocker) }) }, { tag = "p"; children = list($noBlockers) }),
+        if($extraBlockers, { tag = "p"; children = list($extraBlockers) }, null),
+        { tag = "h5"; children = list("After dispatch") },
+        { tag = "p"; children = list($after) },
+        { tag = "p"; children = list($host) },
+        { tag = "p"; children = list($timeline) },
+        { tag = "ol"; attrs = { class = "performance-timeline"; "aria-label" = "Launch timeline"; role = "list" }; children = $effects.rows },
+        if($extraEffects, { tag = "p"; children = list($extraEffects) }, null)
+      ) }
+      call html.serialize
+      let html = $result
+    port browser.content { ref = $target; html = $html } → _
+    when $launch:
+      port browser.focus { ref = "#performance-detail-heading" } → _
+  catch fault:
+    let input = { tag = "p"; children = list("Launch details are unavailable. Refresh readings and try again.") }
+    call html.serialize
+    port browser.content { ref = $target; html = $result } → _
+
+
+process tools.operation:
+  let operation = $eventInput.operation
+  let dialog = concat("#", $operation.id, "-dialog")
+  let content = concat("#", $operation.id, "-content")
+  when eq($action, "tools-operation-close"):
+    port browser.content { ref = $content; html = "" } → _
+  when not(eq($action, "tools-operation-close")):
+    when eq($action, "tools-operation-open"):
+      port browser.dialog { ref = $dialog; open = true; close = concat("dialog[open]:not(", $dialog, ")") } → _
+    let submitting = eq($action, "tools-operation-submit")
+    let path = $operation.path
+    when not(eq($action, "tools-operation-open")):
+      port browser.target { ref = $eventInput.matched.ref } → destination
+      assert or(eq($destination.pathname, "/identity-management/"),
+        and(not($submitting), eq($destination.method, "GET"), eq($destination.path, "/settings/identity/")))
+        otherwise "Unexpected operation route."
+      let path = $destination.path
+    when not($submitting):
+      let input = { tag = "p"; attrs = { role = "status" }; children = list("Opening app…") }
+      call html.serialize
+      port browser.content { ref = $content; html = $result } → _
+    try:
+      port browser.request { path = $path; method = if($submitting, "POST", "GET"); form = if($submitting, $eventInput.matched.ref, null); fragment = $operation.fragment } → response
+      port browser.property { ref = $dialog; name = "open" } → open
+      when $open:
+        let input = { tag = "p"; attrs = { role = "status" }; children = list("This app is unavailable. Close it and try again.") }
+        call html.serialize
+        let html = $result
+        when and(includes(list(200, 400, 403, 503), $response.status), $response.body):
+          let html = $response.body
+        when and(eq($response.status, 403), not($response.body)):
+          let input = list(
+            { tag = "p"; attrs = { role = "status" }; children = list("Act as Sourcery steward to use this app.") },
+            { tag = "button"; attrs = { class = "button"; type = "button"; "data-open-acting-as" = true }; children = list("Steward") }
+          )
+          call html.serialize
+          let html = $result
+        when eq($response.status, 0):
+          let input = list(
+            { tag = "p"; children = list("Sign in with your approved Temple identity in a new tab, then reopen this app.") },
+            { tag = "a"; attrs = { class = "button"; "data-operation-auth" = true; href = $path; target = "_blank"; rel = "noopener" }; children = list("Continue with Google") }
+          )
+          call html.serialize
+          let html = $result
+        port browser.content { ref = $content; html = $html } → _
+    catch fault:
+      port browser.property { ref = $dialog; name = "open" } → open
+      when $open:
+        let input = { tag = "p"; attrs = { role = "status" }; children = list("This app could not complete the request. Close it and try again.") }
+        call html.serialize
+        port browser.content { ref = $content; html = $result } → _
+
+process tools.workloads:
+  port dom.exists { selector = "main.desktop:not([hidden]) #notes-performance-window:not([hidden]) #performance-workloads[open]" } → open
+  when $open:
+    let input = { tag = "p"; children = list("Server workload readings are unavailable.") }
+    call html.serialize
+    let content = $result
+    try:
+      port browser.property { ref = "#performance-workload-sort"; name = "value" } → sort
+      port browser.request { path = "/workspace/server-workloads"; query = { sort = $sort } } → response
+      when includes(list(401, 403), $response.status):
+        let input = { tag = "p"; children = list("Sign in as a Platform operator to see server workloads.") }
+        call html.serialize
+        let content = $result
+      when eq($response.status, 200):
+        port json.parse { text = $response.body } → report
+        call tools.workloadReport
+        let content = $result
+    catch fault:
+      let input = { tag = "p"; children = list("Server workload readings are unavailable.") }
+      call html.serialize
+      let content = $result
+    port browser.content { ref = "#performance-workload-results"; html = $content } → _
+
+process tools.workloadReport:
+  let activities = $report.activities
+  let areas = if($report.storage, $report.storage.areas, list())
+  let values = append(map($activities, "row", $row.memoryBytes), map($areas, "row", $row.bytes))
+  let values = filter($values, "size", not(eq($size, null)))
+  let sizes = {}
+  when count($values):
+    port browser.formatFileSizes { bytes = $values } → sizes
+  fold $activities as row; computeRows starts list():
+    let cpu = "Sampling…"
+    when not(eq($row.cpuTenths, null)):
+      port number.calculate { operation = "divide"; values = list($row.cpuTenths, 10) } → percent
+      let cpu = concat($percent, "%")
+    let memory = at($sizes, concat("", $row.memoryBytes))
+    yield append($computeRows, list({ tag = "tr"; children = list(
+      { tag = "th"; attrs = { scope = "row" }; children = list($row.activity) },
+      { tag = "td"; children = list($cpu) },
+      { tag = "td"; children = list(if($memory, $memory.short, "Unavailable")) },
+      { tag = "td"; children = list($row.groups) }
+    ) })) → computeRows
+  fold $areas as row; storageRows starts list():
+    let disk = at($sizes, concat("", $row.bytes))
+    let size = if($disk, concat($disk.short, if($row.partial, " measured (partial)", "")), "Unavailable")
+    yield append($storageRows, list({ tag = "tr"; children = list(
+      { tag = "th"; attrs = { scope = "row" }; children = list($row.activity) },
+      { tag = "td"; children = list($size) }
+    ) })) → storageRows
+  let input = { tag = "div"; children = list(
+    { tag = "p"; children = list("CPU is share of all host cores. Memory includes cache charged to each service group. Shared services and development sessions are grouped where AppDev has no per-activity measurement.") },
+    if(count($computeRows), { tag = "table"; children = list(
+      { tag = "caption"; children = list("CPU and memory by activity") },
+      { tag = "thead"; children = list({ tag = "tr"; children = map(list("Activity", "CPU", "Memory", "Groups"), "label",
+        { tag = "th"; attrs = { scope = "col" }; children = list($label) }) }) },
+      { tag = "tbody"; children = $computeRows }
+    ) }, { tag = "p"; children = list("CPU and memory accounting is unavailable.") }),
+    if($report.sampledAt, { tag = "small"; children = list("CPU and memory sampled ", $report.sampledAt) }, null),
+    { tag = "h3"; children = list("Disk by storage area") },
+    if(count($storageRows), { tag = "table"; children = list(
+      { tag = "thead"; children = list({ tag = "tr"; children = list(
+        { tag = "th"; attrs = { scope = "col" }; children = list("Storage area") },
+        { tag = "th"; attrs = { scope = "col" }; children = list("Allocated") }
+      ) }) }, { tag = "tbody"; children = $storageRows }
+    ) }, { tag = "p"; children = list("No disk breakdown has been collected yet.") }),
+    if($report.storage, { tag = "p"; children = list("Measured ", $report.storage.sampledAt, ". Covers the listed folders. Other storage is included in the overall disk reading above.") }, null)
+  ) }
+  call html.serialize

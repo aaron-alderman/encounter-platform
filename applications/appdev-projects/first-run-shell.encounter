@@ -1,0 +1,1427 @@
+process-module "temple/surface-process-module/1"
+
+process onboarding.styles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = ".onboarding-dialog"; declarations = list(
+      { property = "width"; value = "min(760px,calc(100vw - 24px))" },
+      { property = "max-height"; value = "calc(100dvh - 24px)" },
+      { property = "padding"; value = "4px" },
+      { property = "border"; value = "0" },
+      { property = "background"; value = "var(--gray,var(--chrome,#d4d0c8))" },
+      { property = "color"; value = "var(--ink,#16172a)" },
+      { property = "box-shadow"; value = "var(--raised)" },
+      { property = "font"; value = "14px/1.45 Tahoma,Verdana,sans-serif" }
+    ) },
+    { selector = ".onboarding-dialog[open]"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-direction"; value = "column" },
+      { property = "overflow"; value = "hidden" }
+    ) },
+    { selector = ".onboarding-heading,.onboarding-navigation,.onboarding-footer"; declarations = list(
+      { property = "flex"; value = "none" }
+    ) },
+    { selector = ".onboarding-heading"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "8px 10px" },
+      { property = "background"; value = "var(--navy,#080c62)" },
+      { property = "color"; value = "white" },
+      { property = "font-size"; value = "16px" }
+    ) },
+    { selector = ".onboarding-navigation"; declarations = list(
+      { property = "padding"; value = "4px 12px 10px" },
+      { property = "border-bottom"; value = "1px solid #79777c" }
+    ) },
+    { selector = ".onboarding-navigation p"; declarations = list(
+      { property = "margin"; value = "6px 0" }
+    ) },
+    { selector = ".onboarding-navigation nav"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "8px" }
+    ) },
+    { selector = ".onboarding-body"; declarations = list(
+      { property = "min-height"; value = "0" },
+      { property = "padding"; value = "12px" },
+      { property = "overflow"; value = "auto" },
+      { property = "overscroll-behavior"; value = "contain" }
+    ) },
+    { selector = ".onboarding-body h3"; declarations = list(
+      { property = "margin"; value = "0 0 8px" },
+      { property = "font-size"; value = "20px" }
+    ) },
+    { selector = ".onboarding-body h3[tabindex]:focus"; declarations = list(
+      { property = "outline"; value = "none" }
+    ) },
+    { selector = ".onboarding-body p"; declarations = list(
+      { property = "margin"; value = "8px 0" }
+    ) },
+    { selector = ".onboarding-dialog button,.onboarding-dialog .onboarding-link,.onboarding-launch"; declarations = list(
+      { property = "display"; value = "inline-block" },
+      { property = "min-height"; value = "44px" },
+      { property = "padding"; value = "10px 12px" },
+      { property = "border"; value = "0" },
+      { property = "background"; value = "var(--gray,var(--chrome,#d4d0c8))" },
+      { property = "color"; value = "var(--ink,#16172a)" },
+      { property = "box-shadow"; value = "var(--raised)" },
+      { property = "font"; value = "inherit" },
+      { property = "text-decoration"; value = "none" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = ".onboarding-dialog button:focus-visible,.onboarding-dialog a:focus-visible,.onboarding-launch:focus-visible"; declarations = list(
+      { property = "outline"; value = "2px dotted var(--navy,#080c62)" },
+      { property = "outline-offset"; value = "-4px" }
+    ) },
+    { selector = ".onboarding-dialog nav button[aria-pressed=true]"; declarations = list(
+      { property = "box-shadow"; value = "var(--sunken,var(--well))" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".onboarding-layout"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "minmax(0,2fr) minmax(0,1fr)" },
+      { property = "gap"; value = "16px" }
+    ) },
+    { selector = ".onboarding-example h4"; declarations = list(
+      { property = "margin"; value = "0 0 8px" }
+    ) },
+    { selector = ".onboarding-example"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "padding"; value = "14px" },
+      { property = "background"; value = "#fffef3" },
+      { property = "box-shadow"; value = "var(--sunken,var(--well))" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".onboarding-tip"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".onboarding-tip h4"; declarations = list(
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".onboarding-form"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "gap"; value = "8px" }
+    ) },
+    { selector = ".onboarding-form label"; declarations = list(
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".onboarding-form textarea"; declarations = list(
+      { property = "box-sizing"; value = "border-box" },
+      { property = "width"; value = "100%" },
+      { property = "min-width"; value = "0" },
+      { property = "min-height"; value = "130px" },
+      { property = "padding"; value = "10px" },
+      { property = "border"; value = "1px solid #79777c" },
+      { property = "background"; value = "#fffef8" },
+      { property = "color"; value = "#16172a" },
+      { property = "font"; value = "inherit" },
+      { property = "resize"; value = "vertical" }
+    ) },
+    { selector = ".onboarding-actions"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "8px" },
+      { property = "margin-top"; value = "16px" }
+    ) },
+    { selector = ".onboarding-dialog .onboarding-primary"; declarations = list(
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".onboarding-feedback"; declarations = list(
+      { property = "flex"; value = "none" },
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "6px 12px" },
+      { property = "background"; value = "#fffef3" }
+    ) },
+    { selector = ".onboarding-feedback:empty"; declarations = list(
+      { property = "padding"; value = "0" }
+    ) },
+    { selector = ".onboarding-footer"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "justify-content"; value = "space-between" },
+      { property = "gap"; value = "8px" },
+      { property = "padding"; value = "8px 12px" },
+      { property = "border-top"; value = "1px solid #79777c" }
+    ) },
+    { selector = ".onboarding-card"; declarations = list(
+      { property = "padding"; value = "10px 14px" },
+      { property = "background"; value = "#fffef3" },
+      { property = "color"; value = "var(--ink,#16172a)" },
+      { property = "box-shadow"; value = "var(--sunken,var(--well))" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".onboarding-card p"; declarations = list(
+      { property = "margin"; value = "4px 0" }
+    ) },
+    { selector = ".onboarding-card summary"; declarations = list(
+      { property = "font-weight"; value = "bold" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = ".onboarding-shortcuts"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "flex-wrap"; value = "wrap" },
+      { property = "gap"; value = "8px" }
+    ) },
+    { selector = ".onboarding-dialog::backdrop"; declarations = list(
+      { property = "background"; value = "#10172b88" }
+    ) },
+    { selector = ".formation-resource"; declarations = list(
+      { property = "margin-block"; value = "6px" },
+      { property = "padding-inline"; value = "10px" },
+      { property = "background"; value = "#fffef3" },
+      { property = "box-shadow"; value = "var(--sunken,var(--well))" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = ".formation-resource[open]"; declarations = list(
+      { property = "padding-bottom"; value = "10px" }
+    ) },
+    { selector = ".formation-resource summary"; declarations = list(
+      { property = "display"; value = "list-item" },
+      { property = "list-style"; value = "revert" },
+      { property = "cursor"; value = "pointer" },
+      { property = "font-weight"; value = "bold" },
+      { property = "min-height"; value = "44px" },
+      { property = "padding-block"; value = "10px" }
+    ) },
+    { selector = ".formation-resource summary::-webkit-details-marker"; declarations = list(
+      { property = "display"; value = "revert" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:620px)"; rules = list(
+      { selector = ".onboarding-layout"; declarations = list(
+        { property = "grid-template-columns"; value = "minmax(0,1fr)" }
+      ) },
+      { selector = ".onboarding-tip"; declarations = list(
+        { property = "border-top"; value = "1px solid #79777c" },
+        { property = "padding-top"; value = "10px" }
+      ) },
+      { selector = ".onboarding-body"; declarations = list(
+        { property = "padding"; value = "10px" }
+      ) },
+      { selector = ".onboarding-navigation nav"; declarations = list(
+        { property = "display"; value = "grid" },
+        { property = "grid-template-columns"; value = "repeat(4,minmax(0,1fr))" },
+        { property = "gap"; value = "4px" }
+      ) },
+      { selector = ".onboarding-navigation nav button"; declarations = list(
+        { property = "padding"; value = "6px 4px" },
+        { property = "line-height"; value = "1.15" }
+      ) },
+      { selector = ".onboarding-form textarea"; declarations = list(
+        { property = "min-height"; value = "110px" },
+        { property = "font-size"; value = "16px" }
+      ) }
+    ) },
+    { atRule = "media"; prelude = "(max-width:620px) and (max-height:650px)"; rules = list(
+      { selector = ".onboarding-form textarea"; declarations = list(
+        { property = "height"; value = "84px" },
+        { property = "min-height"; value = "84px" }
+      ) }
+    ) }
+  )
+  call css.renderCompactRules
+
+
+process formation.workgardenExercise:
+  let result = {
+    id = "workgarden"; title = "Workgarden · Complete a real work item";
+    route = "home/catalogue/hosted-workgarden"; href = "/life-board/workgarden/";
+    actions = list("workgarden.add-item", "workgarden.toggle-item");
+    proof = "After returning from Work’s Start menu, the same item still says Completed. Choose Reopen to move it back to Open.";
+    body = { tag = "p"; children = list(
+    "Use a task you actually need to do. In Workgarden, enter its title under ",
+    { tag = "strong"; children = list("New work item") },
+    " and choose ",
+    { tag = "strong"; children = list("Add work item") },
+    ". After doing the task, choose ",
+    { tag = "strong"; children = list("Complete") },
+    "."
+  ) }
+  }
+
+process formation.workspaceExercises:
+  let result = list(
+    { id = "front-gate"; title = "Front Gate · Check a service over SSH";
+      route = "home/desktop/front-gate"; relatedRoute = "home/catalogue/front-gate"; launch = "front-gate";
+      actions = list("open Front Gate", "set Auto-refresh", "check recovery");
+      body = { tag = "p"; children = list(
+    "Connect the existing Front Gate SSH tunnel. Open Front Gate, choose an interval under ",
+    { tag = "strong"; children = list("Auto-refresh") },
+    ", and watch the countdown. If your connection drops, reconnect the tunnel and wait for the next scheduled check."
+  ) };
+      proof = "The next successful check clears Stale and updates Checked in the same window.";
+      link = { tag = "a"; attrs = { class = "onboarding-link"; href = "/workspace/home?open=front-gate" }; children = list("Open Front Gate") };
+      verification = "workspace-routes/verify.py --front-gate-only" },
+    { id = "file-manager"; title = "File Manager · Inspect a published record";
+      route = "home/desktop/file-manager"; launch = "file-manager";
+      actions = list("open File Manager", "open a REL record", "search facts", "view REL source");
+      body = { tag = "p"; children = list(
+    "In Home, open ",
+    { tag = "strong"; children = list("File Manager") },
+    " from the desktop. Choose an available collection and open a ",
+    { tag = "strong"; children = list(".rel") },
+    " file. Use ",
+    { tag = "strong"; children = list("Search facts") },
+    " to filter the table, then open ",
+    { tag = "strong"; children = list("REL source preview") },
+    " to read the original record."
+  ) };
+      proof = "The filtered facts and the source preview show the same published record.";
+      link = "";
+      verification = "workspace-routes/verify.py --front-gate-only" },
+    { id = "service-manager"; title = "Service Manager · Follow a scheduled run";
+      route = "home/desktop/service-manager"; launch = "service-manager";
+      actions = list("inspect Schedules", "open a published receipt", "return to the same service");
+      body = { tag = "p"; children = list(
+    "Open ",
+    { tag = "strong"; children = list("Service Manager") },
+    " in Home. In ",
+    { tag = "strong"; children = list("Schedules") },
+    ", choose a timer and inspect its last service execution. If an execution has a published receipt, choose ",
+    { tag = "strong"; children = list("Open receipt in File Manager") },
+    ". Use ",
+    { tag = "strong"; children = list("Back to Service Manager") },
+    " when you finish."
+  ) };
+      proof = "You return to the same service, and the receipt shows that execution’s outcome.";
+      link = ""; verification = "workspace-routes/verify.py --front-gate-only" },
+    { id = "file-viewer"; title = "File Viewer · Read a release record";
+      route = "home/desktop/file-viewer"; launch = "file-viewer";
+      actions = list("open File Viewer from File Manager", "search facts", "return to the folder");
+      body = { tag = "p"; children = list(
+    "In File Manager, select a published REL file. Choose ",
+    { tag = "strong"; children = list("Open in File Viewer") },
+    " for that file and search for a fact. Close File Viewer to return to the source folder in File Manager."
+  ) };
+      proof = "The separate viewer displays the selected record and leaves the original folder available.";
+      link = ""; verification = "workspace-routes/verify.py --front-gate-only" },
+    { id = "performance"; title = "Performance · Inspect a launch timing";
+      route = "home/desktop/performance"; launch = "performance";
+      actions = list("open an app", "review Recent launches", "copy recent launches");
+      body = { tag = "p"; children = list(
+    "Open an Operations tool, such as ",
+    { tag = "strong"; children = list("Network Settings") },
+    ", then open ",
+    { tag = "strong"; children = list("Performance") },
+    ". In ",
+    { tag = "strong"; children = list("Recent launches") },
+    ", select the launch and inspect its queue, request and total timings. Choose ",
+    { tag = "strong"; children = list("Copy recent launches") },
+    " to share the readings."
+  ) };
+      proof = "The copied rows identify the launch and its outcome.";
+      link = ""; verification = "workspace-routes/verify.py --front-gate-only" },
+    { id = "about"; title = "About this build · Identify your Home release";
+      route = "home/desktop/about"; launch = "about";
+      actions = list("open build badge", "read Build ID", "read Home fingerprint");
+      body = { tag = "p"; children = list(
+    "Select the build badge in Home to open ",
+    { tag = "strong"; children = list("About this build") },
+    ". Read the full ",
+    { tag = "strong"; children = list("Build ID") },
+    " and ",
+    { tag = "strong"; children = list("Home fingerprint") },
+    " when you need to identify the release someone is using."
+  ) };
+      proof = "The About window shows the build and its complete SHA-256 fingerprint.";
+      link = ""; verification = "workspace-routes/verify.py --formation-tools" },
+    { id = "assurance"; title = "Assurance · Look up an app’s declared purpose";
+      route = "home/desktop/assurance"; launch = "assurance";
+      actions = list("open Assurance", "read App semantic definitions", "inspect an app finding");
+      body = { tag = "p"; children = list(
+    "Open ",
+    { tag = "strong"; children = list("Assurance") },
+    " under Operations. In ",
+    { tag = "strong"; children = list("App semantic definitions") },
+    ", find an app, read its declared purpose and launch destination, then review its finding before relying on it."
+  ) };
+      proof = "The published row ties the app’s purpose and review finding to its launch destination.";
+      link = ""; verification = "workspace-routes/verify.py --formation-tools" },
+    { id = "semantic-compiler"; title = "Semantic Compiler · Dry-run a route";
+      route = "home/desktop/semantic-compiler"; relatedRoute = "home/catalogue/semantic-compiler"; launch = "semantic-compiler";
+      actions = list("open Semantic Compiler", "run route dry run", "read coverage and conflict");
+      body = { tag = "p"; children = list(
+    "Open ",
+    { tag = "strong"; children = list("Semantic Compiler") },
+    " from Apps and choose ",
+    { tag = "strong"; children = list("Dry run") },
+    ". Run it with the published route in ",
+    { tag = "strong"; children = list("Proposed route") },
+    " to see its coverage. Try ",
+    { tag = "code"; children = list("/workspace/mobile/") },
+    " to see why an existing workspace route is reserved."
+  ) };
+      proof = "The result changes in the Compiler window, while the published Home route stays in place.";
+      link = ""; verification = "workspace-routes/verify.py --formation-tools" },
+    { id = "store"; title = "Store · Reopen an app release";
+      route = "home/desktop/store"; relatedRoute = "home/catalogue/store"; launch = "store";
+      actions = list("open Store", "sign in to Store", "reopen a release");
+      body = { tag = "p"; children = list(
+    "Open ",
+    { tag = "strong"; children = list("Store") },
+    " from Work and select a release. If Store asks you to sign in, complete the sign-in in this tab. Reopen the release when you return to Work."
+  ) };
+      proof = "After sign-in, Work returns to the selected release.";
+      link = { tag = "a"; attrs = { class = "onboarding-link"; href = "/workspace/work?open=store" }; children = list("Open Store in Work") };
+      verification = "workspace-routes/verify.py --store-only" },
+    { id = "customization"; title = "Customization · Try a readable typeface";
+      route = "home/desktop/design"; launch = "design";
+      actions = list("change Preview typeface", "switch Preview example", "reset");
+      body = { tag = "p"; children = list(
+    "In Home Operations, open ",
+    { tag = "strong"; children = list("Sourcery OS Customization") },
+    ". Choose ",
+    { tag = "strong"; children = list("Atkinson Hyperlegible Next") },
+    " under ",
+    { tag = "strong"; children = list("Preview typeface") },
+    ". Switch ",
+    { tag = "strong"; children = list("Preview example") },
+    " to Service Manager, then choose ",
+    { tag = "strong"; children = list("Reset to standard") },
+    "."
+  ) };
+      proof = "The chosen typeface carries across the two previews. Reset returns the preview to Standard.";
+      link = ""; verification = "workspace-routes/verify.py --formation-desktop" },
+    { id = "steward"; title = "Steward · Check which role you are using";
+      route = "home/desktop/acting-as"; launch = "acting-as";
+      actions = list("open Steward", "read Current role", "check Verified identity", "inspect Decision history");
+      body = { tag = "p"; children = list(
+    "Sign in to Temple, then open ",
+    { tag = "strong"; children = list("Steward") },
+    " in Home Operations. Check ",
+    { tag = "strong"; children = list("Current role") },
+    " and ",
+    { tag = "strong"; children = list("Verified identity") },
+    ". Read ",
+    { tag = "strong"; children = list("Notes authority") },
+    " and inspect ",
+    { tag = "strong"; children = list("Decision history") },
+    " before using steward controls."
+  ) };
+      proof = "The window shows the signed-in Temple identity, its current role, and any decisions visible to that role.";
+      link = ""; verification = "workspace-routes/verify.py --formation-desktop" },
+    { id = "certificates"; title = "Certificates · Check a managed certificate";
+      route = "home/desktop/certificates"; launch = "certificates";
+      actions = list("open Certificates", "compare leaf and issuer expiry", "read Certificate details");
+      body = { tag = "p"; children = list(
+    "While acting as Sourcery steward, open ",
+    { tag = "strong"; children = list("Certificates") },
+    " in Home Operations. Choose a Managed Super CRM entry. Compare ",
+    { tag = "strong"; children = list("Certificate expires") },
+    " and ",
+    { tag = "strong"; children = list("Issuer expires") },
+    ", then expand ",
+    { tag = "strong"; children = list("Certificate details") },
+    " to read the public SHA-256 fingerprint."
+  ) };
+      proof = "The named certificate shows two expiry timestamps and a public fingerprint. You can check these without starting a renewal.";
+      link = ""; verification = "workspace-routes/verify.py --formation-desktop" },
+    { id = "keys"; title = "Keys · Match a public fingerprint";
+      route = "home/desktop/keys"; launch = "keys";
+      actions = list("open Keys", "locate managed key", "read algorithm and fingerprint");
+      body = { tag = "p"; children = list(
+    "While acting as Sourcery steward, open ",
+    { tag = "strong"; children = list("Keys") },
+    " in Home Operations. Find the managed key you need to identify. Read its ",
+    { tag = "strong"; children = list("Algorithm") },
+    " and compare its ",
+    { tag = "strong"; children = list("Public key fingerprint (SHA-256)") },
+    " with the value you were given."
+  ) };
+      proof = "The inventory identifies the key by name, algorithm and public fingerprint.";
+      link = ""; verification = "workspace-routes/verify.py --formation-desktop" },
+    { id = "temple-manager"; title = "Temple Manager · Reopen Memory and Journal";
+      route = "home/desktop/temple-manager"; launch = "temple-manager";
+      actions = list("open signed-in Temple Manager", "edit a memory in its editor", "refresh and reopen the saved records");
+      body = { tag = "p"; children = list(
+    "Sign in to Temple, then open ",
+    { tag = "strong"; children = list("Temple Manager") },
+    " in Home Operations. ",
+    { tag = "strong"; children = list("Memory") },
+    " shows your saved note and ",
+    { tag = "strong"; children = list("Journal") },
+    " shows your Field visit entry. Use ",
+    { tag = "strong"; children = list("Edit memory") },
+    " to save something you want to remember, then choose ",
+    { tag = "strong"; children = list("File → Refresh saved records") },
+    " in Temple Manager."
+  ) };
+      proof = "Temple Manager shows the same signed-in records that reopen in Work and can be sent to Mobile.";
+      link = ""; verification = "workspace-routes/verify.py --system-journeys" },
+    { id = "game-zone"; title = "Game Zone · Follow a release into Store";
+      route = "home/desktop/game"; relatedRoute = "home/catalogue/game"; launch = "game";
+      actions = list("open Game Zone", "inspect Tools", "open Publish and install");
+      body = { tag = "p"; children = list(
+    "Open ",
+    { tag = "strong"; children = list("Game Zone") },
+    " in Home Apps and sign in if prompted. Use ",
+    { tag = "strong"; children = list("Tools") },
+    " to locate the One World editor. Switch to ",
+    { tag = "strong"; children = list("Operations") },
+    " and choose ",
+    { tag = "strong"; children = list("Publish and install") },
+    " to open Store, where releases and receipts are listed."
+  ) };
+      proof = "Game Zone opens the real Store window from its Operations tab.";
+      link = ""; verification = "workspace-routes/verify.py --formation-desktop" })
+
+process formation.workExercises:
+  let result = list(
+    { id = "work-performance"; title = "Work Performance · Read a live host sample";
+      route = "work/capability/performance"; capabilities = list("window.open", "performance.observe");
+      actions = list("open Performance from Work Start", "read Host uptime", "wait for a second sample");
+      body = { tag = "p"; children = list(
+    "In Work, open ",
+    { tag = "strong"; children = list("Performance") },
+    " from Start. Compare ",
+    { tag = "strong"; children = list("Host uptime") },
+    " and ",
+    { tag = "strong"; children = list("Browser connections") },
+    " across two readings. Use the second reading to interpret the CPU chart."
+  ) };
+      proof = "The sample timestamp advances while Performance is open.";
+      link = ""; verification = "workspace-routes/verify.py --system-journeys" },
+    { id = "super-crm"; title = "Super CRM · Reopen a case and its activity";
+      route = "work/capability/super-crm"; relatedRoute = "home/catalogue/hosted-super-crm";
+      capabilities = list("window.open", "super-crm.open-case");
+      href = "/life-board/super-crm/";
+      actions = list("open Super CRM", "open a case", "save a case update", "reopen the case");
+      body = { tag = "p"; children = list(
+    "Open ",
+    { tag = "strong"; children = list("Super CRM") },
+    " from Work Start. In a CRM workspace you are allowed to edit, add an account if needed, then open a case. Choose a ",
+    { tag = "strong"; children = list("Case stage") },
+    ", enter an ",
+    { tag = "strong"; children = list("Activity note") },
+    ", and choose ",
+    { tag = "strong"; children = list("Save case update") },
+    ". Return through Start and find the same case."
+  ) };
+      proof = "The reopened case retains the stage and the activity note.";
+      link = { tag = "a"; attrs = { class = "onboarding-link"; href = "/life-board/super-crm/" }; children = list("Open Super CRM") };
+      verification = "workspace-routes/verify.py --system-journeys" },
+    { id = "decompiler"; title = "Semantic Decompiler · Inspect a retained document";
+      route = "work/capability/decompiler"; relatedRoute = "home/catalogue/hosted-decompiler";
+      capabilities = list("window.open", "decompiler.inspect-source");
+      href = "/life-board/decompiler/";
+      actions = list("open Semantic Decompiler", "find a retained document", "page retained replies");
+      body = { tag = "p"; children = list(
+    "Open ",
+    { tag = "strong"; children = list("Semantic Decompiler") },
+    " from Work Start. Find ",
+    { tag = "strong"; children = list("CSV import and time entry") },
+    " under ",
+    { tag = "strong"; children = list("Document") },
+    ". In a narrow window, open ",
+    { tag = "strong"; children = list("Replies") },
+    " and page forward and back to inspect the retained record."
+  ) };
+      proof = "The document is available in the Work mount, and paging returns to the starting reply.";
+      link = { tag = "a"; attrs = { class = "onboarding-link"; href = "/life-board/decompiler/" }; children = list("Open Semantic Decompiler") };
+      verification = "workspace-routes/verify.py --system-journeys; encounter appdev-decompiler-check APP_ROOT paging 24220" },
+    { id = "temple-mailbox"; title = "Temple Mailbox · Review and send an appointment";
+      route = "work/capability/temple"; capabilities = list("window.open", "temple.review-appointment", "temple.send-offer");
+      actions = list("open the coordinating Mailbox", "review the UTC appointment", "approve and send");
+      body = { tag = "p"; children = list(
+    "In enrolled managed Work, sign in to ",
+    { tag = "strong"; children = list("Temple Mailbox") },
+    " as the coordinating operator and open an appointment case. Enter the UTC appointment and private scheduling reason, then choose ",
+    { tag = "strong"; children = list("Review schedule") },
+    ". Check the recipient, time and case revision before choosing ",
+    { tag = "strong"; children = list("Approve and send") },
+    "."
+  ) };
+      proof = "The coordinating Mailbox records the reviewed proposal and the signed exchange.";
+      link = ""; verification = "workspace-routes/verify.py --system-journeys" },
+    { id = "temple-receiving"; title = "Receiving Temple · Accept a delivered appointment";
+      route = "work/capability/temple-receiving"; capabilities = list("window.open", "temple.accept-offer");
+      actions = list("open the receiving inbox", "read the delivered proposal", "accept the appointment");
+      body = { tag = "p"; children = list(
+    "Open ",
+    { tag = "strong"; children = list("Receiving Temple") },
+    " in enrolled managed Work and sign in as the receiving operator. Open the delivered offer, check its UTC time and choose ",
+    { tag = "strong"; children = list("Accept appointment") },
+    " when it suits. Reopen the Mailbox in each Temple to check the confirmed time."
+  ) };
+      proof = "Both independently stored Mailboxes retain the same confirmation.";
+      link = ""; verification = "workspace-routes/verify.py --system-journeys" },
+    { id = "work-today"; title = "Today · Read the confirmed appointment";
+      route = "work/capability/today"; capabilities = list("window.open", "calendar.read-appointment");
+      actions = list("open Today in managed Work", "check the confirmed appointment and CRM revision");
+      body = { tag = "p"; children = list(
+    "Open ",
+    { tag = "strong"; children = list("Today") },
+    " in enrolled managed Work as the coordinating operator. Read the ",
+    { tag = "strong"; children = list("Confirmed appointment") },
+    " and current CRM revision. Use ",
+    { tag = "strong"; children = list("Refresh calendar") },
+    " to reread the coordinating Temple's ledger."
+  ) };
+      proof = "Today shows the same UTC appointment as the two Mailboxes.";
+      link = ""; verification = "workspace-routes/verify.py --system-journeys" },
+    { id = "work-assurance"; title = "Work Assurance · Trace the signed appointment exchange";
+      route = "work/capability/assurance"; capabilities = list("window.open", "app.receipts");
+      actions = list("open Assurance in managed Work", "read the Appointment Saga", "inspect the signed receipt");
+      body = { tag = "p"; children = list(
+    "Open ",
+    { tag = "strong"; children = list("Assurance") },
+    " in enrolled managed Work as the coordinating operator. In ",
+    { tag = "strong"; children = list("Appointment Saga") },
+    ", find the confirmed exchange and choose ",
+    { tag = "strong"; children = list("Inspect signed receipt") },
+    ". Use the workflow ID to follow the exchange across the local events and signed evidence."
+  ) };
+      proof = "Assurance identifies a verified signed receipt and its workflow.";
+      link = ""; verification = "workspace-routes/verify.py --system-journeys" })
+
+process formation.gameExercises:
+  let result = list(
+    { id = "game-hub"; title = "Game Hub · Choose a world or tool"; route = "work/capability/game-hub";
+      href = "/game/"; actions = list("open Game Hub from Work", "choose Worlds & tools");
+      body = { tag = "p"; children = list(
+    "Open ",
+    { tag = "strong"; children = list("Game Hub") },
+    " from Work Start and sign in if prompted. In ",
+    { tag = "strong"; children = list("Worlds & tools") },
+    ", choose One World to work on the transport simulation or choose a Foundry to work on its inputs."
+  ) };
+      proof = "The signed-in hub shows the actual tools for the current game release." },
+    { id = "one-world"; title = "One World · Advance the shipment simulation"; route = "home/catalogue/one-world";
+      href = "/game/one-world/"; actions = list("read current simulation clock", "advance simulation", "reopen the world");
+      body = { tag = "p"; children = list(
+    "In a world you are allowed to edit, find ",
+    { tag = "strong"; children = list("Dispatch and simulation clock") },
+    ". Choose a step and select ",
+    { tag = "strong"; children = list("Advance simulation") },
+    ". Reopen the same world to check the new clock reading."
+  ) };
+      proof = "The world retains the accepted simulation clock after reopening." },
+    { id = "asset-foundry"; title = "Asset Foundry · Save a recipe draft"; route = "home/catalogue/asset-foundry";
+      href = "/game/asset-foundry/"; actions = list("choose an asset", "edit recipe directly", "save draft", "reopen the asset");
+      body = { tag = "p"; children = list(
+    "Choose an asset you are allowed to edit. Expand ",
+    { tag = "strong"; children = list("Edit recipe directly") },
+    ", keep the ",
+    { tag = "code"; children = list("/asset/label") },
+    " path, enter a descriptive label in JSON quotes, and choose ",
+    { tag = "strong"; children = list("Save draft edit") },
+    ". Reopen that asset to check the draft."
+  ) };
+      proof = "The draft retains the edited label without creating a new candidate build." },
+    { id = "landscape-foundry"; title = "Landscape Foundry · Preview a terrain edit"; route = "home/catalogue/landscape-foundry";
+      href = "/game/landscape-foundry/"; actions = list("inspect terrain revision", "preview a terrain edit", "commit and reopen an approved edit");
+      body = { tag = "p"; children = list(
+    "In the coastal project, read the current ",
+    { tag = "strong"; children = list("Terrain revision") },
+    ". Choose a tool and use ",
+    { tag = "strong"; children = list("Preview terrain edit") },
+    ". If you are allowed to edit this project and want to keep the preview, give a ",
+    { tag = "strong"; children = list("Commit reason") },
+    " and choose ",
+    { tag = "strong"; children = list("Commit terrain edit") },
+    ". Reopen the project to check the new revision."
+  ) };
+      proof = "Preview leaves the saved revision unchanged. A committed edit keeps its new revision after reopening." },
+    { id = "design-references"; title = "Design References · Inspect a full-size reference"; route = "home/catalogue/design-references";
+      href = "/game/design-references/"; actions = list("choose a retained reference", "open its full-size image");
+      body = { tag = "p"; children = list(
+    "In ",
+    { tag = "strong"; children = list("Design References") },
+    ", choose ",
+    { tag = "strong"; children = list("Global Logistics Tycoon") },
+    " and open its original image. Compare the scale of the transport network with the retained mining and urban transport references."
+  ) };
+      proof = "The selected reference opens at its full published resolution." },
+    { id = "game-folio"; title = "Recent Folio · Find the shipment controls"; route = "home/catalogue/game-folio";
+      href = "/game/recent-folio/"; actions = list("open Dispatch an export shipment", "follow the link to the simulation controls");
+      body = { tag = "p"; children = list(
+    "In ",
+    { tag = "strong"; children = list("Recent Folio") },
+    ", find ",
+    { tag = "strong"; children = list("Dispatch an export shipment") },
+    ". Choose ",
+    { tag = "strong"; children = list("Open dispatch controls") },
+    " to go straight to that part of the current One World simulation."
+  ) };
+      proof = "The activity link opens One World's dispatch controls." })
+
+process formation.signedInExercises:
+  let result = list(
+    { id = "steward-handover"; title = "Steward handover · Transfer the office with a receipt";
+      route = "home/catalogue/handover-demo"; href = "/identity-management/?view=acting-as";
+      actions = list("offer the steward office", "review and accept as the verified recipient", "reopen decision history");
+      body = { tag = "p"; children = list(
+    "Use a Temple office you are authorised to transfer. In Home Apps, open ",
+    { tag = "strong"; children = list("Steward handover") },
+    ", act as the steward, and enter the incoming steward’s verified Google email. The incoming steward opens the same app, reviews any read-only X Mentions delegation, and accepts. Check ",
+    { tag = "strong"; children = list("Decision history") },
+    " and the new term. For practice with sample accounts, use ",
+    { tag = "strong"; children = list("Try the handover demo") },
+    " in the Steward window."
+  ) };
+      proof = "The incoming steward holds the next term and both participants can reopen the acceptance receipt.";
+      link = "" },
+    { id = "environments"; title = "Environments · Set your signed-in start workspace";
+      route = "home/catalogue/environments-demo"; href = "/workspace/home#start-flyout-workspaces";
+      actions = list("open Workspaces", "save a default environment", "return to the root in a new browser");
+      body = { tag = "p"; children = list(
+    "Sign in, open ",
+    { tag = "strong"; children = list("Environments") },
+    " in Home Apps, and choose ",
+    { tag = "strong"; children = list("Default environment") },
+    " in the Workspaces menu. Select Home, Work, or Mobile and choose ",
+    { tag = "strong"; children = list("Save") },
+    ". Open the Sourcery OS address again from a new signed-in browser. Set your original choice again if this was an exercise."
+  ) };
+      proof = "Sourcery OS opens your saved environment and leaves the other account’s choice independent.";
+      link = "" },
+    { id = "north-river"; title = "North River · Create and reopen a project";
+      route = "home/catalogue/north-river"; href = "/encounter-pilot/";
+      actions = list("open North River", "create a project", "reopen the project");
+      body = { tag = "p"; children = list(
+    "Open ",
+    { tag = "strong"; children = list("North River") },
+    " in a pilot workspace you are allowed to edit. If the workspace needs a project, choose ",
+    { tag = "strong"; children = list("Create project") },
+    ", enter a ",
+    { tag = "strong"; children = list("Project name") },
+    ", and save it. Return to ",
+    { tag = "strong"; children = list("Project home") },
+    " to check the name and its tasks."
+  ) };
+      proof = "The named project still opens when you return to North River.";
+      link = { tag = "a"; attrs = { class = "onboarding-link"; href = "/encounter-pilot/" }; children = list("Open North River") } },
+    { id = "claimipedia"; title = "Claimipedia · Trace a claim to its linked evidence";
+      route = "home/catalogue/claimipedia-notes"; href = "/identity-management/?view=claimipedia";
+      actions = list("search released claims", "open linked evidence", "reopen the same evidence");
+      body = { tag = "p"; children = list(
+    "Sign in to Temple and open ",
+    { tag = "strong"; children = list("Claimipedia") },
+    " in Home Apps. Search released claims for a distinctive term such as ",
+    { tag = "strong"; children = list("identity") },
+    ". Choose a result with ",
+    { tag = "strong"; children = list("Linked evidence") },
+    " and read its direction and provenance. Use that record to identify what the release actually links to the claim."
+  ) };
+      proof = "The same claim and evidence record can be reopened from the published release.";
+      link = "" },
+    { id = "aster"; title = "Ask Aster · Create a scoped conversation";
+      route = "home/catalogue/aster"; href = "/identity-management/?view=aster";
+      actions = list("open Ask Aster as the steward", "select Claimipedia scope", "create a conversation", "reopen it");
+      body = { tag = "p"; children = list(
+    "Sign in with your approved Temple steward account and open ",
+    { tag = "strong"; children = list("Ask Aster") },
+    " from Home Apps. Under ",
+    { tag = "strong"; children = list("New conversation") },
+    ", choose ",
+    { tag = "strong"; children = list("Claimipedia") },
+    " as the conversation context. Select ",
+    { tag = "strong"; children = list("Create conversation") },
+    ". Open it again under ",
+    { tag = "strong"; children = list("Conversations") },
+    " to confirm the saved scope."
+  ) };
+      proof = "The same conversation reopens with Claimipedia scope under its owner's account.";
+      link = "" },
+    { id = "x-inbox"; title = "X Inbox · Refresh a delivered mention";
+      route = "home/catalogue/x-inbox"; relatedRoute = "home/catalogue/x-mentions";
+      href = "/identity-management/?view=mentions#x-inbox"; relatedHref = "/identity-management/?view=mentions";
+      actions = list("check connection state", "refresh the inbox", "read the saved mention");
+      body = { tag = "p"; children = list(
+    "In Home Social, open ",
+    { tag = "strong"; children = list("X Mentions") },
+    " to check the connected account, then open ",
+    { tag = "strong"; children = list("X Inbox") },
+    ". Choose ",
+    { tag = "strong"; children = list("Refresh inbox") },
+    " and check the author and time on a received mention. These steps use the current connection. They do not register a webhook or change the subscription."
+  ) };
+      proof = "A delivered mention remains available when you reopen the inbox.";
+      link = "" })
+
+process formation.portfolioExercises:
+  let result = list(
+    { id = "foundry"; title = "Foundry Mine to Port · Compare a capacity scenario";
+      actions = list("run a baseline", "select Port expansion", "run and reopen the scenario");
+      body = { tag = "p"; children = list(
+    "In an editable Foundry workspace, run the baseline. Choose ",
+    { tag = "strong"; children = list("Port expansion") },
+    " in ",
+    { tag = "strong"; children = list("Scenario") },
+    " and select ",
+    { tag = "strong"; children = list("Run scenario") },
+    ". Compare throughput and the named bottleneck."
+  ) };
+      proof = "Reopening retains the selected scenario, throughput, and bottleneck." },
+    { id = "industrial-optimizer"; title = "Industrial Systems Optimizer · Compare a demand limit";
+      actions = list("name a scenario", "change Saleable demand", "compare and reopen");
+      body = { tag = "p"; children = list(
+    "Enter a ",
+    { tag = "strong"; children = list("Scenario name") },
+    " and choose ",
+    { tag = "strong"; children = list("Compare scenario") },
+    ". In a second comparison, lower ",
+    { tag = "strong"; children = list("Saleable demand (t/h)") },
+    " and inspect whether any build step improves throughput within that limit."
+  ) };
+      proof = "The saved comparison retains the throughput and whether the baseline was selected." },
+    { id = "super-crm"; title = "Super CRM preview · Review an appointment before scheduling";
+      actions = list("open a case", "review an appointment", "confirm the occurrence change");
+      body = { tag = "p"; children = list(
+    "In a preview case you are allowed to edit, enter an ",
+    { tag = "strong"; children = list("Appointment") },
+    " and ",
+    { tag = "strong"; children = list("Scheduling reason") },
+    ". Choose ",
+    { tag = "strong"; children = list("Review schedule") },
+    ", then check the proposed change before choosing ",
+    { tag = "strong"; children = list("Confirm occurrence change") },
+    "."
+  ) };
+      proof = "The case remains unscheduled during review and shows Scheduled after confirmation." },
+    { id = "timesheet"; title = "Timesheet · Follow a time entry to approval";
+      actions = list("log time", "submit entry", "approve entry", "reopen");
+      body = { tag = "p"; children = list(
+    "In a timesheet workspace you are allowed to edit, fill ",
+    { tag = "strong"; children = list("Person") },
+    ", ",
+    { tag = "strong"; children = list("Project") },
+    ", ",
+    { tag = "strong"; children = list("Work date") },
+    ", and ",
+    { tag = "strong"; children = list("Hours") },
+    ", then choose ",
+    { tag = "strong"; children = list("Log time") },
+    ". Use ",
+    { tag = "strong"; children = list("Submit entry") },
+    " and have an approved reviewer use ",
+    { tag = "strong"; children = list("Approve entry") },
+    "."
+  ) };
+      proof = "The approved total includes the entry after reopening." },
+    { id = "tradie"; title = "Tradie · Track an enquiry to completion";
+      actions = list("record enquiry", "claim enquiry", "complete enquiry", "reopen");
+      body = { tag = "p"; children = list(
+    "Record an enquiry with the customer, site, and work requested. Enter the ",
+    { tag = "strong"; children = list("Operator") },
+    " before choosing ",
+    { tag = "strong"; children = list("Claim enquiry") },
+    ". Once the work is done, enter a ",
+    { tag = "strong"; children = list("Completion note") },
+    " and choose ",
+    { tag = "strong"; children = list("Complete enquiry") },
+    "."
+  ) };
+      proof = "The enquiry retains its completed status and operator after reopening." },
+    { id = "outcome-value"; title = "Outcome Value Navigator · Tie a measured result to evidence";
+      actions = list("open an outcome case", "record evidence", "record and reopen measured outcome");
+      body = { tag = "p"; children = list(
+    "Open an outcome case. Use ",
+    { tag = "strong"; children = list("Record evidence") },
+    " for the constraint and demand observations. Enter the observed tonnes, contribution, intervention cost, measurement source, and affected-party outcome before choosing ",
+    { tag = "strong"; children = list("Record measured outcome") },
+    "."
+  ) };
+      proof = "The reopened case retains the reported contribution and measurement source." },
+    { id = "relationship"; title = "Relationship Navigator · Check private and shared views";
+      actions = list("open a repair process", "use an invitation in a second browser", "make a shared offer");
+      body = { tag = "p"; children = list(
+    "Use a practice process with a consenting participant. Save a ",
+    { tag = "strong"; children = list("Private account") },
+    " as Participant A. Use the one-time invitation in a separate browser as Participant B, then enter a ",
+    { tag = "strong"; children = list("Shared offer") },
+    "."
+  ) };
+      proof = "Participant B can share an offer while Participant A's private account stays private." },
+    { id = "world"; title = "World · Compare capability constraints";
+      actions = list("run a development scenario", "change Scenario", "reopen the result");
+      body = { tag = "p"; children = list(
+    "Choose ",
+    { tag = "strong"; children = list("Run development scenario") },
+    ", then select the scenario without data governance and run it again. Check which capability is blocked and what the report says about governed data stock."
+  ) };
+      proof = "The reopened report keeps the selected scenario and its recorded constraints." },
+    { id = "sourcery-desktop"; title = "Sourcery Desktop · Keep a claim's revision history";
+      actions = list("record claim", "add evidence", "save a revision", "export complete history");
+      body = { tag = "p"; children = list(
+    "In a workspace you are allowed to edit, record a practice claim and its scope. Open ",
+    { tag = "strong"; children = list("Edit, add evidence or withdraw") },
+    ", add a reference, then revise the claim with a reason. Use ",
+    { tag = "strong"; children = list("Export complete history as REL") },
+    " to inspect the retained versions."
+  ) };
+      proof = "The REL history contains the original evidence and the versioned claim." })
+
+process formation.workPreviewLaunches:
+  let result = list(
+    { id = "sourcery-desktop"; title = "Sourcery Desktop"; href = "http://sourcery-desktop.localhost:24220/" },
+    { id = "worldwright-unified"; title = "Worldwright Unified"; href = "http://worldwright-unified.localhost:24220/" },
+    { id = "usewords"; title = "Usewords"; href = "http://usewords.localhost:24220/" },
+    { id = "harborboard"; title = "Harborboard"; href = "http://harborboard.localhost:24220/" })
+
+process formation.platformPreviewExercises:
+  let result = list(
+    { id = "workgarden"; title = "Workgarden preview · Track a work item";
+      href = "http://workgarden.localhost:24220/";
+      actions = list("add work item", "complete work item", "reopen");
+      body = { tag = "p"; children = list(
+    "In an editable Workgarden board, enter a real task under ",
+    { tag = "strong"; children = list("New work item") },
+    ". Add it and choose ",
+    { tag = "strong"; children = list("Complete") },
+    " once the work is done. Reopen the preview to check its status."
+  ) };
+      proof = "The same item remains Completed after reopening." },
+    { id = "harborboard"; title = "Harborboard · Show why work is blocked";
+      href = "http://harborboard.localhost:24220/";
+      actions = list("add epic and work items", "save the plan", "add a dependency", "reopen");
+      body = { tag = "p"; children = list(
+    "In an editable board, add an epic and two work items. Open ",
+    { tag = "strong"; children = list("Edit plan and dependencies") },
+    " on the item that must wait, assign its ",
+    { tag = "strong"; children = list("Epic") },
+    ", and choose ",
+    { tag = "strong"; children = list("Save plan") },
+    ". Use ",
+    { tag = "strong"; children = list("Depends on") },
+    " to add the prerequisite."
+  ) };
+      proof = "The board retains the epic and the blocked item names its prerequisite after reopening." },
+    { id = "game-hub"; title = "Game Hub preview · Find the One World workbench";
+      href = "http://game-hub.localhost:24220/";
+      actions = list("open the local Game Hub", "locate the current One World controls");
+      body = { tag = "p"; children = list(
+    "Open the local ",
+    { tag = "strong"; children = list("Game Hub") },
+    " and find ",
+    { tag = "strong"; children = list("One World") },
+    " under ",
+    { tag = "strong"; children = list("Worlds & tools") },
+    ". Locate ",
+    { tag = "strong"; children = list("Dispatch and simulation clock") },
+    ". Use the One World guide when you want to run and reopen a simulation."
+  ) };
+      proof = "The preview serves the working One World controls through Front Gate." },
+    { id = "evaluation"; title = "Model Evaluation · Compare a retained report with its receipt";
+      href = "http://evaluation.localhost:24220/";
+      actions = list("read PageRank vs lexical", "locate a retained trial", "download receipt");
+      body = { tag = "p"; children = list(
+    "In ",
+    { tag = "strong"; children = list("Model evaluation") },
+    ", read ",
+    { tag = "strong"; children = list("PageRank vs lexical") },
+    ", then choose a named trial under North River or Usewords Lightning. Use ",
+    { tag = "strong"; children = list("Download receipt") },
+    " to keep the report's published REL evidence."
+  ) };
+      proof = "The report has named trials and its receipt identifies the Encounter evaluation protocol." },
+    { id = "decompiler"; title = "Semantic Decompiler preview · Inspect retained replies";
+      href = "http://localhost:24220/decompiler";
+      actions = list("open the local Semantic Decompiler", "select retained document", "page replies");
+      body = { tag = "p"; children = list(
+    "Find ",
+    { tag = "strong"; children = list("CSV import and time entry") },
+    " under ",
+    { tag = "strong"; children = list("Document") },
+    ". On a phone or in a narrow window, open ",
+    { tag = "strong"; children = list("Replies") },
+    " and page forward and back while keeping the document selected."
+  ) };
+      proof = "The reply counter advances and returns to its starting value." },
+    { id = "claimipedia"; title = "Claimipedia Editorial · Stage an exact reviewed revision";
+      href = "http://claimipedia.localhost:24220/";
+      actions = list("save a private draft", "accept the draft locally", "approve its exact revision", "stage with a curator", "reopen the private candidate");
+      body = { tag = "p"; children = list(
+    "In an editorial workspace you are authorized to use, open an assigned claim. Save the wording and revision reason, then choose ",
+    { tag = "strong"; children = list("Accept draft locally") },
+    ". An authorized reviewer approves that exact revision for private staging. An authorized curator opens the same claim and selects ",
+    { tag = "strong"; children = list("Stage publication candidate") },
+    "."
+  ) };
+      proof = "The curator can reopen the staged candidate and still see the existing released revision separately." },
+    { id = "claimipedia-native"; title = "Claimipedia Native Pilot · Check a released revision";
+      href = "http://claimipedia-native.localhost:24220/";
+      actions = list("search released claims", "open a claim by its identifier", "reopen the released revision");
+      body = { tag = "p"; children = list(
+    "Enter ",
+    { tag = "strong"; children = list("endorser") },
+    " in ",
+    { tag = "strong"; children = list("Search claims") },
+    " and choose ",
+    { tag = "strong"; children = list("Search") },
+    ". Open ",
+    { tag = "strong"; children = list("clm_AI_INQUIRY_SOURCE_NOT_ENDORSER") },
+    " and read its entry under ",
+    { tag = "strong"; children = list("Released revisions") },
+    ". Reload the claim to check the version and scope."
+  ) };
+      proof = "The same identifier opens the same released revision." },
+    { id = "claimipedia-surfaces"; title = "Claimipedia Surface Preview · Trace a claim and its authority";
+      href = "http://claimipedia-surfaces.localhost:24220/";
+      actions = list("search released claims", "inspect released revision history", "open atlas dependencies", "inspect the knowledge ecology");
+      body = { tag = "p"; children = list(
+    "Search claims for ",
+    { tag = "strong"; children = list("endorser") },
+    " and open the result about source, recorder, mapper, and endorser roles. Read ",
+    { tag = "strong"; children = list("Released revision history") },
+    ". Then open ",
+    { tag = "strong"; children = list("Claim atlas → Dependencies") },
+    " and ",
+    { tag = "strong"; children = list("Knowledge ecology → Typed relationships") },
+    " to see how claim relationships and the responsibilities of each service are represented."
+  ) };
+      proof = "The claim reopens with the same revision history, the atlas opens its dependency view, and the ecology names the relationship between Aster and Claimipedia." },
+    { id = "usewords"; title = "Usewords · Create and reopen a matter";
+      href = "http://usewords.localhost:24220/";
+      actions = list("describe a matter", "save it", "reopen it in the same browser");
+      body = { tag = "p"; children = list(
+    "In ",
+    { tag = "strong"; children = list("My matters") },
+    ", give a real issue a name and describe what matters to you. Choose ",
+    { tag = "strong"; children = list("Create a matter") },
+    ". Reload the page and use ",
+    { tag = "strong"; children = list("Your local matters") },
+    " to find it again. Usewords saves matters in the current browser profile and uses local personas for collaboration practice."
+  ) };
+      proof = "The same local matter and description are available after reload." },
+    { id = "worldwright-unified"; title = "Worldwright Unified · Follow and reopen a trail";
+      href = "http://worldwright-unified.localhost:24220/";
+      actions = list("enter the garden of possibilities", "try two linked quantities", "follow the narrowing trail", "reopen the expedition");
+      body = { tag = "p"; children = list(
+    "Open ",
+    { tag = "strong"; children = list("The garden of possibilities") },
+    ". Try ",
+    { tag = "strong"; children = list("Two linked quantities") },
+    " and compare it with ",
+    { tag = "strong"; children = list("A shared limit") },
+    ". Follow ",
+    { tag = "strong"; children = list("What survives the narrowing?") },
+    ", then reload and open the expedition from the discovery count."
+  ) };
+      proof = "The expedition remembers both places in the same browser profile." },
+    { id = "context-hub"; title = "Context Hub · Reopen a retained evidence comparison";
+      href = "http://context-hub.localhost:24220/";
+      actions = list("open a frozen episode", "compare baseline and adaptive context", "reopen the retained revision");
+      body = { tag = "p"; children = list(
+    "Open a frozen audit episode for ",
+    { tag = "strong"; children = list("Does the Jordan face inside the relation quotient select its own positive order?") },
+    " and note its episode ID. Read the corpus, policy and admitted-state pins, then compare the sources under ",
+    { tag = "strong"; children = list("Baseline") },
+    " and ",
+    { tag = "strong"; children = list("Adaptive") },
+    ". Reload and select the same episode to recover its evidence and comparison."
+  ) };
+      proof = "The same episode revision, pins and comparison reopen." },
+    { id = "worldbox"; title = "Worldbox K1 · Inspect the current world and its recovery points";
+      href = "http://worldbox.localhost:24220/";
+      actions = list("open the current world", "fingerprint numeric state", "list and reopen a retained checkpoint");
+      body = { tag = "p"; children = list(
+    "Wait for the Encounter workspace, then choose ",
+    { tag = "strong"; children = list("Open current world") },
+    ". Use ",
+    { tag = "strong"; children = list("Fingerprint numeric state") },
+    " to read the current state hash. Choose ",
+    { tag = "strong"; children = list("List runtime checkpoints") },
+    " to see existing recovery points and their definition binding. Reload and list the checkpoints again."
+  ) };
+      proof = "The current world reports a state hash and the same retained checkpoint can be found again." },
+    { id = "encounter"; title = "Encounter Authoring · Review and reopen a change";
+      href = "http://encounter.localhost:24220/";
+      actions = list("write an intent", "review without changing the accepted revision", "accept the change", "reopen its decision receipt");
+      body = { tag = "p"; children = list(
+    "In a new authoring workspace you may edit, describe what you want to make and why. Fill in the reason, target and goal, then choose ",
+    { tag = "strong"; children = list("Review one change") },
+    ". Check the proposal and choose ",
+    { tag = "strong"; children = list("Accept this change") },
+    ". Open ",
+    { tag = "strong"; children = list("History") },
+    " and expand the revision's ",
+    { tag = "strong"; children = list("Decision receipt") },
+    "."
+  ) };
+      proof = "Review leaves the revision unchanged. Acceptance advances it once, and History retains the decision and source hash." },
+    { id = "creator-studio"; title = "Creator Studio · Preview and save a document version";
+      href = "http://creator-studio.localhost:24220/";
+      actions = list("open an editable document", "preview a title change", "save the version", "reopen the accepted document");
+      body = { tag = "p"; children = list(
+    "In an editable project, open ",
+    { tag = "strong"; children = list("Documents") },
+    ". Choose a document and give it a descriptive title. Select ",
+    { tag = "strong"; children = list("Preview changes") },
+    " to keep the edit as a draft. Choose ",
+    { tag = "strong"; children = list("Save version") },
+    ", then reopen the project in the same browser profile and find the document by its new title."
+  ) };
+      proof = "Preview leaves the accepted version unchanged. The saved version and its document title survive reload." })
+
+process formation.publicationExercises:
+  let result = list(
+    { id = "personal-site"; title = "Personal website · Follow the Atlas";
+      actions = list("open Atlas / Map", "read the map", "reopen the same page");
+      body = { tag = "p"; children = list(
+    "Open the personal website preview and choose ",
+    { tag = "strong"; children = list("Atlas / Map") },
+    ". Use the map to find how the site groups evidence, boundaries and repair. Reopen the map when you need that overview again."
+  ) };
+      proof = "Atlas / Map opens the published page with its map sections." },
+    { id = "pyramid-material-history"; title = "The Missing Middle · Follow a worked investigation";
+      actions = list("open a worked case", "inspect its corpus records", "reopen the case");
+      body = { tag = "p"; children = list(
+    "In ",
+    { tag = "strong"; children = list("The Missing Middle") },
+    ", choose ",
+    { tag = "strong"; children = list("First identify the stone") },
+    ". Read the current conclusion alongside ",
+    { tag = "strong"; children = list("Connected corpus records") },
+    " and the traversal graph. Use the record links to see what the published investigation cites."
+  ) };
+      proof = "The worked case and its corpus references remain available at the same URL." },
+    { id = "the-field"; title = "The Field · Inspect a synthetic household period";
+      actions = list("change scenario", "read usable capacity", "move Inspect period");
+      body = { tag = "p"; children = list(
+    "Set ",
+    { tag = "strong"; children = list("Change scenario") },
+    " to ",
+    { tag = "strong"; children = list("B has fewer usable hours") },
+    ". Check the displayed ",
+    { tag = "strong"; children = list("Usable capacity") },
+    ", then move ",
+    { tag = "strong"; children = list("Inspect period") },
+    " to read a different period. These are results from the published synthetic household explorer."
+  ) };
+      proof = "The scenario changes the displayed inputs and the period control updates its reading." },
+    { id = "perth-encounter"; title = "Perth Encounter · Find the published guardrails";
+      actions = list("open Guardrails", "inspect the stewardship sections", "reopen");
+      body = { tag = "p"; children = list(
+    "Open the Perth Encounter preview and choose ",
+    { tag = "strong"; children = list("Guardrails") },
+    ". Find ",
+    { tag = "strong"; children = list("Operational independence") },
+    " and the section on how the treasury is governed. Return to the same page when reviewing the event's published boundaries."
+  ) };
+      proof = "The Guardrails link opens the same published sections on return." },
+    { id = "church-on-air"; title = "Church on Air · Inspect shots in the retained cut";
+      actions = list("read the current shot title", "advance one shot", "return to the same shot");
+      body = { tag = "p"; children = list(
+    "Open the broadcast studio and check the title in ",
+    { tag = "strong"; children = list("Shot inspector") },
+    ". Use ",
+    { tag = "strong"; children = list("Next shot") },
+    " to inspect the next part of the cut, then ",
+    { tag = "strong"; children = list("Previous shot") },
+    " to return. The MP4 link identifies the retained output."
+  ) };
+      proof = "The inspector title changes and returns to the original shot." },
+    { id = "worldwright-platform"; title = "Worldwright Platform · Find the first-world instructions";
+      actions = list("follow Make your first world", "read the guide", "reopen");
+      body = { tag = "p"; children = list(
+    "Open the Worldwright Platform preview. Choose ",
+    { tag = "strong"; children = list("Make your first world") },
+    " to open the published starting instructions. Reopen that guide when you are ready to build."
+  ) };
+      proof = "The published link opens the Make your world guide at a stable address." })
+
+process formation.helpShell:
+  call formation.workgardenExercise
+  let exercise = $result
+  let workgarden = { id = $exercise.id; title = $exercise.title;
+    body = list($exercise.body, { tag = "p"; children = list($exercise.proof) },
+      { tag = "a"; attrs = { class = "onboarding-link"; href = $exercise.href }; children = list("Open Workgarden") }) }
+  call formation.workspaceExercises
+  let homeExercises = $result
+  call formation.workExercises
+  let workExercises = $result
+  call formation.gameExercises
+  let gameExercises = map($result, "exercise", {
+    id = $exercise.id; title = $exercise.title; body = $exercise.body; proof = $exercise.proof;
+    link = { tag = "a"; attrs = { class = "onboarding-link"; href = $exercise.href }; children = list("Open app") } })
+  call formation.signedInExercises
+  let signedInExercises = $result
+  call formation.workPreviewLaunches
+  let workPreviews = map($result, "app", $app.id)
+  call formation.portfolioExercises
+  let portfolioExercises = map($result, "exercise", {
+    id = concat("preview-", $exercise.id); title = $exercise.title;
+    body = list({ tag = "p"; children = list("Connect your Front Gate SSH tunnel before opening this preview.",
+      if(includes($workPreviews, $exercise.id), " You can also open it from Work Start.", "")) }, $exercise.body);
+    proof = $exercise.proof;
+    link = { tag = "a"; attrs = { class = "onboarding-link"; href = concat("http://", $exercise.id, ".localhost:24220/"); target = "_blank"; rel = "noopener" }; children = list("Open preview") } })
+  call formation.platformPreviewExercises
+  let platformPreviews = map($result, "exercise", {
+    id = concat("preview-", $exercise.id); title = $exercise.title;
+    body = list({ tag = "p"; children = list("Connect your Front Gate SSH tunnel before opening this preview.",
+      if(includes($workPreviews, $exercise.id), " You can also open it from Work Start.", "")) }, $exercise.body);
+    proof = $exercise.proof;
+    link = { tag = "a"; attrs = { class = "onboarding-link"; href = $exercise.href; target = "_blank"; rel = "noopener" }; children = list("Open preview") } })
+  call formation.publicationExercises
+  let publications = map($result, "exercise", {
+    id = concat("preview-", $exercise.id); title = $exercise.title;
+    body = list({ tag = "p"; children = list("Connect your Front Gate SSH tunnel before opening this preview.") }, $exercise.body);
+    proof = $exercise.proof;
+    link = { tag = "a"; attrs = { class = "onboarding-link"; href = concat("http://", $exercise.id, ".localhost:24220/"); target = "_blank"; rel = "noopener" }; children = list("Open preview") } })
+  let workspaceExercises = map(append(append($homeExercises, $workExercises), append(append($gameExercises, $signedInExercises), append(append($portfolioExercises, $platformPreviews), $publications))), "exercise", { id = $exercise.id; title = $exercise.title;
+    body = list($exercise.body, { tag = "p"; children = list($exercise.proof) }, $exercise.link) })
+  let resources = append(list(
+    $workgarden,
+    { id = "shop"; title = "Shop · Request an item and track it"; body = list(
+      { tag = "p"; children = list(
+        "Sign in, choose an item and quantity, then select ",
+        { tag = "strong"; children = list("Request order") },
+        ". Reopen Shop and find the same order under ",
+        { tag = "strong"; children = list("Your orders") },
+        ". The order history records each change. You can cancel while the request is still pending."
+      ) },
+      { tag = "p"; children = list("Shop operators can publish an item, accept a request, and mark it fulfilled.") },
+      { tag = "a"; attrs = { class = "onboarding-link"; href = "/shop/" }; children = list("Open Shop") }
+    ) },
+    { id = "mobile"; title = "Mobile · Prepare a trip"; body = list(
+      { tag = "p"; children = list("Pair your phone from a desktop. Choose your saved Formation note or Field visit task, then send the trip. On the phone, turn on airplane mode and reopen Mobile. Reconnect so the phone can send its offline receipt.") },
+      { tag = "p"; children = list("The desktop shows Ready only after every selected item reopened offline on that phone.") },
+      { tag = "a"; attrs = { class = "onboarding-link"; href = "/workspace/mobile" }; children = list("Prepare a trip") }
+    ) },
+    { id = "starter"; title = "Starter guide"; body = list(
+      { tag = "p"; children = list("Formation starts with a short walkthrough of Home and Work. Save a note, complete a work item in Workgarden, and decide whether to pin Work in Home. You can return whenever you need to.") },
+      { tag = "button"; attrs = { type = "button"; "data-first-run" = "resume" }; children = list("Open Getting started") }
+    ) },
+    { id = "navigation"; title = "General help · Home, Work and Inbox"; body = list(
+      { tag = "p"; children = list("Use the environment controls in the top bar. Home is your personal starting place. Work brings together the apps you use for your projects.") },
+      { tag = "p"; children = list("Open Inbox from Start to review incoming requests and follow them to their environment. Platform has two apps, Platform Inbox for incoming requests and Work items for development. A sign-in prompt means the queue needs an approved identity.") }
+    ) },
+    { id = "note"; title = "Contextual help · My first note"; body = list(
+      { tag = "p"; children = list(
+        "Replace the example text with something you want to remember, then choose ",
+        { tag = "strong"; children = list("Save note") },
+        ". Reopen ",
+        { tag = "strong"; children = list("My first note") },
+        " from the Getting started card in Home or Work."
+      ) },
+      { tag = "p"; children = list(
+        "If you have an older draft, open ",
+        { tag = "strong"; children = list("Browser draft") },
+        " to review it or import it into your signed-in records."
+      ) }
+    ) },
+    { id = "project"; title = "Contextual help · Field visit"; body = list(
+      { tag = "p"; children = list(
+        "Read the sample brief and write one task someone could do next. Choose ",
+        { tag = "strong"; children = list("Save project task") },
+        ". You can pick up that saved task from the walkthrough’s final screen or the Getting started card."
+      ) },
+      { tag = "p"; children = list("Try naming a person or a deadline, such as “Ask the site manager to confirm access by Friday.”") }
+    ) },
+    { id = "setup"; title = "Contextual help · Customize and save"; body = list(
+      { tag = "p"; children = list(
+        "Under ",
+        { tag = "strong"; children = list("Make it yours") },
+        ", choose ",
+        { tag = "strong"; children = list("Pin Work shortcut") },
+        " to add a direct link in Home. Return to the same screen to remove it."
+      ) },
+      { tag = "p"; children = list("Signed-in records are available on your other devices. Work shortcut preferences stay in this browser.") }
+    ) },
+    { id = "tips"; title = "Tips and tricks"; body = { tag = "ul"; children = list(
+      { tag = "li"; children = list("Use the Getting started card to reopen a specific example without going through every step.") },
+      { tag = "li"; children = list("Turn a vague reminder into a task by adding a person, place, or date.") },
+      { tag = "li"; children = list("On desktop, press Escape to close Help and return to the screen you were using.") }
+    ) } }
+  ), $workspaceExercises)
+  let articles = map($resources, "resource", { tag = "details"; attrs = {
+    class = "formation-resource"; name = "formation-resource"; id = concat("formation-resource-", $resource.id)
+  }; children = list({ tag = "summary"; children = list($resource.title) }, $resource.body) })
+  let result = { tag = "dialog"; attrs = { id = "formation-help"; class = "onboarding-dialog"; "aria-labelledby" = "formation-help-title" }; children = list(
+    { tag = "h2"; attrs = { class = "onboarding-heading"; id = "formation-help-title" }; children = list("Help · Sourcery OS") },
+    { tag = "div"; attrs = { class = "onboarding-body" }; children = list(
+      { tag = "h3"; attrs = { id = "formation-help-index"; tabindex = "-1" }; children = list("Formation resources") },
+      { tag = "p"; children = list("Start with the guide, look up an action, or try a tip when you need it.") },
+      $articles
+    ) },
+    { tag = "form"; attrs = { method = "dialog"; class = "onboarding-footer" }; children = list(
+      { tag = "button"; children = list("Close Help") }
+    ) }
+  ) }
+
+process onboarding.shell:
+  call formation.workgardenExercise
+  let workgarden = $result
+  let shortcut = if($work, null, { tag = "p"; attrs = { id = "first-run-pin"; hidden = true }; children = list(
+    { tag = "a"; attrs = { href = "/workspace/work" }; children = list("Open Work") }
+  ) })
+  let dismiss = if($work, null, { tag = "button"; attrs = { class = "workspace-action onboarding-dismiss"; type = "button"; "data-first-run" = "dismiss-home"; "aria-label" = "Dismiss Getting started in Home" }; children = list("×") })
+  let input = { tag = "section"; attrs = { class = "onboarding-card"; "aria-label" = "Getting started" }; children = list(
+    { tag = "details"; children = list(
+      { tag = "summary"; children = list(concat("Getting started in ", if($work, "Work", "Home"))) },
+      { tag = "p"; children = list(if($work, "Try the Field visit starter project and save a task you can come back to.", "Start with a note and reopen it from Home or Work.")) },
+      { tag = "div"; attrs = { class = "onboarding-shortcuts" }; children = list(
+        { tag = "button"; attrs = { class = "onboarding-launch"; type = "button"; "data-first-run" = "resume" }; children = list("Getting started") },
+        { tag = "button"; attrs = { class = "onboarding-launch"; type = "button"; "data-first-run" = "note" }; children = list("My first note") },
+        { tag = "button"; attrs = { class = "onboarding-launch"; type = "button"; "data-first-run" = "project" }; children = list("Field visit · starter project") }
+      ) }
+    ) },
+    concat($dismiss, $shortcut)
+  ) }
+  call html.serialize
+  let card = $result
+  let dialog = { tag = "dialog"; attrs = { id = "first-run-dialog"; class = "onboarding-dialog"; "aria-labelledby" = "first-run-title" }; children = list(
+    { tag = "h2"; attrs = { class = "onboarding-heading"; id = "first-run-title" }; children = list("Formation · Getting started") },
+    { tag = "div"; attrs = { class = "onboarding-navigation" }; children = list(
+      { tag = "p"; attrs = { id = "first-run-progress"; role = "status" } },
+      { tag = "nav"; attrs = { "aria-label" = "Getting started steps" }; children = list(
+        { tag = "button"; attrs = { type = "button"; "data-first-run" = "home" }; children = list("Home") },
+        { tag = "button"; attrs = { type = "button"; "data-first-run" = "work" }; children = list("Work") },
+        { tag = "button"; attrs = { type = "button"; "data-first-run" = "customize" }; children = list("Make it yours") },
+        { tag = "button"; attrs = { type = "button"; "data-first-run" = "finish" }; children = list("Next step") }
+      ) }
+    ) },
+    { tag = "div"; attrs = { class = "onboarding-body" }; children = list(
+      { tag = "section"; attrs = { id = "first-run-home"; class = "onboarding-step"; hidden = true; "aria-labelledby" = "first-run-home-title" }; children = list(
+        { tag = "h3"; attrs = { id = "first-run-home-title"; tabindex = "-1" }; children = list("A place to begin") },
+        { tag = "div"; attrs = { class = "onboarding-layout" }; children = list(
+          { tag = "article"; attrs = { class = "onboarding-example" }; children = list(
+            { tag = "h4"; children = list("Your Home") },
+            { tag = "p"; children = list("Keep a note, collect a reference, or pick up something you were doing. Home is your personal starting place.") },
+            { tag = "p"; children = list("We have left a welcome note for you. Open it, change a line, and save something you want to remember.") },
+            { tag = "button"; attrs = { type = "button"; class = "onboarding-primary"; "data-first-run" = "note" }; children = list("Open the welcome note") }
+          ) },
+          { tag = "aside"; attrs = { class = "onboarding-tip" }; children = list(
+            { tag = "h4"; children = list("Finding your way") },
+            { tag = "p"; children = list("Use Home and Work in the top bar to change environment. Apps give you a place to do something within that context.") },
+            { tag = "p"; children = list("Your examples stay available under Getting started.") },
+            { tag = "button"; attrs = { type = "button"; "data-formation-help" = "navigation" }; children = list("Help with Home and Work") }
+          ) }
+        ) },
+        { tag = "div"; attrs = { class = "onboarding-actions" }; children = list(
+          { tag = "button"; attrs = { type = "button"; "data-first-run" = "work" }; children = list("Explore Work") }
+        ) }
+      ) },
+      { tag = "section"; attrs = { id = "first-run-work"; class = "onboarding-step"; hidden = true; "aria-labelledby" = "first-run-work-title" }; children = list(
+        { tag = "h3"; attrs = { id = "first-run-work-title"; tabindex = "-1" }; children = list("Give your work a context") },
+        { tag = "div"; attrs = { class = "onboarding-layout" }; children = list(
+          { tag = "article"; attrs = { class = "onboarding-example" }; children = list(
+            { tag = "h4"; children = list($workgarden.title) },
+            $workgarden.body,
+            { tag = "p"; children = list($workgarden.proof) },
+            { tag = "a"; attrs = { id = "first-run-workgarden"; class = "onboarding-link onboarding-primary"; href = $workgarden.href }; children = list("Open Workgarden") }
+          ) },
+          { tag = "aside"; attrs = { class = "onboarding-tip" }; children = list(
+            { tag = "h4"; children = list("Field visit drafts") },
+            { tag = "p"; children = list("Use the starter project to revisit a Field visit draft.") },
+            { tag = "button"; attrs = { type = "button"; "data-first-run" = "project" }; children = list("Open the starter project") }
+          ) }
+        ) },
+        { tag = "div"; attrs = { class = "onboarding-actions" }; children = list(
+          { tag = "button"; attrs = { type = "button"; "data-first-run" = "customize" }; children = list("Make it yours") }
+        ) }
+      ) },
+      { tag = "section"; attrs = { id = "first-run-note"; class = "onboarding-step"; hidden = true; "aria-labelledby" = "first-run-note-title" }; children = list(
+        { tag = "h3"; attrs = { id = "first-run-note-title"; tabindex = "-1" }; children = list("My first note") },
+        { tag = "div"; attrs = { class = "onboarding-layout" }; children = list(
+          { tag = "div"; children = list(
+            { tag = "form"; attrs = { class = "onboarding-example onboarding-form"; "data-first-run-form" = "note" }; children = list(
+              { tag = "label"; attrs = { for = "first-run-note-text" }; children = list("Something to remember") },
+              { tag = "textarea"; attrs = { id = "first-run-note-text"; maxlength = "2000"; rows = "6"; required = true; "aria-describedby" = "first-run-note-help" } },
+              { tag = "button"; attrs = { class = "onboarding-primary"; type = "submit" }; children = list("Save note") },
+              { tag = "p"; attrs = { id = "first-run-note-help" }; children = list("Sign in to save this record across devices. Signed-out drafts stay in this browser.") }
+            ) },
+            { tag = "details"; attrs = { id = "first-run-note-legacy"; hidden = true }; children = list(
+              { tag = "summary"; children = list("Browser draft") },
+              { tag = "p"; attrs = { id = "first-run-note-legacy-text" } },
+              { tag = "button"; attrs = { type = "button"; id = "first-run-note-import"; "data-first-run" = "import-note" }; children = list("Import browser draft") }
+            ) }
+          ) },
+          { tag = "aside"; attrs = { class = "onboarding-tip" }; children = list(
+            { tag = "h4"; children = list("A useful first habit") },
+            { tag = "p"; children = list("Capture one concrete next action while it is fresh. You can reopen this note from Getting started in Home or Work.") },
+            { tag = "p"; children = list("Keep the note short so you can scan it when you come back.") },
+            { tag = "button"; attrs = { type = "button"; "data-formation-help" = "note" }; children = list("Help with this note") }
+          ) }
+        ) },
+        { tag = "div"; attrs = { class = "onboarding-actions" }; children = list(
+          { tag = "button"; attrs = { type = "button"; "data-first-run" = "work" }; children = list("Explore Work") },
+          { tag = "button"; attrs = { type = "button"; "data-first-run" = "customize" }; children = list("Make it yours") }
+        ) }
+      ) },
+      { tag = "section"; attrs = { id = "first-run-project"; class = "onboarding-step"; hidden = true; "aria-labelledby" = "first-run-project-title" }; children = list(
+        { tag = "h3"; attrs = { id = "first-run-project-title"; tabindex = "-1" }; children = list("Field visit · starter project") },
+        { tag = "div"; attrs = { class = "onboarding-layout" }; children = list(
+          { tag = "div"; children = list(
+            { tag = "form"; attrs = { class = "onboarding-example onboarding-form"; "data-first-run-form" = "project" }; children = list(
+              { tag = "p"; children = list(
+                { tag = "strong"; children = list("Example brief") },
+                " · Arrange a field visit. Confirm the location, read the background, and agree on a time with the team."
+              ) },
+              { tag = "label"; attrs = { for = "first-run-project-text" }; children = list("Your next task") },
+              { tag = "textarea"; attrs = { id = "first-run-project-text"; maxlength = "2000"; rows = "4"; required = true; "aria-describedby" = "first-run-project-help" } },
+              { tag = "button"; attrs = { type = "submit"; class = "onboarding-primary" }; children = list("Save project task") },
+              { tag = "p"; attrs = { id = "first-run-project-help" }; children = list("Sign in to save this record across devices. Signed-out drafts stay in this browser.") }
+            ) },
+            { tag = "details"; attrs = { id = "first-run-project-legacy"; hidden = true }; children = list(
+              { tag = "summary"; children = list("Browser draft") },
+              { tag = "p"; attrs = { id = "first-run-project-legacy-text" } },
+              { tag = "button"; attrs = { type = "button"; id = "first-run-project-import"; "data-first-run" = "import-project" }; children = list("Import browser draft") }
+            ) }
+          ) },
+          { tag = "aside"; attrs = { class = "onboarding-tip" }; children = list(
+            { tag = "h4"; children = list("From practice to your work") },
+            { tag = "p"; children = list("Use the apps in Work for your projects. This example lets you practice writing a next task.") },
+            { tag = "button"; attrs = { type = "button"; "data-formation-help" = "project" }; children = list("Help with this project") },
+            concat(" ", if($work, null, { tag = "a"; attrs = { class = "onboarding-link"; href = "/workspace/work" }; children = list("Open Work") }))
+          ) }
+        ) },
+        { tag = "div"; attrs = { class = "onboarding-actions" }; children = list(
+          { tag = "button"; attrs = { type = "button"; "data-first-run" = "customize" }; children = list("Make it yours") }
+        ) }
+      ) },
+      { tag = "section"; attrs = { id = "first-run-customize"; class = "onboarding-step"; hidden = true; "aria-labelledby" = "first-run-customize-title" }; children = list(
+        { tag = "h3"; attrs = { id = "first-run-customize-title"; tabindex = "-1" }; children = list("Make this starting place yours") },
+        { tag = "div"; attrs = { class = "onboarding-layout" }; children = list(
+          { tag = "article"; attrs = { class = "onboarding-example" }; children = list(
+            { tag = "h4"; children = list("A shortcut for your work") },
+            { tag = "p"; children = list("Pin a shortcut in Home’s Getting started card so you can go straight to Work.") },
+            { tag = "button"; attrs = { type = "button"; "data-first-run" = "pin"; id = "first-run-pin-button"; "aria-pressed" = "false" }; children = list("Pin Work shortcut") },
+            { tag = "p"; children = list("You can change this choice here whenever you need to.") }
+          ) },
+          { tag = "aside"; attrs = { class = "onboarding-tip" }; children = list(
+            { tag = "h4"; children = list("Across devices") },
+            { tag = "p"; children = list("Sign in on another device to reopen your saved records. The Work shortcut preference stays in this browser.") },
+            { tag = "p"; children = list("Use Mobile to prepare read-only trip copies on your phone.") },
+            { tag = "p"; children = list(
+              { tag = "a"; attrs = { class = "onboarding-link"; href = "/workspace/mobile"; "data-first-run" = "prepare-mobile" }; children = list("Pair a phone and prepare a trip") }
+            ) },
+            { tag = "button"; attrs = { type = "button"; "data-formation-help" = "setup" }; children = list("Help with this setup") }
+          ) }
+        ) },
+        { tag = "div"; attrs = { class = "onboarding-actions" }; children = list(
+          { tag = "button"; attrs = { type = "button"; class = "onboarding-primary"; "data-first-run" = "finish" }; children = list("Show my next step") }
+        ) }
+      ) },
+      { tag = "section"; attrs = { id = "first-run-finish"; class = "onboarding-step"; hidden = true; "aria-labelledby" = "first-run-finish-title" }; children = list(
+        { tag = "h3"; attrs = { id = "first-run-finish-title"; tabindex = "-1" }; children = list("Your setup and what to do next") },
+        { tag = "article"; attrs = { class = "onboarding-example" }; children = list(
+          { tag = "p"; attrs = { id = "first-run-summary" } },
+          { tag = "p"; attrs = { id = "first-run-next-explanation" } },
+          { tag = "button"; attrs = { type = "button"; class = "onboarding-primary"; id = "first-run-next"; "data-first-run" = "next" }; children = list("Open your next step") }
+        ) },
+        { tag = "p"; children = list("To change your setup, reopen Getting started and choose Make it yours. Your note and starter project stay available there.") },
+        { tag = "div"; attrs = { class = "onboarding-actions" }; children = list(
+          { tag = "button"; attrs = { type = "button"; "data-first-run" = "customize" }; children = list("Customize my setup") },
+          { tag = "button"; attrs = { type = "button"; "data-first-run" = "done" }; children = list("Finish and return") }
+        ) }
+      ) }
+    ) },
+    { tag = "form"; attrs = { id = "formation-record-form"; hidden = true }; children = list(
+      { tag = "input"; attrs = { id = "formation-record-kind"; name = "kind" } },
+      { tag = "input"; attrs = { id = "formation-record-owner"; name = "owner" } },
+      { tag = "input"; attrs = { id = "formation-record-base"; name = "base" } },
+      { tag = "input"; attrs = { id = "formation-record-action"; name = "action" } },
+      { tag = "textarea"; attrs = { id = "formation-record-text"; name = "text" } }
+    ) },
+    { tag = "p"; attrs = { id = "first-run-feedback"; class = "onboarding-feedback"; role = "status" } },
+    { tag = "footer"; attrs = { class = "onboarding-footer" }; children = list(
+      { tag = "span"; attrs = { id = "first-run-custody" }; children = list("Checking saved records…") },
+      { tag = "button"; attrs = { type = "button"; "data-first-run" = "pause"; id = "first-run-close" }; children = list("Close for now") }
+    ) }
+  ) }
+  call formation.helpShell
+  let input = list($dialog, $result)
+  call html.serialize
+  let result = { card = $card; dialog = $result }

@@ -1,0 +1,80 @@
+process-module "temple/surface-process-module/1"
+
+process notes.browserBoot:
+  port browser.asterStream { query = "aster.browserStream" } → _
+  each list("claimipedia", "aster") as id:
+    let content = concat("#", $id, "-content")
+    let dialog = concat("#", $id, "-dialog")
+    let bindings = list(
+      { ref = "document"; event = "click"; delegate = concat("a[data-notes-program=", $id, "]"); prevent = true; unmodified = true; action = "notes-open"; id = $id;
+        timing = if(eq($id, "aster"), "Ask Aster", "Claimipedia"); reveal = $dialog },
+      { ref = $content; event = "submit"; delegate = "form"; prevent = true; action = "notes-submit"; id = $id },
+      { ref = $dialog; event = "close"; action = "notes-close"; id = $id }
+    )
+    call appdev.bind
+    port dom.exists { selector = concat($content, " > *") } → rendered
+    when $rendered:
+      port browser.dialog { ref = $dialog; open = true } → _
+
+process notes.browserEvent:
+  let id = $eventInput.id
+  let content = concat("#", $id, "-content")
+  let dialog = concat("#", $id, "-dialog")
+  when eq($action, "notes-close"):
+    port browser.property { ref = $dialog; name = "open" } → open
+    when not($open):
+      port browser.content { ref = $content; html = "" } → _
+      port browser.location {} → location
+      port text.match { value = $location.search; pattern = concat("(?:[?&])view=", $id, "(?:&|$)") } → openedHere
+      when and($openedHere, eq($location.path, "/identity-management/")):
+        port browser.navigate { path = "/workspace/home"; historyOnly = true } → _
+  when not(eq($action, "notes-close")):
+    try:
+      port browser.target { ref = $eventInput.matched.ref } → destination
+      let asterRoute = and(eq($id, "aster"), eq($destination.pathname, "/identity-management/aster/"))
+      assert or(eq($destination.pathname, "/identity-management/"), $asterRoute)
+        otherwise "Unexpected Notes programme route."
+      when and(eq($action, "notes-open"), eq($id, "claimipedia")):
+        let input = list(
+          { tag = "p"; attrs = { role = "status" }; children = list("Loading Claimipedia…") },
+          { tag = "progress"; attrs = { "aria-label" = "Loading Claimipedia" } }
+        )
+        call html.serialize
+        let loading = $result
+        let previous = concat("dialog[open]:not(", $dialog, ")")
+        port browser.dialog { ref = $dialog; open = true; close = $previous; content = { ref = $content; html = $loading } } → _
+      when and(eq($action, "notes-open"), not(eq($id, "claimipedia"))):
+        port browser.property { ref = $dialog; name = "open" } → open
+        when not($open):
+          port dom.exists { selector = "dialog[open]" } → other
+          when $other:
+            port browser.dialog { ref = "dialog[open]"; open = false } → _
+          port browser.dialog { ref = $dialog; open = true } → _
+      let form = if(eq($action, "notes-submit"), $eventInput.matched.ref, null)
+      let path = if(and(eq($id, "aster"), not($asterRoute)), "/identity-management/aster/", $destination.path)
+      port browser.request { path = $path; method = $destination.method; form = $form;
+        query = { fragment = "1" }; fragment = concat("[data-notes-content=", $id, "]") } → response
+      port browser.property { ref = $dialog; name = "open" } → stillOpen
+      when $stillOpen:
+        assert or(and(eq($response.status, 200), $response.body), includes(list(0, 403), $response.status))
+          otherwise "Notes programme response unavailable."
+        when and(eq($response.status, 200), $response.body):
+          port browser.content { ref = $content; html = $response.body } → _
+          let heading = concat($content, " [tabindex='-1']")
+          port dom.exists { selector = $heading } → found
+          when $found:
+            port browser.focus { ref = $heading } → _
+        when includes(list(0, 403), $response.status):
+          let input = list(
+            { tag = "p"; attrs = { role = "status" }; children = list("Sign in with your approved Temple identity to open this program.") },
+            { tag = "a"; attrs = { class = "button"; href = concat("/identity-management/?view=", $id) }; children = list("Continue with Google") }
+          )
+          call html.serialize
+          port browser.content { ref = $content; html = $result } → _
+    catch fault:
+      port browser.property { ref = $dialog; name = "open" } → stillOpen
+      when $stillOpen:
+        let input = { tag = "p"; attrs = { role = "status" }; children = list("Claimipedia could not complete the request. Try opening the program again.") }
+        call html.serialize
+        port browser.content { ref = $content; html = $result } → _
+

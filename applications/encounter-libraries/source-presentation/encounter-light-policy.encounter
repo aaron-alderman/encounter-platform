@@ -1,0 +1,29 @@
+process-module "temple/surface-process-module/1"
+
+# Encounter light theme and lexical policy from personal-site/source/encounter/presentation.json.
+# The shared source algebra owns scanning and rendering.
+process source.encounterLightPolicy:
+  let presentation = {
+    protocol = "encounter/source-presentation-policy/1";
+    roles = list("plain", "comment", "keyword", "string", "property", "number", "boolean", "reference", "identifier", "operator", "punctuation", "identity", "predicate", "type");
+    maxCodeUnits = 160000;
+    maxParts = 18000;
+    keywords = list("module", "entity", "view", "of", "isa", "representation", "given", "as", "require", "equals", "return", "render", "events", "edit", "through", "here", "in", "show", "each", "run", "arguments", "let", "assert", "otherwise", "port", "call", "when", "fold", "starts", "yield", "try", "catch", "type", "valueType", "expects", "process-module", "profile", "process");
+    punctuation = list("[", "]", "{", "}", ":", ",", "(", ")", ";");
+    operators = list("=", "→", "-");
+    referenceSigil = "$";
+    typeIntroducers = { encounter = list("isa", "representation", "return"); temple = list("isa", "type", "valueType", "expects") };
+    themesAllowed = list("light");
+    themes = list({ id = "light"; roles = { plain = "#20323f"; comment = "#657166"; keyword = "#754a91"; string = "#196641"; property = "#07596c"; number = "#96501b"; boolean = "#854c88"; reference = "#6e4590"; identifier = "#20323f"; operator = "#7d431c"; punctuation = "#52636a"; identity = "#07596c"; predicate = "#754a91"; type = "#8c4b16" } });
+    layoutRules = list(
+      { selector = ".sp-code"; context = null; declarations = list({ property = "display"; value = "block" }, { property = "font"; value = "inherit" }, { property = "white-space"; value = "inherit" }, { property = "counter-reset"; value = "sp-line" }) },
+      { selector = ".sp-code .sp-line"; context = null; declarations = list({ property = "display"; value = "inline" }, { property = "padding"; value = "0" }, { property = "min-height"; value = "0" }) },
+      { selector = ".sp-code[data-numbered=\"true\"] .sp-line::before"; context = null; declarations = list({ property = "content"; value = "attr(data-line)" }, { property = "display"; value = "inline-block" }, { property = "width"; value = "3ch" }, { property = "padding-right"; value = "1.5ch" }, { property = "text-align"; value = "right" }, { property = "opacity"; value = ".55" }, { property = "user-select"; value = "none" }, { property = "font-size"; value = ".85em" }) },
+      { selector = ".sp-code[data-numbered=\"false\"] .sp-line::before"; context = null; declarations = list({ property = "content"; value = "none" }) },
+      { selector = ".sp-code .highlight"; context = null; declarations = list({ property = "background"; value = "#b98b3933" }, { property = "outline"; value = "1px solid #b98b3966" }) },
+      { selector = ".sp-code .sp-comment"; context = null; declarations = list({ property = "font-style"; value = "italic" }) },
+      { selector = ".sp-code:focus-visible"; context = null; declarations = list({ property = "outline"; value = "2px solid currentColor" }, { property = "outline-offset"; value = "4px" }) },
+      { selector = ".sp-code .sp-type"; context = null; declarations = list({ property = "font-weight"; value = "600" }) }
+    )
+  }
+  let result = { presentation = $presentation; lexical = { identifierPattern = "[@$]?[A-Za-z_][A-Za-z0-9_.-]*"; maxParts = 18000; jsonPatternPath = list("pattern") }; grammar = { pattern = "(\"(?:[^\"\\\\]|\\\\.)*\"|[\\[\\]{}:,]|-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|true|false|null)" } }

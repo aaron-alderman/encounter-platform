@@ -1,0 +1,112 @@
+process-module "temple/surface-process-module/1"
+
+process desktop.assureView:
+  call desktop.defaultAction
+  let viewId = concat(" id=\"", $app.window, "\"")
+  let launchId = concat(" id=\"", $app.id, "\"")
+  let taskId = concat(" id=\"", $app.task, "\"")
+  let views = count(filter($pageIds, "id", eq($id, $app.window)))
+  let launchers = count(filter($pageIds, "id", eq($id, $app.id)))
+  let tasks = count(filter($pageIds, "id", eq($id, $app.task)))
+  when not(and(eq($views, 1), eq($tasks, 1))):
+    let fault = raise(concat("Desktop assurance: ", $app.key, " requires one window and taskbar entry. Found ", $views, " windows and ", $tasks, " taskbar entries."))
+  port text.match { value = $desktopOutsideWorkspace; pattern = concat("<section[^>]*", $viewId, "[^>]*class=\"desktop-app-window\"[^>]* hidden[^>]*>") } → appWindow
+  assert $appWindow
+    otherwise "Desktop assurance requires an independent window alongside Sourcery Workspace."
+  port text.match { value = $taskbar.text; pattern = concat("<button[^>]*", $taskId, "[^>]*aria-controls=\"", $app.window, "\"[^>]* hidden[^>]*>") } → task
+  assert $task
+    otherwise "Desktop assurance requires a taskbar button that controls the app window."
+  when eq($app.group, "hosted"):
+    call desktop.assureHostedShortcuts
+  when eq($app.group, "banner"):
+    assert eq($launchers, 1)
+      otherwise "About must have exactly one build badge launcher."
+    port text.match { value = $workspace.text; pattern = concat("<button[^>]*", $launchId, "[^>]*class=\"edition\"[^>]*aria-controls=\"", $app.window, "\"[^>]*data-launch-action=\"", $app.defaultAction, "\"[^>]*>") } → badge
+    assert $badge
+      otherwise "The build badge must declare Open for the About window."
+  when includes(list("quality", "administration"), $app.group):
+    assert eq($launchers, 1)
+      otherwise "Desktop assurance requires exactly one Operations launcher."
+    port text.split { value = $programs; pattern = "</section>" } → sections
+    fold $sections as section; card starts null:
+      port text.match { value = $section; pattern = concat("<section class=\"program-group notes-operations\">[\\s\\S]*?(<button[^>]*", $launchId, "[^>]*aria-controls=\"", $app.window, "\"[^>]*data-launch-action=\"", $app.defaultAction, "\"[^>]*>)") } → candidate
+      yield or($card, at(at($candidate, "groups"), 0)) → card
+    assert $card
+      otherwise "Desktop assurance requires the Operations button to declare the default action for the app window."
+    port text.match { value = $card; pattern = "(aria-haspopup|target)=" } → popup
+    assert not($popup)
+      otherwise "Desktop assurance requires the launcher to open an independent desktop window."
+  let result = $page
+
+process desktop.assureHostedShortcuts:
+  let shortcut = concat("<button[^>]* data-desktop-launch=\"", $app.key, "\"[^>]* aria-controls=\"", $app.window, "\"[^>]* data-launch-action=\"", $app.defaultAction, "\"[^>]*>")
+  port text.match { value = $desktop.text; pattern = "<nav class=\"shortcuts\"[^>]*>[\\s\\S]*?</nav>" } → shortcuts
+  port text.match { value = $taskbar.text; pattern = "<nav aria-label=\"Start menu\"[^>]*>[\\s\\S]*?</nav>" } → startMenu
+  assert and($shortcuts, $startMenu)
+    otherwise "Desktop assurance could not find the desktop shortcuts and Start menu."
+  port text.match { value = $programs; pattern = "<section class=\"program-group\" data-group=\"hosted\">[\\s\\S]*?</section>" } → hosted
+  assert $hosted
+    otherwise "Desktop assurance could not find the Apps launcher."
+  each list($shortcuts.text, $hosted.text, $startMenu.text) as surface:
+    port text.matchAll { value = $surface; pattern = $shortcut } → buttons
+    assert eq(count($buttons), 1)
+      otherwise "Each shortcut must explicitly declare Open for the same desktop window."
+    let button = at($buttons, 0)
+    port text.match { value = $button.text; pattern = "(aria-haspopup|target)=" } → popup
+    assert not($popup)
+      otherwise "Apps shortcuts must launch an independent desktop window."
+
+process desktop.assureApps:
+  port text.matchAll { value = $page; pattern = " id=\"([^\"]+)\"" } → idMatches
+  let pageIds = map($idMatches, "match", at($match.groups, 0))
+  port text.match { value = $page; pattern = "<main class=\"desktop\"[^>]*>[\\s\\S]*?</main>" } → desktop
+  assert $desktop
+    otherwise "Desktop assurance could not find the Sourcery desktop."
+  port text.match { value = $desktop.text; pattern = "<section class=\"window\" id=\"workspace\"[^>]*>[\\s\\S]*?<div class=\"programs\"[^>]*>([\\s\\S]*?)</div></div><footer class=\"statusbar\"(?: data-window-slot=\"status\")?>[\\s\\S]*?</footer></section>" } → workspace
+  assert $workspace
+    otherwise "Desktop assurance could not find the application area inside Sourcery Workspace."
+  let programs = at($workspace.groups, 0)
+  port text.replaceAll { value = $desktop.text; search = $workspace.text; replacement = "" } → desktopOutsideWorkspace
+  port text.match { value = $page; pattern = "<footer class=\"taskbar sourcery-os-taskbar\"[^>]*>[\\s\\S]*?</footer>" } → taskbar
+  assert $taskbar
+    otherwise "Desktop assurance could not find the taskbar."
+  call desktop.apps
+  each filter($result, "entry", not(and($legacyHome, eq($entry.key, "front-gate")))) as app:
+    call desktop.assureView
+  let result = $page
+
+process desktop.viewAssuranceMarkup:
+  call desktop.apps
+  let apps = filter($result, "entry", not(and($legacyHome, eq($entry.key, "front-gate"))))
+  fold $apps as app; rows starts list():
+    let checks = list(
+      { id = "open"; label = "Awaiting launch" },
+      { id = "repeat"; label = "Awaiting repeat launch" },
+      { id = "restore"; label = "Awaiting restore" },
+      { id = "isolation"; label = "Awaiting Workspace minimize" }
+    )
+    let row = { tag = "tr"; children = list(
+      { tag = "th"; attrs = { scope = "row" }; children = list($app.title) },
+      map($checks, "check", { tag = "td"; attrs = { id = concat("desktop-launch-check-", $app.key, "-", $check.id) }; children = list($check.label) })
+    ) }
+    yield append($rows, list($row)) → rows
+  let input = { tag = "section"; attrs = { "aria-labelledby" = "desktop-assurance-title" }; children = list(
+      { tag = "h3"; attrs = { id = "desktop-assurance-title" }; children = list("Desktop app launch") },
+      { tag = "p"; children = list("Each app declares Open as its default action. The build checks its independent desktop window and taskbar entry.") },
+      { tag = "div"; attrs = { class = "desktop-launch-results"; tabindex = "0"; role = "region"; "aria-label" = "Browser launch observations" }; children = list(
+        { tag = "table"; attrs = { class = "sourcery-data-table"; "data-table-layout" = "grid" }; children = list(
+          { tag = "caption"; children = list("Browser observations for this session") },
+          { tag = "thead"; children = list(
+            { tag = "tr"; children = list(
+              { tag = "th"; attrs = { scope = "col" }; children = list("App") },
+              { tag = "th"; attrs = { scope = "col" }; children = list("Open and focus") },
+              { tag = "th"; attrs = { scope = "col" }; children = list("Focus on repeat") },
+              { tag = "th"; attrs = { scope = "col" }; children = list("Restore") },
+              { tag = "th"; attrs = { scope = "col" }; children = list("Independent of Workspace") }
+            ) }
+          ) },
+          { tag = "tbody"; children = $rows }
+        ) }
+      ) }
+    ) }
+  call html.serialize

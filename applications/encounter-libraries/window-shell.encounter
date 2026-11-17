@@ -1,0 +1,134 @@
+process-module "temple/surface-process-module/1"
+
+process windowShell.types:
+  let title = { id = "title"; label = "Title and window controls" }
+  let menu = { id = "menu"; label = "Command menu" }
+  let banner = { id = "banner"; label = "Banner" }
+  let content = { id = "content"; label = "Content" }
+  let status = { id = "status"; label = "Status"; optional = true }
+  let actions = { id = "actions"; label = "Actions"; optional = true }
+  let result = list(
+    { id = "document"; title = "Document window"; slots = list($title, $menu, $banner, $content, $status, $actions) },
+    { id = "compact"; title = "Compact window"; slots = list($title, $content, $actions) }
+  )
+
+process windowShell.controlDefinitions:
+  let result = list(
+    { id = "maximize"; label = "Maximize / Restore"; verb = "Maximize or restore"; glyph = "□"; description = "Toggle between maximized and normal size." },
+    { id = "minimize"; label = "Minimize"; verb = "Minimize"; glyph = "−"; description = "Hide the window and keep its taskbar entry." },
+    { id = "close"; label = "Close"; verb = "Close"; glyph = "×"; description = "Close the app window." }
+  )
+
+# Rows are keyed by current visibility, then by shell action.
+process windowShell.visibilityRules:
+  let result = {
+    closed = { open = "visible"; minimize = "closed"; close = "closed" };
+    visible = { open = "visible"; minimize = "minimized"; close = "closed" };
+    minimized = { open = "visible"; minimize = "minimized"; close = "closed" }
+  }
+
+# Presentation-independent definitions for the desktop's common controls.
+process windowWidget.definitions:
+  let result = {
+    directory = { id = "directory"; empty = "This folder is empty."; commands = list(
+      { id = "select"; key = "Up/Down"; label = "Select" },
+      { id = "open"; key = "Enter"; label = "Open" },
+      { id = "parent"; key = "Backspace"; label = "Parent" },
+      { id = "copy"; key = "Ctrl+C"; label = "Copy" }) };
+    text = { id = "text"; commands = list(
+      { id = "new"; key = "Ctrl+N"; label = "New" },
+      { id = "open"; key = "Ctrl+O"; label = "Open" },
+      { id = "save"; key = "Ctrl+S"; label = "Save" },
+      { id = "save-as"; key = "Ctrl+Shift+S"; label = "Save As" }) };
+    clipboard = { id = "clipboard"; commands = list(
+      { id = "copy"; key = "Ctrl+C"; label = "Copy all" },
+      { id = "paste"; key = "Ctrl+V"; label = "Paste" }) }
+  }
+
+process windowWidget.dialogDefinitions:
+  let cancel = { id = "cancel"; label = "Cancel"; key = "Esc" }
+  let discard = { id = "discard"; label = "Discard"; key = "Enter" }
+  let open = { id = "open"; label = "Open"; key = "Enter" }
+  let save = { id = "save"; label = "Save"; key = "Enter" }
+  let result = list(
+    { id = "save"; code = 1; title = "Save changes?"; primary = $save; secondary = $cancel },
+    { id = "save-error"; code = 2; title = "Unable to save this file"; primary = { id = "dismiss"; label = "Dismiss"; key = "Enter" }; secondary = null },
+    { id = "discard"; code = 3; title = "Discard changes?"; primary = $discard; secondary = $cancel },
+    { id = "discard-exit"; code = 4; title = "Discard and exit?"; primary = $discard; secondary = $cancel },
+    { id = "save-as"; code = 5; title = "Save as a new file"; primary = $save; secondary = $cancel; field = "path" },
+    { id = "open"; code = 6; title = "Open a text file"; primary = $open; secondary = $cancel; field = "path" },
+    { id = "discard-new"; code = 7; title = "Discard changes and start a new file?"; primary = $discard; secondary = $cancel },
+    { id = "discard-open"; code = 8; title = "Discard changes and open another file?"; primary = $discard; secondary = $cancel },
+    { id = "save-as-error"; code = 9; title = "Unable to save to this path"; primary = $save; secondary = $cancel; field = "path" },
+    { id = "open-error"; code = 10; title = "Unable to open this path"; primary = $open; secondary = $cancel; field = "path" })
+
+process windowWidget.desktopSettings:
+  let result = { title = "Desktop settings"; field = "Background";
+    help = "Choose a background to save it"; error = "Could not save desktop settings";
+    choices = list({ code = 0; label = "Teal"; color = "193f40" },
+      { code = 1; label = "Blue"; color = "263d69" },
+      { code = 2; label = "Slate"; color = "424953" }) }
+
+process windowShell.titleControls:
+  call windowShell.controlDefinitions
+  let controls = filter($result, "control", at($controlBindings, $control.id))
+  fold $controls as control; nodes starts list():
+    let binding = at($controlBindings, $control.id)
+    let label = concat($control.verb, " ", $controlTarget)
+    port record.put { record = $binding.attrs; key = "aria-label"; value = $label } → attrs
+    port record.put { record = $attrs; key = "title"; value = $label } → attrs
+    port record.put { record = $attrs; key = "data-window-control"; value = $control.id } → attrs
+    yield append($nodes, list({ tag = $binding.tag; attrs = $attrs; children = list($control.glyph) })) → nodes
+  let result = if(count($nodes), { tag = "div"; attrs = { class = "window-controls" }; children = $nodes }, null)
+
+process windowShell.typeById:
+  call windowShell.types
+  let result = at(filter($result, "kind", eq($kind.id, $windowTypeId)), 0)
+
+process windowShell.frame:
+  assert $windowType
+    otherwise "Window type must resolve to a known window contract."
+  let windowName = or(at($frame.attrs, "id"), at($frame.attrs, "aria-label"), $windowType.id)
+  let slotIds = map($windowType.slots, "slot", $slot.id)
+  port record.entries { value = $slots } → suppliedSlots
+  each $suppliedSlots as entry:
+    let slotId = at($entry, 0)
+    when and(not(eq(at($entry, 1), null)), not(includes($slotIds, $slotId))):
+      let fault = raise(concat("Window ", $windowName, " > slots > ", $slotId, ": not allowed for ", $windowType.id, "."))
+  fold $windowType.slots as slot; children starts list():
+    let node = at($slots, $slot.id)
+    when not(or($node, at($slot, "optional"))):
+      let fault = raise(concat("Window ", $windowName, " > slots > ", $slot.id, ": required for ", $windowType.id, "."))
+    let next = $children
+    when $node:
+      port record.put { record = $node.attrs; key = "data-window-slot"; value = $slot.id } → attrs
+      let next = append($children, list({ tag = $node.tag; attrs = $attrs; children = at($node, "children") }))
+    yield $next → children
+  port record.put { record = $frame.attrs; key = "data-window-type"; value = $windowType.id } → attrs
+  let result = { tag = $frame.tag; attrs = $attrs; children = $children }
+
+# The browser calls this with the state projected from its window and task.
+process windowShell.nextVisibility:
+  call windowShell.visibilityRules
+  let visibilityRule = at($result, $windowVisibility)
+  let result = or(at($visibilityRule, $windowAction), $windowVisibility)
+
+process windowWidget.directory:
+  call windowWidget.definitions
+  let definition = $result.directory
+  let marker = { class = "sourcery-feedback"; "data-feedback" = "info"; role = "status"; "data-workspace-widget" = $definition.id }
+  let result = { tag = "p"; attrs = $marker; children = list($definition.empty) }
+  when $directoryContents:
+    port record.put { record = $directoryContents.attrs; key = "data-workspace-widget"; value = $definition.id } → attrs
+    let result = { tag = $directoryContents.tag; attrs = $attrs; children = $directoryContents.children }
+
+process windowWidget.text:
+  call windowWidget.definitions
+  let attrs = { "data-workspace-widget" = $result.text.id; "aria-label" = $textLabel }
+  let result = { tag = if($textEditable, "textarea", "pre"); attrs = $attrs; children = list($textValue) }
+
+process windowWidget.dialogActions:
+  let buttons = map($dialogActions, "action", {
+    tag = "button"; attrs = { value = at($action, "id") }; children = list($action.label)
+  })
+  let result = { tag = "form"; attrs = { method = "dialog"; class = "dialog-actions" }; children = $buttons }

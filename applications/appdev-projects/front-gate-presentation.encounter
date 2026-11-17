@@ -1,0 +1,55 @@
+process-module "temple/surface-process-module/1"
+
+process frontGate.styles:
+  let rules = list(
+    { selector = "#front-gate-content"; properties = list(list("padding", "14px"), list("background", "#f5f3e9")) },
+    { selector = ".front-gate-overview"; properties = list(list("display", "flex"), list("align-items", "center"), list("justify-content", "space-between"), list("gap", "12px"), list("padding", "13px 14px"), list("border", "1px solid #aebbd7"), list("border-inline-start", "4px solid #2b4e91"), list("background", "#e9eef9"), list("color", "#1d2d57")) },
+    { selector = ".front-gate-overview-copy"; properties = list(list("min-width", "0")) },
+    { selector = ".front-gate-overview-label"; properties = list(list("display", "block"), list("font-size", "12px"), list("font-weight", "700"), list("margin-block-end", "4px"), list("color", "#34466d")) },
+    { selector = ".front-gate-reading"; properties = list(list("display", "grid"), list("gap", "4px"), list("line-height", "1.35")) },
+    { selector = ".front-gate-reading strong"; properties = list(list("font-size", "18px")) },
+    { selector = ".front-gate-reading span"; properties = list(list("font-size", "12px"), list("color", "#34466d")) },
+    { selector = ".front-gate-overview-actions"; properties = list(list("display", "flex"), list("align-items", "end"), list("gap", "8px"), list("flex", "none")) },
+    { selector = ".front-gate-overview-actions label"; properties = list(list("display", "grid"), list("gap", "4px"), list("font-size", "12px"), list("font-weight", "700")) },
+    { selector = ".front-gate-auto-refresh-control"; properties = list(list("display", "grid"), list("gap", "4px")) },
+    { selector = "#front-gate-countdown"; properties = list(list("min-height", "1.35em"), list("font-size", "12px"), list("line-height", "1.35"), list("color", "#34466d"), list("font-variant-numeric", "tabular-nums")) },
+    { selector = "#front-gate-auto-refresh"; properties = list(list("min-height", "34px"), list("padding", "4px 6px"), list("font", "inherit"), list("font-size", "13px"), list("font-weight", "400"), list("color", "#1d2541"), list("background", "#fffef8"), list("border", "1px solid #8b94ab")) },
+    { selector = "#front-gate-refresh"; properties = list(list("flex", "none"), list("align-self", "start"), list("margin-block-start", "18px"), list("min-height", "34px"), list("padding-inline", "10px"), list("font", "inherit"), list("cursor", "pointer")) },
+    { selector = ".front-gate-filters"; properties = list(list("display", "grid"), list("grid-template-columns", "minmax(0, 1fr) minmax(8rem, 12rem)"), list("gap", "10px"), list("margin", "15px 0 17px")) },
+    { selector = ".front-gate-filters label"; properties = list(list("display", "grid"), list("gap", "5px"), list("min-width", "0"), list("font-weight", "700"), list("font-size", "12px")) },
+    { selector = ".front-gate-filters input, .front-gate-filters select"; properties = list(list("box-sizing", "border-box"), list("width", "100%"), list("min-width", "0"), list("min-height", "36px"), list("padding", "6px 8px"), list("font", "inherit"), list("font-size", "14px"), list("font-weight", "400"), list("color", "#1d2541"), list("background", "#fffef8"), list("border", "1px solid #8b94ab")) },
+    { selector = ".front-gate-group + .front-gate-group"; properties = list(list("margin-block-start", "19px")) },
+    { selector = ".front-gate-group h3"; properties = list(list("display", "flex"), list("align-items", "center"), list("gap", "8px"), list("margin", "0 0 8px"), list("font-size", "14px"), list("color", "#252d51")) },
+    { selector = ".front-gate-group h3 small"; properties = list(list("padding", "1px 5px"), list("color", "#4a4f63"), list("background", "#e8e5da"), list("font-size", "11px")) },
+    { selector = ".front-gate-grid"; properties = list(list("display", "grid"), list("grid-template-columns", "repeat(auto-fit, minmax(min(100%, 16rem), 1fr))"), list("gap", "8px"), list("padding", "0"), list("margin", "0"), list("list-style", "none")) },
+    { selector = ".front-gate-card"; properties = list(list("min-width", "0"), list("padding", "9px 10px"), list("border", "1px solid #d0cbb8"), list("background", "#fffdf5"), list("overflow-wrap", "anywhere")) },
+    { selector = ".front-gate-card:focus-within"; properties = list(list("border-color", "#3454a0"), list("background", "#f1f4ff")) },
+    { selector = ".front-gate-card-heading"; properties = list(list("display", "flex"), list("flex-wrap", "wrap"), list("align-items", "baseline"), list("justify-content", "space-between"), list("gap", "5px 8px"), list("line-height", "1.35"), list("font-weight", "700")) },
+    { selector = ".front-gate-card-heading a"; properties = list(list("color", "#1a3e88"), list("text-underline-offset", "2px")) },
+    { selector = ".front-gate-card p"; properties = list(list("margin", "4px 0 0"), list("font-size", "12px"), list("line-height", "1.45"), list("color", "#454854")) },
+    { selector = ".front-gate-badge"; properties = list(list("padding", "2px 5px"), list("border", "1px solid currentColor"), list("border-radius", "2px"), list("font-size", "11px"), list("line-height", "1.2"), list("white-space", "nowrap")) },
+    { selector = ".front-gate-badge[data-state=Listening]"; properties = list(list("color", "#21543c"), list("background", "#e6f2e8")) },
+    { selector = ".front-gate-badge[data-state=Offline]"; properties = list(list("color", "#812d2a"), list("background", "#f9e8e5")) },
+    { selector = ".front-gate-reading .front-gate-badge[data-state=Stale]"; properties = list(list("justify-self", "start"), list("color", "#714b12"), list("background", "#fff1ce")) },
+    { selector = ".front-gate-badge[data-state='HTTPS pilot']"; properties = list(list("color", "#334e84"), list("background", "#e7edf9")) },
+    { selector = ".front-gate-units, .front-gate-empty"; properties = list(list("margin-block-start", "15px"), list("padding", "10px 12px"), list("border", "1px solid #d0cbb8"), list("background", "#fffdf5")) },
+    { selector = ".front-gate-units summary"; properties = list(list("color", "#252d51"), list("font-weight", "700"), list("cursor", "pointer")) },
+    { selector = ".front-gate-unit-groups"; properties = list(list("display", "grid"), list("grid-template-columns", "repeat(auto-fit, minmax(min(100%, 15rem), 1fr))"), list("gap", "12px"), list("overflow-wrap", "anywhere")) },
+    { selector = ".front-gate-unit-groups h3"; properties = list(list("font-size", "13px"), list("margin", "12px 0 5px")) },
+    { selector = ".front-gate-unit-groups ul"; properties = list(list("margin", "0"), list("padding-inline-start", "17px"), list("font-family", "monospace"), list("font-size", "12px"), list("line-height", "1.5")) },
+    { selector = "#front-gate-content :is(a, button, input, select, summary):focus-visible"; properties = list(list("outline", "2px solid #3454a0"), list("outline-offset", "2px")) },
+    { selector = "#front-gate-content"; context = "(max-width: 450px)"; properties = list(list("padding", "10px")) },
+    { selector = ".front-gate-overview"; context = "(max-width: 450px)"; properties = list(list("align-items", "start"), list("padding", "10px")) },
+    { selector = ".front-gate-reading strong"; context = "(max-width: 450px)"; properties = list(list("font-size", "15px")) },
+    { selector = ".front-gate-overview-actions"; context = "(max-width: 450px)"; properties = list(list("display", "grid"), list("align-items", "stretch")) },
+    { selector = "#front-gate-auto-refresh"; context = "(max-width: 450px)"; properties = list(list("min-height", "40px"), list("font-size", "16px")) },
+    { selector = ".front-gate-filters"; context = "(max-width: 450px)"; properties = list(list("grid-template-columns", "minmax(0, 1fr) minmax(7.5rem, 0.7fr)"), list("gap", "7px")) },
+    { selector = ".front-gate-filters input, .front-gate-filters select"; context = "(max-width: 450px)"; properties = list(list("min-height", "42px"), list("font-size", "16px")) },
+    { selector = "#front-gate-refresh"; context = "(max-width: 450px)"; properties = list(list("margin-block-start", "0"), list("min-height", "40px")) }
+  )
+  let cssPlan = { imports = list(); tokens = list(); rules = map($rules, "rule", {
+    selector = $rule.selector; context = at($rule, "context");
+    declarations = map($rule.properties, "pair", { property = at($pair, 0); value = at($pair, 1) })
+  }) }
+  call css.renderPlan
+  let result = concat("/* Front Gate native */", $result, "/* End Front Gate native */")

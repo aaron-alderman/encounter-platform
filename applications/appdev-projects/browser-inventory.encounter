@@ -1,0 +1,27 @@
+process-module "temple/surface-process-module/1"
+
+process inventory.open:
+  let view = $app.key
+  let target = concat("#", $app.content)
+  let notice = "loading"
+  when not($form):
+    call inventory.notice
+    port browser.content { ref = $target; html = $result } → _
+  let notice = "unavailable"
+  let body = null
+  try:
+    port browser.request { path = concat("/identity-management/?view=", $view, "&fragment=1"); fragment = $app.inventory; method = if($form, "POST", "GET"); form = $form } → response
+    when and(includes(list(200, 400, 409, 503), $response.status), $response.body):
+      let body = $response.body
+    when eq($response.status, 403):
+      let notice = "steward"
+    when includes(list(0, 401), $response.status):
+      let notice = "sign-in"
+  catch fault:
+    let notice = "unavailable"
+  port browser.property { ref = concat("#", $app.window); name = "hidden" } → hidden
+  when not($hidden):
+    when not($body):
+      call inventory.notice
+      let body = $result
+    port browser.content { ref = $target; html = $body } → _

@@ -1,0 +1,4 @@
+("rel.document", "kind", "ApplicationData")
+("v0", "type", "String")
+("v0", "scalar", "")
+("rel.document", "root", "v0")

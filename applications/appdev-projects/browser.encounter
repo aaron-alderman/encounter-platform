@@ -1,0 +1,359 @@
+process-module "temple/surface-process-module/1"
+
+process browser.boot:
+  call appdev.desktopPreflight
+  let surface = $result
+  when $surface.platform:
+    call inbox.notesBoot
+    let startupScope = "platform"
+    call workspace.startup
+    let launch = $result
+    when $launch.first:
+      call inbox.startup
+  when not($surface.platform):
+    when $surface.mobile:
+      call mobile.boot
+    when and($surface.desktop, not($surface.mobile)):
+      call appdev.desktopBoot
+    when and(not($surface.desktop), not($surface.mobile)):
+      call pairing.phoneBoot
+  let result = true
+
+process appdev.bind:
+  when count($bindings):
+    let batch = map($bindings, "binding", { ref = $binding.ref; event = $binding.event; query = "appdev.event"; input = $binding;
+      delegate = at($binding, "delegate"); outside = at($binding, "outside"); preventDefault = at($binding, "prevent"); preventKeys = at($binding, "keys");
+      unmodified = at($binding, "unmodified"); milliseconds = at($binding, "milliseconds"); backgroundSession = at($binding, "backgroundSession");
+      initialSession = at($binding, "initialSession");
+      timing = or(at($binding, "timing"), null); reveal = or(at($binding, "reveal"), null);
+      dispatchLabel = concat("appdev.event / ", $binding.action) })
+    port browser.onMany { bindings = $batch } → _
+
+process appdev.desktopBoot:
+  port dom.exists { selector = "#workspace input[name=programs]:checked:not(#tab-hosted)" } → restoredTab
+  call notes.browserBoot
+  call inbox.notesBoot
+  port dom.exists { selector = "#workspace [data-app-card]" } → hasAppCards
+  when $hasAppCards:
+    port browser.appDescriptions { ref = "#workspace" } → _
+  let bindings = list(
+    { ref = "#sign-in"; event = "click"; action = "sign-in" },
+    { ref = "document"; event = "change"; delegate = "#workspace input[name=programs]"; action = "shortcut-count" },
+    { ref = "#sign-out"; event = "click"; action = "sign-out" },
+    { ref = "window"; event = "focus"; action = "observe-identity"; backgroundSession = true; initialSession = true },
+    { ref = "window"; event = "pageshow"; action = "observe-identity"; backgroundSession = true },
+    { ref = "document"; event = "click"; delegate = "a[data-open-acting-as],button[data-open-acting-as]"; prevent = true; unmodified = true; action = "acting-as-open" },
+    { ref = "#acting-as-content"; event = "submit"; delegate = "form"; prevent = true; action = "acting-as-submit" },
+    { ref = "#acting-as-content"; event = "click"; delegate = "[data-refresh-program]"; action = "acting-as-refresh" },
+    { ref = "document"; event = "click"; delegate = "button:is([data-app-menu],[data-production-menu]):not([role=menuitem])"; action = "context-open" },
+    { ref = "document"; event = "contextmenu"; delegate = ":is(.app-menu-entry[data-app-menu],.preview-app-entry[data-production-menu])"; prevent = true; action = "context-open" },
+    { ref = "document"; event = "keydown"; delegate = ":is(.app-menu-entry[data-app-menu],.preview-app-entry[data-production-menu])"; keys = list("ContextMenu", "F10"); action = "context-key" },
+    { ref = "document"; event = "click"; delegate = "[role=menuitem]:is([data-app-menu],[data-production-menu])"; action = "context-close" }
+  )
+  call appdev.bind
+  let programmes = list(
+    { id = "x-mentions"; label = "X Mentions"; launch = "?view=mentions"; fragment = "mentions-program"; anchor = "data-open-mentions"; settings = "data-x-mentions" },
+    { id = "versions"; label = "Manage versions"; launch = "?view=versions"; fragment = "versions-program"; anchor = "data-open-versions"; settings = "data-versions" }
+  )
+  each $programmes as programme:
+    let dialog = concat("#", $programme.id, "-dialog")
+    port dom.exists { selector = $dialog } → available
+    when $available:
+      let content = concat("#", $programme.id, "-content")
+      let bindings = list(
+        { ref = "document"; event = "click"; delegate = concat(":is(a,button)[", $programme.anchor, "]"); prevent = true; unmodified = true; action = "programme-open"; programme = $programme; timing = $programme.label; reveal = $dialog },
+        { ref = $content; event = "click"; delegate = "[data-refresh-program]"; action = "programme-refresh"; programme = $programme },
+        { ref = $content; event = "submit"; delegate = "form"; prevent = true; action = "programme-submit"; programme = $programme },
+        { ref = $dialog; event = "close"; action = "programme-close"; programme = $programme }
+      )
+      call appdev.bind
+      port dom.exists { selector = concat($content, " > *") } → rendered
+      when $rendered:
+        port browser.dialog { ref = $dialog; open = true } → _
+  call tools.boot
+  call tray.boot
+  call design.workspaceBind
+  call demo.boot
+  call environments.boot
+  let startupScope = "desktop"
+  call workspace.startup
+  let launch = $result
+  when $launch.signIn:
+    call appdev.refreshIdentity
+  when not($launch.frontGate):
+    call store.startup
+  call onboarding.boot
+  when $launch.first:
+    call inbox.startup
+  when and($launch.first, $launch.frontGate):
+    call desktop.browserApps
+    let apps = $result
+    let app = at(filter($apps, "entry", eq($entry.key, "front-gate")), 0)
+    when $app:
+      let returned = false
+      call desktop.open
+  when eq($launch.hash, "#handover-demo"):
+    call demo.enter
+  when includes(list("#environments-demo", "#environments-demo-home", "#environments-demo-office"), $launch.hash):
+    let hash = $launch.hash
+    call environments.open
+  when eq($launch.hash, "#start-flyout-workspaces"):
+    call desktop.openWorkspaces
+  when eq($launch.hash, "#platform"):
+    port dom.exists { selector = "#tab-encounters" } → encountersTab
+    port browser.write { ref = if($encountersTab, "#tab-encounters", "#tab-hosted"); name = "checked"; value = true } → _
+  port storage.read { key = "workspace-sign-out-tab"; scope = "tab"; maxLength = 32 } → returnTab
+  when includes(list("tab-hosted", "tab-encounters", "tab-workspaces", "tab-operations", "tab-x"), $returnTab.value):
+    port storage.write { key = "workspace-sign-out-tab"; scope = "tab"; value = "" } → _
+    port browser.write { ref = concat("#", $returnTab.value); name = "checked"; value = true } → _
+  when or($restoredTab, eq($launch.hash, "#platform"),
+    includes(list("tab-hosted", "tab-encounters", "tab-workspaces", "tab-operations", "tab-x"), $returnTab.value)):
+    call appdev.shortcutCount
+  when $launch.signIn:
+    when includes(list("failed", "public-failed"), $launch.signIn):
+      let message = if(eq($launch.signIn, "failed"), "X sign-in did not complete. You can try again.",
+        "Public sign-in did not complete. You can try again.")
+      port browser.write { ref = "#sign-in-message"; name = "hidden"; value = false } → _
+      port browser.write { ref = "#sign-in-message"; name = "textContent"; value = $message } → _
+    port dom.exists { selector = "dialog[open]" } → dialogOpen
+    port browser.property { ref = "#sign-in"; name = "hidden" } → signedIn
+    when and(not($dialogOpen), not($signedIn)):
+      port browser.dialog { ref = "#sign-in-dialog"; open = true } → _
+
+process appdev.desktopPreflight:
+  # These selectors describe the initial Home document. Live dialog and tab state
+  # are read at their point of use, after any launch or restore actions.
+  let selectors = list(
+    "#home-tray-open",
+    "#workspace [data-app-card]", "#notes-inbox-window", "#claimipedia-content > *", "#aster-content > *",
+    "#x-mentions-dialog", "#x-mentions-content > *", "#versions-dialog", "#versions-content > *",
+    "main.desktop > .desktop-app-window", "#front-gate-window", "#front-gate-availability", "#front-gate-refresh",
+    "#front-gate-summary", "#front-gate-auto-refresh", "#front-gate-countdown",
+    "#notes-assurance-history > section", "#acting-as-content [data-acting-as]",
+    "#notes-certificates-content [data-certificate-inventory]", "#notes-keys-content [data-key-inventory]",
+    "#notes-design-demo-content", "#notes-store-window", "#first-run-dialog", "#first-run-pin",
+    "#desktop-settings-dialog",
+    "#home-getting-started", "#workspace #status", "#workspace input[name=programs]:checked:not(#tab-hosted)"
+  )
+  let fields = list(
+    { ref = "#front-gate-search"; name = "value" }, { ref = "#front-gate-availability"; name = "value" },
+    { ref = "#front-gate-status-address"; name = "value" }, { ref = "#front-gate-live-status"; name = "href" },
+    { ref = "#front-gate-summary"; name = "textContent" }, { ref = "#front-gate-checked"; name = "textContent" },
+    { ref = "#front-gate-checked"; name = "hidden" }, { ref = "#front-gate-stale"; name = "hidden" }
+  )
+  let storage = list(
+    { key = "sourcery.desktop.background"; maxLength = 1 },
+    { key = "sourcery.service-manager.density"; maxLength = 7 },
+    { key = "sourcery.store.intent"; scope = "tab"; maxLength = 512 },
+    { key = "workspace-sign-out-tab"; scope = "tab"; maxLength = 32 },
+    { key = "sourcery.first-run.v1.step"; maxLength = 20 },
+    { key = "sourcery.first-run.v1.note"; maxLength = 2000 },
+    { key = "sourcery.first-run.v1.project"; maxLength = 2000 },
+    { key = "sourcery.first-run.v1.pin"; maxLength = 1 },
+    { key = "sourcery.first-run.v1.next"; maxLength = 20 },
+    { key = "sourcery.first-run.v1.visibility"; maxLength = 20 },
+    { key = "sourcery.first-run.v1.home-card"; maxLength = 12 }
+  )
+  let state = list("first-run-setup", "front-gate-browser-port")
+  let reads = append(
+    append(map($selectors, "selector", { port = "dom.exists"; args = { selector = $selector } }),
+      map($fields, "field", { port = "browser.property"; args = $field })),
+    append(map($storage, "entry", { port = "storage.read"; args = $entry }),
+      map($state, "key", { port = "state.get"; args = { scope = "document"; key = $key } }))
+  )
+  let startupScope = "desktop"
+  call workspace.startupRequest
+  let reads = append($reads, list(
+    { port = "browser.startup"; args = $result },
+    { port = "browser.location"; args = {} }
+  ))
+  port browser.batch { preflight = $reads; probes = {
+    platform = "[data-platform-workspace]"; mobile = "#mobile-trip"; desktop = "#account-state"
+  }; when = "body:has(#account-state):not(:has([data-platform-workspace], #mobile-trip))" } → result
+
+process appdev.event:
+  let action = $eventInput.action
+  when includes(list("tray-open", "tray-inbox", "tray-resources"), $action):
+    call tray.event
+  when eq($action, "shortcut-count"):
+    call appdev.shortcutCount
+  when includes(list("environments-open", "environments-action", "environments-close"), $action):
+    call environments.event
+  when includes(list("tools-operation-open", "tools-operation-link", "tools-operation-submit", "tools-operation-close", "tools-open", "tools-assurance", "tools-performance", "tools-performance-detail", "tools-workloads", "tools-menu-dismiss", "tools-menu-escape", "tools-open-app"), $action):
+    call tools.event
+  when includes(list("tools-desktop-settings", "tools-desktop-color"), $action):
+    call tools.event
+  when eq($action, "observe-identity"):
+    let session = at($eventInput.event, "session")
+    call appdev.renderIdentity
+  when eq($action, "sign-in"):
+    port browser.write { ref = "#start"; name = "open"; value = false } → _
+    port browser.dialog { ref = "#sign-in-dialog"; open = true } → _
+    call appdev.refreshIdentity
+    port browser.property { ref = "#sign-in"; name = "hidden" } → signedIn
+    when $signedIn:
+      port browser.dialog { ref = "#sign-in-dialog"; open = false } → _
+  when eq($action, "sign-out"):
+    call appdev.signOut
+  when includes(list("context-open", "context-key", "context-close"), $action):
+    call appdev.contextMenu
+  when includes(list("programme-open", "programme-refresh", "programme-submit", "programme-close"), $action):
+    call appdev.programmeAction
+  when eq($action, "acting-as-open"):
+    call actingAs.open
+  when includes(list("acting-as-submit", "acting-as-refresh"), $action):
+    call actingAs.load
+  when includes(list("phone-poll", "phone-command"), $action):
+    call pairing.event
+  when includes(list("notes-open", "notes-submit", "notes-close"), $action):
+    call notes.browserEvent
+  when includes(list("demo-open", "demo-action"), $action):
+    call demo.event
+  let result = true
+
+process appdev.shortcutCount:
+  port dom.exists { selector = "#workspace #status" } → available
+  when $available:
+    port browser.property { ref = "#workspace input[name=programs]:checked"; name = "id" } → tab
+    let groups = if(eq($tab, "tab-hosted"), list("[data-group=hosted] > ul", "[data-group=portfolio] > ul"),
+      if(eq($tab, "tab-encounters"), list("[data-group=previews] > ul", "[data-group=platform] > ul"),
+        if(eq($tab, "tab-workspaces"), list("[data-group=workspaces] > ul"),
+          if(eq($tab, "tab-x"), list("[data-group=x] > ul"),
+            list(".notes-operations > ul[data-operation-group=quality]", ".notes-operations > ul[data-operation-group=administration]")))))
+    fold $groups as group; total starts 0:
+      port browser.property { ref = concat("#workspace .programs > ", $group); name = "childElementCount" } → shortcuts
+      yield add($total, $shortcuts) → total
+    port browser.write { ref = "#workspace #status"; name = "textContent"; value = concat($total, if(eq($total, 1), " shortcut", " shortcuts")) } → _
+
+process appdev.refreshIdentity:
+  let session = null
+  try:
+    port browser.request { path = "/workspace/session" } → response
+    assert eq($response.status, 200)
+      otherwise "Session observation unavailable."
+    port json.parse { text = $response.body } → session
+  catch fault:
+    let session = null
+  call appdev.renderIdentity
+
+process appdev.renderIdentity:
+  let signedIn = not(not(at($session, "templeIdentity")))
+  let username = at($session, "username")
+  let publicIdentity = at($session, "publicIdentity")
+  let identity = or(at($session, "templeIdentity"), $publicIdentity, if($username, concat("@", $username), "Identity"))
+  let hasSession = or($signedIn, not(not($publicIdentity)), not(not($username)))
+  let xAvailable = eq(at($session, "xAvailable"), true)
+  let gmailAvailable = eq(at($session, "gmailAvailable"), true)
+  let microsoftAvailable = eq(at($session, "microsoftAvailable"), true)
+  let account = if(not($session), "Sign-in status unavailable", if($signedIn, concat("Signed in as ", $identity), if($hasSession, concat("Public account: ", $identity, " · Workspace sign-in required"), "Signed out")))
+  let message = if(not($session), "AppDev could not check public sign-in availability. Try again shortly.", "")
+  let steps = list(
+    { port = "dom.exists"; args = { selector = "html:not(:has(#desktop-identity-name))" }; save = "missingIdentity" },
+    { port = "dom.exists"; args = { selector = "html:not(:has(#workspace-sign-in-text))" }; save = "missingStatus" },
+    { port = "browser.attribute"; args = { ref = "body"; name = "data-workspace-signed-in"; value = $signedIn } },
+    { port = "browser.write"; args = { ref = "#desktop-identity-name"; name = "textContent"; value = $identity }; unless = "missingIdentity" },
+    { port = "browser.write"; args = { ref = "#workspace-sign-in-text"; name = "textContent"; value = if($signedIn, "Signed in", "Sign-in required") }; unless = "missingStatus" },
+    { port = "browser.write"; args = { ref = "#account-state"; name = "textContent"; value = $account } },
+    { port = "browser.write"; args = { ref = "#sign-in-x"; name = "hidden"; value = not($xAvailable) } },
+    { port = "browser.write"; args = { ref = "#sign-in-x-unavailable"; name = "hidden"; value = $xAvailable } },
+    { port = "browser.write"; args = { ref = "#sign-in-gmail"; name = "hidden"; value = not($gmailAvailable) } },
+    { port = "browser.write"; args = { ref = "#sign-in-gmail-unavailable"; name = "hidden"; value = $gmailAvailable } },
+    { port = "browser.write"; args = { ref = "#sign-in-microsoft"; name = "hidden"; value = not($microsoftAvailable) } },
+    { port = "browser.write"; args = { ref = "#sign-in-microsoft-unavailable"; name = "hidden"; value = $microsoftAvailable } },
+    { port = "browser.write"; args = { ref = "#sign-in-message"; name = "hidden"; value = not($message) } },
+    { port = "browser.write"; args = { ref = "#sign-in-message"; name = "textContent"; value = $message } }
+  )
+  when $session:
+    let steps = append($steps, list(
+      { port = "browser.write"; args = { ref = "#sign-in"; name = "hidden"; value = $signedIn } },
+      { port = "browser.write"; args = { ref = "#sign-out"; name = "hidden"; value = not($hasSession) } }
+    ))
+  port browser.batch { steps = $steps; diagnosticLabel = "Update sign-in status" } → _
+  call tray.identityChanged
+
+process appdev.signOut:
+  port browser.write { ref = "#sign-out"; name = "disabled"; value = true } → _
+  try:
+    port browser.request { path = "/workspace/sign-out"; method = "POST" } → response
+    assert eq($response.status, 204)
+      otherwise "Sign-out refused."
+    port dom.exists { selector = "#workspace input[name=programs]:checked" } → hasTab
+    when $hasTab:
+      port browser.property { ref = "#workspace input[name=programs]:checked"; name = "id" } → tab
+      port storage.write { key = "workspace-sign-out-tab"; scope = "tab"; value = $tab } → _
+    port browser.navigate { path = "/workspace/home" } → _
+  catch fault:
+    port browser.write { ref = "#account-state"; name = "textContent"; value = "Could not sign out. Try again." } → _
+  port browser.write { ref = "#sign-out"; name = "disabled"; value = false } → _
+
+process appdev.contextMenu:
+  let context = $eventInput.context
+  when not($context):
+    let menuId = or(at($eventInput.matched.attributes, "data-app-menu"), at($eventInput.matched.attributes, "data-production-menu"))
+    let context = { anchor = concat("#", $menuId, "-launch"); menu = concat("#", $menuId) }
+  let event = $eventInput.event
+  when or(eq($action, "context-open"), and(eq($action, "context-key"), or(eq($event.key, "ContextMenu"), and(eq($event.key, "F10"), $event.shiftKey)))):
+    let position = if(eq($event.type, "contextmenu"), { x = $event.clientX; y = $event.clientY }, { anchor = $context.anchor })
+    port browser.focus { ref = $context.anchor; preventScroll = true } → _
+    port browser.popover { ref = $context.menu; open = true; position = $position } → _
+    port browser.focus { ref = concat($context.menu, " [role=menuitem]") } → _
+  when eq($action, "context-close"):
+    port browser.popover { ref = $context.menu; open = false } → _
+
+process appdev.programmeAction:
+  let programme = $eventInput.programme
+  let inboxRequested = and(eq($action, "programme-open"), eq($programme.id, "x-mentions"), at($eventInput.matched.attributes, "data-x-inbox"))
+  when $inboxRequested:
+    port record.put { record = $programme; key = "label"; value = "X Inbox" } → programme
+  let dialog = concat("#", $programme.id, "-dialog")
+  let content = concat("#", $programme.id, "-content")
+  when eq($action, "programme-close"):
+    port browser.content { ref = $content; html = "" } → _
+    port browser.location {} → location
+    when eq($location.path, "/identity-management/"):
+      port browser.navigate { path = "/workspace/home"; historyOnly = true } → _
+  when not(eq($action, "programme-close")):
+    when eq($action, "programme-open"):
+      port dom.exists { selector = "dialog[open]" } → open
+      when $open:
+        port browser.dialog { ref = "dialog[open]"; open = false } → _
+      port browser.dialog { ref = $dialog; open = true } → _
+    port state.get { scope = "document"; key = "handover-demo" } → demo
+    when $demo:
+      call demo.programme
+    when not($demo):
+      call appdev.loadProgramme
+    when $inboxRequested:
+      port dom.exists { selector = "#x-mentions-content #x-inbox" } → inboxVisible
+      when $inboxVisible:
+        port browser.focus { ref = "#x-mentions-content #x-inbox" } → _
+
+process appdev.loadProgramme:
+  let path = concat("/identity-management/?view=", $programme.fragment)
+  let submitting = eq($action, "programme-submit")
+  let form = if($submitting, $eventInput.matched.ref, null)
+  when not($submitting):
+    let message = concat("Opening ", $programme.label, "…")
+    let link = null
+    call appdev.programmeNotice
+  try:
+    port browser.request { path = $path; method = if($submitting, "POST", "GET"); form = $form;
+      fragment = concat("[", $programme.settings, "]") } → response
+    when $response.body:
+      port browser.content { ref = $content; html = $response.body } → _
+    when not($response.body):
+      assert includes(list(0, 403), $response.status)
+        otherwise "Program content unavailable."
+      let link = concat("/identity-management/", $programme.launch)
+      let message = concat("Sign in with the approved Temple identity to open ", $programme.label, ".")
+      call appdev.programmeNotice
+  catch fault:
+    let message = concat($programme.label, " could not complete the request. Close the window and try again.")
+    let link = null
+    call appdev.programmeNotice
+
+process appdev.programmeNotice:
+  let input = list({ tag = "p"; attrs = { role = "status" }; children = list($message) },
+    if($link, { tag = "a"; attrs = { class = "button"; href = $link }; children = list("Continue with Google") }, null))
+  call html.serialize
+  port browser.content { ref = $content; html = $result } → _

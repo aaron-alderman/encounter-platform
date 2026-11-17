@@ -1,0 +1,324 @@
+process-module "temple/surface-process-module/1"
+
+process demo.boot:
+  port browser.guard { active = "body[data-handover-demo]"; within = "a,button";
+    allow = "[data-handover-banner],a[data-open-acting-as],a[data-open-mentions],#acting-as-window button,#acting-as-task,#x-mentions-dialog button" } → _
+  let bindings = list(
+    { ref = "document"; event = "click"; delegate = "a[data-open-handover-demo]"; prevent = true; unmodified = true; action = "demo-open" },
+    { ref = "document"; event = "click"; delegate = "[data-handover-banner] button"; action = "demo-action" }
+  )
+  call appdev.bind
+
+process demo.reset:
+  let demo = { person = "outgoing"; holder = "outgoing"; personal = false; offered = false; delegation = null;
+    mentions = list("Before the handover · @sample_author mentioned @sourcery_demo.");
+    decisions = list({ person = "outgoing"; decision = "Authorized connecting the X inbox" }) }
+  port state.set { scope = "document"; key = "handover-demo"; value = $demo } → _
+
+process demo.enter:
+  port state.get { scope = "document"; key = "handover-demo" } → demo
+  when not($demo):
+    port dom.exists { selector = "dialog[open]" } → other
+    when $other:
+      port browser.dialog { ref = "dialog[open]"; open = false } → _
+    call demo.reset
+    port browser.attribute { ref = "body"; name = "data-handover-demo"; value = true } → _
+  call actingAs.open
+  call demo.update
+
+process demo.event:
+  when eq($action, "demo-open"):
+    call demo.enter
+  when eq($action, "demo-action"):
+    port state.get { scope = "document"; key = "handover-demo" } → demo
+    when $demo:
+      let attributes = $eventInput.matched.attributes
+      let button = at($attributes, "data-demo-action")
+      let person = at($attributes, "data-demo-person")
+      when eq($button, "exit"):
+        call demo.exit
+      when not(eq($button, "exit")):
+        when eq($button, "reset"):
+          call demo.reset
+        when includes(list("outgoing", "incoming", "delegate"), $person):
+          port record.put { record = $demo; key = "person"; value = $person } → demo
+          port state.set { scope = "document"; key = "handover-demo"; value = $demo } → _
+        call demo.update
+
+process demo.exit:
+  port dom.exists { selector = "dialog[open]" } → open
+  when $open:
+    port browser.dialog { ref = "dialog[open]"; open = false } → _
+  port state.set { scope = "document"; key = "handover-demo"; value = null } → _
+  port browser.attribute { ref = "body"; name = "data-handover-demo"; value = false } → _
+  call demo.update
+  port browser.write { ref = "#acting-as-window"; name = "hidden"; value = true } → _
+  port browser.write { ref = "#acting-as-task"; name = "hidden"; value = true } → _
+  port browser.focus { ref = "#start > summary" } → _
+  call appdev.refreshIdentity
+
+process demo.update:
+  port state.get { scope = "document"; key = "handover-demo" } → demo
+  each range(2) as position:
+    let ref = { selector = "[data-handover-banner]"; index = add($position, -1) }
+    port browser.write { ref = $ref; name = "hidden"; value = not($demo) } → _
+    when $demo:
+      each list("outgoing", "incoming", "delegate") as person:
+        let ref = { selector = concat("[data-handover-banner] [data-demo-person=", $person, "]"); index = add($position, -1) }
+        port browser.attribute { ref = $ref; name = "aria-pressed"; value = eq($person, $demo.person) } → _
+  when $demo:
+    port dom.exists { selector = "#acting-as-window:not([hidden])" } → rolesOpen
+    when $rolesOpen:
+      call actingAs.load
+    port browser.property { ref = "#x-mentions-dialog"; name = "open" } → mentionsOpen
+    when $mentionsOpen:
+      let programme = { id = "x-mentions" }
+      let content = "#x-mentions-content"
+      let action = "programme-refresh"
+      call demo.programme
+
+process demo.programme:
+  let message = ""
+  when and(eq($programme.id, "acting-as"), eq($action, "programme-submit")):
+    let formRef = $eventInput.matched.ref
+    port browser.property { ref = $formRef; name = "method" } → method
+    let button = at($eventInput.matched.attributes, "data-demo-form")
+    when eq($method, "dialog"):
+      call demo.apply
+  let steward = and(eq($demo.person, $demo.holder), not($demo.personal))
+  let delegated = eq($demo.person, at($demo.delegation, "recipient"))
+  let html = ""
+  when eq($programme.id, "acting-as"):
+    call demo.inspect
+  when eq($programme.id, "x-mentions"):
+    call demo.inbox
+  port browser.content { ref = $content; html = $html } → _
+  when $message:
+    port browser.focus { ref = concat($content, " [role=status]") } → _
+
+process demo.apply:
+  when and(eq($button, "role"), eq($demo.person, $demo.holder)):
+    port record.put { record = $demo; key = "personal"; value = not($demo.personal) } → demo
+    let message = if($demo.personal, "Now acting as Personal.", "Now acting as Sourcery steward.")
+  when and(eq($button, "offer"), eq($demo.person, "outgoing"), eq($demo.holder, "outgoing"), not($demo.personal), not($demo.offered)):
+    let decisions = append(list({ person = "outgoing"; participant = "incoming"; decision = "Offered steward handover to Jordan" }), $demo.decisions)
+    let demo = { person = "outgoing"; holder = "outgoing"; personal = false; offered = true; delegation = $demo.delegation; mentions = $demo.mentions; decisions = $decisions }
+    let message = "Handover offered. Switch to Jordan to review and accept."
+  when and(eq($demo.person, "incoming"), eq($demo.holder, "outgoing"), $demo.offered):
+    when or(and(not($demo.delegation), eq($button, "accept")), and($demo.delegation, includes(list("accept-carry", "accept-end"), $button))):
+      call demo.accept
+  when includes(list("grant", "grant-other", "revoke", "advance"), $button):
+    call demo.delegationApply
+  port state.set { scope = "document"; key = "handover-demo"; value = $demo } → _
+
+process demo.accept:
+  let grant = $demo.delegation
+  let decisions = $demo.decisions
+  let delegation = null
+  when $grant:
+    let carry = eq($button, "accept-carry")
+    let decision = if($carry, "Carried X Mentions access through to expiry", "Ended X Mentions access at handover")
+    let decisions = append(list({ person = "incoming"; participant = "outgoing"; recipient = $grant.recipient; decision = $decision }), $decisions)
+    when $carry:
+      let delegation = { issuer = $grant.issuer; recipient = $grant.recipient; carried = true }
+  let decisions = append(list({ person = "incoming"; participant = "outgoing"; decision = "Accepted steward handover" }), $decisions)
+  let mentions = append($demo.mentions, list("After the handover · @sample_author sent another mention to the same inbox."))
+  let demo = { person = "incoming"; holder = "incoming"; personal = false; offered = false; delegation = $delegation; mentions = $mentions; decisions = $decisions }
+  let message = "Handover accepted. Open X Mentions to see the office inbox."
+
+process demo.delegationApply:
+  let steward = and(eq($demo.person, $demo.holder), not($demo.personal))
+  let grant = $demo.delegation
+  let names = { outgoing = "Casey"; incoming = "Jordan"; delegate = "Riley" }
+  when and(includes(list("grant", "grant-other"), $button), $steward, not($grant)):
+    let recipient = if(eq($button, "grant"), "delegate", if(eq($demo.holder, "outgoing"), "incoming", "outgoing"))
+    let decision = { person = $demo.person; recipient = $recipient; decision = "Granted read-only X Mentions access" }
+    port record.put { record = $demo; key = "delegation"; value = { issuer = $demo.person; recipient = $recipient } } → demo
+    port record.put { record = $demo; key = "decisions"; value = append(list($decision), $demo.decisions) } → demo
+    let message = concat("Granted read-only access to ", at($names, $recipient), " for 5 demo minutes.")
+  when and(eq($button, "revoke"), $steward, $grant):
+    let decision = { person = $demo.person; recipient = $grant.recipient; decision = "Revoked read-only X Mentions access" }
+    port record.put { record = $demo; key = "delegation"; value = null } → demo
+    port record.put { record = $demo; key = "decisions"; value = append(list($decision), $demo.decisions) } → demo
+    let message = concat("Revoked read-only access for ", at($names, $grant.recipient), ".")
+  when and(eq($button, "advance"), $grant):
+    let decision = { person = $grant.issuer; recipient = $grant.recipient; decision = "Read-only X Mentions access expired"; expired = true }
+    port record.put { record = $demo; key = "delegation"; value = null } → demo
+    port record.put { record = $demo; key = "decisions"; value = append(list($decision), $demo.decisions) } → demo
+    let message = "Advanced 5 demo minutes. Read-only access expired."
+
+process demo.inspect:
+  let names = { outgoing = "Casey"; incoming = "Jordan"; delegate = "Riley" }
+  let emails = { outgoing = "casey@example.test"; incoming = "jordan@example.test"; delegate = "riley@example.test" }
+  let held = eq($demo.person, $demo.holder)
+  let transferred = eq($demo.holder, "incoming")
+  let choice = if($held, { tag = "form"; attrs = { method = "dialog"; "data-demo-form" = "role" }; children = list(
+      { tag = "button"; attrs = { class = "button" }; children = list(if($steward, "Act as Personal", "Act as Sourcery steward")) }
+    ) }, null)
+  let handover = { tag = "p"; children = list("Switch to Casey to make the offer.") }
+  when $transferred:
+    let handover = { tag = "p"; children = list("Jordan now holds the office. Switch accounts to compare their access.") }
+  let grant = $demo.delegation
+  let recipientName = at($names, or(at($grant, "recipient"), "delegate"))
+  when and(not($transferred), $demo.offered):
+    call demo.preview
+  when and(not($transferred), not($demo.offered), $held):
+    let handover = if($steward, { tag = "form"; attrs = { method = "dialog"; "data-demo-form" = "offer" }; children = list(
+        { tag = "label"; attrs = { for = "demo-handover-email" }; children = list("Incoming steward’s Google email") },
+        { tag = "input"; attrs = { id = "demo-handover-email"; value = "jordan@example.test"; type = "email"; readonly = true } },
+        { tag = "button"; attrs = { class = "button" }; children = list("Offer steward handover") }
+      ) }, { tag = "p"; children = list("Act as Sourcery steward to make the offer.") })
+  let otherName = at($names, if(eq($demo.holder, "outgoing"), "incoming", "outgoing"))
+  let delegation = { tag = "p"; children = list("Only the acting steward can grant or revoke access.") }
+  when $steward:
+    let delegation = if($demo.delegation, list(
+      { tag = "p"; children = list(
+        $recipientName,
+        " has read-only access for 5 demo minutes."
+      ) },
+      { tag = "form"; attrs = { method = "dialog"; "data-demo-form" = "revoke" }; children = list(
+        { tag = "button"; attrs = { class = "button" }; children = list("Revoke read-only access") }
+      ) }
+    ), list(
+      { tag = "p"; children = list("Give Riley read-only access to X Mentions for 5 demo minutes.") },
+      { tag = "form"; attrs = { method = "dialog"; "data-demo-form" = "grant" }; children = list(
+        { tag = "button"; attrs = { class = "button" }; children = list("Grant read-only access to Riley") }
+      ) },
+      { tag = "form"; attrs = { method = "dialog"; "data-demo-form" = "grant-other" }; children = list(
+        { tag = "button"; attrs = { class = "button" }; children = list(
+          "Grant read-only access to ",
+          $otherName
+        ) }
+      ) }
+    ))
+  when $demo.delegation:
+    let delegation = list(
+      $delegation,
+      { tag = "form"; attrs = { method = "dialog"; "data-demo-form" = "advance" }; children = list(
+        { tag = "button"; attrs = { class = "button" }; children = list("Advance demo clock 5 minutes") }
+      ) }
+    )
+  let authority = if($steward, "Manage X Mentions for the office.", "Personal access. No X Mentions access.")
+  when and($delegated, not($steward)):
+    let authority = concat("Read-only access to X Mentions for 5 demo minutes. Granted by ", at($names, $grant.issuer), " acting as Sourcery steward.",
+      if(at($grant, "carried"), " Jordan carried this grant through to its original expiry.", ""))
+  let visible = filter($demo.decisions, "receipt", or($steward, eq($receipt.person, $demo.person), eq(at($receipt, "participant"), $demo.person), eq(at($receipt, "recipient"), $demo.person)))
+  fold $visible as receipt; history starts list():
+    let actor = if(at($receipt, "expired"), "Demo clock", concat(at($emails, $receipt.person), " · Sourcery steward"))
+    let recipient = at($receipt, "recipient")
+    yield append($history, list({ tag = "li"; children = list(
+        { tag = "strong"; children = list($receipt.decision) },
+        { tag = "br" },
+        $actor,
+        if($recipient, concat(" · Recipient ", at($names, $recipient)), "")
+      ) })) → history
+  let html = { tag = "div"; attrs = { "data-acting-as" = true }; children = list(
+      { tag = "section"; children = list(
+        { tag = "h3"; children = list("Current role") },
+        { tag = "p"; children = list(
+          { tag = "strong"; children = list(if($steward, "Sourcery steward", "Personal")) }
+        ) },
+        if($message, { tag = "p"; attrs = { role = "status"; tabindex = "-1" }; children = list($message) }, null),
+        $choice
+      ) },
+      { tag = "section"; children = list(
+        { tag = "h3"; children = list("Steward") },
+        { tag = "dl"; children = list(
+          { tag = "dt"; children = list("Sample Temple identity") },
+          { tag = "dd"; children = list(
+            at($names, $demo.person),
+            " · ",
+            at($emails, $demo.person)
+          ) },
+          { tag = "dt"; children = list("Notes authority") },
+          { tag = "dd"; children = list($authority) },
+          { tag = "dt"; children = list("Office holder") },
+          { tag = "dd"; children = list(
+            at($names, $demo.holder),
+            " · term ",
+            if($transferred, "2", "1")
+          ) }
+        ) }
+      ) },
+      { tag = "section"; children = list(
+        { tag = "h3"; children = list("Steward handover") },
+        $handover
+      ) },
+      { tag = "section"; attrs = { "aria-label" = "X Mentions delegation" }; children = list(
+        { tag = "h3"; children = list("X Mentions delegation") },
+        $delegation
+      ) },
+      { tag = "section"; attrs = { "aria-label" = "Decision history" }; children = list(
+        { tag = "h3"; children = list("Decision history") },
+        if(count($history), { tag = "ol"; attrs = { class = "identity-receipts" }; children = list($history) }, { tag = "p"; children = list("No decisions recorded for this view.") })
+      ) }
+    ) }
+  let input = $html
+  call html.serialize
+  let html = $result
+
+process demo.preview:
+  let accepting = eq($demo.person, "incoming")
+  let intro = if($accepting, { tag = "p"; children = list("Casey offered you the Sourcery steward office.") }, { tag = "p"; children = list("Casey holds the office until Jordan accepts.") })
+  let details = { tag = "p"; children = list("There is no active X Mentions delegation.") }
+  let controls = if($accepting, { tag = "form"; attrs = { method = "dialog"; "data-demo-form" = "accept" }; children = list(
+      { tag = "button"; attrs = { class = "button" }; children = list("Accept steward handover") }
+    ) }, null)
+  when $grant:
+    let details = { tag = "p"; children = list(
+        $recipientName,
+        " currently has read-only access. Jordan can carry it through to its original expiry or end it at handover."
+      ) }
+    let controls = if($accepting, list(
+      { tag = "form"; attrs = { method = "dialog"; "data-demo-form" = "accept-carry" }; children = list(
+        { tag = "button"; attrs = { class = "button" }; children = list("Accept and carry access through to expiry") }
+      ) },
+      { tag = "form"; attrs = { method = "dialog"; "data-demo-form" = "accept-end" }; children = list(
+        { tag = "button"; attrs = { class = "button" }; children = list("Accept and end access at handover") }
+      ) }
+    ), null)
+  let handover = list(
+    $intro,
+    { tag = "section"; attrs = { "aria-label" = "Handover preview" }; children = list(
+      { tag = "h4"; children = list("Handover preview") },
+      { tag = "p"; children = list("Jordan takes over as steward. Casey’s steward access ends. The X Mentions inbox and decision history stay with the office.") },
+      $details,
+      $controls
+    ) }
+  )
+
+process demo.inbox:
+  let html = { tag = "div"; attrs = { "data-x-mentions" = true }; children = list(
+      { tag = "p"; children = list("Act as Sourcery steward to use this program.") },
+      { tag = "p"; children = list(
+        { tag = "a"; attrs = { class = "button"; href = "/identity-management/?view=acting-as"; "data-open-acting-as" = true }; children = list("Steward") }
+      ) }
+    ) }
+  when or($steward, $delegated):
+    fold $demo.mentions as mention; inbox starts list():
+      yield append($inbox, list({ tag = "li"; children = list(
+          { tag = "article"; children = list(
+            { tag = "header"; children = list(
+              { tag = "strong"; children = list("@sample_author") }
+            ) },
+            { tag = "p"; children = list($mention) }
+          ) }
+        ) })) → inbox
+    let html = { tag = "div"; attrs = { "data-x-mentions" = true }; children = list(
+        { tag = "p"; children = list(
+          { tag = "strong"; children = list("Connected to @sourcery_demo") }
+        ) },
+        if($steward, null, { tag = "p"; children = list(
+          { tag = "strong"; children = list("Read-only access") },
+          " · ",
+          { tag = "a"; attrs = { class = "button"; href = "/identity-management/?view=acting-as"; "data-open-acting-as" = true }; children = list("Steward") }
+        ) }),
+        { tag = "section"; attrs = { "aria-label" = "Mentions inbox" }; children = list(
+          { tag = "h3"; attrs = { id = "x-inbox"; tabindex = "-1" }; children = list("Inbox") },
+          { tag = "button"; attrs = { type = "button"; class = "button"; "data-refresh-program" = true }; children = list("Refresh inbox") },
+          { tag = "ol"; attrs = { class = "mention-list" }; children = list($inbox) }
+        ) }
+      ) }
+  let input = $html
+  call html.serialize
+  let html = $result

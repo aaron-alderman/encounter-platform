@@ -1,0 +1,76 @@
+process-module "temple/surface-process-module/1"
+
+# Commit the contents and directory information in the same storage item.
+process browserDocuments.read:
+  port storage.readRecord { key = "sourcery.desktop.documents.v1"; maxLength = 65536 } → stored
+  let rows = list()
+  let valid = $stored.ok
+  when not(eq(at($stored, "value"), null)):
+    try:
+      port json.parse { text = $stored.value } → rows
+      port number.calculate { operation = "lessEqual"; values = list(count($rows), 32) } → bounded
+      let valid = and($bounded, eq(map($rows, "row", $row), $rows))
+    catch fault:
+      let valid = false
+  let result = { available = $valid; rows = if($valid, $rows, list()); revision = at($stored, "value") }
+
+process browserDocuments.path:
+  let path = concat($scope.fileRoot, "/", $relative)
+  port text.matches { value = $relative; pattern = "^[A-Za-z0-9_-][A-Za-z0-9_.-]*(/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*$" } → canonical
+  port number.calculate { operation = "subtract"; values = list(count($path), count($scope.extension)) } → start
+  port text.slice { value = $path; start = $start; end = count($path) } → ending
+  port number.calculate { operation = "lessEqual"; values = list(count($path), 80) } → bounded
+  let result = if(and($canonical, $bounded, eq($ending, $scope.extension)), $path, "")
+
+process browserDocuments.load:
+  call browserDocuments.read
+  let volume = $result
+  let row = at(filter($volume.rows, "row", eq($row.path, $path)), 0)
+  # Existing files saved by the first browser editor remain reopenable by path.
+  when and($volume.available, not($row)):
+    port digest.sha256 { text = $path } → digest
+    port storage.read { key = concat("sourcery.desktop.documents.", $digest); maxLength = 4096 } → old
+    when and($old.ok, not(eq(at($old, "value"), null))):
+      let row = { path = $path; text = $old.value }
+  let result = { available = $volume.available; rows = $volume.rows; revision = $volume.revision; file = $row }
+
+process browserDocuments.save:
+  port text.utf8Length { value = $contents } → length
+  port number.calculate { operation = "lessEqual"; values = list($length, 4096) } → fits
+  let remaining = filter($volume.rows, "row", not(eq($row.path, $path)))
+  port number.calculate { operation = "less"; values = list(count($remaining), 32) } → room
+  fold $remaining as row; clear starts true:
+    port text.indexOf { value = $row.path; search = concat($path, "/"); from = 0 } → child
+    port text.indexOf { value = $path; search = concat($row.path, "/"); from = 0 } → parent
+    yield and($clear, not(or(eq($child, 0), eq($parent, 0)))) → clear
+  let result = false
+  when and($fits, $room, $clear, $volume.available):
+    port json.stringify { value = append($remaining, list({ path = $path; text = $contents })); space = 0 } → next
+    port number.calculate { operation = "lessEqual"; values = list(count($next), 56000) } → bounded
+    when $bounded:
+      port storage.compareAndSet { key = "sourcery.desktop.documents.v1"; expected = $volume.revision; value = $next } → written
+      let result = $written.ok
+
+process browserDocuments.catalogue:
+  call desktopText.definition
+  let scope = $result
+  call browserDocuments.read
+  let volume = $result
+  let root = { id = "local-documents"; path = $scope.fileRoot; name = "Documents"; kind = "Folder"; permission = "This browser"; local = true }
+  fold $volume.rows as row; nodes starts list($root):
+    port text.slice { value = $row.path; start = add(count($scope.fileRoot), 1); end = count($row.path) } → relative
+    call browserDocuments.path
+    let next = $nodes
+    when eq($result, $row.path):
+      port text.split { value = $relative; pattern = "/" } → components
+      fold $components as name; directory starts { parent = $root; nodes = $nodes }:
+        let path = concat($directory.parent.path, "/", $name)
+        let file = eq($path, $row.path)
+        let id = concat("local-document:", $path)
+        let node = { id = $id; path = $path; parent = $directory.parent.id; name = $name;
+          kind = if($file, "Text", "Folder"); permission = "This browser"; local = true }
+        let exists = some($directory.nodes, "entry", eq($entry.id, $id))
+        yield { parent = $node; nodes = if($exists, $directory.nodes, append($directory.nodes, list($node))) } → directory
+      let next = $directory.nodes
+    yield $next → nodes
+  let result = $nodes

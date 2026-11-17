@@ -1,0 +1,126 @@
+process-module "temple/surface-process-module/1"
+
+process release.plan:
+  let facts = $eventInput.facts
+  let subject = "plan"
+  let property = "contract"
+  call facts.one
+  assert eq($result, "encounter/appdev-release-plan/2")
+    otherwise "Unsupported AppDev release plan."
+  let operation = $eventInput.operation
+  let operations = {
+    "check" = { candidate = "home"; finish = "return" };
+    "check-system" = { candidate = "system"; finish = "return" };
+    "check-work" = { candidate = "work-with-active-home"; finish = "return" };
+    "preview-rel" = { candidate = "preview-declaration"; finish = "preview" };
+    "deploy" = { candidate = "home"; finish = "activate-home" };
+    "deploy-system" = { candidate = "system"; finish = "activate-system" };
+    "deploy-work" = { candidate = "bundled-work-system"; finish = "activate-system" }
+  }
+  let route = at($operations, $operation)
+  assert $route
+    otherwise "Unknown AppDev release operation."
+  let subject = $operation
+  let property = "gates"
+  call facts.one
+  let subject = $result
+  let property = "gate"
+  call facts.values
+  let gates = $result
+  let preview = eq($route.candidate, "preview-declaration")
+  let work = eq($route.candidate, "work-with-active-home")
+  let system = includes(list("system", "bundled-work-system"), $route.candidate)
+  when $preview:
+    assert eq($gates, list("shared-preview"))
+      otherwise "Invalid AppDev preview route."
+  when not($preview):
+    assert and(includes($gates, "home-browser"), includes($gates, "interaction-assurance"),
+      includes($gates, "home-temple-startup"), includes($gates, "identity-assurance"),
+      includes($gates, "decompiler-paging"), includes($gates, "decompiler-mount"),
+      or(not($work), includes($gates, "work-browser")))
+      otherwise "The release plan omitted a required gate."
+  when $system:
+    assert includes($gates, "app-build")
+      otherwise "The system check requires App Build API, manual UI, guided replay and restart Assurance."
+    assert and(eq(count($gates), count(distinct($gates))), includes($gates, "system-journeys"),
+      includes($gates, "system-work-browser"), includes($gates, "system-work-performance"),
+      eq(at($gates, 0), "frontend-csp-policy"),
+      eq(at($gates, add(count($gates), -1)), "registry-performance"))
+      otherwise "The system check requires staged journeys and the final registry performance gate."
+  let subject = "shared-preview"
+  let property = "start"
+  call facts.values
+  let previewCheck = and(eq($operation, "check"), $eventInput.previewCheck)
+  let gates = if($previewCheck, filter($gates, "gate", not(eq($gate, "identity-assurance"))), $gates)
+  let result = { candidate = $route.candidate; finish = $route.finish; gates = $gates; launch = $result }
+
+process release.admit:
+  when eq($eventInput.operation, "deploy"):
+    assert not($eventInput.system)
+      otherwise "Use coordinated system activation for the system package."
+  when includes(list("check-system", "deploy-system", "deploy-work"), $eventInput.operation):
+    assert $eventInput.system
+      otherwise "Expected an AppDev system package."
+  let result = true
+
+process release.finish:
+  assert eq($eventInput.homeBefore, $eventInput.homeAfter)
+    otherwise "The AppDev package changed during verification."
+  when $eventInput.work:
+    assert and(eq($eventInput.workBefore, $eventInput.workAfter), eq($eventInput.activeBefore, $eventInput.activeAfter))
+      otherwise "Home or the Work package changed during verification."
+  let result = true
+
+process release.verify:
+  let home = $eventInput.home
+  let work = $eventInput.work
+  let gates = $eventInput.gates
+  let homeWasm = eq($eventInput.homeWasm, true)
+  let workWasm = eq($eventInput.workWasm, true)
+  let standaloneWasm = eq($eventInput.standaloneWasm, true)
+  when includes($gates, "frontend-csp-policy"):
+    assert and(eq($homeWasm, $workWasm), eq($homeWasm, $standaloneWasm))
+      otherwise "A coordinated Wasm release requires Home, Work, and standalone browser catalogs together."
+  when not($homeWasm):
+    let gates = filter($gates, "gate", not(eq($gate, "frontend-csp-policy")))
+  fold $gates as gate; commands starts list():
+    let browser = list("--candidate", $home)
+    let args = list()
+    let tool = "routes"
+    when eq($gate, "frontend-csp-policy"):
+      let args = append($browser, list("--frontend-wasm-journeys"))
+      when $eventInput.previousClients:
+        let args = append($args, list("--frontend-previous-clients", $eventInput.previousClients))
+    when eq($gate, "work-browser"):
+      assert $work
+        otherwise "The Work gate requires a Work package."
+      let args = append($browser, list("--work-candidate", $work))
+    when eq($gate, "system-work-browser"):
+      let args = append($browser, list("--system-work-startup"))
+    when eq($gate, "system-work-performance"):
+      let args = append($browser, list("--system-work-performance"))
+    when eq($gate, "system-journeys"):
+      let args = append($browser, list("--system-journeys"))
+    when eq($gate, "app-build"):
+      let args = append($browser, list("--app-build"))
+    when eq($gate, "home-temple-startup"):
+      let args = append(list("--home-temple-startup"), $browser)
+    when eq($gate, "home-browser"):
+      let args = append(list("--front-gate-only"), $browser)
+    when eq($gate, "decompiler-paging"):
+      let tool = "decompiler-paging"
+    when eq($gate, "decompiler-mount"):
+      let tool = "decompiler-mount"
+    when eq($gate, "identity-assurance"):
+      let tool = "identity-assurance"
+      let args = list("applications/appdev-projects/identity-compiler.rel", "check-reviewed")
+    when eq($gate, "interaction-assurance"):
+      let tool = "assurance"
+    when eq($gate, "registry-performance"):
+      let tool = "registry-performance"
+    assert or(count($args), includes(list("decompiler-paging", "decompiler-mount", "registry-performance", "assurance"), $tool))
+      otherwise "Unknown AppDev gate."
+    let command = { label = $gate; tool = $tool; args = $args }
+    when and(eq($gate, "home-browser"), includes($gates, "frontend-csp-policy")):
+      let command = { label = $gate; tool = $tool; args = $args; enforceFrontendCsp = true }
+    yield append($commands, list($command)) → result

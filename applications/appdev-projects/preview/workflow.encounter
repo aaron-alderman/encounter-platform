@@ -1,0 +1,146 @@
+process-module "temple/surface-process-module/1"
+
+process preview.plan:
+  let operations = list("identity-broker", "identity-gateway", "workspace", "browser", "proxy")
+  assert eq(count($eventInput.launch), count($operations))
+    otherwise "Expected each preview host operation once."
+  each $operations as operation:
+    assert includes($eventInput.launch, $operation)
+      otherwise "Missing preview host operation."
+  let required = list("preview.contract", "preview.package", "preview.credentials", "preview.stewardEmail",
+    "port.http", "port.workspace", "port.browser")
+  let optional = list("fixture.certificateInventory", "fixture.certificateRenewal", "fixture.certificateRollover",
+    "fixture.identityGateway", "port.identityGateway", "fixture.identityBroker", "port.identityBroker",
+    "fixture.directPrincipal", "fixture.directActorSession", "preview.identityOverview")
+  fold $eventInput.facts as fact; fields starts {}:
+    let key = concat(at($fact, 0), ".", at($fact, 1))
+    assert or(includes($required, $key), includes($optional, $key))
+      otherwise "Unknown preview field."
+    assert not(at($fields, $key))
+      otherwise "Duplicate preview field."
+    let value = at($fact, 2)
+    assert $value
+      otherwise "Preview fields must have a value."
+    when or(includes(list("fixture.certificateInventory", "fixture.certificateRenewal"), $key),
+      includes(list("port.http", "port.workspace", "port.browser", "port.identityGateway", "port.identityBroker"), $key)):
+      port text.matches { value = $value; pattern = "^[1-9][0-9]{3,4}$" } → numeric
+      assert $numeric
+        otherwise "Expected a numeric loopback port."
+      port number.parse { value = $value } → value
+      port number.calculate { operation = "less"; values = list(1023, $value) } → above
+      port number.calculate { operation = "less"; values = list($value, 65536) } → below
+      assert and($above, $below)
+        otherwise "Expected an unprivileged loopback port."
+    port record.put { record = $fields; key = $key; value = $value } → updated
+    yield $updated → fields
+  each $required as key:
+    assert at($fields, $key)
+      otherwise "Missing required preview field."
+  assert eq(at($fields, "preview.contract"), "encounter/appdev-preview/1")
+    otherwise "Unsupported preview contract."
+  let rollover = at($fields, "fixture.certificateRollover")
+  assert or(not($rollover), eq($rollover, "true"))
+    otherwise "Expected true for certificate rollover."
+  let gatewayFile = at($fields, "fixture.identityGateway")
+  let gatewayPort = at($fields, "port.identityGateway")
+  let brokerKind = at($fields, "fixture.identityBroker")
+  let brokerPort = at($fields, "port.identityBroker")
+  assert and(eq(not($gatewayFile), not($gatewayPort)), eq(not($brokerKind), not($brokerPort)), or(not($brokerKind), $gatewayFile))
+    otherwise "The identity gateway needs a file and port, and a broker needs a gateway and port."
+  assert or(not($brokerKind), eq($brokerKind, "synthetic-temple"))
+    otherwise "Expected the synthetic-temple preview broker."
+  let principal = at($fields, "fixture.directPrincipal")
+  let actorSession = at($fields, "fixture.directActorSession")
+  assert and(eq(not($principal), not($actorSession)), not(and($principal, $gatewayFile)))
+    otherwise "Choose an identity gateway or a direct fixture principal and session."
+  let identityOverview = at($fields, "preview.identityOverview")
+  assert or(not($identityOverview), and(eq($identityOverview, "/settings/identity/"), $gatewayFile, $brokerKind))
+    otherwise "The Identity Management move preview requires the canonical route and a fixture gateway and broker."
+  let http = at($fields, "port.http")
+  let workspace = at($fields, "port.workspace")
+  let browser = at($fields, "port.browser")
+  let inventory = at($fields, "fixture.certificateInventory")
+  let renewal = at($fields, "fixture.certificateRenewal")
+  fold list($http, $workspace, $browser, $gatewayPort, $brokerPort) as port; ports starts list():
+    assert or(not($port), and(not(includes($ports, $port)), not(eq($port, $inventory)), not(eq($port, $renewal))))
+      otherwise "Preview listeners must use distinct ports outside the certificate fixtures."
+    yield if($port, append($ports, list($port)), $ports) → ports
+  let result = { release = at($fields, "preview.package"); credentials = at($fields, "preview.credentials");
+    identityOverview = if($identityOverview, $identityOverview, null);
+    steward = at($fields, "preview.stewardEmail"); http = $http; workspace = $workspace; browser = $browser;
+    inventory = if($inventory, $inventory, null); renewal = if($renewal, $renewal, null);
+    rollover = eq($rollover, "true"); ports = $ports;
+    gateway = if($gatewayFile, { file = $gatewayFile; port = $gatewayPort }, null);
+    broker = if($brokerKind, { port = $brokerPort }, null);
+    direct = if($principal, { principal = $principal; actorSession = $actorSession }, null) }
+
+process preview.gateway:
+  let facts = $eventInput.facts
+  let subject = "gateway"
+  let property = "port"
+  call facts.one
+  assert eq($result, concat("", $eventInput.gateway))
+    otherwise "Identity gateway port differs from the preview declaration."
+  when $eventInput.broker:
+    let property = "identityPort"
+    call facts.one
+    assert eq($result, concat("", $eventInput.broker))
+      otherwise "Identity broker port differs from the preview declaration."
+    let property = "broker"
+    call facts.one
+    assert eq($result, concat("http://127.0.0.1:", $eventInput.broker))
+      otherwise "Expected the synthetic broker on the declared loopback origin."
+    let property = "identityPath"
+    call facts.one
+    assert eq($result, "/v1/me")
+      otherwise "Expected the synthetic broker's identity endpoint."
+    let property = "prefix"
+    call facts.one
+    assert eq($result, "/identity-management")
+      otherwise "The synthetic broker is scoped to the Identity Management preview."
+    let property = "mount"
+    call facts.values
+    assert eq(count($result), 0)
+      otherwise "The synthetic broker cannot authenticate gateway mounts."
+    let property = "target"
+    call facts.values
+    assert eq(count($result), 1)
+      otherwise "The synthetic broker requires one preview gateway target."
+    let subject = at($result, 0)
+    let property = "origin"
+    call facts.one
+    assert eq($result, concat("http://127.0.0.1:", $eventInput.http))
+      otherwise "The synthetic broker requires the preview HTTP origin."
+    let property = "port"
+    call facts.one
+    assert eq($result, concat("", $eventInput.workspace))
+      otherwise "The synthetic broker requires the preview workspace port."
+  let result = true
+
+process preview.environment:
+  let config = $eventInput.config
+  let http = concat("127.0.0.1:", $config.http)
+  let workspace = concat("127.0.0.1:", $config.workspace)
+  let browser = concat("127.0.0.1:", $config.browser)
+  let gateway = if($config.gateway, concat("127.0.0.1:", $config.gateway.port), null)
+  let direct = null
+  when $config.direct:
+    port text.trim { value = $eventInput.credential } → authorization
+    each list($authorization, $config.direct.principal, $config.steward, $config.direct.actorSession) as header:
+      port text.matches { value = $header; pattern = "^[ -~]+$" } → printable
+      port text.matches { value = $header; pattern = "['\"$\\\\]" } → escaped
+      assert and($printable, not($escaped))
+        otherwise "Invalid preview identity header."
+    let direct = { authorization = $authorization; principal = $config.direct.principal;
+      steward = $config.steward; actorSession = $config.direct.actorSession }
+  let proxy = { http = $http; workspace = $workspace; browser = $browser; gateway = $gateway; direct = $direct;
+    identityOverview = $config.identityOverview }
+  let origin = concat("http://", $http)
+  let workEnv = { APPDEV_PORT = concat("", $config.workspace); APPDEV_ORIGIN = $origin;
+    APPDEV_STEWARD_EMAIL = $config.steward; APPDEV_IDENTITY_GATEWAY = concat("http://", if($gateway, $gateway, $browser));
+    APPDEV_CERTIFICATE_ROLLOVER = if($config.rollover, "1", "0");
+    APPDEV_NETWORK_STATE = concat($eventInput.scratch, "/no-network-state");
+    STATE_DIRECTORY = concat($eventInput.scratch, "/state"); CREDENTIALS_DIRECTORY = $eventInput.credentials;
+    APPDEV_CERTIFICATE_INVENTORY = if($config.inventory, concat("http://127.0.0.1:", $config.inventory), null);
+    APPDEV_CERTIFICATE_RENEWAL = if($config.renewal, concat("http://127.0.0.1:", $config.renewal), null) }
+  let result = { proxy = $proxy; workspace = $workEnv; url = concat($origin, "/workspace/home") }

@@ -1,0 +1,186 @@
+process-module "temple/surface-process-module/1"
+
+process design.colors:
+  let result = list(
+    { id = "ink"; label = "Text" }, { id = "muted"; label = "Secondary text" },
+    { id = "accent"; label = "Links and focus" }, { id = "gold"; label = "Highlight" },
+    { id = "frame"; label = "Frame and controls" }, { id = "paper"; label = "Document surface" },
+    { id = "panel"; label = "Panel surface" }, { id = "line"; label = "Borders" },
+    { id = "selected"; label = "Selection" },
+    { id = "title-start"; label = "Title gradient start"; default = "#080950" },
+    { id = "title-end"; label = "Title gradient end"; default = "#3974bc" },
+    { id = "title-ink"; label = "Title text"; default = "#ffffff" },
+    { id = "error-paper"; label = "Error surface"; default = "#fbe6e4" },
+    { id = "error-ink"; label = "Error text"; default = "#712722" },
+    { id = "backdrop"; label = "Solid backdrop"; default = "#225b6e" }
+  )
+
+process design.tokenColor:
+  let marker = concat("--sourcery-", $color.id, ":")
+  port text.indexOf { value = $tokens; search = $marker } → start
+  let start = add($start, count($marker))
+  port text.slice { value = $tokens; start = $start; end = add($start, 7) } → result
+
+process design.options:
+  let result = list(
+    { id = "font"; label = "Typeface"; values = list("Standard", "System", "Serif", "Monospace") },
+    { id = "scale"; label = "Text size"; values = list("Standard", "Small", "Large") },
+    { id = "spacing"; label = "Spacing"; values = list("Standard", "Compact", "Roomy") },
+    { id = "frame-style"; label = "Window frame"; values = list("Raised", "Flat") },
+    { id = "shadow"; label = "Window shadow"; values = list("Standard", "None") },
+    { id = "desktop"; label = "Desktop texture"; values = list("Standard", "Solid") },
+    { id = "status"; label = "Feedback state"; values = list("Success", "Error", "None") },
+    { id = "button-state"; label = "Primary button state"; values = list("Enabled", "Disabled") },
+    { id = "source-mode"; label = "Source mode"; values = list("Read only", "Editable") },
+    { id = "source-position"; label = "Source position"; values = list("Below", "Beside") },
+    { id = "source-scale"; label = "Source text size"; values = list("Standard", "Small", "Large") },
+    { id = "numbers"; label = "Viewer line numbers"; values = list("On", "Off") },
+    { id = "wrap"; label = "Editor wrapping"; values = list("Off", "On") }
+  )
+
+process design.page:
+  let fields = $eventInput.fields
+  let embedded = at($eventInput, "embedded")
+  call sourcery.presentation.tokens
+  let tokens = $result
+  call design.colors
+  let colors = $result
+  call design.options
+  let options = $result
+  fold $colors as color; values starts {}:
+    let default = at($color, "default")
+    when not($default):
+      call design.tokenColor
+      let default = $result
+    let chosen = at($fields, $color.id)
+    let valid = and(eq(count(or($chosen, "")), 7), eq(at($chosen, 0), "#"),
+      every(range(6), "index", includes("0123456789abcdefABCDEF", at($chosen, $index))))
+    port record.put { record = $values; key = $color.id; value = if($valid, $chosen, $default) } → updated
+    yield $updated → colorsPicked
+  fold $options as option; values starts $colorsPicked:
+    let chosen = at($fields, $option.id)
+    port record.put { record = $values; key = $option.id; value = if(includes($option.values, $chosen), $chosen, at($option.values, 0)) } → updated
+    yield $updated → settings
+  let title = or(at($fields, "title"), "Review work")
+  let action = or(at($fields, "action"), "Apply design")
+  port text.slice { value = $title; start = 0; end = 80 } → title
+  port text.slice { value = $action; start = 0; end = 40 } → action
+  let themeAttrs = map(append($colors, $options), "setting", list(concat("data-", $setting.id), at($settings, $setting.id)))
+  let customTitle = not(and(eq($settings.title-start, "#080950"), eq($settings.title-end, "#3974bc")))
+  port record.fromEntries { entries = append($themeAttrs, list(list("class", "design-preview"), list("id", "design-preview"), list("tabindex", "-1"),
+    list("data-custom-title", if($customTitle, "true", "false")))) } → previewAttrs
+  call design.specimen
+  let specimen = $result
+  let result = { tag = "div"; attrs = { class = "design-layout" }; children = list(
+    { tag = "form"; attrs = { id = "design-controls"; class = "design-controls"; method = "get"; action = if($embedded, null, "/#design-preview"); "aria-label" = "Customize Encounter design" }; children = list(
+      { tag = "input"; attrs = { type = "hidden"; name = "view"; value = "design" } },
+      { tag = "div"; attrs = { class = "design-actions" }; children = list(
+        { tag = "button"; attrs = { type = "submit" }; children = list("Apply to preview") },
+        { tag = "a"; attrs = { href = "#design-preview" }; children = list("Preview") },
+        if($embedded, { tag = "button"; attrs = { type = "button"; "data-design-reset" = "true" }; children = list("Reset to standard") },
+          { tag = "a"; attrs = { href = "/?view=design" }; children = list("Reset to standard") })
+      ) },
+      { tag = "fieldset"; children = list({ tag = "legend"; children = list("Appearance and behavior") },
+        map($options, "option", { tag = "label"; children = list($option.label, { tag = "select"; attrs = { name = $option.id; "aria-label" = $option.label }; children =
+          map($option.values, "value", { tag = "option"; attrs = { selected = eq($value, at($settings, $option.id)) }; children = list($value) }) }) }),
+        { tag = "label"; children = list("Window title", { tag = "input"; attrs = { name = "title"; value = $title; maxlength = "80" } }) },
+        { tag = "label"; children = list("Primary button label", { tag = "input"; attrs = { name = "action"; value = $action; maxlength = "40" } }) }
+      ) },
+      { tag = "fieldset"; children = list({ tag = "legend"; children = list("Palette") },
+        map($colors, "color", { tag = "label"; children = list($color.label, { tag = "input"; attrs = { type = "color"; name = $color.id; value = at($settings, $color.id) } }) })
+      ) }
+    ) },
+    { tag = "section"; attrs = $previewAttrs; children = list($specimen) }
+  ) }
+
+process design.specimen:
+  let sample = concat("process-module \"temple/surface-process-module/1\"\n\n",
+    "process review.status:\n",
+    "  let release = $eventInput\n",
+    "  let result = if($release.approved, \"Ready\", \"Needs review\")\n")
+  port kernel.invoke { query = "source.widget"; input = { label = "Encounter source"; language = "Encounter"; text = $sample; name = "sample-source";
+    rows = "9"; editable = eq($settings.source-mode, "Editable"); numbered = eq($settings.numbers, "On"); wrap = eq($settings.wrap, "On") } } → source
+  port kernel.invoke { query = "sourcery.presentation.decision"; input = {
+    attrs = { class = "decision-form" }; title = "Review decision"; legend = "Decision";
+    properties = list({ label = "App"; value = "Field notebook" }, { label = "Version"; value = "1.0.0" });
+    body = list(
+      { tag = "label"; children = list("Comment", { tag = "input"; attrs = { placeholder = "Add a review comment" } }) },
+      { tag = "label"; children = list({ tag = "input"; attrs = { type = "checkbox"; checked = true } }, "Keep the review with the release") }
+    );
+    commands = list({ tag = "button"; attrs = { type = "submit"; form = "design-controls"; class = "decision-default"; disabled = eq($settings.button-state, "Disabled") }; children = list($action) })
+  } } → decision
+  let result = { tag = "div"; attrs = { class = "design-window" }; children = list(
+    { tag = "header"; attrs = { class = "nb1-title" }; children = list({ tag = "h2"; children = list($title) }) },
+    { tag = "nav"; attrs = { class = "project-command-bar"; "aria-label" = "Preview sections" }; children = list(
+      { tag = "a"; attrs = { href = "#design-review"; "aria-current" = "true" }; children = list("Review") },
+      { tag = "a"; attrs = { href = "#design-source" }; children = list("Source") },
+      { tag = "a"; attrs = { href = "#design-controls" }; children = list("Customize") }
+    ) },
+    { tag = "div"; attrs = { class = "design-window-content"; id = "design-review" }; children = list(
+      if(not(eq($settings.status, "None")), { tag = "p"; attrs = { class = if(eq($settings.status, "Error"), "feedback error", "feedback") };
+        children = list(if(eq($settings.status, "Error"), "The review needs a decision.", "The release is ready for review.")) }, null),
+      $decision,
+      { tag = "table"; children = list(
+        { tag = "thead"; children = list({ tag = "tr"; children = list({ tag = "th"; attrs = { scope = "col" }; children = list("Release") },
+          { tag = "th"; attrs = { scope = "col" }; children = list("Status") }) }) },
+        { tag = "tbody"; children = list({ tag = "tr"; children = list({ tag = "td"; children = list("Field notebook 1.0.0") },
+          { tag = "td"; children = list({ tag = "span"; attrs = { class = "nb1-stamp" }; children = list("Ready") }) }) }) }
+      ) },
+      { tag = "div"; attrs = { id = "design-source" }; children = list($source) }
+    ) }
+  ) }
+
+process design.workspaceFrameStyles:
+  call design.desktopMultiWindowStyles
+  let windows = $result
+  let result = concat(
+    "main.desktop>#workspace{position:relative}main.desktop>#workspace[data-active=true]{z-index:4}",
+    ":is(.window,.desktop-app-window,.custom-window){display:flex;flex-direction:column;min-width:0;min-height:0;padding:var(--sourcery-window-frame-width,4px);background:var(--sourcery-frame,var(--gray));box-shadow:var(--sourcery-raised,var(--raised)),var(--sourcery-window-shadow,8px 9px 0 #10294156)}",
+    ".desktop-app-window{position:absolute;z-index:3;top:clamp(10px,5vh,48px);right:12px;width:min(56rem,calc(100% - 24px));max-height:calc(100% - clamp(10px,5vh,48px) - 12px)}",
+    ".desktop-app-window[hidden],.desktop-app-task[hidden]{display:none}.desktop-app-window>.titlebar{flex:none}.desktop-app-window .titlebar h2{margin:0;font:inherit}.desktop-app-window .window-controls button,.desktop-app-task{font:inherit;background:var(--gray);color:var(--ink);border:0;box-shadow:var(--raised);cursor:pointer}.desktop-app-window .window-controls button{min-width:25px;min-height:23px}.desktop-app-window .window-controls button:focus-visible,.desktop-app-task:focus-visible{outline:2px dashed var(--navy);outline-offset:-3px}",
+    ":is(.programs,.manager-panel,.desktop-app-content){min-height:0;background:var(--sourcery-paper,#fffef3);box-shadow:var(--sourcery-inset,var(--sunken))}.desktop-app-content{overflow:auto;overscroll-behavior:contain;padding:10px}.desktop-app-task{min-width:0;max-width:18rem}.desktop-app-task span{overflow:hidden;text-overflow:ellipsis}.desktop-app-task .icon{flex:none}",
+    "@media(max-width:670px){.desktop-app-window{top:8px;right:8px;width:calc(100% - 16px);max-height:calc(100% - 16px)}.desktop-app-task{flex:1}.desktop-app-window .window-controls button{min-width:34px;min-height:32px}}",
+    "@media(max-width:460px){.taskbar:has(>.desktop-app-task:not([hidden]))>.tray{display:none}}", $windows)
+
+process design.desktopMultiWindowStyles:
+  call sourcery.presentation.dataTableStyles
+  let result = concat($result,
+    ".desktop-app-window[data-active=true]{z-index:5}",
+    "#notes-assurance-window{top:clamp(24px,8vh,68px);right:28px;max-height:calc(100% - clamp(24px,8vh,68px) - 12px)}",
+    "#notes-performance-window{top:clamp(38px,11vh,88px);right:44px;width:min(34rem,calc(100% - 56px));max-height:calc(100% - clamp(38px,11vh,88px) - 12px)}",
+    "#notes-performance-reading dl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px}#notes-performance-reading dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}",
+    ".desktop-launch-results{overflow:auto;margin:10px 0 20px}.desktop-launch-results .sourcery-data-table{--sourcery-table-cell-padding:6px 8px}",
+    "@media(max-width:670px){#notes-assurance-window,#notes-performance-window{top:8px;right:8px;width:calc(100% - 16px);max-height:calc(100% - 16px)}.taskbar:has(>.desktop-app-task:not([hidden]))>[for=workspace-open]{min-width:0;overflow:hidden;max-width:36%}.desktop-app-task{flex:1 1 0}}")
+
+process design.workspaceStyles:
+  call ui.presentationStyles
+  let notebook = $result
+  call source.widgetStyles
+  let widget = $result
+  call design.styles
+  port text.replaceAll { value = concat($notebook, $widget, $result); search = ":root"; replacement = ":scope" } → scoped
+  call design.workspaceFrameStyles
+  let result = concat($result,
+    "#notes-design-demo-content{color:var(--sourcery-ink);font:14px/1.45 var(--sourcery-font)}",
+    "@scope (#notes-design-demo-content){", $scoped, "}")
+
+process design.styles:
+  call design.colors
+  let declarations = map(filter($result, "color", not(at($color, "default"))), "color",
+    concat("--sourcery-", $color.id, ":attr(data-", $color.id, " type(<color>));"))
+  port text.join { values = $declarations; separator = "" } → palette
+  let result = concat(
+    ".design-layout{display:grid;grid-template-columns:minmax(14rem,23rem) minmax(0,1fr);gap:1rem;align-items:start}",
+    ".design-controls{display:grid;margin:0}.design-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.55rem}.design-controls fieldset{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem;padding:.55rem;background:var(--sourcery-panel)}.design-controls input[type=color]{height:2rem;padding:3px}",
+    ".design-preview{min-width:0;padding:clamp(.55rem,2vw,1rem);background:var(--sourcery-desktop);color:var(--sourcery-ink);font:14px/1.45 var(--sourcery-font);--design-space:.65rem}",
+    "@supports(color:attr(data-ink type(<color>),black)){.design-preview{", $palette, "--design-title-ink:attr(data-title-ink type(<color>),#fff);--design-error-paper:attr(data-error-paper type(<color>),#fbe6e4);--design-error-ink:attr(data-error-ink type(<color>),#712722);accent-color:var(--sourcery-accent)}",
+    ".design-preview[data-custom-title=true]{--sourcery-title:linear-gradient(90deg,attr(data-title-start type(<color>),#080950),attr(data-title-end type(<color>),#3974bc))}}",
+    ".design-window{min-width:0;background:var(--sourcery-paper);border:4px solid var(--sourcery-frame);box-shadow:var(--sourcery-raised),var(--sourcery-shadow)}.design-window .nb1-title{color:var(--design-title-ink,#fff)}.design-window h2{margin:0;font-size:1.12em}.design-window-content{padding:var(--design-space)}.design-window .nb1-stamp{background:var(--sourcery-gold)}",
+    ".design-preview[data-font=System]{--sourcery-font:system-ui,sans-serif}.design-preview[data-font=Serif]{--sourcery-font:Georgia,serif}.design-preview[data-font=Monospace]{--sourcery-font:monospace}",
+    ".design-preview[data-scale=Small]{font-size:12px}.design-preview[data-scale=Large]{font-size:18px}.design-preview[data-spacing=Compact]{--design-space:.3rem}.design-preview[data-spacing=Roomy]{--design-space:1.25rem}",
+    ".design-preview[data-source-scale=Small] :is(.source-widget-read,textarea.source-widget-edit){font-size:11px}.design-preview[data-source-scale=Large] :is(.source-widget-read,textarea.source-widget-edit){font-size:17px}",
+    ".design-preview .feedback.error{background:var(--design-error-paper,#fbe6e4);color:var(--design-error-ink,#712722)}",
+    "@media(min-width:72rem){.design-preview[data-source-position=Beside] .design-window-content{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.55rem;align-items:start}.design-preview[data-source-position=Beside] #design-source{grid-area:1/2/span 3/3;min-width:0}}",
+    ".design-preview[data-frame-style=Flat]{--sourcery-raised:0 0 transparent;--sourcery-inset:0 0 transparent}.design-preview[data-shadow=None]{--sourcery-shadow:0 0 transparent}.design-preview[data-desktop=Solid]{background:attr(data-backdrop type(<color>),#225b6e)}",
+    "@media(max-width:53rem){.design-layout{grid-template-columns:minmax(0,1fr)}}"
+  )

@@ -1,0 +1,87 @@
+process-module "temple/surface-process-module/1"
+
+process semantic.syntax:
+  let keywords = list("process-module", "profile", "process", "let", "port", "when", "assert", "otherwise", "call", "try", "catch", "each", "fold", "as", "starts", "yield")
+  let literals = list("true", "false", "null")
+  let digits = list("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "-")
+  fold $eventInput as token; spans starts list():
+    let text = $token.text
+    let first = at($text, 0)
+    let kind = null
+    when eq($first, "#"):
+      let kind = "comment"
+    when eq($first, "\""):
+      let kind = "string"
+    when eq($first, at(" $", 1)):
+      let kind = "reference"
+    when or(includes($literals, $text), includes($digits, $first)):
+      let kind = "literal"
+    when includes($keywords, $text):
+      let kind = "keyword"
+    when and(not($kind), includes($text, ".")):
+      let kind = "qualified"
+    yield if($kind, append($spans, list({ start = $token.start; end = $token.end; kind = $kind })), $spans) → spans
+  let result = $spans
+
+process semantic.sourceStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = ".source-code .gutter"; declarations = list(
+      { property = "color"; value = "#565b65" },
+      { property = "background"; value = "#e9ebef" }
+    ) },
+    { selector = ".source-code .executed,.source-code .mapped"; declarations = list(
+      { property = "background"; value = "#fff0a2" }
+    ) },
+    { selector = ".source-code .match"; declarations = list(
+      { property = "outline"; value = "1px solid #a36f00" },
+      { property = "background"; value = "#ffe29a" }
+    ) },
+    { selector = ".source-code .keyword"; declarations = list(
+      { property = "color"; value = "#152a91" },
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = ".source-code .string"; declarations = list(
+      { property = "color"; value = "#a22e1d" }
+    ) },
+    { selector = ".source-code .reference"; declarations = list(
+      { property = "color"; value = "#713b82" }
+    ) },
+    { selector = ".source-code .literal"; declarations = list(
+      { property = "color"; value = "#844900" }
+    ) },
+    { selector = ".source-code .qualified"; declarations = list(
+      { property = "color"; value = "#20537e" }
+    ) },
+    { selector = ".source-code .comment"; declarations = list(
+      { property = "color"; value = "#376340" },
+      { property = "font-style"; value = "italic" }
+    ) }
+  )
+  call css.renderCompactRules
+
+
+process semantic.siteLabel:
+  let site = $eventInput
+  let result = if(eq($site.kind, "when"), "Branch", if(eq($site.kind, "assert"), "Check",
+    if(eq($site.kind, "catch"), "Caught refusal", "Effect")))
+
+process semantic.keywordHelp:
+  let result = {
+    "process-module" = "Declares the source module format.";
+    profile = "Selects the profile that governs this module.";
+    process = "Defines a named process.";
+    let = "Binds a value in the current scope.";
+    port = "Invokes a declared capability.";
+    when = "Runs the following block if the condition holds.";
+    assert = "Requires a condition to hold before continuing.";
+    otherwise = "Supplies the message for a failed assertion.";
+    call = "Invokes another process.";
+    try = "Runs a block whose failure can be handled.";
+    catch = "Handles a failure from the try block.";
+    each = "Runs a block for every item in a collection.";
+    fold = "Accumulates a result across a collection.";
+    as = "Names the current item in a collection.";
+    starts = "Supplies the starting value of a fold.";
+    yield = "Supplies the next value of the fold."
+  }

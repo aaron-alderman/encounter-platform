@@ -1,0 +1,333 @@
+process-module "temple/surface-process-module/1"
+
+process systemCatalogue.snapshot:
+  call desktop.windowInventory
+  let entries = $result
+  call desktop.nativeApps
+  let guestApps = $result
+  call desktop.workspaceEnvironments
+  let environments = $result
+  call windowShell.types
+  let windowTypes = $result
+  call windowShell.controlDefinitions
+  let windowControls = $result
+  call desktop.workspaceDefinition
+  let shellWindow = $result
+  call customization.windows
+  let specimens = $result
+  call customization.catalog
+  let elements = $result
+  call customization.properties
+  let properties = $result
+  call source.encounterLightPolicy
+  let spPolicy = $result.presentation
+  call customization.tokens
+  let tokens = $result
+  let result = { catalogue = "Sourcery OS"; workspace = "Home"; environments = $environments;
+    windowTypes = $windowTypes; windowControls = $windowControls; shellWindow = $shellWindow; entries = $entries; guestApps = $guestApps;
+    customization = { app = "design"; placement = "Operations";
+      source = "applications/appdev-projects/customization.encounter";
+      specimens = $specimens; semanticElements = $elements; properties = $properties; tokens = $tokens } }
+
+process systemCatalogue.fields:
+  let result = { tag = "dl"; attrs = { class = "catalogue-fields" }; children = map($fields, "field",
+    { tag = "div"; children = list({ tag = "dt"; children = list($field.label) },
+      { tag = "dd"; children = list($field.value) }) }) }
+
+process systemCatalogue.sourceLinks:
+  port text.split { value = $reference; pattern = " and " } → references
+  let files = {
+    "workspace.encounter" = "version-programme/applications/appdev-projects/workspace.encounter";
+    "desktop-launch.encounter" = "version-programme/applications/appdev-projects/desktop-launch.encounter";
+    "window-shell.encounter" = "version-programme/applications/encounter-libraries/window-shell.encounter";
+    "projects.encounter" = "browser-programme/applications/appdev-projects/projects.encounter" }
+  fold $references as item; nodes starts list():
+    port text.split { value = $item; pattern = "#" } → parts
+    port text.split { value = at($parts, 0); pattern = "/" } → segments
+    let file = at($segments, add(count($segments), -1))
+    let path = at($files, $file)
+    let processName = at($parts, 1)
+    let label = { tag = "code"; children = list($item) }
+    let link = if($path, { tag = "button"; attrs = { type = "button"; class = "file-viewer-link";
+      "data-catalogue-source" = concat("Platform/Releases/Home/", if($processName,
+        concat("spec/catalogue-source/", $path, "/", $processName, ".encounter"), $path));
+      "data-catalogue-file" = $file; "data-catalogue-process" = $processName; title = "Open in File Viewer" }; children = list($label) }, $label)
+    yield append($nodes, list($link)) → nodes
+  let result = { tag = "div"; children = $nodes }
+
+process systemCatalogue.treeNode:
+  let reference = $node.rule
+  call systemCatalogue.sourceLinks
+  let fields = append(list(
+    { label = "Type"; value = $node.type },
+    if(at($node, "relationship"), { label = "Relationship"; value = $node.relationship }, null),
+    { label = "Admissibility criteria"; value = $node.admission },
+    { label = "Rule source"; value = $result }), $node.fields)
+  let fields = filter($fields, "field", $field)
+  call systemCatalogue.fields
+  let result = { tag = "li"; children = list(
+    { tag = "details"; attrs = { "data-catalogue-node" = $node.id; open = eq($node.id, "os") };
+      children = list(
+        { tag = "summary"; children = list({ tag = "strong"; children = list($node.title) },
+          { tag = "span"; children = list($node.kind) }) },
+        $result,
+        if(count($node.children), { tag = "ul"; children = $node.children }, null)) }) }
+
+process systemCatalogue.windowNode:
+  let reference = $window.source
+  call systemCatalogue.sourceLinks
+  let declaration = $result
+  let windowType = at(filter($snapshot.windowTypes, "kind", eq($kind.id, $window.type)), 0)
+  let controlIds = $window.controls
+  call systemCatalogue.controlNames
+  let fields = list(
+    { label = "Role"; value = $window.role },
+    { label = "Window ID"; value = { tag = "code"; children = list($window.id) } },
+    { label = "Window controls"; value = $result },
+    { label = "When you hide or close it"; value = $window.lifecycle },
+    { label = "Declaration"; value = $declaration })
+  when $windowType:
+    let fields = append($fields, list({ label = "Slots"; value = { tag = "ul"; children = map($windowType.slots, "slot",
+      { tag = "li"; children = list($slot.label, if(at($slot, "optional"), " (optional)", " (required)")) }) } }))
+  let node = { id = concat("window-", $window.id); title = $window.title; kind = "Window";
+    relationship = $window.relationship;
+    type = if($windowType, $windowType.title, or($window.type, "Undeclared"));
+    admission = if($windowType, "The declaration resolves to a known window type. The frame requires every required slot and refuses populated slots outside the contract.",
+      "Refused. Explicitly declare Document or Compact.");
+    rule = "window-shell.encounter#windowShell.frame"; fields = $fields; children = list() }
+  call systemCatalogue.treeNode
+
+process systemCatalogue.inspection:
+  call desktop.inspectorCoverage
+  let covered = includes($result, $entry.app)
+  let result = { label = "App inspector"; value = if($covered,
+    { tag = "a"; attrs = { href = concat("http://encounter.localhost:24220/?view=inspect&app=", $entry.app);
+      target = "_blank"; rel = "noopener"; "aria-label" = concat("Inspect ", $entry.title, " in App inspector") };
+      children = list("Inspect app (Front Gate)") }, "Inspection unavailable") }
+
+process systemCatalogue.appNode:
+  let window = { id = $entry.window; title = concat($entry.title, " window");
+    type = $entry.declaredType; controls = $entry.controls; source = $entry.source;
+    relationship = concat($entry.title, " opens in this window.");
+    role = "Independent app window";
+    lifecycle = "Minimize keeps its taskbar entry. Close removes the taskbar entry until the app is launched again. Home stays open." }
+  call systemCatalogue.windowNode
+  let windowNode = $result
+  call systemCatalogue.inspection
+  let inspection = $result
+  let isOperations = includes(list("quality", "administration"), $entry.group)
+  let node = { id = concat("app-", $entry.app); title = $entry.title; kind = "App"; type = "Desktop app";
+    relationship = "Home admits and launches this app.";
+    admission = if($isOperations,
+      "The Operations launcher must match one registered app and use its declared default action, independent window and task. Reopening focuses or restores that window.",
+      "The app must declare a default action targeting an independent desktop window. Reopening focuses or restores that window.");
+    rule = if($isOperations, "desktop-launch.encounter#desktop.admitOperation and desktop-launch.encounter#desktop.admitHome", "desktop-launch.encounter#desktop.defaultAction");
+    fields = list(
+      { label = "App ID"; value = { tag = "code"; children = list($entry.app) } },
+      { label = "Launch"; value = concat($entry.defaultAction, " · ", $entry.action.surface, " · ", $entry.action.repeat) },
+      { label = "Task"; value = { tag = "code"; children = list($entry.task) } }, $inspection);
+    children = list($windowNode) }
+  call systemCatalogue.treeNode
+
+process systemCatalogue.tree:
+  let definition = $snapshot.shellWindow
+  let window = { id = $definition.id; title = $definition.title; type = $definition.type; controls = $definition.controls;
+    role = $definition.role; source = $definition.source; lifecycle = $definition.lifecycle;
+    relationship = concat($definition.owner, " renders this window.") }
+  call systemCatalogue.windowNode
+  let node = { id = "home-shell"; title = $definition.owner; kind = "Shell"; type = "Desktop shell";
+    relationship = "Home uses this shell to present the desktop.";
+    admission = "The Home page assembles the header, desktop and taskbar with the admitted app launchers.";
+    rule = "projects.encounter";
+    fields = list({ label = "Provides"; value = "Desktop, Start menu, shortcuts, taskbar and the workspace launcher window." });
+    children = list($result) }
+  call systemCatalogue.treeNode
+  fold $snapshot.entries as entry; homeChildren starts list($result):
+    call systemCatalogue.appNode
+    yield append($homeChildren, list($result)) → homeChildren
+  fold $snapshot.environments as environment; workspaces starts list():
+    let home = eq($environment.key, "home")
+    let fields = list({ label = "Entry route"; value = { tag = "code"; children = list($environment.href) } })
+    when not($home):
+      let fields = append($fields, list({ label = "Catalogue coverage"; value = "Workspace entry only. App and window definitions are outside the Home desktop registry." }))
+    let node = { id = $environment.key; title = $environment.name; kind = "Workspace"; type = $environment.type;
+      relationship = "Sourcery OS provides this workspace.";
+      admission = $environment.admission; rule = $environment.rule; fields = $fields;
+      children = if($home, $homeChildren, list()) }
+    call systemCatalogue.treeNode
+    yield append($workspaces, list($result)) → workspaces
+  let node = { id = "os"; title = $snapshot.catalogue; kind = "OS"; type = "Operating environment";
+    admission = "The environment policy uses Home when there is no permitted saved choice. A signed-in Temple can save an allowed environment. Platform also requires the steward identity.";
+    rule = "workspace.encounter#workspace.environmentPolicy";
+    fields = list(); children = $workspaces }
+  call systemCatalogue.treeNode
+  let result = { tag = "nav"; attrs = { "aria-label" = "System structure"; class = "catalogue-tree" };
+    children = list({ tag = "ul"; children = list($result) }) }
+
+process systemCatalogue.appDetails:
+  let reference = $entry.source
+  call systemCatalogue.sourceLinks
+  let declaration = $result
+  call systemCatalogue.inspection
+  let inspection = $result
+  let controlIds = $entry.controls
+  call systemCatalogue.controlNames
+  let fields = list(
+    { label = "Placement"; value = if(includes(list("quality", "administration"), $entry.group), "Home → Operations",
+      if(eq($entry.group, "hosted"), "Home → Apps", if(eq($entry.group, "desktop"), "Home → Start → Tools", "Home → Workspace banner"))) },
+    { label = "Launch"; value = concat($entry.defaultAction, " · ", $entry.action.surface, " · ", $entry.action.repeat) },
+    { label = "Window"; value = { tag = "code"; children = list($entry.window) } },
+    { label = "Task"; value = { tag = "code"; children = list($entry.task) } },
+    { label = "Window controls"; value = $result },
+    { label = "Layout admission"; value = if($entry.layoutAdmitted, "Explicit window type admitted", "Refused · declare document or compact") },
+    { label = "Source"; value = $declaration }, $inspection
+  )
+  call systemCatalogue.fields
+  let result = { tag = "details"; attrs = { class = "catalogue-entry"; "data-catalogue-app" = $entry.app; open = eq($entry.app, "design") };
+    children = list({ tag = "summary"; children = list({ tag = "strong"; children = list($entry.title) },
+      { tag = "span"; children = list(if($entry.layoutAdmitted, $entry.declaredType, "Layout refused")) }) }, $result) }
+
+process systemCatalogue.apps:
+  fold $snapshot.entries as entry; entries starts list():
+    call systemCatalogue.appDetails
+    yield append($entries, list($result)) → entries
+  let result = $entries
+
+process systemCatalogue.controlNames:
+  let names = map(filter($snapshot.windowControls, "control", includes($controlIds, $control.id)), "control", $control.label)
+  port text.join { values = $names; separator = ", " } → result
+
+process systemCatalogue.shellWindow:
+  let shellWindow = $snapshot.shellWindow
+  let reference = $shellWindow.source
+  call systemCatalogue.sourceLinks
+  let declaration = $result
+  let controlIds = $shellWindow.controls
+  call systemCatalogue.controlNames
+  let fields = list(
+    { label = "Rendered by"; value = $shellWindow.owner },
+    { label = "Role"; value = $shellWindow.role },
+    { label = "Purpose"; value = $shellWindow.purpose },
+    { label = "Window type"; value = $shellWindow.type },
+    { label = "Window controls"; value = $result },
+    { label = "When you hide it"; value = $shellWindow.lifecycle },
+    { label = "Source"; value = $declaration })
+  call systemCatalogue.fields
+  let result = { tag = "section"; attrs = { class = "catalogue-entry"; "data-catalogue-shell" = $shellWindow.id };
+    children = list({ tag = "h4"; children = list($shellWindow.title) }, $result) }
+
+process systemCatalogue.windows:
+  let result = map($snapshot.windowTypes, "kind", { tag = "section"; attrs = { class = "catalogue-entry"; "data-catalogue-window" = $kind.id };
+    children = list(
+      { tag = "h4"; children = list($kind.title) },
+      { tag = "ul"; children = map($kind.slots, "slot", { tag = "li"; children = list($slot.label, if(at($slot, "optional"), " (optional)", " (required)")) }) },
+      { tag = "p"; children = list({ tag = "strong"; children = list("Customization specimens") }) },
+      { tag = "ul"; children = map(filter($snapshot.customization.specimens, "specimen", eq($specimen.kind, $kind.id)), "specimen",
+        { tag = "li"; children = list($specimen.title) }) }
+    ) })
+
+process systemCatalogue.elements:
+  fold $snapshot.customization.semanticElements as element; entries starts list():
+    port text.join { values = $element.tokens; separator = ", " } → tokenNames
+    let fields = list(
+      { label = "Where it appears"; value = $element.usage },
+      { label = "Consolidation"; value = concat($element.policy, " · ", $element.note) },
+      { label = "Selectors"; value = { tag = "code"; children = list($element.selector) } },
+      { label = "Tokens"; value = { tag = "code"; children = list($tokenNames) } })
+    call systemCatalogue.fields
+    let properties = filter($snapshot.customization.properties, "property", eq($property.role, $element.id))
+    yield append($entries, list({ tag = "details"; attrs = { class = "catalogue-entry"; "data-catalogue-element" = $element.id };
+      children = list({ tag = "summary"; children = list({ tag = "strong"; children = list($element.label) }) }, $result,
+        if(count($properties), { tag = "ul"; attrs = { "aria-label" = "Preview properties" }; children = map($properties, "property",
+          { tag = "li"; children = list($property.label) }) }, null)) })) → entries
+  let result = $entries
+
+process systemCatalogue.tokens:
+  let result = { tag = "ul"; attrs = { class = "catalogue-tokens"; "aria-label" = $tokenGroup.label };
+    children = map(filter($snapshot.customization.tokens, "token", eq(eq(at($token, "syntax"), true), $tokenGroup.syntax)), "token",
+      { tag = "li"; children = list({ tag = "strong"; children = list($token.label) },
+        { tag = "code"; children = list($token.token) },
+        if(at($token, "default"), { tag = "code"; children = list($token.default) }, null)) }) }
+
+process systemCatalogue.homeRelationships:
+  let window = $snapshot.shellWindow
+  let catalogueApp = at(filter($snapshot.entries, "entry", eq($entry.app, "system-catalogue")), 0)
+  let relationships = list(
+    { subject = $snapshot.catalogue; verb = "provides"; object = $snapshot.workspace; type = "workspace" },
+    { subject = $snapshot.workspace; verb = "uses"; object = $window.owner; type = "desktop shell" },
+    { subject = $window.owner; verb = "renders"; object = $window.title; type = "launcher window" },
+    { subject = $snapshot.workspace; verb = "launches"; object = $catalogueApp.title; type = "desktop app" },
+    { subject = $catalogueApp.title; verb = "opens in"; object = concat($catalogueApp.title, " window"); type = "app window" })
+  let result = { tag = "section"; attrs = { class = "catalogue-entry"; "aria-labelledby" = "catalogue-home-relationships" };
+    children = list({ tag = "h4"; attrs = { id = "catalogue-home-relationships" }; children = list("How Home fits together") },
+      { tag = "ul"; attrs = { class = "catalogue-relationships" }; children = map($relationships, "link",
+        { tag = "li"; children = list({ tag = "strong"; children = list($link.subject) }, " ", $link.verb, " ",
+          { tag = "strong"; children = list($link.object) }, " (", $link.type, ")") }) }) }
+
+process systemCatalogue.fileViewerVariants:
+  call files.viewerVariants
+  let variants = $result
+  fold $variants as variant; cards starts list():
+    let fields = list(
+      { label = "Subscribed surface"; value = $variant.surface },
+      { label = "Source scope"; value = $variant.scope },
+      { label = "Admissibility criteria"; value = $variant.admission })
+    call systemCatalogue.fields
+    yield append($cards, list({ tag = "details"; attrs = { class = "catalogue-entry" }; children = list(
+      { tag = "summary"; children = list($variant.name) }, $result) })) → cards
+  let result = $cards
+
+process systemCatalogue.slots:
+  call systemCatalogue.snapshot
+  let snapshot = $result
+  call systemCatalogue.homeRelationships
+  let relationships = $result
+  call systemCatalogue.tree
+  let tree = $result
+  call systemCatalogue.apps
+  let apps = $result
+  call systemCatalogue.windows
+  let windowContracts = $result
+  call systemCatalogue.shellWindow
+  let shellWindowCard = $result
+  let controlCard = { tag = "section"; attrs = { class = "catalogue-entry" }; children = list(
+    { tag = "h4"; children = list("Window controls") },
+    { tag = "ul"; children = map($snapshot.windowControls, "control", { tag = "li"; children = list(
+      { tag = "strong"; children = list($control.glyph, " ", $control.label) }, " · ", $control.description) }) }) }
+  call systemCatalogue.elements
+  let elements = $result
+  let tokenGroup = { label = "Style entries"; syntax = false }
+  call systemCatalogue.tokens
+  let styles = $result
+  let tokenGroup = { label = "Encounter syntax roles"; syntax = true }
+  call systemCatalogue.tokens
+  let syntax = $result
+  call systemCatalogue.fileViewerVariants
+  let viewers = $result
+  let groups = list(
+    { id = "file-viewer-variants"; label = "File Viewer variants"; count = count($viewers); content = $viewers },
+    { id = "apps"; label = "Home desktop apps"; count = count($apps); content = $apps },
+    { id = "windows"; label = "Window types"; count = count($windowContracts); content = append(list($shellWindowCard, $controlCard), $windowContracts) },
+    { id = "elements"; label = "Semantic elements"; count = count($elements); content = $elements },
+    { id = "styles"; label = "Style entries"; count = count($styles.children); content = list($styles) },
+    { id = "syntax"; label = "Encounter syntax roles"; count = count($syntax.children); content = list($syntax) })
+  when $homeEdition:
+    # File Viewer is a Home app. Keep its variants with the app catalogue
+    # in the archival edition's five-section System Catalogue.
+    let viewerSection = { tag = "details"; attrs = { class = "catalogue-entry"; "data-catalogue-section" = "file-viewer-variants" };
+      children = append(list({ tag = "summary"; children = list("File Viewer variants") }), $viewers) }
+    let topLevel = filter($groups, "group", not(eq($group.id, "file-viewer-variants")))
+    let groups = map($topLevel, "group", if(eq($group.id, "apps"),
+      { id = $group.id; label = $group.label; count = $group.count; content = append($group.content, list($viewerSection)) }, $group))
+  let detail = list(
+    $relationships,
+    $tree,
+    { tag = "div"; attrs = { class = "catalogue-groups" }; children = map($groups, "group", {
+      tag = "details"; attrs = { name = "system-catalogue-sections"; "data-catalogue-section" = $group.id; open = eq($group.id, "apps") };
+      children = append(list({ tag = "summary"; children = list({ tag = "strong"; children = list($group.label) },
+        { tag = "span"; children = list($group.count) }) }), $group.content)
+    }) })
+  let document = { description = "Home apps, window contracts and shared styles"; build = $releaseId;
+    help = "Expand an item in System structure to see its type, admission criteria and source. The Home branch includes registered desktop apps and windows.";
+    detailLabel = "System Catalogue definitions"; detail = $detail }
+  call desktop.documentSlots

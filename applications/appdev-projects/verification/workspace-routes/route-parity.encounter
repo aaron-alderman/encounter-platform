@@ -1,0 +1,228 @@
+process-module "temple/surface-process-module/1"
+
+process routeParity.plan:
+  let phase = $eventInput
+  assert includes(list("access", "work-mounts", "admitted", "revoked", "store"), $phase)
+    otherwise "Unknown workspace route verification phase."
+  let item = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  let result = list(
+    list("/", "anonymous", 303, "/workspace/home"),
+    list("/?open=store&play=example", "anonymous", 303, "/workspace/home?open=store&play=example"),
+    list("/life-board", "anonymous", 302, "/workspace/work"),
+    list("/life-board/?setup=work", "anonymous", 302, "/workspace/work?setup=work"),
+    list("/workspace/mobile/?pilot=trip", "anonymous", 303, "/workspace/mobile?pilot=trip"),
+    list("/workspace/mobile/phone", "anonymous", 200),
+    list("/workspace/mobile/worker.mjs", "anonymous", 200),
+    list("/workspace/mobile/runtime.mjs", "anonymous", 200),
+    list("/workspace/mobile", "anonymous", 200),
+    list("/workspace/default", "member", 303, "/workspace/work", "/workspace/work"),
+    list("/", "member", 303, "/workspace/work"),
+    list("/?view=aster", "member", 303, "/workspace/home?view=aster"),
+    list("/?setup=home", "member", 303, "/workspace/home?setup=home"),
+    list("/workspace/home", "member", 200),
+    list("/workspace/platform", "member", 403),
+    list("/workspace/platform", "forged-header", 403),
+    list("/workspace/platform", "steward", 200),
+    list("/", "steward", 303, "/workspace/home"),
+    list("/?view=platform", "steward", 303, "/workspace/platform"),
+    list("/workspace/home?view=platform", "steward", 303, "/workspace/platform"),
+    list("/workspace/platform?view=platform", "steward", 303, "/workspace/platform"),
+    list(concat("/?view=work-items&item=", $item), "steward", 303, concat("/workspace/platform?view=work-items&item=", $item)),
+    list(concat("/workspace/home?view=platform&item=", $item), "steward", 303, concat("/workspace/platform?view=platform&item=", $item)),
+    list("/workspace/default", "member", 403, null, "/workspace/platform"),
+    list("/workspace/default", "steward", 403, null, "/workspace/platform", "https://other.test"),
+    list("/workspace/default", "steward", 303, "/workspace/platform", "/workspace/platform"),
+    list("/", "steward", 303, "/workspace/platform"),
+    list("/workspace/work", "work", 200, null, null, null, list("href=\"/workspace/home\"", "href=\"/workspace/platform\"", "<title>Work</title>", "src=\"/life-board/_encounter/browser.mjs\"")),
+    list("/life-board/_encounter/browser.mjs", "work", 200))
+  when eq($phase, "revoked"):
+    let result = list(list("/", "steward", 303, "/workspace/home"), list("/workspace/platform", "steward", 403))
+  when eq($phase, "store"):
+    let result = list(list("/store/?workspace-fragment=1", "anonymous", 401),
+      list("/store/", "anonymous", list(302, 303)),
+      list("/store/connect?workspace=https%3A%2F%2Fother.test", "anonymous", 403))
+  when eq($phase, "access"):
+    let result = list(
+      list("/identity-management/workspace-access", "member", 200, null, null, null, null,
+        { endpoint = "identity"; broker = true }),
+      list("/identity-management/workspace-access", "member", 403, null, null, null, null,
+        { endpoint = "identity" }),
+      list("/workspace/access", "steward", 200, null, null, null, null,
+        { body = "{\"platform\":true}" }))
+  when eq($phase, "work-mounts"):
+    let result = map(list(
+      list("super-crm/", "GET", 200),
+      list("super-crm/styles.css", "POST", 405),
+      list("decompiler/", "GET", 200),
+      list("decompiler/evaluation", "GET", 200, "/evaluation"),
+      list("decompiler/evaluation", "POST", 405),
+      list("decompiler/decompiler/verify", "GET", 405),
+      list("decompiler/decompiler/verify", "POST", 200, "/decompiler/verify"),
+      list("decompiler/unpublished", "GET", 404)), "mount",
+        list(concat("/life-board/", at($mount, 0)), "work", at($mount, 2), null, null, null, null,
+          { method = at($mount, 1); origin = true;
+            body = if(at($mount, 3), concat(at($mount, 1), " ", at($mount, 3)), null) }))
+
+process routeParity.check:
+  let input = $eventInput
+  let probe = $input.probe
+  let status = at($probe, 2)
+  assert includes(if(isArray($status), $status, list($status)), $input.status)
+    otherwise "Workspace route returned an unexpected status."
+  when at($probe, 3):
+    assert eq($input.locations, list(at($probe, 3)))
+      otherwise "Workspace route returned an unexpected redirect."
+  when at($probe, 6):
+    each at($probe, 6) as expected:
+      assert includes($input.body, $expected)
+        otherwise "Workspace route omitted expected Work markup."
+  when at(at($probe, 7), "body"):
+    assert eq($input.body, at(at($probe, 7), "body"))
+      otherwise "Workspace route returned an unexpected response body."
+  let result = true
+
+process routeParity.indexPlan:
+  let result = list(
+    { check = "anonymous"; status = 200; actor = "anonymous" },
+    { check = "member"; status = 200; actor = "member" },
+    { check = "duplicate"; status = 200; actor = "duplicate-steward" },
+    { check = "forged"; status = 200; actor = "forged-header" },
+    { check = "inventory"; status = 200; actor = "steward" },
+    { check = "root"; status = 403; actor = "steward"; query = "?root=kernel" },
+    { check = "cross-site"; status = 403; actor = "steward"; crossSite = true },
+    { check = "mutation"; status = 404; actor = "steward"; post = true },
+    { check = "media-member"; status = 403; actor = "member"; media = true },
+    { check = "media-mutation"; status = 404; actor = "steward"; media = true; post = true },
+    { check = "media-range"; status = 416; actor = "steward"; media = true; range = true },
+    { check = "preview-member"; actor = "member"; file = true },
+    { check = "preview"; actor = "steward"; file = true },
+    { check = "selected"; status = 200; actor = "steward"; file = true; suffix = "&view=file" },
+    { check = "selected-anonymous"; actor = "anonymous"; file = true; suffix = "&view=file" },
+    { check = "selected-member"; actor = "member"; file = true; suffix = "&view=file" },
+    { check = "selection-no-file"; status = 403; actor = "steward"; query = "?view=file" },
+    { check = "selection-invalid-view"; status = 403; actor = "steward"; file = true; suffix = "&view=all" },
+    { check = "selection-cross-site"; status = 403; actor = "steward"; file = true; suffix = "&view=file"; crossSite = true },
+    { check = "selection-missing"; actor = "steward"; query = "?file=0000000000000000000000000000000000000000000000000000000000000000&view=file" },
+    { check = "filtered-member"; actor = "member"; file = true; suffix = "&rel-filter=FORMAT" },
+    { check = "filtered"; actor = "steward"; file = true; suffix = "&rel-filter=FORMAT" })
+
+process routeParity.applicationFiles:
+  let phase = $eventInput
+  assert includes(list("application-files", "north-changed", "files-revoked"), $phase)
+    otherwise "Unknown application file verification phase."
+  let image = "/game/images/sourcery-game-reference-global-logistics-tycoon.png"
+  let result = list(
+    { check = "game-folio"; endpoint = "game"; path = "/game/?document=recent-folio"; actor = "game"; status = 200; markup = "class=\"navigation pane\"" },
+    { check = "game-index"; actor = "game"; status = 200; inventory = true },
+    { check = "game-hidden"; actor = "steward"; fileKey = "image" },
+    { check = "game-preview"; actor = "game"; fileKey = "image" },
+    { check = "game-media-denied"; endpoint = "front"; path = $image; actor = "anonymous"; status = list(302, 303, 401, 403) },
+    { check = "game-media-mutation"; endpoint = "front"; path = $image; actor = "game"; status = 405; post = true },
+    { check = "game-duplicate"; actor = "duplicate-game"; status = 200; inventory = true },
+    { check = "store-index"; actor = "store"; status = 200; inventory = true },
+    { check = "north-index"; actor = "north"; status = 200; inventory = true },
+    { check = "north-hidden"; actor = "steward"; fileKey = "northSource" },
+    { check = "north-preview"; actor = "north"; fileKey = "northSource" })
+  when eq($phase, "north-changed"):
+    let result = list({ check = "north-changed"; actor = "north"; status = 200; inventory = true })
+  when eq($phase, "files-revoked"):
+    let result = list({ check = "files-revoked"; actor = "combined"; status = 200; inventory = true })
+
+process routeParity.indexObservation:
+  let input = $eventInput
+  let probe = $input.probe
+  let check = $probe.check
+  let root = "Platform/Kernel/Releases"
+  let body = $input.body
+  let state = $input.state
+  let result = $state
+  when at($probe, "status"):
+    assert includes(if(isArray($probe.status), $probe.status, list($probe.status)), $input.status)
+      otherwise "Workspace file probe returned an unexpected status."
+  when or(at($probe, "inventory"), includes(list("anonymous", "member", "duplicate", "forged", "inventory", "selected"), $check)):
+    assert eq($input.cache, list("no-store"))
+      otherwise "Workspace file evidence must be served without caching."
+  when includes(list("anonymous", "member", "duplicate", "forged", "preview-member", "filtered-member"), $check):
+    assert eq(at($body, "collections"), {})
+      otherwise "Workspace file index exposed an ungranted collection."
+  when eq($check, "inventory"):
+    let rows = at($body.collections, $root)
+    let binary = at(filter($rows, "row", eq($row.name, "encounter")), 0)
+    let manifest = at(filter($rows, "row", eq($row.name, "release.rel")), 0)
+    let movie = at(filter($rows, "row", eq($row.name, "fixture.webm")), 0)
+    assert and(eq($binary.bytes, 15), eq($binary.permission, "Platform steward"), eq($binary.steward, "role:platform-steward"),
+      eq($movie.viewer, "video"), $manifest.id, $movie.id)
+      otherwise "Workspace index metadata differs from the admitted fixture."
+    each $rows as row:
+      port record.entries { value = $row } → fields
+      assert not(some($fields, "field", eq(at($field, 0), "text")))
+        otherwise "Workspace inventory exposed file content."
+    let result = { manifest = $manifest.id; movie = $movie.id }
+  when eq($check, "preview"):
+    let row = at(filter(at($body.collections, $root), "row", eq($row.id, $state.manifest)), 0)
+    port text.startsWith { value = $row.text; search = "(\"release\", \"format\"" } → prefix
+    assert $prefix
+      otherwise "Workspace release preview lacks the REL format excerpt."
+    let result = { manifest = $state.manifest; movie = $state.movie; preview = $row }
+  when eq($check, "selected"):
+    port record.fromEntries { entries = list(list($root, list($state.preview))) } → collection
+    assert eq($body, { platform = true; collections = $collection })
+      otherwise "Workspace selected file differs from the exact admitted preview."
+  when includes(list("selected-anonymous", "selected-member"), $check):
+    assert eq($body, { platform = false; collections = {} })
+      otherwise "Workspace selected file was exposed without a grant."
+  when eq($check, "selection-missing"):
+    assert eq($body, { platform = true; collections = {} })
+      otherwise "Workspace selection exposed a row for an unknown file."
+  when eq($check, "filtered"):
+    let rel = at(at(filter(at($body.collections, $root), "row", eq($row.id, $state.manifest)), 0), "rel")
+    port number.calculate { operation = "greater"; values = list($rel.total, 1) } → multiple
+    assert and(eq($rel.matches, 1), $multiple, eq($rel.rows,
+      list({ subject = "release"; predicate = "format"; object = "encounter/release/1"; polarity = "is" })))
+      otherwise "Workspace REL filter returned unexpected facts."
+  when at($probe, "markup"):
+    assert includes($body, $probe.markup)
+      otherwise "The Game gateway omitted the recent folio navigation."
+  when includes(list("game-duplicate", "north-changed", "files-revoked"), $check):
+    assert eq($body.collections, {})
+      otherwise "Workspace exposed a collection after credentials or file ownership changed."
+  let game = "Apps/Game Hub/Assets"
+  let north = "Apps/North River/Source"
+  when eq($check, "game-index"):
+    port record.entries { value = $body.collections } → entries
+    assert eq(map($entries, "entry", at($entry, 0)), list($game))
+      otherwise "The Game session received the wrong collections."
+    let rows = at($body.collections, $game)
+    let image = at(filter($rows, "row", eq($row.name, "sourcery-game-reference-global-logistics-tycoon.png")), 0)
+    port record.entries { value = $image } → fields
+    assert and($image.id, not(some($fields, "field", eq(at($field, 0), "imagePreview"))))
+      otherwise "The Game inventory did not return a metadata-only image."
+    let result = { image = $image.id }
+  when eq($check, "game-hidden"):
+    assert not(at($body.collections, $game))
+      otherwise "The Game collection was exposed to the Platform steward."
+  when eq($check, "game-preview"):
+    let rows = at($body.collections, $game)
+    let image = at(filter($rows, "row", eq($row.id, $state.image)), 0)
+    assert eq($image.imagePreview, "/game/images/sourcery-game-reference-global-logistics-tycoon.png")
+      otherwise "The Game image preview did not use its gateway."
+  when eq($check, "store-index"):
+    port record.entries { value = $body.collections } → entries
+    assert eq(map($entries, "entry", at($entry, 0)), list("Apps/Game Hub/Store/Published assets"))
+      otherwise "The Store session received the wrong collections."
+  when eq($check, "north-index"):
+    port record.entries { value = $body.collections } → entries
+    let names = map($entries, "entry", at($entry, 0))
+    let rows = at($body.collections, $north)
+    assert and(eq(count($names), 2), includes($names, $north), includes($names, "Apps/North River/Receipts"),
+      every($rows, "row", eq($row.owner, "fixture-owner")))
+      otherwise "The North River session received the wrong collections or owner."
+    let source = at(filter($rows, "row", eq($row.name, "catalog.encounter")), 0)
+    let result = { northSource = $source.id }
+  when eq($check, "north-hidden"):
+    assert not(at($body.collections, $north))
+      otherwise "The North River source was exposed to the Platform steward."
+  when eq($check, "north-preview"):
+    let source = at(filter(at($body.collections, $north), "row", eq($row.id, $state.northSource)), 0)
+    assert includes($source.text, "let result = \"North River fixture\"")
+      otherwise "The North River source preview omitted the expected programme."

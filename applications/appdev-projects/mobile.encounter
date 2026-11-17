@@ -1,0 +1,255 @@
+process-module "temple/surface-process-module/1"
+
+process mobile.boot:
+  port browser.on { ref = "#mobile-trip"; event = "click"; delegate = "[data-mobile-action]"; query = "mobile.event" } → _
+  port browser.on { ref = "#mobile-offer"; event = "change"; query = "mobile.event"; input = { action = "selection" } } → _
+  port browser.on { ref = "window"; event = "storage"; query = "mobile.event"; input = { action = "source" } } → _
+  port browser.on { ref = "#mobile-offer"; event = "submit"; query = "mobile.event"; preventDefault = true; input = { action = "send" } } → _
+  port browser.on { ref = "#mobile-assurance[open]"; event = "interval"; milliseconds = 30000; query = "mobile.event";
+    input = { action = "assurance-poll" } } → _
+  port browser.on { ref = "#mobile-disconnect:not([hidden]), #mobile-invitation:not([hidden])"; event = "interval"; milliseconds = 1500; query = "mobile.event"; input = { action = "poll" } } → _
+  port storage.read { key = "sourcery.mobile.pair"; scope = "tab"; maxLength = 1024 } → saved
+  let pair = null
+  when $saved.value:
+    try:
+      port json.parse { text = $saved.value } → pair
+    catch fault:
+      let pair = null
+  port state.set { key = "mobile-pair"; value = $pair } → _
+  port browser.write { ref = "#mobile-pair"; name = "disabled"; value = false } → _
+  port browser.write { ref = "#mobile-pair-status"; name = "textContent"; value = if($pair, "Checking your phone…", "Pair a phone to prepare a trip.") } → _
+  let startupScope = "mobile"
+  call workspace.startup
+  let launch = $result
+  when $launch.first:
+    let refresh = false
+    call mobile.items
+    call mobile.pilot
+  when $pair:
+    call mobile.poll
+
+process mobile.savedRecords:
+  call formation.loadRecords
+  let source = $result
+  when eq($source.mode, "browser"):
+    port storage.read { key = "sourcery.first-run.v1.note"; maxLength = 2000 } → note
+    port storage.read { key = "sourcery.first-run.v1.project"; maxLength = 2000 } → project
+    let source = { mode = "browser"; owner = null; records = { note = { text = $note.value }; project = { text = $project.value } } }
+  let result = $source
+
+process mobile.items:
+  call mobile.savedRecords
+  let source = $result
+  port state.set { scope = "document"; key = "mobile-records"; value = $source } → _
+  fold list("note", "project") as id; dirty starts false:
+    let record = at($source.records, $id)
+    let available = at($record, "text")
+    let control = concat("#mobile-choose-", $id)
+    port browser.write { ref = $control; name = "disabled"; value = not($available) } → _
+    let selection = if($pair, $pair.selection, null)
+    let previous = at($selection, $id)
+    when not($refresh):
+      port browser.write { ref = $control; name = "checked"; value = if(and($previous, $available), true, false) } → _
+    when and($refresh, not($available)):
+      port browser.write { ref = $control; name = "checked"; value = false } → _
+    let changed = false
+    when and($previous, not(eq($source.mode, "unavailable"))):
+      port digest.sha256 { text = concat($available) } → digest
+      let changed = not(eq($previous, $digest))
+    yield or($dirty, $changed) → dirty
+  let message = if(eq($source.mode, "signed-in"), "Choose from your signed-in records.",
+    if(eq($source.mode, "browser"), "Signed out · choose from drafts saved in this browser.", "Saved records are temporarily unavailable. Try Refresh saved items."))
+  port browser.write { ref = "#mobile-items-status"; name = "textContent"; value = $message } → _
+  when $dirty:
+    port state.set { scope = "document"; key = "mobile-selection-dirty"; value = true } → _
+    port browser.write { ref = "#mobile-trip-status"; name = "textContent"; value = "A saved item changed. Send it to the phone to run a new offline check." } → _
+
+process mobile.pilot:
+  let requested = $launch.pilot
+  let task = if($requested, $requested, if($pair, $pair.pilotTask, null))
+  let comment = if($requested, $launch.comment, if($pair, $pair.pilotComment, null))
+  when $task:
+    try:
+      let path = concat("/encounter-pilot/task?travel=1&task=", $task, if($comment, concat("&comment=", $comment), ""))
+      port browser.request { path = $path } → response
+      assert eq($response.status, 200)
+        otherwise "Pilot sign-in required."
+      port json.parse { text = $response.body } → reply
+      assert eq($reply.status, "open")
+        otherwise "Pilot review unavailable."
+      let draft = at(filter($reply.packet.items, "item", eq($item.id, "pilot-draft")), 0)
+      let selection = concat($task, "/", $draft.draft.pin, "/", if($comment, $comment, "new"))
+      let prior = if($pair, at($pair.selection, "pilot"), null)
+      let selected = or($requested, eq($prior, $selection))
+      port state.set { scope = "document"; key = "mobile-pilot-review"; value = { packet = $reply.packet; selection = $selection; task = $task; comment = $comment } } → _
+      port browser.write { ref = "#mobile-pilot-option"; name = "hidden"; value = false } → _
+      port browser.write { ref = "#mobile-choose-pilot"; name = "checked"; value = if($selected, true, false) } → _
+      port text.join { values = map($reply.packet.items, "item", $item.title); separator = "\n" } → titles
+      port browser.write { ref = "#mobile-pilot-references"; name = "textContent"; value = $titles } → _
+      when and($selected, not(eq($prior, $selection))):
+        port state.set { scope = "document"; key = "mobile-selection-dirty"; value = true } → _
+        port browser.write { ref = "#mobile-trip-status"; name = "textContent"; value = "Send this selection to run a new offline check." } → _
+    catch fault:
+      when $requested:
+        port state.set { scope = "document"; key = "mobile-selection-dirty"; value = true } → _
+        port browser.write { ref = "#mobile-trip-status"; name = "textContent"; value = "The requested review is unavailable." } → _
+      port browser.write { ref = "#mobile-pilot-status"; name = "textContent"; value = "This review is unavailable. Sign in to Pilot and reopen an active review you own." } → _
+
+process mobile.event:
+  let action = $eventInput.action
+  when not($action):
+    let action = at($eventInput.matched.attributes, "data-mobile-action")
+  port state.get { key = "mobile-pair" } → pair
+  try:
+    when and(eq($action, "source"), includes(list("sourcery.first-run.v1.note", "sourcery.first-run.v1.project"), $eventInput.event.key)):
+      let id = if(eq($eventInput.event.key, "sourcery.first-run.v1.note"), "note", "project")
+      port browser.property { ref = concat("#mobile-choose-", $id); name = "checked" } → chosen
+      when $chosen:
+        port state.set { scope = "document"; key = "mobile-selection-dirty"; value = true } → _
+      let action = "refresh-items"
+    when eq($action, "refresh-items"):
+      let refresh = true
+      call mobile.items
+    when eq($action, "selection"):
+      port state.set { scope = "document"; key = "mobile-selection-dirty"; value = true } → _
+      port browser.write { ref = "#mobile-trip-status"; name = "textContent"; value = "Selection changed. Send it to the phone to run a new offline check." } → _
+    when eq($action, "assurance-open"):
+      port browser.dialog { ref = "#mobile-assurance"; open = true } → _
+    when includes(list("assurance-open", "assurance-refresh"), $action):
+      call mobile.assurance
+    when eq($action, "assurance-poll"):
+      call mobile.assuranceRefresh
+    when eq($action, "pair"):
+      when $pair:
+        port browser.request { path = concat("/workspace/mobile/pair/", $pair.id, "/disconnect"); method = "POST"; bearer = $pair.bearer } → _
+      port browser.write { ref = "#mobile-send"; name = "disabled"; value = true } → _
+      port browser.write { ref = "#mobile-trip-status"; name = "textContent"; value = "Pairing a phone for a new trip session." } → _
+      port browser.request { path = "/workspace/mobile/pair"; method = "POST" } → response
+      assert eq($response.status, 201)
+        otherwise "Could not start phone pairing."
+      port json.parse { text = $response.body } → invitation
+      let pair = { id = $invitation.id; bearer = $invitation.surface }
+      port state.set { key = "mobile-pair"; value = $pair } → _
+      port json.stringify { value = $pair } → packed
+      port storage.write { key = "sourcery.mobile.pair"; scope = "tab"; value = $packed } → _
+      port browser.write { ref = "#mobile-invitation"; name = "hidden"; value = false } → _
+      port browser.write { ref = "#mobile-pair-link"; name = "value"; value = $invitation.link } → _
+      port browser.attribute { ref = "#mobile-qr"; name = "src"; value = $invitation.qr } → _
+      port browser.write { ref = "#mobile-qr"; name = "hidden"; value = false } → _
+      port browser.write { ref = "#mobile-pair-status"; name = "textContent"; value = "Scan with your phone. This invitation expires in three minutes." } → _
+    when $pair:
+      let endpoint = concat("/workspace/mobile/pair/", $pair.id)
+      when eq($action, "approve"):
+        port browser.request { path = concat($endpoint, "/approve"); method = "POST"; bearer = $pair.bearer } → response
+        assert eq($response.status, 200)
+          otherwise "Phone approval failed."
+      when eq($action, "disconnect"):
+        port browser.request { path = concat($endpoint, "/disconnect"); method = "POST"; bearer = $pair.bearer } → response
+        assert includes(list(204, 404), $response.status)
+          otherwise "Disconnect failed."
+        port state.set { key = "mobile-pair"; value = null } → _
+        port storage.write { key = "sourcery.mobile.pair"; scope = "tab"; value = "" } → _
+        port browser.write { ref = "#mobile-send"; name = "disabled"; value = true } → _
+        port browser.write { ref = "#mobile-approve"; name = "hidden"; value = true } → _
+        port browser.write { ref = "#mobile-disconnect"; name = "hidden"; value = true } → _
+        port browser.write { ref = "#mobile-qr"; name = "hidden"; value = true } → _
+        port browser.write { ref = "#mobile-invitation"; name = "hidden"; value = true } → _
+        port browser.write { ref = "#mobile-pair-status"; name = "textContent"; value = "Phone disconnected. Offline copies already on the phone expire after 24 hours." } → _
+        port browser.write { ref = "#mobile-trip-status"; name = "textContent"; value = "Pair a phone to prepare another trip." } → _
+      when eq($action, "send"):
+        port state.set { scope = "document"; key = "mobile-selection-dirty"; value = true } → _
+        port state.get { scope = "document"; key = "mobile-records" } → shown
+        call mobile.savedRecords
+        let source = $result
+        fold list("note", "project") as id; selection starts {}:
+          port browser.property { ref = concat("#mobile-choose-", $id); name = "checked" } → checked
+          let record = at($source.records, $id)
+          let previous = at($shown.records, $id)
+          let text = at($record, "text")
+          let same = and(eq($shown.mode, $source.mode), eq($shown.owner, $source.owner), eq(at($previous, "text"), $text))
+          assert or(not($checked), and($same, $text))
+            otherwise "A selected record changed. Refresh saved items before sending."
+          port browser.write { ref = concat("#mobile-copy-", $id); name = "disabled"; value = not(and($checked, $text)) } → _
+          port browser.write { ref = concat("#mobile-copy-", $id); name = "value"; value = if(and($checked, $text), $text, "") } → _
+          when and($checked, $text):
+            port digest.sha256 { text = $text } → digest
+            port record.put { record = $selection; key = $id; value = $digest } → selection
+          yield $selection → selection
+        port state.get { scope = "document"; key = "mobile-pilot-review" } → pilot
+        port browser.property { ref = "#mobile-choose-pilot"; name = "checked" } → includePilot
+        port browser.write { ref = "#mobile-copy-pilot"; name = "disabled"; value = not($includePilot) } → _
+        when and($includePilot, $pilot):
+          port json.stringify { value = $pilot.packet } → packet
+          port browser.write { ref = "#mobile-copy-pilot"; name = "value"; value = $packet } → _
+          port record.put { record = $selection; key = "pilot"; value = $pilot.selection } → selection
+        assert or(at($selection, "note"), at($selection, "project"), at($selection, "pilot"))
+          otherwise "Choose at least one saved item."
+        port browser.request { path = concat($endpoint, "/offer"); method = "POST"; bearer = $pair.bearer; form = "#mobile-offer" } → response
+        assert eq($response.status, 201)
+          otherwise "Could not send this selection. Choose smaller items or try again."
+        port record.put { record = $pair; key = "selection"; value = $selection } → pair
+        port record.put { record = $pair; key = "pilotTask"; value = if($includePilot, $pilot.task, null) } → pair
+        port record.put { record = $pair; key = "pilotComment"; value = if($includePilot, $pilot.comment, null) } → pair
+        port state.set { key = "mobile-pair"; value = $pair } → _
+        port json.stringify { value = $pair } → packed
+        port storage.write { key = "sourcery.mobile.pair"; scope = "tab"; value = $packed } → _
+        port state.set { scope = "document"; key = "mobile-selection-dirty"; value = false } → _
+        port browser.write { ref = "#mobile-trip-status"; name = "textContent"; value = "Sent. Waiting for the phone to save and reopen every selected item offline." } → _
+      when includes(list("poll", "approve", "pair"), $action):
+        call mobile.poll
+  catch fault:
+    port browser.write { ref = "#mobile-trip-status"; name = "textContent"; value = if(eq($action, "poll"), "Phone check interrupted. Ready requires confirmation from the phone.", "Could not complete that action. Refresh saved items, check your selection and phone connection, then try again.") } → _
+  let result = true
+
+process mobile.assurance:
+  port dom.exists { selector = "#mobile-assurance-catalogue:not(:has(iframe))" } → needsCatalogue
+  when $needsCatalogue:
+    port application.data { name = "assurance-catalogue" } → version
+    let input = { tag = "p"; attrs = { role = "status" }; children = list("The app catalogue is unavailable.") }
+    when $version:
+      let input = { tag = "iframe"; attrs = {
+        src = concat("/_encounter/assurance-catalogue/", $version, ".html"); title = "App semantic definitions";
+        width = "100%"; height = "360"; frameborder = "0"
+      } }
+    call html.serialize
+    port browser.content { ref = "#mobile-assurance-catalogue"; html = $result } → _
+  call mobile.assuranceRefresh
+
+process mobile.assuranceRefresh:
+  port browser.assuranceRefresh {} → response
+  let status = $response.historyStatus
+  when not(eq($status, null)):
+    let input = { tag = "p"; attrs = { class = "sourcery-feedback" }; children = list("Decision history is unavailable. Try refreshing Assurance.") }
+    call html.serialize
+    let feedback = $result
+    when eq($status, 200):
+      let feedback = ""
+    when includes(list(0, 401, 403), $status):
+      let input = { tag = "p"; attrs = { class = "sourcery-feedback" }; children = list(
+          "Sign in from ",
+          { tag = "a"; attrs = { href = "/workspace/home" }; children = list("Home") },
+          ", then return to Mobile to see the decisions available to your role."
+        ) }
+      call html.serialize
+      let feedback = $result
+    port browser.content { ref = "#notes-assurance-history-status"; html = $feedback } → _
+
+process mobile.poll:
+  let endpoint = concat("/workspace/mobile/pair/", $pair.id)
+  port browser.request { path = $endpoint; bearer = $pair.bearer } → response
+  assert eq($response.status, 200)
+    otherwise "Phone pairing expired."
+  port json.parse { text = $response.body } → room
+  let connected = eq($room.status, "connected")
+  port browser.write { ref = "#mobile-send"; name = "disabled"; value = not($connected) } → _
+  port browser.write { ref = "#mobile-approve"; name = "hidden"; value = not(eq($room.status, "approval")) } → _
+  port browser.write { ref = "#mobile-disconnect"; name = "hidden"; value = false } → _
+  port browser.write { ref = "#mobile-qr"; name = "hidden"; value = not(eq($room.status, "waiting")) } → _
+  port browser.write { ref = "#mobile-invitation"; name = "hidden"; value = not(eq($room.status, "waiting")) } → _
+  port browser.write { ref = "#mobile-pair-status"; name = "textContent"; value = if($connected, "Phone paired for this trip session.",
+    if(eq($room.status, "approval"), concat("Code: ", $room.code, ". Match the code on your phone, then approve."), "Scan the QR code with your phone.")) } → _
+  port state.get { scope = "document"; key = "mobile-selection-dirty" } → dirty
+  when and($connected, not($dirty)):
+    port browser.write { ref = "#mobile-trip-status"; name = "textContent"; value = if($room.confirmed,
+      concat("Ready · all ", $room.count, " selected items reopened offline on the paired phone. Trip version ", $room.revision, "."),
+      if($room.revision, concat("Waiting for offline confirmation · trip version ", $room.revision, "."), "Choose what to take, then send it to your phone.")) } → _

@@ -1,0 +1,224 @@
+process-module "temple/surface-process-module/1"
+
+process store.startup:
+  port dom.exists { selector = "#notes-store-window" } → available
+  when $available:
+    let path = $launch.path
+    call store.environmentAtPath
+    when $environment:
+      call store.readIntent
+      when $launch.store:
+        let release = $launch.release
+        call store.newIntent
+        call store.saveIntent
+      when $intent:
+        call store.resumeIntent
+
+process store.environment:
+  port browser.location {} → storeLocation
+  let path = $storeLocation.path
+  call store.environmentAtPath
+
+process store.environmentAtPath:
+  let environment = if(includes(list("/workspace/work", "/life-board/"), $path), "work",
+    if(includes(list("/workspace/home", "/"), $path), "home", ""))
+
+process store.readIntent:
+  port storage.read { key = "sourcery.store.intent"; scope = "tab"; maxLength = 512 } → saved
+  let intent = null
+  when $saved.value:
+    try:
+      port json.parse { text = $saved.value } → pending
+      port runtime.clock {} → now
+      port text.matches { value = if($pending.id, $pending.id, ""); pattern = "^[a-f0-9]{48}$" } → validId
+      port text.matches { value = if($pending.release, $pending.release, ""); pattern = "^(?:[A-Za-z0-9][A-Za-z0-9_.-]{0,79})?$" } → validRelease
+      port number.calculate { operation = "less"; values = list($now, if($pending.expires, $pending.expires, 0)) } → live
+      when and($validId, $validRelease, eq($pending.environment, $environment),
+        includes(list("opening", "waiting", "signing-in", "retry"), $pending.phase), $live):
+        let intent = $pending
+    catch fault:
+      let intent = null
+
+process store.newIntent:
+  port runtime.nonce {} → id
+  port runtime.clock {} → now
+  let intent = { id = $id; environment = $environment; release = $release; phase = "opening"; expires = add($now, 600000) }
+
+process store.saveIntent:
+  port json.stringify { value = $intent } → packed
+  port storage.write { key = "sourcery.store.intent"; scope = "tab"; value = $packed } → saved
+  let persisted = $saved.ok
+
+process store.cancelIntent:
+  port storage.write { key = "sourcery.store.intent"; scope = "tab"; value = "" } → _
+
+process store.resumeIntent:
+  port dom.exists { selector = concat("#notes-store-surface > [data-store-accepted='", $intent.id, "']") } → accepted
+  when $accepted:
+    port browser.write { ref = "#notes-store-status"; name = "textContent"; value = "" } → _
+    call store.cancelIntent
+  when and(not($accepted), or(eq($intent.phase, "opening"), and(eq($intent.phase, "signing-in"), $launch.first))):
+    port record.put { record = $intent; key = "phase"; value = "opening" } → intent
+    call store.saveIntent
+    port browser.property { ref = "#notes-store-window"; name = "hidden" } → hidden
+    when $hidden:
+      call store.showWindow
+    let path = if($intent.release, concat("/store/?play=", $intent.release), "/store/")
+    let method = "GET"
+    let form = null
+    call store.desktopRequest
+
+process store.signIn:
+  call store.environment
+  call store.readIntent
+  when and($environment, not($intent)):
+    let release = ""
+    call store.newIntent
+  when $intent:
+    port record.put { record = $intent; key = "phase"; value = "signing-in" } → intent
+    call store.saveIntent
+    when $persisted:
+      port browser.navigate { path = concat("/store/connect?workspace=", $environment) } → _
+    when not($persisted):
+      port browser.write { ref = "#notes-store-status"; name = "textContent"; value = "This tab could not save your Store destination. Enable tab storage and try again." } → _
+
+process store.desktopBind:
+  port browser.onMany { bindings = list(
+    { ref = "#notes-store-content"; event = "click"; delegate = "a[href='/store/']:not([target]),a[href^='/store/?']:not([target])"; unmodified = true; preventDefault = true; query = "store.desktopEvent"; input = { action = "follow" } },
+    { ref = "#notes-store-surface"; event = "click"; delegate = "button[data-store-form]"; query = "store.desktopEvent"; input = { action = "command" } },
+    { ref = "#notes-store-surface"; event = "submit"; delegate = "form[action='/store/'],form[action^='/store/?']"; preventDefault = true; query = "store.desktopEvent"; input = { action = "submit" } },
+    { ref = "#notes-store-surface"; event = "click"; delegate = "[data-store-retry]"; query = "store.desktopEvent"; input = { action = "retry" } },
+    { ref = "#notes-store-surface"; event = "click"; delegate = "[data-store-sign-in]"; query = "store.desktopEvent"; input = { action = "sign-in" } }
+  ) } → _
+
+process store.desktopPrepare:
+  port dom.exists { selector = "#notes-store-surface > #store-content" } → loaded
+  when not($loaded):
+    call store.environment
+    call store.readIntent
+    let path = if(and($intent, $intent.release), concat("/store/?play=", $intent.release), "/store/")
+    let method = "GET"
+    let form = null
+    call store.desktopRequest
+
+process store.desktopEvent:
+  let action = $eventInput.action
+  let matched = $eventInput.matched
+  when eq($action, "sign-in"):
+    call store.signIn
+  let intent = null
+  when eq($action, "retry"):
+    call store.environment
+    call store.readIntent
+    when $intent:
+      port record.put { record = $intent; key = "phase"; value = "opening" } → intent
+      call store.saveIntent
+  when eq($action, "command"):
+    let formId = at($matched.attributes, "data-store-form")
+    let command = $matched.value
+    port text.matches { value = $formId; pattern = "^[0-9]+$" } → formIdValid
+    port text.matches { value = $command; pattern = "^[a-z][a-z0-9-]{0,39}$" } → commandValid
+    when and($formIdValid, $commandValid):
+      port browser.write { ref = concat("#notes-store-surface form[data-store-form='", $formId, "'] input[name=operation]"); name = "value"; value = $command } → _
+  when includes(list("follow", "submit", "retry"), $action):
+    let path = if(and($intent, $intent.release), concat("/store/?play=", $intent.release), "/store/")
+    let method = "GET"
+    let form = null
+    when not(eq($action, "retry")):
+      port browser.target { ref = $matched.ref } → target
+      assert and(eq($target.pathname, "/store/"), includes(list("GET", "POST"), $target.method))
+        otherwise "Expected a Store catalogue route."
+      let path = $target.path
+      let method = $target.method
+    when eq($action, "submit"):
+      let form = $matched.ref
+    call store.desktopRequest
+  let result = true
+
+process store.desktopRequest:
+  let status = "#notes-store-status"
+  port browser.write { ref = $status; name = "textContent"; value = if(eq($method, "POST"), "Submitting to Store…", "Loading Store…") } → _
+  let message = "Store is unavailable. Try again."
+  try:
+    port browser.request { path = $path; method = $method; form = $form; fragment = "#store-content";
+      query = { "workspace-fragment" = "1" } } → response
+    when and(eq($response.status, 200), $response.body):
+      let html = $response.body
+      call store.desktopProject
+      let projected = $result
+      let input = if($intent, { tag = "span"; attrs = { hidden = true; "data-store-accepted" = $intent.id } }, null)
+      call html.serialize
+      port browser.content { ref = "#notes-store-surface"; html = concat($projected, $result) } → _
+      when $intent:
+        call store.cancelIntent
+      let message = ""
+    when includes(list(0, 401), $response.status):
+      let message = "Store requires a Temple sign-in."
+      when $intent:
+        port record.put { record = $intent; key = "phase"; value = "waiting" } → intent
+        call store.saveIntent
+      when eq($method, "GET"):
+        let input = { tag = "p"; children = list(
+          { tag = "button"; attrs = { class = "notes-button"; type = "button"; "data-store-sign-in" = true }; children = list("Sign in to Store") }, " ",
+          { tag = "button"; attrs = { class = "notes-button"; type = "button"; "data-store-retry" = true }; children = list("Retry Store") }
+        ) }
+        call html.serialize
+        port browser.content { ref = "#notes-store-surface"; html = $result } → _
+      when eq($method, "POST"):
+        let message = "Your Store session has expired. Keep this form open and sign in before retrying."
+    when eq($response.status, 403):
+      let message = "Store refused access for this account or request."
+  catch fault:
+    when eq($method, "POST"):
+      let message = "Store did not confirm this submission. Check the catalogue before retrying."
+  when and($message, eq($method, "GET")):
+    when and($intent, not(eq($intent.phase, "waiting"))):
+      port record.put { record = $intent; key = "phase"; value = "retry" } → intent
+      call store.saveIntent
+    port dom.exists { selector = "#notes-store-surface > #store-content, #notes-store-surface [data-store-retry]" } → recoverable
+    when not($recoverable):
+      let input = { tag = "p"; children = list(
+        { tag = "button"; attrs = { class = "notes-button"; type = "button"; "data-store-retry" = true }; children = list("Reload Store") }
+      ) }
+      call html.serialize
+      port browser.content { ref = "#notes-store-surface"; html = $result } → _
+  port browser.write { ref = $status; name = "textContent"; value = $message } → _
+
+process store.desktopProject:
+  # FormData omits the submit button in the browser request port. Keep an
+  # operation value for keyboard submission and let each command update it.
+  port html.select { html = $html; select = { tag = "form"; attrs = { method = "post" } } } → forms
+  port html.select { html = $html; select = { tag = "button"; attrs = { name = "operation" } } } → buttons
+  fold $forms as form; formsEdits starts list():
+    fold $buttons as button; selected starts list():
+      port number.calculate { operation = "greaterEqual"; values = list($button.start, $form.openEnd) } → afterOpen
+      port number.calculate { operation = "lessEqual"; values = list($button.end, $form.closeStart) } → beforeClose
+      yield if(and($afterOpen, $beforeClose), append($selected, list($button)), $selected) → commands
+    fold $commands as command; valid starts null:
+      let value = at($command.attrs, "value")
+      port text.matches { value = or($value, ""); pattern = "^[a-z][a-z0-9-]{0,39}$" } → operation
+      yield if(or($valid, not($operation)), $valid, $value) → first
+    let edits = $formsEdits
+    when $first:
+      let input = list(
+        { tag = "input"; attrs = { type = "hidden"; name = "operation"; value = $first } },
+        { tag = "input"; attrs = { type = "hidden"; name = "workspace-fragment"; value = "1" } }
+      )
+      call html.serialize
+      let fields = $result
+      let tag = "form"
+      let element = { attrs = { "data-store-form" = $form.start } }
+      call html.attributes
+      let attribute = $result
+      let updates = map(append(list($form), $commands), "element", { start = $element.nameEnd; end = $element.nameEnd; value = $attribute })
+      let edits = append(append($edits, $updates), list({ start = $form.closeStart; end = $form.closeStart; value = $fields }))
+    yield $edits → formsEdits
+  fold list("/store/runtime/", "https://appdev.sourcerytech.com.au/game/") as prefix; edits starts $formsEdits:
+    port html.select { html = $html; select = { tag = "a"; attrs = { target = false }; prefixes = { href = $prefix } } } → links
+    let tag = "a"
+    let element = { attrs = { target = "_blank"; rel = "noopener" } }
+    call html.attributes
+    let attributes = $result
+    let updated = map($links, "link", { start = $link.nameEnd; end = $link.nameEnd; value = $attributes })
+    yield append($edits, $updated) → edits
+  port html.edit { html = $html; edits = $edits } → result

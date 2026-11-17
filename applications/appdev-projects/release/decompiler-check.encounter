@@ -1,0 +1,55 @@
+process-module "temple/surface-process-module/1"
+
+process decompiler.mountPlan:
+  let result = {
+    port = "24247";
+    config = "/srv/encounter-apps/hosted-life-board-mounts.xScO4TGj/gateway.rel";
+    revokedPin = "15a59177538457a5c9cfabc4f74ab8308fd6319d50ed2cf9f21430e9b7b6fc3f"
+  }
+
+process decompiler.mountPin:
+  port text.matches { value = $eventInput.revokedPin; pattern = "\\A[0-9a-f]{64}\\z" } → valid
+  assert $valid
+    otherwise "Expected a SHA-256 fingerprint for the revoked Decompiler credential."
+  assert not($eventInput.revoked)
+    otherwise "The revoked Decompiler credential is configured again."
+  let result = true
+
+process decompiler.mountDenied:
+  assert eq($eventInput.status, 403)
+    otherwise "The hosted Decompiler accepted unapproved mount authorization."
+  let result = true
+
+process decompiler.mountPage:
+  port text.matches { value = $eventInput.body; pattern = "<h1>Semantic decompiler</h1>" } → heading
+  assert and(eq($eventInput.status, 200), $heading)
+    otherwise "The hosted Decompiler refused the current mount credential."
+  let result = true
+
+process decompiler.pagingPlan:
+  let result = {
+    port = "24220"; widths = list(320, 375, 430); height = 480;
+    document = { selector = "select"; role = "combobox"; name = "Document" };
+    option = "import-and-entry";
+    replies = { selector = "body"; role = "button"; name = "Replies" };
+    aster = { selector = "#aster-buddy" }; settings = { selector = "#aster-kernel-menu summary" };
+    counter = { selector = "#counter" };
+    next = { selector = "body"; role = "button"; name = "Next ▶" };
+    previous = { selector = "body"; role = "button"; name = "◀ Previous" }
+  }
+
+process decompiler.pagingPage:
+  assert eq($eventInput.status, 200)
+    otherwise "The Front Gate refused the Decompiler document."
+  let result = true
+
+process decompiler.pagingTurn:
+  assert eq($eventInput.scrollWidth, $eventInput.viewport)
+    otherwise "The Decompiler overflows the touch viewport."
+  assert not(eq($eventInput.next, $eventInput.first))
+    otherwise "Next did not advance the Decompiler counter."
+  assert and($eventInput.asterVisible, $eventInput.settingsVisible)
+    otherwise "Aster disappeared before Previous."
+  assert eq($eventInput.previous, $eventInput.first)
+    otherwise "Previous did not restore the Decompiler counter."
+  let result = true

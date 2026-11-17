@@ -1,0 +1,70 @@
+process-module "temple/surface-process-module/1"
+
+process cli.main:
+  port json.parse { text = at($eventInput, 0) } → config
+  let identity = ""
+  when $config.gateway:
+    let upstream = $config.gateway
+    let forwarding = concat("proxy_http_version 1.1; proxy_set_header Host ", $config.http, "; ")
+    call preview.canonicalIdentity
+    let identity = concat("location ^~ /identity-management/ { proxy_pass http://", $upstream, "; ", $forwarding, "}\n", $result)
+    when eq($config.identityOverview, "/settings/identity/"):
+      call preview.identityOverview
+      let identity = concat($identity, $result)
+  when $config.direct:
+    let upstream = $config.workspace
+    let forwarding = concat(
+      "proxy_set_header Host ", $config.workspace,
+      "; proxy_set_header Authorization '", $config.direct.authorization,
+      "'; proxy_set_header Origin http://", $config.workspace,
+      "; proxy_set_header X-Temple-Principal '", $config.direct.principal,
+      "'; proxy_set_header X-Temple-Email '", $config.direct.steward,
+      "'; proxy_set_header X-Temple-Actor-Session '", $config.direct.actorSession, "'; ")
+    call preview.canonicalIdentity
+    let identity = concat("location = /identity-management/ { proxy_pass http://", $upstream, "; ", $forwarding, "}\n", $result)
+  let result = concat(
+    "daemon off;\nworker_processes 1;\npid nginx.pid;\nerror_log stderr warn;\nevents {}\nhttp {\n",
+    "access_log off;\nclient_body_temp_path client-body;\nproxy_temp_path proxy-temp;\n",
+    "fastcgi_temp_path fastcgi-temp;\nuwsgi_temp_path uwsgi-temp;\nscgi_temp_path scgi-temp;\n",
+    "server { listen ", $config.http, ";\n",
+    "location = /_encounter/browser { proxy_pass http://", $config.browser,
+    "; proxy_http_version 1.1; proxy_set_header Host ", $config.browser,
+    "; proxy_set_header Origin http://", $config.browser,
+    "; proxy_set_header Connection upgrade; proxy_set_header Upgrade $http_upgrade; }\n",
+    "location = /_encounter/browser.mjs { proxy_http_version 1.1; proxy_pass http://", $config.browser,
+    "; proxy_set_header Host ", $config.browser, "; }\n",
+    "location = /_encounter/assurance-catalogue.html { proxy_http_version 1.1; proxy_pass http://", $config.browser,
+    "/assurance-catalogue.html; proxy_set_header Host ", $config.browser, "; limit_except GET { deny all; } }\n",
+    "location ^~ /_encounter/assurance-catalogue/ { if ($uri !~ \"^/_encounter/assurance-catalogue/[a-f0-9]{64}\\.html$\") { return 404; } proxy_http_version 1.1; proxy_pass http://",
+    $config.browser, "/assurance-catalogue/; proxy_set_header Host ", $config.browser, "; proxy_set_header Cookie \"\"; proxy_hide_header Cache-Control; proxy_hide_header Content-Security-Policy; gzip_vary on; ",
+    "add_header Cache-Control \"public, max-age=31536000, immutable\"; add_header Content-Security-Policy \"default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'; base-uri 'none'\" always; limit_except GET { deny all; } }\n",
+    "location = /workspace/vm-manager/console { proxy_pass http://", $config.workspace,
+    "; proxy_http_version 1.1; proxy_set_header Host ", $config.http,
+    "; proxy_set_header Connection upgrade; proxy_set_header Upgrade $http_upgrade; proxy_read_timeout 60s; }\n",
+    "location = /workspace/mobile { proxy_pass http://", $config.workspace, "; proxy_set_header Host ", $config.workspace,
+    "; proxy_hide_header Content-Security-Policy; add_header Content-Security-Policy \"$upstream_http_content_security_policy; frame-src http://$http_host/_encounter/assurance-catalogue/\" always; }\n",
+    $identity, "location / { proxy_pass http://", $config.workspace, "; proxy_set_header Host ",
+    $config.workspace, "; }\n}\n}\n")
+
+process preview.canonicalIdentity:
+  let result = concat(
+    "location = /settings/identity { return 404; }\n",
+    "location = /settings/identity/ {\n",
+    "if ($request_method != GET) { return 404; }\n",
+    "if ($request_uri != \"/settings/identity/\") { return 404; }\n",
+    "proxy_pass http://", $upstream, "/identity-management/; ", $forwarding, "}\n")
+
+process preview.identityOverview:
+  # Keep the gateway session and rewrite only the overview's finish location.
+  let gateway = concat("proxy_http_version 1.1; proxy_set_header Host ", $config.http, "; }\n")
+  let result = concat(
+    "location = /identity-management/ {\n",
+    "absolute_redirect off;\n",
+    "set $overview_request \"$request_method:$request_uri\";\n",
+    "if ($overview_request = \"GET:/identity-management/\") { return 308 /settings/identity/; }\n",
+    "proxy_pass http://", $config.gateway, "; ", $gateway,
+    "location = /identity-management/finish {\n",
+    "proxy_redirect ~^/identity-management/$ /settings/identity/;\n",
+    "proxy_pass http://", $config.gateway, "; ", $gateway,
+    "location = /identity-management/workspace-access { return 404; }\n",
+    "location = /identity-management/workspace-sign-out { return 404; }\n")

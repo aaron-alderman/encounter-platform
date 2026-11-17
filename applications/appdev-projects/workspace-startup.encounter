@@ -1,0 +1,39 @@
+process-module "temple/surface-process-module/1"
+
+process workspace.startupRequest:
+  let home = list("/", "/workspace/home")
+  let paths = if(eq($startupScope, "work"), list("/workspace/work", "/life-board/"),
+    if(eq($startupScope, "mobile"), list("/workspace/mobile", "/workspace/mobile/"),
+      if(eq($startupScope, "platform"), list("/workspace/platform"), append($home, list("/workspace/platform")))))
+  let desktopLaunches = list("#platform", "#handover-demo", "#environments-demo", "#environments-demo-home",
+    "#environments-demo-office", "#start-flyout-workspaces", "#public-sign-in-complete", "#public-sign-in-failed")
+  let hashes = if(eq($startupScope, "desktop"), $desktopLaunches, list())
+  let result = { receiver = "workspace"; paths = $paths; hashes = $hashes }
+
+process workspace.startup:
+  call workspace.startupRequest
+  let request = $result
+  port browser.startup { receiver = $request.receiver; paths = $request.paths; hashes = $request.hashes } → received
+  let home = list("/", "/workspace/home")
+  let fields = $received.fields
+  let onHome = includes($home, $received.path)
+  let platform = eq($received.path, "/workspace/platform")
+  let view = if(or(and($onHome, includes(list("inbox", "aster"), $fields.view)),
+    and($platform, includes(list("platform", "work-items", "platform-inbox"), $fields.view))), $fields.view, "")
+  port text.matches { value = if($fields.item, $fields.item, ""); pattern = "^[a-f0-9]{32}$" } → item
+  port text.matches { value = if($fields.pilot, $fields.pilot, ""); pattern = "^[A-Za-z0-9_-]{1,80}$" } → pilot
+  port text.matches { value = if($fields.comment, $fields.comment, ""); pattern = "^[A-Za-z0-9_-]{1,80}$" } → comment
+  let setup = if(and(not($view), not($received.hash), not(at($fields, "sign-in")),
+    or($onHome, eq($startupScope, "work")), includes(list("home", "work"), $fields.setup)), $fields.setup, "")
+  let signIn = at($fields, "sign-in")
+  port text.matches { value = if($fields.play, $fields.play, ""); pattern = "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$" } → release
+  let store = and(eq($fields.open, "store"), or($onHome, eq($startupScope, "work")), not($view),
+    not($received.hash), not($setup), not($signIn), or(not($fields.play), $release))
+  let frontGate = and(eq($fields.open, "front-gate"), eq($startupScope, "desktop"), $onHome,
+    not($view), not($received.hash), not($setup), not($signIn))
+  let result = { first = $received.first; path = $received.path; hadInput = $received.hadInput;
+    store = $store; frontGate = $frontGate; release = if($release, $fields.play, ""); view = $view; item = if($item, $fields.item, ""); setup = $setup;
+    signIn = if(and($onHome, eq($received.hash, "#public-sign-in-failed")), "public-failed",
+      if(and($onHome, not($view), not($received.hash), includes(list("failed", "unavailable"), $signIn)), $signIn, ""));
+    pilot = if($pilot, $fields.pilot, ""); comment = if($comment, $fields.comment, "");
+    hash = if(and($onHome, not($view)), $received.hash, "") }

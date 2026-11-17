@@ -1,0 +1,65 @@
+process-module "temple/surface-process-module/1"
+
+process source.widget:
+  let source = $eventInput
+  let editable = at($source, "editable")
+  let buffer = null
+  when $editable:
+    let buffer = { tag = "textarea"; attrs = { class = "source-widget-edit"; name = $source.name; rows = or(at($source, "rows"), "12");
+      "aria-label" = $source.label; required = at($source, "required"); spellcheck = "false"; autocapitalize = "off"; autocomplete = "off"; wrap = if(at($source, "wrap"), "soft", "off") };
+      children = list($source.text) }
+  when not($editable):
+    port text.split { value = $source.text; pattern = "\\r?\\n" } → lines
+    let numbered = not(eq(at($source, "numbered"), false))
+    let buffer = { tag = "div"; attrs = { class = "nr-source-buffer source-widget-read"; tabindex = "0"; role = "region"; "aria-label" = $source.label }; children =
+      map(range(count($lines)), "number", { tag = "div"; attrs = { class = if($numbered, "nr-source-line", "source-widget-unnumbered") }; children = list(
+        if($numbered, { tag = "span"; attrs = { class = "nr-source-gutter"; "aria-hidden" = "true" }; children = list($number) }, null),
+        { tag = "code"; children = list(at($lines, add($number, -1))) }
+      ) }) }
+  let result = { tag = "section"; attrs = { class = "nr-source-workspace source-widget"; "aria-label" = $source.label }; children = list(
+    { tag = "header"; attrs = { class = "nr-source-header" }; children = list(
+      { tag = "strong"; children = list($source.label) },
+      { tag = "small"; children = list($source.language, " · ", if($editable, "Editable", "Read only")) }
+    ) },
+    $buffer
+  ) }
+
+process source.widgetStyles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = ".source-widget"; declarations = list(
+      { property = "min-width"; value = "0" },
+      { property = "width"; value = "100%" },
+      { property = "margin"; value = ".55rem 0" }
+    ) },
+    { selector = ".source-widget .nr-source-header"; declarations = list(
+      { property = "margin-bottom"; value = "4px" }
+    ) },
+    { selector = ".source-widget .nr-source-header small"; declarations = list(
+      { property = "color"; value = "inherit" }
+    ) },
+    { selector = ".source-widget textarea.source-widget-edit"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "min-height"; value = "8rem" },
+      { property = "max-height"; value = "70vh" },
+      { property = "margin"; value = "0" },
+      { property = "tab-size"; value = "2" },
+      { property = "font"; value = "13px/1.55 monospace" },
+      { property = "color"; value = "var(--sourcery-ink)" },
+      { property = "background"; value = "var(--sourcery-paper)" }
+    ) },
+    { selector = ".source-widget-read"; declarations = list(
+      { property = "box-shadow"; value = "var(--sourcery-inset)" }
+    ) },
+    { selector = ".source-widget-read>div"; declarations = list(
+      { property = "min-height"; value = "1.55em" }
+    ) },
+    { selector = ".source-widget-read code"; declarations = list(
+      { property = "font"; value = "inherit" },
+      { property = "white-space"; value = "pre" }
+    ) },
+    { selector = ".source-widget-unnumbered"; declarations = list(
+      { property = "padding-inline"; value = ".55rem" }
+    ) }
+  )
+  call css.renderCompactRules

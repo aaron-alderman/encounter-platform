@@ -1,0 +1,755 @@
+process-module "temple/surface-process-module/1"
+
+process desktop.tunnelForward:
+  let port = $input
+  let result = concat("127.0.0.1:", $port, ":127.0.0.1:", $port)
+
+process desktop.icon:
+  let app = $input
+  let result = { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true"; "shape-rendering" = "crispEdges" }; children = list(
+    { tag = "use"; attrs = { href = concat("#icon-", $app.icon) } },
+    if($app.signIn, { tag = "svg"; attrs = { x = "18"; y = "18"; width = "14"; height = "14" }; children = list(
+      { tag = "use"; attrs = { class = "workspace-locked"; href = "#badge-sign-in" } },
+      { tag = "use"; attrs = { class = "workspace-unlocked"; href = "#badge-signed-in" } }
+    ) }, null),
+    if($app.local, { tag = "svg"; attrs = { x = "0"; y = "18"; width = "14"; height = "14" }; children = list(
+      { tag = "title"; children = list("Opens locally via SSH tunnel") },
+      { tag = "use"; attrs = { href = "#badge-local" } }
+    ) }, null)
+  ) }
+
+process desktop.link:
+  let app = $input
+  let description = if($app.signIn, if($app.local, "launch-sign-in launch-local", "launch-sign-in"), if($app.local, "launch-local", null))
+  let mentions = includes(list("x-inbox", "x-mentions"), $app.id)
+  let acting = includes(list("acting-as", "handover-demo"), $app.id)
+  let environments = eq($app.id, "environments-demo")
+  let inWorkspace = or($mentions, $acting, $environments, at($app, "notes"), at($app, "sameTab"))
+  let card = { title = $app.name; detail = $app.detail; icon = $app.icon; signIn = $app.signIn; local = $app.local }
+  call desktop.cardContents
+  let result = { tag = "a"; attrs = { href = $app.href; class = "app-link"; target = if($inWorkspace, null, "_blank"); rel = if($inWorkspace, null, "noopener"); "data-launch-action" = $app.defaultAction; "data-open-mentions" = if($mentions, "true", null); "data-x-inbox" = if(eq($app.id, "x-inbox"), "true", null); "data-open-acting-as" = if($acting, "true", null); "data-open-workspaces" = if($environments, "true", null); "data-notes-program" = at($app, "notes"); "aria-describedby" = $description }; children = $result }
+
+process desktop.launchNode:
+  let shortcutKey = $input.id
+  let window = includes(list("store", "game", "front-gate", "semantic-compiler", "aster-codex", "vm-manager", "registry-demo"), $shortcutKey)
+  when $window:
+    call desktop.shortcutNode
+  when not($window):
+    call desktop.link
+
+process desktop.renderLink:
+  call desktop.launchNode
+  let input = $result
+  call html.serialize
+
+process desktop.startSections:
+  call desktop.apps
+  let startTools = filter($result, "entry", eq($entry.start, "tools"))
+  fold $startTools as entry; tools starts list():
+    let shortcutKey = $entry.key
+    call desktop.shortcutNode
+    yield append($tools, list($result)) → tools
+  fold filter($favorites, "entry", not(eq($entry.id, "front-gate"))) as app; pinnedApps starts list():
+    let nativeWindow = includes(list("store", "game", "aster-codex", "vm-manager", "registry-demo"), $app.id)
+    when $nativeWindow:
+      let shortcutKey = $app.id
+      call desktop.shortcutNode
+    when not($nativeWindow):
+      let input = $app
+      call desktop.link
+    yield append($pinnedApps, list($result)) → pinnedApps
+  fold list({ name = "Work"; href = "/workspace/work"; icon = "life-board" },
+    { name = "Mobile"; href = "/workspace/mobile"; icon = "computer" }) as entry; environments starts list():
+    let card = { title = $entry.name; icon = $entry.icon }
+    call desktop.cardContents
+    let link = { tag = "a"; attrs = { href = $entry.href; class = "app-link" }; children = $result }
+    yield append($environments, list($link)) → environments
+  let allApps = { tag = "button"; attrs = { id = "start-all-apps"; class = "app-link"; type = "button"; "aria-controls" = "workspace" }; children = list("All apps") }
+  let account = list(
+    { tag = "p"; attrs = { id = "account-state"; role = "status" }; children = list("Checking sign-in…") },
+    { tag = "button"; attrs = { id = "sign-in"; class = "app-link"; type = "button"; "aria-controls" = "sign-in-dialog" }; children = list("Sign in") },
+    { tag = "button"; attrs = { id = "sign-out"; class = "app-link"; type = "button"; hidden = true }; children = list("Sign out") },
+    { tag = "a"; attrs = { href = "/settings/identity/"; class = "app-link"; "data-open-identity-management" = true }; children = list("Identity Management") }
+  )
+  call inbox.navigation
+  let workspaceLinks = $result
+  let input = { id = "desktop-settings-open"; target = "desktop-settings-dialog" }
+  call desktop.admitOperation
+  call windowWidget.desktopSettings
+  let settings = { tag = "button"; attrs = { id = "desktop-settings-open"; type = "button"; class = "app-link";
+    "aria-controls" = "desktop-settings-dialog" }; children = list($result.title) }
+  let sections = list(
+    { id = "start-flyout-account"; label = "Account"; entries = $account },
+    { id = "start-flyout-workspaces"; label = "Workspaces"; entries = append(append($workspaceLinks, $environments), list({ tag = "span"; attrs = { "data-workspace-preference" = true } })) },
+    { id = "start-flyout-tools"; label = "Workspace tools"; entries = append($tools, list($settings)) },
+    { id = "start-flyout-apps"; label = "Apps"; entries = append($pinnedApps, list($allApps)) }
+  )
+  let input = map($sections, "section", { tag = "details"; attrs = { id = $section.id; class = "start-group"; name = "home-start-groups"; "aria-label" = $section.label };
+    children = list({ tag = "summary"; children = list($section.label) },
+      { tag = "div"; attrs = { class = "start-flyout"; role = "region"; "aria-label" = $section.label }; children = $section.entries }) })
+  call html.serialize
+
+process desktop.workspaceHelp:
+  let result = { tag = "nav"; attrs = { class = "menu-bar"; "aria-label" = "Workspace help" }; children = list(
+    { tag = "details"; children = list(
+      { tag = "summary"; children = list("Help") },
+      { tag = "div"; attrs = { class = "help" }; children = list(
+        { tag = "a"; attrs = { href = "#formation-help"; "data-formation-help" = "index" }; children = list("Formation resources") },
+        { tag = "hr" },
+        { tag = "strong"; children = list("AppDev SSH tunnels") },
+        { tag = "p"; children = list(
+          { tag = "a"; attrs = { href = "/workspace/AppDev-Temple-Connector.exe"; download = true }; children = list("Install the Windows connector") },
+          " and ", { tag = "a"; attrs = { href = "sourcery-appdev-tunnels://open" }; children = list("open SSH tunnels") }, ", or use OpenSSH directly.") },
+        { tag = "code"; children = list(concat($ssh, " -L ", $frontGateForward, " -L ", $lifeBoardForward, " aaron-dev")) },
+        { tag = "p"; children = list("If Front Gate is already connected, open only the Work forward.") },
+        { tag = "code"; children = list(concat($ssh, " -L ", $lifeBoardForward, " aaron-dev")) }
+      ) }
+    ) }
+  ) }
+
+process desktop.workspaceWindow:
+  call desktop.workspaceDefinition
+  let workspaceDefinition = $result
+  let windowTypeId = $workspaceDefinition.type
+  call windowShell.typeById
+  let windowType = $result
+  let frame = { tag = "section"; attrs = { class = "window"; id = "workspace"; "aria-labelledby" = "window-title" } }
+  let icon = { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" };
+    children = list({ tag = "use"; attrs = { href = "#icon-workspace" } }) }
+  let controlTarget = $workspaceDefinition.title
+  let controlBindings = {
+    maximize = if(includes($workspaceDefinition.controls, "maximize"), { tag = "label"; attrs = { for = $workspaceDefinition.maximizeToggle } }, null);
+    minimize = if(includes($workspaceDefinition.controls, "minimize"), { tag = "label"; attrs = { for = $workspaceDefinition.visibilityToggle } }, null)
+  }
+  call windowShell.titleControls
+  let title = { tag = "header"; attrs = { class = "titlebar" }; children = list($icon,
+    { tag = "span"; attrs = { id = "window-title" }; children = list($workspaceDefinition.title) }, $result) }
+  let badgeOwner = "home"
+  let badgeId = $about.id
+  call desktop.buildBadge
+  let buildBadge = $result
+  let banner = { tag = "div"; attrs = { class = "banner" }; children = list(
+    { tag = "div"; attrs = { class = "banner-icon" }; children = list($icon) },
+    { tag = "div"; children = list({ tag = "p"; children = list("APPDEV / PROGRAM MANAGER") },
+      { tag = "h1"; children = list("Sourcery Workspace") }, { tag = "span"; children = list("Open an application to pick up your work.") }) },
+    $buildBadge
+  ) }
+  let tabs = list({ id = "tab-hosted"; label = $workspaceDefinition.appsLabel }, { id = "tab-encounters"; label = "Encounters" },
+    { id = "tab-workspaces"; label = "Workspaces" }, { id = "tab-operations"; label = "Operations" }, { id = "tab-x"; label = "Social" })
+  let radios = map($tabs, "tab", { tag = "input"; attrs = { class = "desktop-toggle"; type = "radio"; name = "programs"; id = $tab.id;
+    checked = eq($tab.id, "tab-hosted"); "aria-label" = $tab.label } })
+  let panelMarker = "sourcery-home-program-panels-placeholder"
+  let content = { tag = "div"; attrs = { class = "program-switcher" }; children = append($radios, list(
+    { tag = "div"; attrs = { class = "tabs" }; children = map($tabs, "tab", { tag = "label"; attrs = { for = $tab.id }; children = list($tab.label) }) },
+    { tag = "div"; attrs = { class = "programs"; tabindex = "0"; "aria-label" = "Applications" }; children = list(
+      { tag = "div"; attrs = { class = "program-group"; id = "home-getting-started"; "data-group" = "getting-started" };
+        children = list("sourcery-home-getting-started-placeholder") }, $panelMarker) }
+  )) }
+  let status = { tag = "footer"; attrs = { class = "statusbar" }; children = list(
+    { tag = "span"; attrs = { id = "status"; role = "status" }; children = list(concat($initialShortcutCount, " shortcuts")) },
+    { tag = "span"; attrs = { id = "launch-sign-in" }; children = list(
+      { tag = "svg"; attrs = { width = "14"; height = "14"; viewBox = "0 0 14 14"; "aria-hidden" = "true" }; children = list(
+        { tag = "use"; attrs = { class = "workspace-locked"; href = "#badge-sign-in" } },
+        { tag = "use"; attrs = { class = "workspace-unlocked"; href = "#badge-signed-in" } }) },
+      { tag = "b"; attrs = { id = "workspace-sign-in-text" }; children = list("Sign-in required") }) },
+    { tag = "span"; attrs = { id = "launch-local" }; children = list(
+      { tag = "svg"; attrs = { width = "14"; height = "14"; viewBox = "0 0 14 14"; "aria-hidden" = "true" }; children = list(
+        { tag = "use"; attrs = { href = "#badge-local" } }) }, " Opens locally via SSH tunnel") }
+  ) }
+  call desktop.workspaceHelp
+  let slots = { title = $title; menu = $result; banner = $banner; content = $content; status = $status }
+  call windowShell.frame
+  let input = $result
+  call html.serialize
+  port text.replaceAll { value = $result; search = "sourcery-home-getting-started-placeholder"; replacement = $firstRun.card } → markup
+  port text.replaceAll { value = $markup; search = $panelMarker; replacement = concat($panels, $workspacePanel, $operationPanels) } → result
+
+process desktop.settingsDialog:
+  let windowTypeId = "compact"
+  call windowShell.typeById
+  let windowType = $result
+  let heading = concat($settings.id, "-title")
+  let frame = { tag = "dialog"; attrs = { id = concat($settings.id, "-dialog");
+    class = if(at($settings, "wide"), "dialog-wide dialog-scroll", null); "aria-labelledby" = $heading } }
+  let title = { tag = "h2"; attrs = { id = $heading; class = "titlebar" }; children = list($settings.title) }
+  let content = { tag = "div"; attrs = { id = if(eq($settings.id, "sign-in"), null, concat($settings.id, "-content")); class = "dialog-body" };
+    children = or(at($settings, "body"), list()) }
+  when eq($settings.id, "x-mentions"):
+    let content = { tag = "div"; attrs = {}; children = list("sourcery-home-mentions-banner-placeholder", $content) }
+  let dialogActions = list({ label = or(at($settings, "close"), "Close") })
+  call windowWidget.dialogActions
+  let slots = { title = $title; content = $content; actions = $result }
+  call windowShell.frame
+  let input = $result
+  call html.serialize
+
+process desktop.settingsWindows:
+  call windowWidget.desktopSettings
+  let preferences = $result
+  let choices = map($preferences.choices, "choice", { tag = "button";
+    attrs = { type = "button"; "data-desktop-color" = concat("", $choice.code); "aria-pressed" = if(eq($choice.code, 0), "true", "false") };
+    children = list($choice.label) })
+  let preferenceBody = list({ tag = "fieldset"; children = append(
+    list({ tag = "legend"; children = list($preferences.field) }), $choices) },
+    { tag = "p"; attrs = { role = "status"; id = "desktop-settings-status" }; children = list($preferences.help) })
+  let signIn = list(
+    { tag = "p"; children = list(
+      { tag = "a"; attrs = { class = "button"; href = "/identity-management/?workspace-return=%2Fworkspace%2Fhome" }; children = list("Continue with Sourcery Google account") }) },
+    { tag = "p"; attrs = { id = "sign-in-message"; role = "status"; hidden = true }; children = list() },
+    { tag = "details"; children = list(
+      { tag = "summary"; children = list("Public accounts") },
+      { tag = "p"; children = list(
+        { tag = "a"; attrs = { class = "button"; id = "sign-in-gmail"; href = "/workspace/auth/gmail"; hidden = true }; children = list("Continue with personal Gmail") },
+        { tag = "span"; attrs = { id = "sign-in-gmail-unavailable" }; children = list("Personal Gmail sign-in is unavailable.") }) },
+      { tag = "p"; children = list(
+        { tag = "a"; attrs = { class = "button"; id = "sign-in-microsoft"; href = "/workspace/auth/microsoft"; hidden = true }; children = list("Continue with Microsoft") },
+        { tag = "span"; attrs = { id = "sign-in-microsoft-unavailable" }; children = list("Microsoft sign-in is unavailable.") }) },
+      { tag = "details"; children = list(
+        { tag = "summary"; children = list("Social") },
+        { tag = "p"; children = list(
+          { tag = "a"; attrs = { class = "button"; id = "sign-in-x"; href = "/workspace/auth/x"; hidden = true }; children = list("Continue with X") },
+          { tag = "span"; attrs = { id = "sign-in-x-unavailable" }; children = list("X sign-in is unavailable.") }) }) }) },
+    { tag = "p"; children = list(
+      { tag = "a"; attrs = { href = "/settings/identity/"; "data-open-identity-management" = true }; children = list("Open Identity Management") },
+      " to see your Temple account and AppDev access.") }
+  )
+  let dialogs = list({ id = "sign-in"; title = "Sign in to AppDev"; body = $signIn },
+    { id = "desktop-settings"; title = $preferences.title; body = $preferenceBody },
+    { id = "versions"; title = "Work · Manage Versions"; wide = true },
+    { id = "identity-management"; title = "Identity Management"; wide = true },
+    { id = "network"; title = "Network settings"; wide = true },
+    { id = "environments"; title = "Environments demo"; wide = true; close = "Exit demo" },
+    { id = "claimipedia"; title = "Claimipedia"; wide = true },
+    { id = "aster"; title = "Ask Aster"; wide = true },
+    { id = "x-mentions"; title = "X Mentions" })
+  fold $dialogs as settings; markup starts "":
+    call desktop.settingsDialog
+    yield concat($markup, $result) → markup
+  port text.replaceAll { value = $markup; search = "sourcery-home-mentions-banner-placeholder"; replacement = $handoverBanner } → result
+
+process desktop.menuTrigger:
+  let result = { tag = "button"; attrs = { type = "button"; id = concat($menu.id, "-launch"); class = "workspace-action"; "aria-haspopup" = "menu"; "aria-controls" = $menu.id; "aria-label" = $menu.label; "data-app-menu" = $menu.id }; children = list("⋯") }
+
+process desktop.appMenuEntry:
+  call desktop.menuTrigger
+  let result = { tag = "div"; attrs = { class = "app-menu-entry"; "data-app-menu" = $menu.id }; children = list($link, $result) }
+
+process desktop.appMenu:
+  let items = map($menu.items, "item", {
+    tag = if($item.href, "a", "button"); attrs = { role = "menuitem"; href = $item.href; target = if($item.href, "_blank", null);
+      rel = if($item.href, "noopener", null); type = if($item.href, null, "button"); "data-open-versions" = eq(at($item, "action"), "versions"); "data-app-menu" = if(eq($menu.id, "life-board-actions"), null, $menu.id) };
+    children = list($item.label)
+  })
+  let input = { tag = "div"; attrs = { id = $menu.id; class = "context-menu"; popover = "auto"; role = "menu"; "aria-label" = $menu.label }; children = $items }
+  call html.serialize
+
+process desktop.workspaceAppAlternates:
+  let alternate = {
+    game = { id = "game-zone-actions"; items = list(
+      { label = "Open hosted Game Hub"; href = "/game/" },
+      { label = "Open SSH preview"; href = concat("http://game-hub.localhost:", $tunnels.frontGate, "/") }) };
+    "game-hub" = { id = "game-hub-actions"; items = list({ label = "Open hosted Game Hub"; href = "/game/" }) };
+    "super-crm" = { id = "super-crm-actions"; items = list({ label = "Open managed CRM"; href = "https://super-crm.life-board.test:24640/" }) };
+    "hosted-super-crm" = { id = "hosted-super-crm-actions"; items = list({ label = "Open managed CRM"; href = "https://super-crm.life-board.test:24640/" }) }
+  }
+  let result = $alternate
+
+process desktop.workspaceAppCard:
+  let cardApp = $app
+  let custom = at($appAlternates, $app.id)
+  let production = and(eq($app.group, "previews"), at($app, "production"))
+  let menuId = if($custom, $custom.id, if($production, concat("production-actions-", $app.id), null))
+  let options = if($custom, $custom.items, if($production, list({ label = "View production"; href = $app.production }), list()))
+  let items = map($options, "item", { tag = "a"; attrs = { href = $item.href; target = "_blank"; rel = "noopener" }; children = list($item.label) })
+  let input = $app
+  call desktop.launchNode
+  let input = { id = $cardApp.id; name = $cardApp.name; description = $cardApp.detail; defaultAction = at($cardApp, "defaultAction"); launch = $result;
+    menuId = $menuId; items = $items; elementId = if(eq($cardApp.id, "super-crm"), "super-crm-entry", null) }
+  call appCard.compose
+
+process desktop.workspacePanel:
+  call desktop.workspaceEnvironments
+  let environments = $result
+  fold $environments as environment; cards starts list():
+    let input = $environment
+    call desktop.icon
+    let card = { tag = "a"; attrs = { href = $environment.href; class = "app-link" }; children = list($result,
+      { tag = "span"; attrs = { class = "app-label" }; children = list({ tag = "strong"; children = list($environment.name) }, { tag = "small"; children = list($environment.detail) }) }
+    ) }
+    when eq($environment.name, "Work"):
+      let menu = $workMenu
+      let link = $card
+      call desktop.appMenuEntry
+      let card = $result
+    let item = { tag = "li"; children = list($card) }
+    let item = if(eq($environment.name, "Platform"), { tag = "template"; attrs = { "data-workspace-platform-card" = true }; children = list($item) }, $item)
+    yield append($cards, list($item)) → environmentsCards
+  let input = { tag = "section"; attrs = { class = "program-group"; "data-group" = "workspaces"; "aria-labelledby" = "workspace-environments-title" }; children = list(
+    { tag = "h2"; attrs = { id = "workspace-environments-title" }; children = list("Workspaces") },
+    { tag = "ul"; children = $environmentsCards }
+  ) }
+  call html.serialize
+
+process desktop.handoverBanner:
+  let input = { tag = "aside"; attrs = { class = "handover-banner"; "data-handover-banner" = true; hidden = true; "aria-label" = "Handover demo mode" }; children = list(
+    { tag = "p"; children = list(
+      { tag = "strong"; children = list("Demo mode") },
+      " · Sample identities, inbox and receipts"
+    ) },
+    { tag = "div"; attrs = { class = "handover-controls" }; children = list(
+      { tag = "button"; attrs = { type = "button"; "data-demo-person" = "outgoing" }; children = list("Casey") },
+      { tag = "button"; attrs = { type = "button"; "data-demo-person" = "incoming" }; children = list("Jordan") },
+      { tag = "button"; attrs = { type = "button"; "data-demo-person" = "delegate" }; children = list("Riley") },
+      { tag = "a"; attrs = { href = "/identity-management/?view=acting-as"; "data-open-acting-as" = true }; children = list("Steward") },
+      { tag = "a"; attrs = { href = "/identity-management/?view=mentions"; "data-open-mentions" = true }; children = list("X Mentions") },
+      { tag = "button"; attrs = { type = "button"; "data-demo-action" = "reset" }; children = list("Reset demo") },
+      { tag = "button"; attrs = { type = "button"; "data-demo-action" = "exit" }; children = list("Exit demo") }
+    ) }
+  ) }
+  call html.serialize
+
+process desktop.assuranceReviews:
+  let result = {
+    "north-river" = { status = "Sign-in pending"; finding = "The hosted pilot and its documented read-only Timesheet preview both redirected to Temple sign-in. Source describes proposal review, a blocking question and a successor proposal. The live proposal and approval workflow remains unverified." };
+    "game" = { status = "Sign-in pending"; finding = "The development build opens One World and lists the Foundries, Design References and Recent Folio. The hosted Game Hub redirects to Temple sign-in. Its signed-in catalogue remains unverified." };
+    "store" = { status = "Sign-in pending"; finding = "The hosted Store redirects to Temple sign-in. Source describes a catalogue and versioned app publishing and installation. The signed-in catalogue and install flow remain unverified." };
+    "one-world" = { status = "Sign-in pending"; finding = "The SSH preview shows shipment dispatch, simulation advance, Foundry inputs and rail-spur controls. The hosted route redirects to Temple sign-in. Signed-in dispatch and state changes remain unverified." };
+    "asset-foundry" = { status = "Sign-in pending"; finding = "The SSH preview shows the asset explorer, original asset, verified build and recipe controls. The hosted route redirects to Temple sign-in. Signed-in build and export remain unverified." };
+    "landscape-foundry" = { status = "Sign-in pending"; finding = "The SSH preview shows terrain preview, commit, undo, redo and packaging controls. The hosted route redirects to Temple sign-in. Signed-in editing and packaging remain unverified." };
+    "design-references" = { status = "Sign-in pending"; finding = "The SSH preview lists the Global Logistics, Global Mining and Urban Transport Tycoon references. The hosted library redirects to Temple sign-in. Signed-in access to the reference images remains unverified." };
+    "game-folio" = { status = "Sign-in pending"; finding = "The development build opens the shipment dispatch and rail construction activities. Signed-in hosted access remains unverified." };
+    "handover-demo" = { status = "Matches"; finding = "The launcher opens the signed-in Steward window and its office transfer controls." };
+    "environments-demo" = { status = "Matches"; finding = "The launcher opens the workspace switcher and signed-in default environment preference." };
+    "claimipedia-notes" = { status = "Sign-in pending"; finding = "The separate reader preview shows released claims, search, the claim atlas and knowledge ecology. The Home Claimipedia route redirects to Temple sign-in. Its signed-in workspace remains unverified." };
+    "aster-codex" = { status = "Sign-in pending"; finding = "The native document window opens maximized and uses the owner-gated chat reader. A signed-in phone session remains unverified." };
+    "aster" = { status = "Sign-in pending"; finding = "The Home panel explicitly asks for a Temple steward account. Source exposes chat and the “Suggest three next steps” action. Signed-in conversation and suggestions remain unverified." };
+    "x-inbox" = { status = "Sign-in pending"; finding = "Opens the received mentions in the office inbox through Temple sign-in." };
+    "x-mentions" = { status = "Sign-in pending"; finding = "The handover demo opens a sample office inbox. The real X Mentions route redirects to Temple sign-in. The connected inbox and delegated read-only access remain unverified with real accounts." };
+    "decompiler" = { status = "Matches"; finding = "The live North River decompiler exposes the case brief, replies, trace, replay and source." };
+    "front-gate" = { status = "Matches"; finding = "The live directory lists private services and their availability." };
+    "encounter" = { status = "Matches"; finding = "The live authoring screen offers intent entry, change review, projections and source inspection." };
+    "game-hub" = { status = "Matches"; finding = "The SSH preview opens One World and links to Asset Foundry, Landscape Foundry and Design References. The hosted launcher has a separate sign-in gate." };
+    "creator-studio" = { status = "Matches"; finding = "The live Home launcher opened the Northbank learning programme through Front Gate. All seven workspace cards loaded, Documents opened, and the same project loaded again after refresh." };
+    "workgarden" = { status = "Matches"; finding = "The live work list exposes adding, opening and completing work items." };
+    "hosted-workgarden" = { status = "Matches"; finding = "The signed-in AppDev fixture adds and completes a work item, restarts the Workgarden host, and reopens the same item from Work." };
+    "harborboard" = { status = "Matches"; finding = "The live board organizes work into backlog, in progress and done, with epics and blockers. The check covered the board surface." };
+    "claimipedia" = { status = "Sign-in pending"; finding = "The live editorial preview asks for operator credentials. Source distinguishes the released corpus from local drafts and review. Signed-in draft and review behavior remains unverified." };
+    "claimipedia-native" = { status = "Matches"; finding = "The live native pilot shows a pinned release, a claims list and a search form." };
+    "claimipedia-surfaces" = { status = "Matches"; finding = "The live surface preview shows the released corpus, search, claim atlas and knowledge ecology, with navigation from propositions to their supporting evidence." };
+    "evaluation" = { status = "Matches"; finding = "The live evaluation page shows recorded Ollama trials, scoring evidence and a PageRank versus lexical comparison." };
+    "worldbox" = { status = "Matches"; finding = "The live screen exposes numeric execution and observation for accepted Encounter definitions, along with checkpoint capture, listing and restore controls." };
+    "foundry" = { status = "Matches"; finding = "The live screen compares modeled capacity across mine, rail, stockyard, berth and marine operations. It identifies the results as a structural model." };
+    "industrial-optimizer" = { status = "Matches"; finding = "The live Pilbara example compares dependency-aware build sequences against illustrative budget, capacity and demand assumptions." };
+    "super-crm" = { status = "Matches"; finding = "The live app presents customer accounts, contacts, delivery cases and their activity history." };
+    "timesheet" = { status = "Matches"; finding = "The live app records hours by person, project and date, and shows recent entries and approved totals." };
+    "tradie" = { status = "Matches"; finding = "The live queue describes recording enquiries and claiming, completing or escalating work." };
+    "outcome-value" = { status = "Matches"; finding = "The live app opens an outcome case and describes the path from a possible binding constraint to evidence, a reversible trial and reported value." };
+    "relationship" = { status = "Matches"; finding = "The live app offers “Open repair process” and entry by invitation code. Its workspace keeps accounts private and shares only deliberate offers, with pausing or returning by consent." };
+    "world" = { status = "Matches"; finding = "The live app offers “Run development scenario” with cases such as unreliable power and insufficient semiconductor yield. It shows what enables or blocks each capability in the material-development model." };
+    "sourcery-desktop" = { status = "Matches"; finding = "The live workspace describes private claim and evidence records, revisions and withdrawal history. It offers claim entry and export of the complete history as REL." };
+    "context-hub" = { status = "Matches"; finding = "The live observatory exposes research episodes, context controls, evaluations and a contribution inbox." };
+    "personal-site" = { status = "Matches"; finding = "The preview opened Aaron Alderman’s publication with its story, questions, threads and atlas." };
+    "worldwright-unified" = { status = "Matches"; finding = "The SSH preview opens the Worldwright reader and links to its Workshop. The project source describes a guided journey, live Encounter example and source inspector." };
+    "usewords" = { status = "Matches"; finding = "The live screen opens and imports matters. Its source organizes work on a matter around proposals and personas." };
+    "pyramid-material-history" = { status = "Matches"; finding = "The live Missing Middle explorer exposes construction models, worked cases, benchmarks and evidence coverage. This review covers the app’s purpose." };
+    "the-field" = { status = "Matches"; finding = "The live explorer exposes synthetic feedback, editable response and learning rules, and household scenario assumptions." };
+    "perth-encounter" = { status = "Matches"; finding = "The live Perth Encounter event preview presents the 7 July 2027 gathering, its story and participation information." };
+    "church-on-air" = { status = "Matches"; finding = "The live broadcast studio shows a retained director’s cut, source library, programme monitor and shot inspector." };
+    "worldwright-platform" = { status = "Matches"; finding = "The live platform site explains Worldwright and offers documentation and working examples." };
+    "notes-inbox-launch" = { status = "Sign-in pending"; finding = "Home Inbox opens to the Platform sign-in prompt. Source exposes incoming request details, refresh and navigation into Platform. The signed-in request list remains unverified." };
+    "notes-platform-launch" = { status = "Sign-in pending"; finding = "Platform opens to the sign-in prompt. Source exposes the steward’s development queue, request promotion and work status. The signed-in queue and actions remain unverified." };
+    "notes-assurance-launch" = { status = "Matches"; finding = "The live app exposes the catalogue and a role-scoped decision history. These first-pass findings add the semantic comparison." };
+    "notes-performance-launch" = { status = "Matches"; finding = "The live panel reports CPU, peak memory, active browser connections, and completed and failed dispatches for the Encounter browser host." };
+    "notes-settings-identity" = { status = "Sign-in pending"; finding = "The Identity Management window asks for an approved Temple identity. The deployed programme describes account and AppDev access details, with steward-only provider setup. The signed-in account view remains unverified." };
+    "notes-settings-network" = { status = "Sign-in pending"; finding = "The Network Settings window asks for an approved Temple identity. Source gates SSH port publication behind steward authority. The signed-in settings view and publication remain unverified." };
+    "notes-inspect-identity" = { status = "Sign-in pending"; finding = "The handover demo shows sample acting roles, steward handover and delegation controls. The real window asks for an approved Temple identity. Signed-in roles and delegation remain unverified." }
+  }
+
+process cli.main:
+  let homeEdition = null
+  when eq(at($eventInput, 1), "assurance-clarify-archive"):
+    port application.data { name = "assurance-clarify" } → homeEdition
+  call desktop.renderHome
+
+process desktop.renderHome:
+  let releaseId = at($eventInput, 0)
+  let legacyHome = false
+  let input = or($releaseId, "Development")
+  call html.escape
+  let build = $result
+  let tunnels = { frontGate = 24220; lifeBoard = 24245 }
+  let input = $tunnels
+  call desktop.shortcuts
+  let shortcuts = $result
+  let input = $tunnels
+  call desktop.previewApps
+  let previews = $result
+  let apps = append($shortcuts, $previews)
+  when $homeEdition:
+    # The shared shell still needs the registered hosted desktop launchers
+    # so the same current admission and window lifecycle apply to archives.
+    call desktop.apps
+    let hostedWindows = map(filter($result, "entry", eq($entry.group, "hosted")), "entry", $entry.key)
+    let historicalIds = map($homeEdition.apps, "entry", $entry.id)
+    let required = filter($apps, "entry", and(includes($hostedWindows, $entry.id), not(includes($historicalIds, $entry.id))))
+    let apps = append($homeEdition.apps, $required)
+    let shortcuts = $apps
+  let initialShortcutCount = count(filter($apps, "app", includes(list("hosted", "portfolio"), $app.group)))
+  call desktop.workspaceAppAlternates
+  let appAlternates = $result
+  when $homeEdition:
+    port record.put { record = $appAlternates; key = "front-gate"; value = { id = "archived-front-gate-actions"; items = list(
+      { label = "Open SSH service directory"; href = concat("http://localhost:", $tunnels.frontGate, "/") }
+    ) } } → appAlternates
+    port record.put { record = $appAlternates; key = "store"; value = { id = "archived-store-actions"; items = list(
+      { label = "Open hosted Store"; href = "/store/" }
+    ) } } → appAlternates
+  let workMenu = { id = "workspace-work-actions"; label = "Work workspace actions"; items = list(
+    { label = "Hosted"; href = "/workspace/work" },
+    { label = "SSH Preview"; href = concat("http://127.0.0.1:", $tunnels.lifeBoard, "/") },
+    { label = "Manage Versions"; action = "versions" }
+  ) }
+  let menu = $workMenu
+  call desktop.appMenu
+  let workMenuHtml = $result
+  call desktop.workspacePanel
+  let workspacePanel = $result
+  let favorites = filter($shortcuts, "app", includes(list("north-river", "game", "store", "decompiler", "front-gate", "aster-codex", "vm-manager", "registry-demo"), $app.id))
+  fold $favorites as app; icons starts "":
+    let input = $app
+    call desktop.renderLink
+    yield concat($icons, $result) → icons
+  let groups = list(
+    { id = "hosted"; label = "Apps"; note = "Use your approved Sourcery account for hosted apps." },
+    { id = "portfolio"; label = "App Dev"; note = "Connect your Front Gate SSH tunnel to open these development apps." },
+    { id = "previews"; label = "Folio"; note = "Connect your Front Gate SSH tunnel to open these previews." },
+    { id = "platform"; label = "Tools"; note = "Local tools require your Front Gate SSH tunnel." },
+    { id = "x"; label = "Social"; note = "Read the office inbox or manage X mention delivery." }
+  )
+  fold $groups as group; catalogue starts { panels = ""; menus = list() }:
+    let entries = filter($apps, "app", eq($app.group, $group.id))
+    fold $entries as app; groupCards starts { cards = list(); menus = $catalogue.menus }:
+      call desktop.workspaceAppCard
+      let card = $result
+      let item = { tag = "li"; children = list($card.card) }
+      yield { cards = append($groupCards.cards, list($item)); menus = append($groupCards.menus, list($card.menu)) } → groupCards
+    let input = { tag = "section"; attrs = { class = "program-group"; "data-group" = $group.id }; children = list(
+      { tag = "h2"; children = list($group.label, " ", { tag = "span"; children = list(count($entries)) }) },
+      { tag = "p"; children = list($group.note) },
+      { tag = "ul"; children = $groupCards.cards }
+    ) }
+    call html.serialize
+    yield { panels = concat($catalogue.panels, $result); menus = $groupCards.menus } → catalogue
+  let panels = $catalogue.panels
+  let input = $catalogue.menus
+  call html.serialize
+  let contextMenus = concat($result, $workMenuHtml)
+  call desktop.apps
+  let desktopApps = $result
+  let about = at(filter($desktopApps, "entry", eq($entry.key, "about")), 0)
+  let operations = append(map(filter($desktopApps, "entry", includes(list("quality", "administration"), $entry.group)), "entry", { id = $entry.id; view = $entry.window; action = $entry.defaultAction; name = $entry.title; detail = $entry.detail; icon = $entry.icon; group = $entry.group }), list(
+    { id = "notes-settings-identity"; dialog = "identity-management-dialog"; name = "Identity Management"; detail = "Temple account, access and sign-in providers"; icon = "workspace"; group = "administration" },
+    { id = "notes-settings-network"; dialog = "network-dialog"; name = "Network Settings"; detail = "Publish SSH tunnel port settings with Sourcery steward access."; icon = "globe"; group = "administration" }
+  ))
+  each $operations as operation:
+    let input = { id = $operation.id; target = or(at($operation, "dialog"), at($operation, "view")); action = at($operation, "action") }
+    call desktop.admitOperation
+  fold list({ id = "quality"; label = "Quality and health" }, { id = "administration"; label = "Identity and configuration" }) as group; operationPanels starts "":
+    let entries = filter($operations, "app", eq($app.group, $group.id))
+    fold $entries as app; cards starts list():
+      let input = $app
+      call desktop.icon
+      let icon = $result
+      let name = $app.name
+      when $homeEdition:
+        let original = at(filter($homeEdition.reviews, "entry", eq($entry.id, $app.id)), 0)
+        let name = or(at($original, "name"), $name)
+      let button = { tag = "button"; attrs = { type = "button"; id = $app.id; class = "app-link"; "aria-haspopup" = if(at($app, "dialog"), "dialog", null); "aria-controls" = or(at($app, "dialog"), at($app, "view")); "data-launch-action" = at($app, "action") }; children = list(
+        $icon, { tag = "span"; attrs = { class = "app-label" }; children = list({ tag = "strong"; children = list($name) }, { tag = "small"; children = list($app.detail) }) }
+      ) }
+      yield append($cards, list({ tag = "li"; children = list($button) })) → cards
+    let input = { tag = "section"; attrs = { class = "program-group notes-operations" }; children = list(
+      { tag = "h2"; children = list($group.label, " ", { tag = "span"; children = list(count($entries)) }) },
+      { tag = "p"; children = list("Open an Operations tool.") },
+      { tag = "ul"; attrs = { "data-operation-group" = $group.id }; children = $cards }
+    ) }
+    call html.serialize
+    yield concat($operationPanels, $result) → operationPanels
+  call inbox.shortcuts
+  let desktopDefinitions = map(filter($desktopApps, "entry", eq($entry.group, "desktop")), "entry",
+    { id = $entry.id; name = $entry.title; detail = $entry.detail; href = concat("#", $entry.window) })
+  let definitionApps = append(append(append($apps, $result), $desktopDefinitions), map($operations, "app", { id = $app.id; name = $app.name; detail = $app.detail; href = concat("#", or(at($app, "dialog"), at($app, "view"))) }))
+  call desktop.assuranceReviews
+  let reviews = $result
+  let assuranceDate = "Access recheck · 11 November 2026"
+  let assuranceMethod = "Compared launcher descriptions with available app screens and source. Sign-in pending marks checks that require an authorized account. Each finding identifies any preview or demo evidence."
+  when $homeEdition:
+    let definitionApps = $homeEdition.reviews
+    let assuranceDate = $homeEdition.assuranceDate
+    let assuranceMethod = $homeEdition.assuranceMethod
+  fold $definitionApps as app; definitions starts "":
+    let review = or(at($reviews, $app.id), { status = "Not reviewed"; finding = "This entry still needs a review." })
+    when $homeEdition:
+      let review = $app
+    let input = { tag = "tr"; attrs = { "data-app-id" = $app.id }; children = list(
+      { tag = "th"; attrs = { scope = "row" }; children = list($app.name) },
+      { tag = "td"; children = list($app.detail, { tag = "br" }, { tag = "code"; children = list($app.href) }) },
+      { tag = "td"; children = list({ tag = "strong"; children = list($review.status) }, { tag = "br" }, $review.finding) }
+    ) }
+    call html.serialize
+    yield concat($definitions, $result) → definitions
+  fold list(
+    { status = "Mismatch"; label = "mismatches" },
+    { status = "Clarify"; label = "to clarify" },
+    { status = "Unavailable"; label = "unavailable" },
+    { status = "Matches"; label = "matches" },
+    { status = "Sign-in pending"; label = "signed-in checks pending" },
+    { status = "Partial"; label = "partial" }
+  ) as category; summary starts "":
+    let total = count(filter($definitionApps, "app", eq(at(at($reviews, $app.id), "status"), $category.status)))
+    yield concat($summary, if($summary, " · ", ""), $total, " ", $category.label) → summary
+  when $homeEdition:
+    fold list(
+      { status = "Mismatch"; label = "mismatches" }, { status = "Clarify"; label = "to clarify" },
+      { status = "Unavailable"; label = "unavailable" }, { status = "Matches"; label = "matches" },
+      { status = "Source checked"; label = "source checked" }, { status = "Partial"; label = "partial" }
+    ) as category; archivedSummary starts "":
+      let total = count(filter($definitionApps, "app", eq($app.status, $category.status)))
+      yield concat($archivedSummary, if($archivedSummary, " · ", ""), $total, " ", $category.label) → summary
+  let markupSlot = "SOURCERY-WORKSPACE-RENDERED-FRAGMENT"
+  let renderedFragments = list($definitions)
+  let input = { tag = "section"; attrs = { "aria-labelledby" = "semantic-assurance-title" }; children = list(
+    { tag = "h3"; attrs = { id = "semantic-assurance-title" }; children = list("App semantic definitions") },
+    { tag = "p"; children = list($assuranceDate) },
+    { tag = "p"; attrs = { "data-review-summary" = true }; children = list($summary) },
+    { tag = "p"; children = list($assuranceMethod) },
+    { tag = "div"; attrs = { class = "assurance-catalogue"; tabindex = "0"; role = "region"; "aria-label" = "App definition review catalogue" }; children = list(
+      { tag = "table"; attrs = { class = "sourcery-data-table"; "data-table-layout" = "grid" }; children = list(
+        { tag = "caption"; children = list(concat(count($definitionApps), " app definitions and findings")) },
+        { tag = "thead"; children = list(
+          { tag = "tr"; children = map(list("App", "Declared purpose and launch", "Review finding"), "heading", { tag = "th"; attrs = { scope = "col" }; children = list($heading) }) }
+        ) },
+        { tag = "tbody"; children = list($markupSlot) }
+      ) }
+    ) }
+  ) }
+  call workspace.assembleMarkup
+  let semanticAssurance = $result
+  let input = $tunnels.frontGate
+  call desktop.tunnelForward
+  let frontGateForward = $result
+  let input = $tunnels.lifeBoard
+  call desktop.tunnelForward
+  let lifeBoardForward = $result
+  let ssh = "ssh -N -o ExitOnForwardFailure=yes"
+  call workspace.shellStyles
+  let shellStyles = $result
+  call desktop.styles
+  let styles = $result
+  call desktop.symbols
+  let symbols = $result
+  call desktop.handoverBanner
+  let handoverBanner = $result
+  let input = "Sourcery Workspace"
+  call workspace.homeConnectionMarkup
+  let connection = $result
+  let work = false
+  call onboarding.shell
+  let firstRun = $result
+  call desktop.viewAssuranceMarkup
+  let launchAssurance = $result
+  let input = { tag = "section"; attrs = { "aria-labelledby" = "identity-release-assurance-title" }; children = list(
+    { tag = "h3"; attrs = { id = "identity-release-assurance-title" }; children = list("Identity Management release gate") },
+    { tag = "div"; attrs = { id = "identity-release-assurance-result" }; children = list(
+      { tag = "p"; children = list("No Identity Management gate result was recorded for this Home release.") }) },
+    { tag = "p"; attrs = { class = "button-row" }; children = list(
+      { tag = "button"; attrs = { type = "button"; class = "button"; "data-desktop-launch" = "semantic-compiler";
+        "aria-controls" = "semantic-compiler-window"; "data-launch-action" = "open" }; children = list("Open Compiler case") },
+      { tag = "a"; attrs = { class = "button"; href = "/life-board/decompiler/?case=identity-management"; target = "_blank"; rel = "noopener" };
+        children = list("Open reviewed Decompiler trace") }) }) }
+  call html.serialize
+  let assuranceHeading = $result
+  let input = { tag = "section"; attrs = { "aria-labelledby" = "decision-history-title" }; children = list(
+    { tag = "h3"; attrs = { id = "decision-history-title" }; children = list("Decision history") },
+    { tag = "p"; children = list("Review steward handovers, access grants, and version submissions recorded by Sourcery OS.") },
+    { tag = "p"; attrs = { class = "button-row" }; children = list(
+      { tag = "button"; attrs = { type = "button"; class = "button"; id = "notes-assurance-refresh" }; children = list("Refresh decision history") }
+    ) },
+    { tag = "div"; attrs = { id = "notes-assurance-history-status"; role = "status"; "aria-live" = "polite"; "aria-atomic" = "true" } },
+    { tag = "div"; attrs = { id = "notes-assurance-history" } }
+  ) }
+  call html.serialize
+  let decisionHistory = $result
+  let assuranceBody = concat($assuranceHeading, $semanticAssurance, $launchAssurance, $decisionHistory)
+  let input = list(
+    { tag = "p"; children = list("Reproduce a slow launch, then refresh. Home keeps the last 30 launches in this tab until reload.") },
+    { tag = "p"; children = list(
+      { tag = "button"; attrs = { type = "button"; class = "button"; id = "notes-performance-refresh" }; children = list("Refresh readings") }
+    ) },
+    { tag = "section"; attrs = { "aria-labelledby" = "performance-alerts-title" }; children = list(
+      { tag = "h3"; attrs = { id = "performance-alerts-title" }; children = list("Performance alerts") },
+      { tag = "div"; attrs = { id = "notes-performance-alerts" } }
+    ) },
+    { tag = "section"; attrs = { "aria-labelledby" = "performance-launches-title" }; children = list(
+      { tag = "h3"; attrs = { id = "performance-launches-title" }; children = list("Recent launches") },
+      { tag = "p"; children = list("Times are in milliseconds. Select a launch for its queue, request timings and timeline.") },
+      { tag = "div"; attrs = { id = "notes-performance-launches" } },
+      { tag = "div"; attrs = { id = "notes-performance-detail" } }
+    ) },
+    { tag = "div"; attrs = { id = "notes-performance-environment" } },
+    { tag = "details"; attrs = { id = "performance-workloads" }; children = list(
+      { tag = "summary"; children = list("Server workloads") },
+      { tag = "p"; children = list(
+        { tag = "label"; children = list(
+          "Rank by ",
+          { tag = "select"; attrs = { id = "performance-workload-sort" }; children = list(
+            { tag = "option"; attrs = { value = "cpu" }; children = list("CPU") },
+            { tag = "option"; attrs = { value = "memory" }; children = list("Memory") }
+          ) }
+        ) }
+      ) },
+      { tag = "div"; attrs = { id = "performance-workload-results" }; children = list(
+        { tag = "p"; children = list("Open to check CPU, memory and disk usage by activity.") }
+      ) }
+    ) },
+    { tag = "details"; children = list(
+      { tag = "summary"; children = list("Encounter browser host") },
+      { tag = "div"; attrs = { id = "notes-performance-reading" } }
+    ) }
+  )
+  call html.serialize
+  let performanceBody = $result
+  call store.desktopMarkup
+  let storeBody = $result
+  call frontGate.desktopMarkup
+  let frontGateBody = $result
+  call desktop.aboutBody
+  let input = $result
+  call html.serialize
+  let aboutBody = $result
+  call game.desktopShell
+  let gameBody = $result
+  fold $desktopApps as app; windows starts "":
+    let body = at({ about = $aboutBody; assurance = $assuranceBody; performance = $performanceBody; design = ""; store = $storeBody; game = $gameBody; "front-gate" = $frontGateBody }, $app.key)
+    let documentSlots = null
+    when and(eq($app.layout, "document"), not($app.fileRole), not(includes(list("semantic-compiler", "system-catalogue", "aster-codex", "vm-manager", "registry-demo"), $app.key))):
+      call managers.slots
+      let documentSlots = $result
+    when eq($app.key, "aster-codex"):
+      call desktop.asterCodexSlots
+      let documentSlots = $result
+    when eq($app.key, "vm-manager"):
+      call desktop.vmManagerSlots
+      let documentSlots = $result
+    when eq($app.key, "registry-demo"):
+      call desktop.registryDemoSlots
+      let documentSlots = $result
+    when eq($app.key, "semantic-compiler"):
+      call compilerUi.slots
+      let documentSlots = $result
+    when eq($app.key, "system-catalogue"):
+      call systemCatalogue.slots
+      let documentSlots = $result
+    when eq($app.fileRole, "text"):
+      call desktop.textEditorSlots
+      let documentSlots = $result
+    call desktop.windowHtml
+    yield concat($windows, $result) → windows
+  fold $desktopApps as app; tasks starts "":
+    call desktop.appTask
+    let input = $result
+    call html.serialize
+    yield concat($tasks, $result) → tasks
+  let shortcutKey = "file-manager"
+  call desktop.hostedShortcut
+  let fileShortcut = $result
+  call desktop.startSections
+  let startEntries = $result
+  let input = { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" }; children = list(
+    { tag = "use"; attrs = { href = "#icon-workspace" } }
+  ) }
+  call html.serialize
+  let workspaceIcon = $result
+  let input = { icon = $workspaceIcon; entries = $startEntries }
+  call workspace.startMenu
+  let startMenu = $result
+  let input = { tag = "nav"; attrs = { class = "workspace-switch"; "aria-label" = "Environment" }; children = list(
+    { tag = "a"; attrs = { href = "/workspace/home"; "aria-current" = "page" }; children = list("Home") },
+    { tag = "a"; attrs = { href = "/workspace/work" }; children = list("Work") },
+    { tag = "span"; attrs = { "data-workspace-platform" = true } },
+    { tag = "a"; attrs = { href = "/workspace/mobile" }; children = list("Mobile") }
+  ) }
+  call html.serialize
+  let navigation = $result
+  let input = { class = "identity-bar home-shell-header"; status = $connection; navigation = $navigation }
+  call workspace.shellHeader
+  let shellHeader = $result
+  call tray.markup
+  let tray = $result
+  call tray.panel
+  let trayPanel = $result
+  let input = { tag = "label"; attrs = { class = "task-button"; for = "workspace-open" }; children = list(
+    { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" }; children = list(
+      { tag = "use"; attrs = { href = "#icon-workspace" } }
+    ) },
+    "Sourcery Workspace"
+  ) }
+  call html.serialize
+  let workspaceTask = $result
+  let input = { tray = $tray; start = $startMenu; tasks = concat($workspaceTask, $tasks); environment = "Home" }
+  call workspace.shellTaskbar
+  let shellTaskbar = $result
+  call desktop.workspaceWindow
+  let workspaceWindow = $result
+  call desktop.settingsWindows
+  let settingsWindows = $result
+  let input = { tag = "a"; attrs = { class = "desktop-identity"; href = "/settings/identity/"; target = "_blank"; rel = "noopener" };
+    children = list({ tag = "span"; attrs = { id = "desktop-identity-name" }; children = list("Identity") }) }
+  call html.serialize
+  let desktopIdentity = $result
+  call inbox.window
+  let inboxWindow = $result
+  let markupSlot = "SOURCERY-WORKSPACE-RENDERED-FRAGMENT"
+  let renderedFragments = list($styles, $symbols, $shellHeader, $handoverBanner, $desktopIdentity, $fileShortcut, $icons, $workspaceWindow, $windows, $shellTaskbar, $trayPanel, $contextMenus, $settingsWindows, $firstRun.dialog)
+  let input = { tag = "html"; attrs = { lang = "en" }; children = list(
+    { tag = "head"; children = list(
+      { tag = "meta"; attrs = { charset = "utf-8" } },
+      { tag = "meta"; attrs = { name = "viewport"; content = "width=device-width, initial-scale=1" } },
+      { tag = "title"; children = list("Sourcery OS · Home") },
+      { tag = "meta"; attrs = { name = "appdev-ssh-ports-v1"; content = concat($tunnels.frontGate, ",", $tunnels.lifeBoard) } },
+      $markupSlot
+    ) },
+    { tag = "body"; children = list(
+      $markupSlot,
+      { tag = "input"; attrs = { class = "desktop-toggle"; id = "workspace-open"; type = "checkbox"; checked = true; "aria-label" = "Show workspace" } },
+      { tag = "input"; attrs = { class = "desktop-toggle"; id = "workspace-maximized"; type = "checkbox"; "aria-label" = "Maximize or restore Sourcery Workspace" } },
+      $markupSlot, $markupSlot,
+      { tag = "main"; attrs = { class = "desktop"; "aria-label" = "Sourcery OS desktop" }; children = list(
+        { tag = "div"; attrs = { class = "wallpaper"; "aria-hidden" = "true" }; children = list(
+          { tag = "b"; children = list("SOURCERY") },
+          { tag = "span"; children = list("SOURCERY WORKSPACE") }
+        ) },
+        $markupSlot,
+        { tag = "nav"; attrs = { class = "shortcuts"; "aria-label" = "Desktop shortcuts" }; children = list(
+          { tag = "label"; attrs = { class = "app-link workspace-shortcut"; for = "workspace-open" }; children = list(
+            { tag = "svg"; attrs = { class = "icon"; viewBox = "0 0 32 32"; "aria-hidden" = "true" }; children = list(
+              { tag = "use"; attrs = { href = "#icon-workspace" } }
+            ) },
+            { tag = "strong"; children = list("Workspace") }
+          ) },
+          $markupSlot, $markupSlot
+        ) },
+        $markupSlot, $markupSlot
+      ) },
+      $inboxWindow, $markupSlot, $markupSlot, $markupSlot, $markupSlot,
+      { tag = "script"; attrs = { type = "module"; src = "/_encounter/browser.mjs" } },
+      $markupSlot
+    ) }
+  ) }
+  call workspace.assembleMarkup
+  let page = concat("<!doctype html>\n", $result)
+  call desktop.assureApps
+  port digest.sha256 { text = $result } → digest
+  port text.slice { value = $digest; start = 0; end = 12 } → fingerprint
+  port text.replaceAll { value = $result; search = "sourcery-home-build-placeholder"; replacement = $fingerprint } → pageWithShortHash
+  port text.replaceAll { value = $pageWithShortHash; search = "sourcery-home-full-build-placeholder"; replacement = $digest } → result

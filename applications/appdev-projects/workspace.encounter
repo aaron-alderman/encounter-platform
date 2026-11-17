@@ -1,0 +1,295 @@
+process-module "temple/surface-process-module/1"
+
+process workspace.request:
+  let request = $eventInput
+  let method = $request.method
+  let path = $request.path
+  let view = $request.view
+  let get = eq($method, "GET")
+  let page = includes(list("GET", "HEAD"), $method)
+  let post = eq($method, "POST")
+  let result = { route = "missing" }
+  when and($post, eq($path, "/workspace/terminal/start")):
+    let result = { route = "terminal-start" }
+  when and($get, eq($path, "/identity-management/terminal")):
+    let result = { route = "terminal-entry" }
+  when and($get, eq($path, "/workspace/terminal/approve")):
+    let result = { route = "terminal-approval-page" }
+  when and($post, $request.sameOrigin, eq($path, "/workspace/terminal/approve")):
+    let result = { route = "terminal-approve" }
+  when and($get, eq($path, "/workspace/terminal/session")):
+    let result = { route = "terminal-session" }
+  when and($get, eq($path, "/workspace/terminal/catalogue")):
+    let result = { route = "terminal-catalogue" }
+  when and($get, eq($path, "/workspace/terminal/files")):
+    let result = { route = "terminal-files" }
+  when and($post, eq($path, "/workspace/terminal/end")):
+    let result = { route = "terminal-end" }
+  when and($page, eq($path, "/")):
+    let result = { route = "workspace-default" }
+  when and($page, eq($path, "/workspace/home")):
+    let result = { route = "home" }
+  when and($page, eq($path, "/workspace/platform")):
+    let result = { route = "platform" }
+  when and($post, eq($path, "/workspace/vm-manager")):
+    let result = { route = "vm-manager-steward" }
+  when and($get, eq($path, "/workspace/vm-manager")):
+    let result = { route = "vm-manager-page" }
+  when and($get, eq($path, "/workspace/vm-manager/console.mjs")):
+    let result = { route = "vm-manager-script" }
+  when and($get, eq($path, "/workspace/vm-manager/style.css")):
+    let result = { route = "vm-manager-style" }
+  when and($get, eq($path, "/workspace/vm-manager/xterm.js")):
+    let result = { route = "vm-manager-xterm" }
+  when and($get, eq($path, "/workspace/vm-manager/xterm.css")):
+    let result = { route = "vm-manager-xterm-css" }
+  when and($get, eq($path, "/workspace/vm-manager/xterm-fit.js")):
+    let result = { route = "vm-manager-xterm-fit" }
+  when and($get, eq($path, "/workspace/server-workloads")):
+    let result = { route = "server-workloads" }
+  when and($get, eq($path, "/workspace/server-resources")):
+    let result = { route = "server-resources" }
+  when and($get, eq($path, "/workspace/access")):
+    let result = { route = "workspace-access" }
+  when and($get, eq($path, "/workspace/files")):
+    let result = { route = "file-index" }
+  when and($get, eq($path, "/workspace/file-media")):
+    let result = { route = "file-media" }
+  when and($post, eq($path, "/workspace/default")):
+    let result = { route = "workspace-preference" }
+  when and($page, eq($path, "/workspace/controller")):
+    let result = { route = "controller" }
+  when and($page, eq($path, "/workspace/AppDev-Temple-Connector.exe")):
+    let result = { route = "download" }
+  when and($get, eq($path, "/workspace/session")):
+    let result = { route = "session" }
+  when and($post, eq($path, "/workspace/sign-out")):
+    let result = { route = "sign-out" }
+  when and($get, eq($path, "/workspace/auth/x")):
+    let result = { route = "authorize" }
+  when and($get, eq($path, "/workspace/auth/x/callback")):
+    let result = { route = "callback" }
+  when and($get, includes(list("/workspace/auth/gmail", "/workspace/auth/gmail/callback",
+    "/workspace/auth/microsoft", "/workspace/auth/microsoft/callback"), $path)):
+    let provider = if(includes(list("/workspace/auth/gmail", "/workspace/auth/gmail/callback"), $path), "gmail", "microsoft")
+    let callback = includes(list("/workspace/auth/gmail/callback", "/workspace/auth/microsoft/callback"), $path)
+    let result = { route = if($callback, "callback-public", "authorize-public"); provider = $provider }
+  when and($post, eq($path, "/workspace/pair")):
+    let result = { route = "pair" }
+  port text.match { value = $path; pattern = "\\A/workspace/pair/([A-Za-z0-9_-]{16})(?:/([a-z-]+))?\\z" } → room
+  when $room:
+    let result = { route = "room"; id = at($room.groups, 0); action = or(at($room.groups, 1), null) }
+  when and($page, eq($path, "/workspace/mobile")):
+    let result = { route = "mobile" }
+  when and($page, eq($path, "/workspace/mobile/")):
+    let result = { route = "mobile-legacy" }
+  when and($page, eq($path, "/workspace/mobile/phone")):
+    let result = { route = "mobile-phone" }
+  when and($get, eq($path, "/workspace/mobile/runtime.mjs")):
+    let result = { route = "mobile-runtime" }
+  when and($get, eq($path, "/workspace/mobile/worker.mjs")):
+    let result = { route = "mobile-worker" }
+  when and($post, eq($path, "/workspace/mobile/pair")):
+    let result = { route = "pair"; mobile = true }
+  port text.match { value = $path; pattern = "^/workspace/mobile/pair/([A-Za-z0-9_-]{16})(?:/([a-z-]+))?$" } → mobileRoom
+  when $mobileRoom:
+    let result = { route = "room"; mobile = true; id = at($mobileRoom.groups, 0); action = or(at($mobileRoom.groups, 1), null) }
+  when and($post, not($request.sameOrigin), not(includes(list("terminal-start", "terminal-end"), $result.route))):
+    let result = { route = "origin" }
+  when and(or($get, and($post, $request.sameOrigin)), eq($path, "/workspace/formation/records")):
+    let result = { route = "formation-records" }
+  when and($post, $request.sameOrigin, eq($path, "/workspace/formation/test-session")):
+    let result = { route = "formation-test-session" }
+  when eq($path, "/workspace/webhooks/x"):
+    let result = { route = "webhook" }
+  when eq($path, "/identity-management/"):
+    let program = if($get, "identity-overview", "identity-management")
+    let fragment = eq($view, "program")
+    when includes(list("providers", "program"), $view):
+      let program = "identity-management"
+    when includes(list("assurance", "assurance-program"), $view):
+      let program = "notes-assurance"
+      let fragment = eq($view, "assurance-program")
+    when includes(list("acting-as", "acting-as-program"), $view):
+      let program = "acting-as"
+      let fragment = eq($view, "acting-as-program")
+    when includes(list("claimipedia", "aster"), $view):
+      let program = $view
+      let fragment = $request.fragment
+    when includes(list("mentions", "mentions-program"), $view):
+      let program = "x-mentions"
+      let fragment = eq($view, "mentions-program")
+    when includes(list("versions", "versions-program"), $view):
+      let program = "versions"
+      let fragment = eq($view, "versions-program")
+    when includes(list("certificates", "keys"), $view):
+      let program = $view
+      let fragment = $request.fragment
+    when eq($view, "network"):
+      let program = $view
+    let result = { route = "management"; program = $program; fragment = $fragment }
+  when and(eq($request.environmentRouting, true), includes(list("workspace-default", "home", "platform"), $result.route)):
+    let route = $result.route
+    call workspace.environmentRoute
+
+process workspace.environmentRoute:
+  let destination = null
+  let platformView = null
+  let platformLink = includes(list("platform", "platform-inbox", "work-items"), $request.view)
+  let barePlatform = and(eq($request.view, "platform"), eq($request.queryCount, 1))
+  when and($platformLink, includes(list("workspace-default", "home"), $route)):
+    let destination = "/workspace/platform"
+  when and(eq($route, "workspace-default"), not($platformLink),
+    or(includes(list("inbox", "aster"), $request.view), $request.hasSetup, $request.hasSignIn)):
+    let destination = "/workspace/home"
+  when eq($route, "platform"):
+    let platformView = if(includes(list("platform-inbox", "work-items"), $request.view), $request.view, null)
+    when and(or(eq($request.view, null), eq($request.view, "platform")), $request.item):
+      port text.matches { value = $request.item; pattern = "\\A[0-9a-f]{32}\\z" } → valid
+      when $valid:
+        let platformView = "work-items"
+    when $barePlatform:
+      let destination = "/workspace/platform"
+  let result = { route = $route; destination = $destination; dropQuery = $barePlatform; platformView = $platformView }
+
+process workspace.platformAllowed:
+  let result = if($request.email, eq($request.email, $request.stewardEmail), false)
+
+process workspace.fileVisibility:
+  let request = $eventInput
+  call workspace.platformAllowed
+  let platform = $result
+  let roots = if($platform, list("Platform/Releases/Home", "Platform/Kernel/Releases", "Platform/Scheduled run receipts"), list())
+  when eq($request.game, true):
+    let roots = append($roots, list("Apps/Game Hub/Assets"))
+  when eq($request.store, true):
+    let roots = append($roots, list("Apps/Game Hub/Store/Published assets"))
+  when eq($request.north, true):
+    let roots = append($roots, list("Apps/North River/Source", "Apps/North River/Receipts"))
+  let result = { platform = $platform; roots = $roots }
+
+process workspace.environmentPolicy:
+  let request = $eventInput
+  call workspace.platformAllowed
+  let platform = and(eq($request.signedIn, true), $result)
+  let choices = list(
+    { path = "/workspace/home"; label = "Home" },
+    { path = "/workspace/work"; label = "Work" },
+    { path = "/workspace/mobile"; label = "Mobile" })
+  when $platform:
+    let choices = append($choices, list({ path = "/workspace/platform"; label = "Platform" }))
+  let paths = map($choices, "choice", $choice.path)
+  let destination = if(and(eq($request.signedIn, true), includes($paths, $request.saved)), $request.saved, "/workspace/home")
+  let save = and(eq($request.signedIn, true), includes($paths, $request.submitted))
+  let picker = ""
+  when and(eq($request.signedIn, true), eq($request.picker, true)):
+    let options = map($choices, "choice", { tag = "option"; attrs = {
+      value = $choice.path; selected = eq($choice.path, $destination) }; children = list($choice.label) })
+    let input = { tag = "form"; attrs = { class = "workspace-preference"; method = "post"; action = "/workspace/default" }; children = list(
+      { tag = "label"; children = list("Default environment ", { tag = "select"; attrs = { name = "environment" }; children = $options }) },
+      { tag = "button"; attrs = { type = "submit" }; children = list("Save") },
+      { tag = "span"; attrs = { role = "status" } }) }
+    call html.serialize
+    let picker = $result
+  let result = { destination = $destination; save = $save; platform = $platform; picker = $picker }
+
+process workspace.claimipediaAdmission:
+  let request = $eventInput
+  let result = "gateway-refused"
+  when eq($request.gatewayAuthenticated, true):
+    let result = "method-refused"
+    when includes(list("GET", "POST"), $request.method):
+      let result = "origin-refused"
+      when or(eq($request.method, "GET"), eq($request.originTrusted, true)):
+        let result = "office-unconfigured"
+        when eq($request.officeConfigured, true):
+          let result = "identity-refused"
+          when eq($request.actorVerified, true):
+            let result = if(eq($request.method, "GET"), "admit", "method-refused")
+
+process workspace.shell:
+  let request = $eventInput
+  let content = $request.content
+  when eq($request.programName, "network"):
+    let input = { tag = "div"; attrs = { "data-network-settings" = true } }
+    call html.serialize
+    let wrapper = $result
+    port html.select { html = $wrapper; select = { tag = "div" } } → wrappers
+    let offset = at(at($wrappers, 0), "openEnd")
+    port html.edit { html = $wrapper; edits = list({ start = $offset; end = $offset; value = $content }) } → content
+  let result = $content
+  when not($request.fragment):
+    let shell = $request.shell
+    let input = $request.origin
+    call html.escape
+    let origin = $result
+    fold list("href", "src") as attribute; urls starts list():
+      port record.put { record = { }; key = $attribute; value = "/" } → prefixes
+      port html.select { html = $shell; select = { prefixes = $prefixes } } → elements
+      fold $elements as element; local starts $urls:
+        port text.startsWith { value = at($element.attrs, $attribute); search = "//" } → external
+        let offset = at(at($element.attributes, $attribute), "valueStart")
+        yield if($external, $local, append($local, list({ start = $offset; end = $offset; value = $origin }))) → local
+      yield $local → urls
+    let openDialogs = list()
+    when eq($request.programName, "network"):
+      port html.select { html = $shell; select = { tag = "dialog"; attrs = { id = "network-dialog"; open = false } } } → dialogs
+      let tag = "dialog"
+      let element = { attrs = { open = true } }
+      call html.attributes
+      let attribute = $result
+      let openDialogs = map($dialogs, "dialog", { start = $dialog.nameEnd; end = $dialog.nameEnd; value = $attribute })
+    let attrs = { id = concat($request.programName, "-content"); class = "dialog-body" }
+    when eq($request.programName, "notes-assurance"):
+      let attrs = { id = "notes-assurance-history" }
+    let inventory = includes(list("certificates", "keys", "acting-as"), $request.programName)
+    when $inventory:
+      call desktop.apps
+      let app = at(filter($result, "entry", eq($entry.key, $request.programName)), 0)
+      let attrs = { id = $app.content }
+    port html.select { html = $shell; select = { tag = "div"; attrs = $attrs } } → slots
+    let edits = append($urls, $openDialogs)
+    fold $slots as slot; fills starts list():
+      let edit = null
+      when eq($slot.openEnd, $slot.closeStart):
+        let edit = { start = $slot.openEnd; end = $slot.openEnd; value = $content }
+        when and($inventory, eq(at($slot.attrs, "class"), "desktop-app-content"), not(eq(at($slot.attrs, "data-window-slot"), "content"))):
+          call desktop.appContent
+          let input = $result
+          call html.serialize
+          let wrapper = $result
+          port html.select { html = $wrapper; select = { tag = "div"; attrs = $attrs } } → wrappers
+          let offset = at(at($wrappers, 0), "openEnd")
+          port html.edit { html = $wrapper; edits = list({ start = $offset; end = $offset; value = $content }) } → filled
+          let edit = { start = $slot.start; end = $slot.end; value = $filled }
+      yield if($edit, append($fills, list($edit)), $fills) → fills
+    port html.edit { html = $shell; edits = append($edits, $fills) } → result
+
+process workspace.refused:
+  let request = $eventInput
+  let input = { tag = "div"; attrs = {
+    "data-x-mentions" = eq($request.programName, "x-mentions");
+    "data-versions" = eq($request.programName, "versions");
+    "data-identity-provider-settings" = not(includes(list("x-mentions", "versions"), $request.programName))
+  }; children = list(
+    { tag = "p"; children = list("Act as Sourcery steward to use this program.") },
+    { tag = "p"; children = list({ tag = "a"; attrs = { class = "button";
+      href = concat($request.origin, "/identity-management/?view=acting-as"); "data-open-acting-as" = true }; children = list("Steward") }) }
+  ) }
+  call html.serialize
+
+
+process workspace.terminalApprovalPage:
+  let title = "Approve Sourcery Workspace Terminal"
+  let input = { tag = "html"; attrs = { lang = "en" }; children = list(
+    { tag = "head"; children = list({ tag = "meta"; attrs = { charset = "utf-8" } }, { tag = "title"; children = list($title) }) },
+    { tag = "body"; children = list(
+      { tag = "h1"; children = list($title) },
+      { tag = "p"; children = list("Enter the code shown in the terminal you started. Approve only a code from your own terminal.") },
+      { tag = "p"; children = list("This grants read-only access to the Home catalogue and the files your Temple account can read through Terminal.") },
+      { tag = "form"; attrs = { method = "post"; action = "/workspace/terminal/approve" }; children = list(
+        { tag = "label"; children = list("Terminal code ", { tag = "input"; attrs = { name = "code"; required = true;
+          minlength = "12"; maxlength = "12"; autocomplete = "off"; spellcheck = "false" } }) },
+        { tag = "button"; attrs = { type = "submit" }; children = list("Approve terminal") }) }) }) }
+  call html.serialize
+  let result = concat("<!doctype html>", $result)

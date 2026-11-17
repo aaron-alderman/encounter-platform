@@ -1,0 +1,173 @@
+process-module "temple/surface-process-module/1"
+
+process tray.markup:
+  let input = { tag = "button"; attrs = { id = "home-tray-open"; type = "button"; "aria-haspopup" = "dialog"; "aria-controls" = "home-tray-panel"; "aria-label" = "Clock and notifications"; "aria-describedby" = "home-tray-unread-label" }; children = list(
+    { tag = "span"; attrs = { class = "home-tray-clock"; "aria-hidden" = "true" }; children = list(
+      { tag = "time"; attrs = { "data-clock" = "time" } },
+      { tag = "time"; attrs = { "data-clock" = "date" } }
+    ) },
+    { tag = "svg"; attrs = { viewBox = "0 0 24 24"; width = "20"; height = "20"; "aria-hidden" = "true" }; children = list(
+      { tag = "path"; attrs = { d = "M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"; fill = "none"; stroke = "currentColor"; "stroke-width" = "1.7"; "stroke-linecap" = "round"; "stroke-linejoin" = "round" } }
+    ) },
+    { tag = "span"; attrs = { id = "home-tray-badge"; hidden = true; "aria-hidden" = "true" } },
+    { tag = "span"; attrs = { id = "home-tray-unread-label"; hidden = true } }
+  ) }
+  call html.serialize
+
+process tray.panel:
+  let input = { tag = "dialog"; attrs = { id = "home-tray-panel"; "aria-labelledby" = "home-tray-title" }; children = list(
+    { tag = "header"; children = list(
+      { tag = "h2"; attrs = { id = "home-tray-title" }; children = list("Notifications") },
+      { tag = "form"; attrs = { method = "dialog" }; children = list({ tag = "button"; attrs = { class = "button"; autofocus = true }; children = list("Close") }) }
+    ) },
+    { tag = "time"; attrs = { class = "home-tray-date"; "data-clock" = "full" } },
+    { tag = "div"; attrs = { id = "home-tray-inbox" }; children = list("Open Inbox to view messages.") },
+    { tag = "a"; attrs = { class = "button"; id = "home-tray-inbox-link"; href = "/workspace/home?view=inbox" }; children = list("Open Inbox") },
+    { tag = "section"; attrs = { id = "home-tray-resources"; hidden = true; "aria-label" = "Server resources" } }
+  ) }
+  call html.serialize
+
+process tray.styles:
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = ".taskbar>.home-system-tray"; declarations = list(
+      { property = "padding"; value = "0" },
+      { property = "flex"; value = "none" }
+    ) },
+    { selector = "#home-tray-open"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "gap"; value = "8px" },
+      { property = "min-height"; value = "36px" },
+      { property = "padding"; value = "3px 8px" },
+      { property = "border"; value = "0" },
+      { property = "background"; value = "transparent" },
+      { property = "color"; value = "inherit" },
+      { property = "font"; value = "inherit" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = "#home-tray-open:is(:hover,:focus-visible)"; declarations = list(
+      { property = "background"; value = "var(--sourcery-paper,#fffef3)" }
+    ) },
+    { selector = ".home-tray-clock"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "gap"; value = "1px" },
+      { property = "text-align"; value = "end" },
+      { property = "font-variant-numeric"; value = "tabular-nums" }
+    ) },
+    { selector = ".home-tray-clock time:first-child"; declarations = list(
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = "#home-tray-badge"; declarations = list(
+      { property = "min-inline-size"; value = "1.4em" },
+      { property = "padding"; value = "2px 4px" },
+      { property = "border-radius"; value = "8px" },
+      { property = "background"; value = "var(--sourcery-accent,#162f7a)" },
+      { property = "color"; value = "white" },
+      { property = "text-align"; value = "center" }
+    ) },
+    { selector = "#home-tray-panel"; declarations = list(
+      { property = "position"; value = "fixed" },
+      { property = "inset"; value = "auto 6px calc(48px + env(safe-area-inset-bottom)) auto" },
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "14px" },
+      { property = "inline-size"; value = "min(352px,calc(100% - 12px))" },
+      { property = "max-block-size"; value = "calc(100dvh - 64px)" },
+      { property = "overflow"; value = "auto" },
+      { property = "overscroll-behavior"; value = "contain" },
+      { property = "background"; value = "var(--sourcery-paper,#fffef3)" },
+      { property = "color"; value = "var(--ink)" }
+    ) },
+    { selector = "#home-tray-panel::backdrop"; declarations = list(
+      { property = "background"; value = "transparent" }
+    ) },
+    { selector = "#home-tray-panel header"; declarations = list(
+      { property = "display"; value = "flex" },
+      { property = "align-items"; value = "center" },
+      { property = "justify-content"; value = "space-between" },
+      { property = "gap"; value = "8px" }
+    ) },
+    { selector = "#home-tray-panel h2"; declarations = list(
+      { property = "font-size"; value = "1.1rem" }
+    ) },
+    { selector = "#home-tray-panel .home-tray-date"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "margin"; value = "3px 0 12px" },
+      { property = "color"; value = "var(--sourcery-muted,#505566)" }
+    ) },
+    { selector = "#home-tray-inbox"; declarations = list(
+      { property = "margin"; value = "0 0 10px" }
+    ) },
+    { selector = "#home-tray-inbox ul"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "padding"; value = "0" },
+      { property = "list-style"; value = "none" }
+    ) },
+    { selector = "#home-tray-inbox li+li"; declarations = list(
+      { property = "border-top"; value = "1px solid var(--sourcery-line,#ccc)" }
+    ) },
+    { selector = "#home-tray-inbox a"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "padding"; value = "8px 0" },
+      { property = "white-space"; value = "normal" },
+      { property = "overflow-wrap"; value = "anywhere" }
+    ) },
+    { selector = "#home-tray-inbox li[data-unread] a"; declarations = list(
+      { property = "font-weight"; value = "bold" }
+    ) },
+    { selector = "#home-tray-inbox p"; declarations = list(
+      { property = "margin"; value = "0 0 5px" }
+    ) },
+    { selector = "#home-tray-inbox-link"; declarations = list(
+      { property = "display"; value = "inline-flex" },
+      { property = "align-items"; value = "center" }
+    ) },
+    { selector = "#home-tray-resources"; declarations = list(
+      { property = "border-top"; value = "1px solid var(--sourcery-line,#ccc)" },
+      { property = "margin-top"; value = "12px" },
+      { property = "padding-top"; value = "8px" }
+    ) },
+    { selector = ".home-server-resources h3"; declarations = list(
+      { property = "margin"; value = "0 0 5px" }
+    ) },
+    { selector = ".home-server-resources dl"; declarations = list(
+      { property = "display"; value = "grid" },
+      { property = "grid-template-columns"; value = "minmax(0,1fr) auto" },
+      { property = "gap"; value = "4px 8px" },
+      { property = "margin"; value = "0" }
+    ) },
+    { selector = ".home-server-resources dd"; declarations = list(
+      { property = "margin"; value = "0" },
+      { property = "text-align"; value = "end" }
+    ) },
+    { selector = ".home-server-resources small"; declarations = list(
+      { property = "display"; value = "block" },
+      { property = "margin-top"; value = "6px" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:670px)"; rules = list(
+      { selector = ".home-tray-clock"; declarations = list(
+        { property = "display"; value = "none" }
+      ) },
+      { selector = "#home-tray-open"; declarations = list(
+        { property = "min-height"; value = "44px" },
+        { property = "min-width"; value = "44px" },
+        { property = "justify-content"; value = "center" }
+      ) },
+      { selector = "#home-tray-panel"; declarations = list(
+        { property = "inset"; value = "auto 0 0" },
+        { property = "width"; value = "100%" },
+        { property = "max-width"; value = "none" },
+        { property = "max-height"; value = "80dvh" },
+        { property = "padding"; value = "14px 16px calc(16px + env(safe-area-inset-bottom))" },
+        { property = "padding-inline"; value = "max(16px,env(safe-area-inset-left)) max(16px,env(safe-area-inset-right))" },
+        { property = "border-radius"; value = "14px 14px 0 0" }
+      ) },
+      { selector = "#home-tray-panel::backdrop"; declarations = list(
+        { property = "background"; value = "#10172b88" }
+      ) },
+      { selector = "#home-tray-panel button,#home-tray-inbox a,#home-tray-inbox-link"; declarations = list(
+        { property = "min-height"; value = "44px" }
+      ) }
+    ) }
+  )
+  call css.renderCompactRules

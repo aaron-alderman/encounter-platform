@@ -1,0 +1,120 @@
+process-module "temple/surface-process-module/1"
+
+process compilerUi.source:
+  let result = { tag = "code"; children = list(concat($reference.file, ":", $reference.line, ":", $reference.column)) }
+
+process compilerUi.facts:
+  let facts = list(
+    { subject = "identity.overview"; predicate = "publishedPath"; object = $case.proposed },
+    { subject = "identity.overview"; predicate = "legacyGet"; object = $case.legacyGet },
+    { subject = "identity.overview"; predicate = "asterPage"; object = $case.asterPage })
+  let identityRows = map($case.identities, "identity", { tag = "tr"; children = list(
+    { tag = "th"; attrs = { scope = "row" }; children = list({ tag = "code"; children = list($identity.id) }) },
+    { tag = "td"; children = list({ tag = "code"; children = list(concat($identity.method, " ", $identity.proposed,
+      if($identity.view, concat("?view=", $identity.view), ""))) }) },
+    { tag = "td"; children = list($identity.program) }) })
+  fold $case.relationships as reference; references starts list():
+    call compilerUi.source
+    yield append($references, list({ tag = "li"; children = list(
+      { tag = "code"; children = list(concat("(\"", $reference.id, "\", \"", $reference.relation, "\", \"", $reference.target, "\")")) },
+      { tag = "p"; children = list($reference.launch, " · ", $result) }) })) → references
+  let result = list(
+    { tag = "h4"; children = list("Stable identities") },
+    { tag = "table"; attrs = { class = "sourcery-data-table"; "aria-label" = "Stable identities" }; children = list(
+      { tag = "thead"; children = list({ tag = "tr"; children = map(list("Identity", "Public request", "Programme"), "label",
+        { tag = "th"; attrs = { scope = "col" }; children = list($label) }) }) },
+      { tag = "tbody"; children = $identityRows }) },
+    { tag = "h4"; children = list("Overview REL facts") },
+    { tag = "ul"; attrs = { class = "compiler-references" }; children = map($facts, "fact", { tag = "li"; children = list(
+      { tag = "code"; children = list(concat("(\"", $fact.subject, "\", \"", $fact.predicate, "\", \"", $fact.object, "\")")) }) }) },
+    { tag = "h4"; children = list("Source relationships") },
+    { tag = "ul"; attrs = { class = "compiler-references" }; children = $references })
+
+process compilerUi.contracts:
+  let groups = append(list(
+    { label = "Split overview and legacy behavior"; references = filter($case.pathContracts, "reference", eq($reference.disposition, "split")) },
+    { label = "Retained bare-path behavior"; references = filter($case.pathContracts, "reference", eq($reference.disposition, "retain")) }
+  ), map($case.qualifiedGroups, "group", { label = $group.label; stays = $group.stays;
+    references = filter($case.qualifiedContracts, "reference", eq($reference.group, $group.id)) }))
+  fold $groups as group; sections starts list():
+    let lines = map($group.references, "reference", concat(
+      $reference.id, "\n", $reference.file, ":", $reference.line, ":", $reference.column,
+      "\nStays · ", or($reference.retainedPath, $reference.current), " · ", $reference.stays,
+      if($reference.moves, concat("\nMoves · ", or($reference.overviewPath, $reference.proposed), " · ", $reference.moves), "")))
+    port text.join { values = $lines; separator = "\n\n" } → evidence
+    let section = { tag = "details"; attrs = { class = "compiler-group" }; children = list(
+      { tag = "summary"; children = list($group.label, " · ", count($group.references)) },
+      if($group.stays, { tag = "p"; children = list($group.stays) }, null),
+      { tag = "pre"; attrs = { class = "compiler-evidence" }; children = list($evidence) }) }
+    yield append($sections, list($section)) → sections
+  let result = append(list({ tag = "h4"; children = list("Route contracts") }), $sections)
+
+process compilerUi.coverage:
+  let coverage = $case.coverage
+  fold $case.checks as check; total starts 0:
+    yield add($total, $check.requests) → total
+  let rows = map($case.checks, "check", { tag = "tr"; children = list(
+    { tag = "th"; attrs = { scope = "row" }; children = list($check.check) },
+    { tag = "td"; children = list($check.requests) },
+    { tag = "td"; children = list(if(eq($check.status, "pass"), "Pass", $check.status)) }) })
+  let result = list(
+    { tag = "h4"; children = list("Source coverage") },
+    { tag = "p"; children = list(concat($coverage.modeled, " of ", $coverage.observed, " observed references modeled · ", $coverage.uncovered, " uncovered")) },
+    if(count($case.uncovered), { tag = "ul"; children = map($case.uncovered, "entry", { tag = "li"; children = list(
+      { tag = "code"; children = list(concat($entry.file, ":", $entry.line, ":", $entry.column)) }, " · ", $entry.token) }) }, null),
+    { tag = "h4"; children = list("Encounter dry-run checks · ", $total) },
+    { tag = "table"; attrs = { class = "sourcery-data-table"; "aria-label" = "Encounter dry-run checks" }; children = list(
+      { tag = "thead"; children = list({ tag = "tr"; children = map(list("Check", "Cases", "Result"), "label",
+        { tag = "th"; attrs = { scope = "col" }; children = list($label) }) }) },
+      { tag = "tbody"; children = $rows }) },
+    { tag = "h4"; children = list("Outside this source snapshot") },
+    { tag = "ul"; children = map($case.unverified, "limit", { tag = "li"; children = list($limit) }) })
+
+process compilerUi.routePreview:
+  let follows = append(append(
+    map(filter($case.relationships, "item", eq($item.target, "identity.overview")), "item", $item.id),
+    map(filter($case.pathContracts, "item", eq($item.disposition, "split")), "item", $item.id)),
+    map(filter($case.qualifiedContracts, "item", eq($item.disposition, "move")), "item", $item.id))
+  let fixed = map(filter($case.qualifiedContracts, "item", and(eq($item.group, "overview.canonical-boundary"), eq($item.disposition, "retain"))), "item",
+    list($item.id, concat($item.file, ":", $item.line, ":", $item.column), $item.current))
+  port json.stringify { value = { published = $case.proposed; current = $case.current; legacy = $case.legacyGet;
+    asterPage = $case.asterPage; coverage = $case.coverage; follows = $follows; fixed = $fixed } } → basis
+  let result = list(
+    { tag = "h4"; children = list("Try an overview route") },
+    { tag = "p"; attrs = { id = "compiler-route-hint" }; children = list("Use a local path with a trailing slash. The proposal only applies to this dry run.") },
+    { tag = "form"; attrs = { id = "compiler-route-form" }; children = list(
+      { tag = "label"; attrs = { for = "compiler-route-input" }; children = list("Proposed route") },
+      { tag = "input"; attrs = { type = "text"; name = "proposed"; id = "compiler-route-input"; value = $case.proposed;
+        maxlength = "160"; required = true; spellcheck = "false"; autocomplete = "off"; "aria-describedby" = "compiler-route-hint" } },
+      { tag = "button"; attrs = { type = "submit"; class = "button" }; children = list("Run dry run") }) },
+    { tag = "div"; attrs = { id = "compiler-route-basis"; hidden = true }; children = list($basis) },
+    { tag = "div"; attrs = { id = "compiler-route-result"; "aria-label" = "Dry-run results" } })
+
+process compilerUi.slots:
+  port application.data { name = "identity-compiler-case" } → case
+  call compilerUi.facts
+  let facts = $result
+  call compilerUi.contracts
+  let contracts = $result
+  call compilerUi.coverage
+  let coverage = $result
+  call compilerUi.routePreview
+  let routePreview = $result
+  let views = list({ id = "facts"; label = "Facts"; content = $facts }, { id = "contracts"; label = "Contracts"; content = $contracts },
+    { id = "coverage"; label = "Coverage"; content = $coverage }, { id = "dry-run"; label = "Dry run"; content = $routePreview })
+  let controls = map($views, "view", { tag = "input"; attrs = { type = "radio"; id = concat("compiler-", $view.id);
+    name = "compiler-view"; checked = eq($view.id, "facts") } })
+  let labels = { tag = "div"; attrs = { class = "manager-tabs" }; children = map($views, "view",
+    { tag = "label"; attrs = { for = concat("compiler-", $view.id) }; children = list($view.label) }) }
+  let panels = map($views, "view", { tag = "section"; attrs = { "data-compiler-view" = $view.id; "aria-label" = $view.label }; children = $view.content })
+  let caseTitle = { tag = "header"; attrs = { class = "compiler-case" }; children = list(
+    { tag = "h3"; children = list("Identity Management") },
+    { tag = "p"; children = list("Source snapshot · Read only") },
+    { tag = "p"; children = list({ tag = "code"; children = list($case.current) }, " → ",
+      { tag = "a"; attrs = { href = $case.proposed; target = "_blank"; rel = "noopener" }; children = list({ tag = "code"; children = list($case.proposed) }) }) }) }
+  let viewGroup = { tag = "div"; attrs = { class = "compiler-views"; role = "group"; "aria-label" = "Compiler views" };
+    children = append(append($controls, list($labels)), $panels) }
+  let document = { description = "Inspect stable identities, route contracts and source coverage."; build = $releaseId;
+    help = "Facts, Contracts and Coverage describe this build’s source snapshot. Dry run lets you test a different overview route against it.";
+    detailLabel = "Identity Management case"; detail = list($caseTitle, $viewGroup) }
+  call desktop.documentSlots

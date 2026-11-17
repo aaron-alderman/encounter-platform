@@ -1,0 +1,66 @@
+process-module "temple/surface-process-module/1"
+
+process store.desktopStyles:
+  port kernel.invoke { query = "hub.styles"; input = null } → hub
+  call ui.presentationStyles
+  let standard = $result
+  call source.widgetStyles
+  port text.replaceAll { value = concat($hub, $standard, $result); search = ":root"; replacement = ":scope" } → scoped
+  let cssRuleSeparator = ""
+  let cssRules = list(
+    { selector = ".shortcuts button[data-desktop-launch],.start-menu button[data-desktop-launch]"; declarations = list(
+      { property = "border"; value = "0" },
+      { property = "background"; value = "transparent" },
+      { property = "font-family"; value = "inherit" },
+      { property = "cursor"; value = "pointer" }
+    ) },
+    { selector = ".start-menu button[data-desktop-launch]"; declarations = list(
+      { property = "width"; value = "100%" },
+      { property = "text-align"; value = "left" }
+    ) },
+    { selector = ".start-menu button[data-desktop-launch]:hover"; declarations = list(
+      { property = "background"; value = "#dde5ff" }
+    ) },
+    { selector = "#notes-store-window"; declarations = list(
+      { property = "top"; value = "clamp(30px,9vh,76px)" },
+      { property = "right"; value = "20px" },
+      { property = "max-height"; value = "calc(100% - clamp(30px,9vh,76px) - 12px)" }
+    ) },
+    { selector = "#notes-store-status:empty"; declarations = list(
+      { property = "display"; value = "none" }
+    ) },
+    { atRule = "media"; prelude = "(max-width:670px)"; rules = list(
+      { selector = "#notes-store-window"; declarations = list(
+        { property = "top"; value = "8px" },
+        { property = "right"; value = "8px" },
+        { property = "width"; value = "calc(100% - 16px)" },
+        { property = "max-height"; value = "calc(100% - 16px)" }
+      ) }
+    ) },
+    { atRule = "scope"; prelude = " (#notes-store-content)"; prefixCss = $scoped; rules = list(
+      { selector = "#store-content .asset-editor>fieldset,#store-content .asset-editor>.source-widget,#store-content .asset-editor>label"; declarations = list(
+        { property = "flex"; value = "1 1 100%" }
+      ) },
+      { selector = "#store-content .asset-editor textarea"; declarations = list(
+        { property = "width"; value = "100%" }
+      ) },
+      { selector = "#store-content fieldset"; declarations = list(
+        { property = "min-width"; value = "0" }
+      ) },
+      { selector = "#store-content input,#store-content select"; declarations = list(
+        { property = "max-width"; value = "100%" }
+      ) },
+      { selector = "#store-content .asset-notice"; declarations = list(
+        { property = "background"; value = "var(--sourcery-selected)" },
+        { property = "border-color"; value = "var(--sourcery-line)" },
+        { property = "color"; value = "var(--sourcery-accent)" }
+      ) },
+      { selector = "#store-content .asset-editor button,#store-content .notes-button"; declarations = list(
+        { property = "background"; value = "var(--sourcery-frame)" },
+        { property = "color"; value = "var(--sourcery-accent)" },
+        { property = "box-shadow"; value = "var(--sourcery-raised)" },
+        { property = "border"; value = "0" }
+      ) }
+    ) }
+  )
+  call css.renderCompactRules

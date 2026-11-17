@@ -1,0 +1,4 @@
+("application", "stateProfile", "encounter/appdev-shared-style/1")
+("application", "module", "release/shared-style.encounter")
+("application", "entry", "cli.main")
+("application", "grant", "text.matchAll")

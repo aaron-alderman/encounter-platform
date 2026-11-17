@@ -1,0 +1,307 @@
+process-module "temple/surface-process-module/1"
+
+process onboarding.boot:
+  port dom.exists { selector = "#first-run-dialog" } → available
+  when $available:
+    port browser.on { ref = "document"; event = "click"; delegate = "[data-formation-help]"; query = "formation.helpOpen"; preventDefault = true } → _
+    port browser.on { ref = "document"; event = "click"; delegate = "[data-first-run]"; query = "onboarding.event"; preventDefault = true } → _
+    port browser.on { ref = "#first-run-dialog"; event = "submit"; delegate = "form[data-first-run-form]"; query = "onboarding.save"; preventDefault = true } → _
+    port browser.on { ref = "#first-run-dialog"; event = "close"; query = "onboarding.closed" } → _
+    let location = { path = $launch.path }
+    port state.get { scope = "document"; key = "first-run-setup" } → setup
+    when not($setup):
+      let loadRecords = false
+      call onboarding.restore
+      call onboarding.pinView
+    port storage.read { key = "sourcery.first-run.v1.visibility"; maxLength = 20 } → visibility
+    port dom.exists { selector = "#home-getting-started" } → homeCard
+    port storage.read { key = "sourcery.first-run.v1.home-card"; maxLength = 12 } → homeCardChoice
+    let dismissed = and($homeCard, eq($homeCardChoice.value, "dismissed"))
+    when $dismissed:
+      port browser.write { ref = "#home-getting-started"; name = "hidden"; value = true } → _
+    let show = $launch.setup
+    when and($launch.first, not($show), not(eq($location.path, "/workspace/platform")),
+      not($visibility.value), not($dismissed), not($launch.hadInput)):
+      port dom.exists { selector = "dialog[open], #notes-store-window:not([hidden])" } → blocked
+      let show = not($blocked)
+    when and($launch.first, $show):
+      let loadRecords = true
+      call onboarding.restore
+      let step = if($launch.setup, $launch.setup, $setup.step)
+      call onboarding.show
+
+process formation.loadRecords:
+  let result = { mode = "unavailable"; owner = null; records = {} }
+  try:
+    port browser.request { path = "/workspace/formation/records" } → response
+    when eq($response.status, 200):
+      port json.parse { text = $response.body } → data
+      port text.matches { value = or(at($data, "owner"), ""); pattern = "^[a-f0-9]{64}$" } → owner
+      port value.type { value = at($data, "records") } → recordsKind
+      assert and($owner, $data.records, eq($recordsKind, "object"), eq(at($data, "outcome"), "read"))
+        otherwise "Invalid saved records response."
+      let result = { mode = "signed-in"; owner = $data.owner; records = $data.records }
+    when eq($response.status, 401):
+      let result = { mode = "browser"; owner = null; records = {} }
+  catch fault:
+    let result = { mode = "unavailable"; owner = null; records = {} }
+
+process onboarding.restore:
+  port storage.read { key = "sourcery.first-run.v1.step"; maxLength = 20 } → storedStep
+  port storage.read { key = "sourcery.first-run.v1.note"; maxLength = 2000 } → note
+  port storage.read { key = "sourcery.first-run.v1.project"; maxLength = 2000 } → project
+  let custody = { mode = "unavailable"; owner = null; records = {} }
+  when $loadRecords:
+    call formation.loadRecords
+    let custody = $result
+  let signedIn = eq($custody.mode, "signed-in")
+  let noteRecord = at($custody.records, "note")
+  let projectRecord = at($custody.records, "project")
+  port storage.read { key = "sourcery.first-run.v1.pin"; maxLength = 1 } → pin
+  port storage.read { key = "sourcery.first-run.v1.next"; maxLength = 20 } → next
+  let setup = { step = if(includes(list("home", "work", "note", "project", "customize", "finish"), $storedStep.value), $storedStep.value, if(eq($location.path, "/workspace/work"), "work", "home"));
+    note = if($signedIn, or(at($noteRecord, "text"), null), $note.value);
+    project = if($signedIn, or(at($projectRecord, "text"), null), $project.value);
+    custody = $custody; pin = eq($pin.value, "1");
+    next = if(includes(list("note", "project", "mobile"), $next.value), $next.value, "note") }
+  port browser.write { ref = "#first-run-note-text"; name = "value"; value = or($setup.note, "Welcome to Home.\n\nOne thing I want to remember today is…") } → _
+  port browser.write { ref = "#first-run-project-text"; name = "value"; value = or($setup.project, "Confirm the visit location and ask the team which time works.") } → _
+  when $loadRecords:
+    fold list("note", "project") as kind; shown starts true:
+      let legacy = if(eq($kind, "note"), $note.value, $project.value)
+      let record = at($custody.records, $kind)
+      let hasDraft = and($signedIn, $legacy, not(eq($legacy, at($record, "text"))))
+      port browser.write { ref = concat("#first-run-", $kind, "-legacy"); name = "hidden"; value = not($hasDraft) } → _
+      port browser.write { ref = concat("#first-run-", $kind, "-legacy-text"); name = "textContent"; value = if($hasDraft, $legacy, "") } → _
+      port browser.write { ref = concat("#first-run-", $kind, "-import"); name = "hidden"; value = or(not($hasDraft), if($record, true, false)) } → _
+      yield $shown → shown
+    let custodyMessage = if($signedIn, "Signed-in records · available across devices",
+      if(eq($custody.mode, "browser"), "Signed out · drafts stay in this browser", "Saved records are temporarily unavailable"))
+    port browser.write { ref = "#first-run-custody"; name = "textContent"; value = $custodyMessage } → _
+  port state.set { scope = "document"; key = "first-run-setup"; value = $setup } → _
+
+process onboarding.event:
+  let command = at($eventInput.matched.attributes, "data-first-run")
+  port state.get { scope = "document"; key = "first-run-setup" } → setup
+  when includes(list("resume", "home", "work", "note", "project", "customize", "finish"), $command):
+    port browser.property { ref = "#first-run-dialog"; name = "open" } → open
+    when or(not($open), eq($setup.custody.mode, "unavailable")):
+      port browser.location {} → location
+      let loadRecords = true
+      call onboarding.restore
+      call onboarding.pinView
+    let step = if(eq($command, "resume"), $setup.step, $command)
+    when eq($command, "resume"):
+      port browser.dialog { ref = "#formation-help"; open = false } → _
+      port storage.read { key = "sourcery.first-run.v1.visibility"; maxLength = 20 } → visibility
+      let step = if(eq($visibility.value, "finished"), "finish", $step)
+    call onboarding.show
+  when includes(list("import-note", "import-project"), $command):
+    let kind = if(eq($command, "import-note"), "note", "project")
+    port storage.read { key = concat("sourcery.first-run.v1.", $kind); maxLength = 2000 } → legacy
+    let draft = $legacy.value
+    let action = "import"
+    call onboarding.commit
+  when eq($command, "dismiss-home"):
+    port storage.write { key = "sourcery.first-run.v1.home-card"; value = "dismissed" } → _
+    port browser.write { ref = "#home-getting-started"; name = "hidden"; value = true } → _
+    port browser.focus { ref = "#tab-hosted"; preventScroll = true } → _
+  when eq($command, "prepare-mobile"):
+    port storage.write { key = "sourcery.first-run.v1.next"; value = "mobile" } → saved
+    when $saved.ok:
+      port browser.navigate { path = "/workspace/mobile" } → _
+    when not($saved.ok):
+      port browser.write { ref = "#first-run-feedback"; name = "textContent"; value = "The browser could not save this next step. Use Mobile in the environment controls to pair your phone." } → _
+  when eq($command, "next"):
+    port storage.write { key = "sourcery.first-run.v1.visibility"; value = "finished" } → saved
+    when not($saved.ok):
+      port browser.write { ref = "#first-run-feedback"; name = "textContent"; value = "The browser could not remember that you finished. You can still open the example from Getting started." } → _
+    when $saved.ok:
+      port state.get { scope = "document"; key = "first-run-destination" } → destination
+      when eq($destination, "open-work"):
+        port browser.location {} → location
+        when eq($location.path, "/workspace/work"):
+          port browser.dialog { ref = "#first-run-dialog"; open = false } → _
+        when not(eq($location.path, "/workspace/work")):
+          port browser.navigate { path = "/workspace/work" } → _
+      when eq($destination, "open-workgarden"):
+        port browser.target { ref = "#first-run-workgarden" } → destinationLink
+        port browser.navigate { path = $destinationLink.path } → _
+      when eq($destination, "open-mobile"):
+        port browser.navigate { path = "/workspace/mobile" } → _
+      when not(includes(list("open-work", "open-workgarden", "open-mobile"), $destination)):
+        let step = $destination
+        call onboarding.show
+  when eq($command, "pin"):
+    let pin = not($setup.pin)
+    port storage.write { key = "sourcery.first-run.v1.pin"; value = if($pin, "1", "0") } → saved
+    when $saved.ok:
+      port record.put { record = $setup; key = "pin"; value = $pin } → setup
+      port state.set { scope = "document"; key = "first-run-setup"; value = $setup } → _
+      call onboarding.pinView
+    port browser.write { ref = "#first-run-feedback"; name = "textContent"; value = if($saved.ok, if($pin, "Work shortcut pinned in Home.", "Work shortcut removed."), "Could not save this shortcut. Check browser storage and try again.") } → _
+  when includes(list("pause", "done"), $command):
+    port storage.read { key = "sourcery.first-run.v1.visibility"; maxLength = 20 } → visibility
+    let finished = or(eq($command, "done"), eq($visibility.value, "finished"))
+    port storage.write { key = "sourcery.first-run.v1.visibility"; value = if($finished, "finished", "paused") } → saved
+    when $saved.ok:
+      port browser.dialog { ref = "#first-run-dialog"; open = false } → _
+    when not($saved.ok):
+      port browser.write { ref = "#first-run-feedback"; name = "textContent"; value = "The browser could not remember this choice. You can close with Escape and return using Getting started." } → _
+  let result = true
+
+process onboarding.show:
+  let step = if(includes(list("home", "work", "note", "project", "customize", "finish"), $step), $step, "home")
+  let parents = { note = "home"; project = "work" }
+  port state.get { scope = "document"; key = "first-run-visible-step" } → visibleStep
+  let previousTab = null
+  when $visibleStep:
+    let previousTab = or(at($parents, $visibleStep), $visibleStep)
+  let tab = or(at($parents, $step), $step)
+  when and($visibleStep, not(eq($visibleStep, $step))):
+    port browser.write { ref = concat("#first-run-", $visibleStep); name = "hidden"; value = true } → _
+  when and($previousTab, not(eq($previousTab, $tab))):
+    port browser.attribute { ref = concat("#first-run-dialog nav [data-first-run=", $previousTab, "]"); name = "aria-pressed"; value = false } → _
+  port browser.write { ref = concat("#first-run-", $step); name = "hidden"; value = false } → _
+  port browser.attribute { ref = concat("#first-run-dialog nav [data-first-run=", $tab, "]"); name = "aria-pressed"; value = true } → _
+  port state.set { scope = "document"; key = "first-run-visible-step"; value = $step } → _
+  let labels = { home = "Home · explore your starting place"; note = "Home · try a note"; work = "Work · explore a project"; project = "Work · try a project task"; customize = "Make it yours · choose a shortcut"; finish = "Next step · your setup" }
+  port browser.write { ref = "#first-run-progress"; name = "textContent"; value = at($labels, $step) } → _
+  port browser.write { ref = "#first-run-feedback"; name = "textContent"; value = "" } → _
+  port record.put { record = $setup; key = "step"; value = $step } → setup
+  when and(not(or($setup.note, $setup.project)), includes(list("home", "work"), $tab)):
+    let next = if(eq($tab, "work"), "project", "note")
+    port record.put { record = $setup; key = "next"; value = $next } → setup
+    port storage.write { key = "sourcery.first-run.v1.next"; value = $next } → _
+  port state.set { scope = "document"; key = "first-run-setup"; value = $setup } → _
+  port storage.write { key = "sourcery.first-run.v1.step"; value = $step } → _
+  port storage.read { key = "sourcery.first-run.v1.visibility"; maxLength = 20 } → visibility
+  port browser.write { ref = "#first-run-close"; name = "textContent"; value = if(eq($visibility.value, "finished"), "Close", "Close for now") } → _
+  when eq($step, "finish"):
+    call onboarding.finale
+  port browser.dialog { ref = "#first-run-dialog"; open = true } → _
+  port browser.focus { ref = concat("#first-run-", $step, "-title") } → _
+
+process onboarding.pinView:
+  port dom.exists { selector = "#first-run-pin" } → shortcut
+  when $shortcut:
+    port browser.write { ref = "#first-run-pin"; name = "hidden"; value = not($setup.pin) } → _
+  port browser.write { ref = "#first-run-pin-button"; name = "textContent"; value = if($setup.pin, "Remove Work shortcut", "Pin Work shortcut") } → _
+  port browser.attribute { ref = "#first-run-pin-button"; name = "aria-pressed"; value = $setup.pin } → _
+
+process onboarding.save:
+  let kind = at($eventInput.matched.attributes, "data-first-run-form")
+  assert includes(list("note", "project"), $kind)
+    otherwise "Choose a starter item."
+  port browser.property { ref = concat("#first-run-", $kind, "-text"); name = "value" } → draft
+  port text.trim { value = $draft } → draft
+  port state.get { scope = "document"; key = "first-run-setup" } → setup
+  let action = "save"
+  call onboarding.commit
+
+process onboarding.commit:
+  let feedback = "Write something before saving."
+  let saved = false
+  when $draft:
+    let feedback = "Saved records are temporarily unavailable. Keep your text and try again."
+    when and(eq($setup.custody.mode, "browser"), eq($action, "save")):
+      port storage.write { key = concat("sourcery.first-run.v1.", $kind); value = $draft } → local
+      let saved = $local.ok
+      let feedback = if($saved, if(eq($kind, "note"), "Note saved in this browser.", "Project task saved in this browser."),
+        "Could not save. Keep this window open and copy your text before leaving.")
+    when eq($setup.custody.mode, "signed-in"):
+      try:
+        let record = at($setup.custody.records, $kind)
+        port browser.write { ref = "#formation-record-kind"; name = "value"; value = $kind } → _
+        port browser.write { ref = "#formation-record-owner"; name = "value"; value = $setup.custody.owner } → _
+        port browser.write { ref = "#formation-record-action"; name = "value"; value = $action } → _
+        port browser.write { ref = "#formation-record-base"; name = "value"; value = if($record, $record.revision, "") } → _
+        port browser.write { ref = "#formation-record-text"; name = "value"; value = $draft } → _
+        port browser.request { path = "/workspace/formation/records"; method = "POST"; form = "#formation-record-form" } → response
+        when eq($response.status, 200):
+          port json.parse { text = $response.body } → receipt
+          assert and(eq($receipt.owner, $setup.custody.owner), eq($receipt.outcome, "saved"))
+            otherwise "Invalid record receipt."
+          let saved = true
+          let feedback = if(eq($action, "import"), "Browser draft copied to your signed-in records.", "Saved to your signed-in records.")
+          let custody = { mode = "signed-in"; owner = $receipt.owner; records = $receipt.records }
+          port record.put { record = $setup; key = "custody"; value = $custody } → setup
+          when eq($action, "import"):
+            port browser.write { ref = concat("#first-run-", $kind, "-text"); name = "value"; value = $draft } → _
+            port browser.write { ref = concat("#first-run-", $kind, "-legacy"); name = "hidden"; value = true } → _
+          port browser.write { ref = concat("#first-run-", $kind, "-import"); name = "hidden"; value = true } → _
+        when eq($response.status, 401):
+          let feedback = "Your Temple sign-in expired. Keep your text, then sign in again before saving."
+        when eq($response.status, 409):
+          let feedback = "The saved record or account changed. Copy your edits, then reopen the note or task to review the latest record."
+        when eq($response.status, 400):
+          let feedback = "Enter a note or task within the length limit."
+      catch fault:
+        let feedback = "Could not confirm the save. Keep your text and try again."
+      port browser.write { ref = "#formation-record-text"; name = "value"; value = "" } → _
+    when $saved:
+      port record.put { record = $setup; key = $kind; value = $draft } → setup
+      port record.put { record = $setup; key = "next"; value = $kind } → setup
+      port state.set { scope = "document"; key = "first-run-setup"; value = $setup } → _
+      port storage.write { key = "sourcery.first-run.v1.next"; value = $kind } → _
+  port browser.write { ref = "#first-run-feedback"; name = "textContent"; value = $feedback } → _
+  let result = $saved
+
+process onboarding.finale:
+  let anySaved = or($setup.note, $setup.project)
+  let destination = $setup.next
+  when and($setup.note, not($setup.project)):
+    let destination = "note"
+  when and($setup.project, not($setup.note)):
+    let destination = "project"
+  when and(not($anySaved), $setup.pin):
+    let destination = "open-work"
+
+  let recommendation = { label = "Write my first note"; text = "Next, replace the welcome note with one thing you want to remember and save it." }
+  when and(eq($destination, "note"), $setup.note):
+    let recommendation = { label = "Open my saved note"; text = "Next, reopen your note and pick up what you saved." }
+  when eq($destination, "project"):
+    let recommendation = { label = "Continue my project task"; text = "Next, reopen your Field visit project and pick up the task you saved." }
+    when not($setup.project):
+      let destination = "open-workgarden"
+      let recommendation = { label = "Open Workgarden"; text = "Next, add a work item you need to complete." }
+  when eq($destination, "open-work"):
+    let recommendation = { label = "Open Work"; text = "Next, use your Work shortcut and choose an app to start with." }
+
+  when eq($setup.next, "mobile"):
+    let destination = "open-mobile"
+    let recommendation = { label = "Prepare my phone"; text = "Next, open Mobile to pair your phone or check your trip’s offline readiness." }
+
+  let summary = concat(if($setup.note, "Your note is saved. ", ""), if($setup.project, "Your Field visit project task is saved. ", ""),
+    if($setup.pin, "Your Work shortcut is pinned in Home. ", ""), if(not($anySaved), "You can save a Home note or start a task in Workgarden.", ""))
+  port state.set { scope = "document"; key = "first-run-destination"; value = $destination } → _
+  port browser.write { ref = "#first-run-summary"; name = "textContent"; value = $summary } → _
+  port browser.write { ref = "#first-run-next-explanation"; name = "textContent"; value = $recommendation.text } → _
+  port browser.write { ref = "#first-run-next"; name = "textContent"; value = $recommendation.label } → _
+
+process onboarding.closed:
+  port storage.read { key = "sourcery.first-run.v1.visibility"; maxLength = 20 } → visibility
+  when not($visibility.value):
+    port storage.write { key = "sourcery.first-run.v1.visibility"; value = "paused" } → _
+  port dom.exists { selector = ".onboarding-card > details > summary" } → launcher
+  when $launcher:
+    port browser.focus { ref = ".onboarding-card > details > summary"; preventScroll = true } → _
+  let result = true
+
+process formation.helpOpen:
+  let topic = at($eventInput.matched.attributes, "data-formation-help")
+  let helpMenu = "#workspace nav[aria-label='Workspace help'] > details[open]"
+  port dom.exists { selector = $helpMenu } → menuOpen
+  when $menuOpen:
+    port browser.write { ref = $helpMenu; name = "open"; value = false } → _
+  port browser.dialog { ref = "#formation-help"; open = true } → _
+  let target = "#formation-help-index"
+  port text.match { value = $topic; pattern = "^[a-z][a-z0-9-]{0,47}$" } → topicId
+  when $topicId:
+    let resource = concat("#formation-help #formation-resource-", $topic)
+    port dom.exists { selector = $resource } → available
+    when $available:
+      port browser.write { ref = $resource; name = "open"; value = true } → _
+      let target = concat($resource, " > summary")
+  port browser.focus { ref = $target } → _
+  let result = true
