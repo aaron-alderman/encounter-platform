@@ -2,6 +2,7 @@
 ("application", "module", "source/products/shared/work-items.encounter")
 ("application", "module", "source/products/shared/work-ui.encounter")
 ("application", "module", "source/products/workgarden/application.encounter")
+("application", "module", "source/products/workgarden/aster-context.encounter")
 ("application", "module", "algebra/html/html.escape.encounter")
 ("application", "module", "algebra/html/html.cssText.encounter")
 ("application", "module", "algebra/html/html.serialize.encounter")

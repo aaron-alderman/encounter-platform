@@ -381,16 +381,21 @@ process browser.harbor:
   let expected = 0
   call browser.harborCardText
   let title = "Review guide"
-  let planStatus = "Done"
-  let epic = null
-  call browser.harborPlan
+  let locator = list({ role = "article"; name = $title }, { role = "button"; name = "Mark done" })
+  call browser.click
+  let pattern = "Cannot mark this item Done"
+  call browser.alert
   let title = "Publish guide"
   let text = "Blocked by: Review guide"
+  let expected = 1
   call browser.harborCardText
+  each list("Draft guide", "Review guide") as item:
+    let locator = list({ role = "article"; name = $item }, { role = "button"; name = "Mark done" })
+    call browser.click
   port browser.stop {} → _
   port store.read { directory = $directory } → stored
-  assert eq(count($stored.revisions), 8)
-    otherwise "Harborboard must record exactly eight accepted revisions."
+  assert eq(count($stored.revisions), 9)
+    otherwise "Harborboard must record nine accepted revisions and omit the refused cycle and completion."
   call browser.serve
   call browser.open
   let expected = 1

@@ -1,0 +1,50 @@
+process-module "temple/surface-process-module/1"
+
+process feedback.plan:
+  let result = { id = "north-river-context-feedback/1"; candidates = list(0.08, 0.35); cases = list(
+    { id = "regression"; split = "regression"; relevant = list("reference-example") },
+    { id = "employee-link"; split = "regression"; relevant = list("reference-example") },
+    { id = "session-check"; split = "regression"; relevant = list("session-example") },
+    { id = "import-and-entry"; split = "regression"; relevant = list("import-example", "entry-control") },
+    { id = "report-date-window"; split = "fresh"; relevant = list("daily-report") },
+    { id = "entry-positive-minutes"; split = "fresh"; relevant = list(); missing = "An optional unit that explicitly checks zero or negative minutes is absent." }
+  ) }
+
+process feedback.score:
+  let item = $eventInput
+  fold $item.ids as id; state starts { position = 0; first = null; hits = 0 }:
+    let position = add($state.position, 1)
+    let hit = includes($item.relevant, $id)
+    yield { position = $position; first = if(and($hit, not($state.first)), $position, $state.first);
+      hits = add($state.hits, if($hit, 1, 0)) } → state
+  let result = { hits = $state.hits; first = $state.first; eligible = count($item.relevant) }
+
+process feedback.summary:
+  let report = $eventInput
+  call feedback.plan
+  let plan = $result
+  assert eq(map($report.cases, "case", $case.id), map($plan.cases, "case", $case.id))
+    otherwise "Feedback must evaluate all declared cases in order."
+  fold $plan.candidates as mixing; candidates starts list():
+    let regressions = filter($report.cases, "case", eq($case.split, "regression"))
+    let fresh = filter($report.cases, "case", and(eq($case.split, "fresh"), count($case.relevant)))
+    let evaluated = concat($mixing)
+    let regressionsSafe = every($regressions, "case", at(at($case.candidates, $evaluated), "noLoss"))
+    let freshSafe = every($fresh, "case", at(at($case.candidates, $evaluated), "noLoss"))
+    let freshGain = some($fresh, "case", at(at($case.candidates, $evaluated), "improved"))
+    yield append($candidates, list({ mixing = $mixing; regressionsSafe = $regressionsSafe; freshSafe = $freshSafe;
+      freshGain = $freshGain; disposition = if(and($regressionsSafe, $freshSafe, $freshGain), "needs-live-pair", "retain-baseline") })) → candidates
+  let result = { protocol = $plan.id; experiment = $report.experiment; selector = $report.selector;
+    cases = $report.cases; candidates = $candidates; admission = "proposal-only" }
+
+process feedback.compare:
+  let pair = $eventInput
+  port number.calculate { operation = "greater"; values = list($pair.candidate.hits, $pair.baseline.hits) } → more
+  port number.calculate { operation = "lessEqual"; values = list($pair.baseline.hits, $pair.candidate.hits) } → atLeast
+  let equal = eq($pair.baseline.hits, $pair.candidate.hits)
+  let earlier = false
+  let later = false
+  when and($equal, $pair.baseline.first, $pair.candidate.first):
+    port number.calculate { operation = "greater"; values = list($pair.baseline.first, $pair.candidate.first) } → earlier
+    port number.calculate { operation = "greater"; values = list($pair.candidate.first, $pair.baseline.first) } → later
+  let result = { noLoss = and($atLeast, not($later)); improved = or($more, $earlier) }

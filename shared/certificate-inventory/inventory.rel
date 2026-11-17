@@ -1,0 +1,5 @@
+("application", "stateProfile", "encounter/certificate-inventory/1")
+("application", "module", "inventory.encounter")
+("application", "entry", "inventory.plan")
+("application", "entry", "inventory.route")
+("application", "entry", "inventory.response")

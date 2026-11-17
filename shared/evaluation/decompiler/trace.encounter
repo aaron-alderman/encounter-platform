@@ -1,0 +1,74 @@
+process-module "temple/surface-process-module/1"
+
+process desk.traceVisit:
+  let item = $eventInput
+  let site = $item.site
+  let event = $item.event
+  let outcome = "Refusal caught"
+  when eq($site.kind, "when"):
+    let outcome = if($event.fault, "Predicate fault", if($event.taken, "Branch taken", "Branch skipped"))
+  when eq($site.kind, "assert"):
+    let outcome = if($event.fault, "Assertion fault", if($event.passed, "Check passed", "Check refused"))
+  when eq($site.kind, "port-end"):
+    let outcome = concat(if($event.ok, "Returned", "Failed"), " · ", $event.port,
+      if(at($event, "query"), concat(" → ", at($event, "query")), ""))
+  let role = "warning"
+  when or(and(eq($site.kind, "when"), at($event, "taken")), and(eq($site.kind, "assert"), at($event, "passed")), and(eq($site.kind, "port-end"), at($event, "ok"))):
+    let role = "positive"
+  when or(at($event, "fault"), and(eq($site.kind, "assert"), not(at($event, "passed"))), and(eq($site.kind, "port-end"), not(at($event, "ok")))):
+    let role = "negative"
+  port kernel.invoke { query = "desk.richInline"; input = { role = if(count($event.changed), "change", "heading"); text = concat("Event ", $event.sequence, if(count($event.changed), " · Differs", "")) } } → number
+  port kernel.invoke { query = "desk.richInline"; input = { role = $role; text = $outcome } } → status
+  let result = concat($number, " · ", $status)
+  when count($event.changed):
+    port text.join { values = $event.changed; separator = ", " } → fields
+    port kernel.invoke { query = "desk.richInline"; input = { role = "note"; text = concat("Changed fields · ", $fields) } } → detail
+    let result = concat($result, "\n", $detail)
+  when and(eq($site.kind, "assert"), not(at($event, "passed")), $site.diagnostic):
+    port kernel.invoke { query = "desk.richInline"; input = { role = "note"; text = $site.diagnostic } } → note
+    let result = concat($result, "\n", $note)
+  when at($event, "diagnostic"):
+    port kernel.invoke { query = "desk.richInline"; input = { role = "note"; text = $event.diagnostic } } → note
+    let result = concat($result, "\n", $note)
+  fold or(at($event, "operands"), list()) as operand; lines starts $result:
+    port text.join { values = $operand.ref; separator = "." } → ref
+    port decompiler.literal { value = $operand.observed } → observed
+    port kernel.invoke { query = "desk.richInline"; input = { role = "code"; text = concat(at(" $", 1), $ref) } } → name
+    port kernel.invoke { query = "evaluation.escape"; input = $observed } → value
+    yield concat($lines, "\n", $name, " = ", $value) → lines
+  let result = $lines
+  when and(eq($site.kind, "port-end"), at($event, "ok")):
+    port decompiler.literal { value = at($event, "result") } → observed
+    port kernel.invoke { query = "desk.richInline"; input = { role = "code"; text = $observed } } → value
+    let result = concat($result, "\nRecorded result ", $value)
+  when at($event, "revision"):
+    let result = concat($result, "\nRevision ", at($event, "revision"))
+  when at($event, "sourceHash"):
+    port kernel.invoke { query = "desk.richInline"; input = { role = "code"; text = $event.sourceHash } } → pin
+    let result = concat($result, "\nStored-document SHA-256 ", $pin)
+
+process desk.traceArm:
+  let arm = $eventInput
+  let visits = $arm.visits
+  when $arm.differencesOnly:
+    let visits = filter($visits, "event", count($event.changed))
+  let summary = concat(count($visits), " recorded ", if(eq(count($visits), 1), "visit", "visits"), " · ", $arm.site.process)
+  port kernel.invoke { query = "desk.richInline"; input = { role = "heading"; text = $summary } } → header
+  fold $visits as event; text starts $header:
+    port kernel.invoke { query = "desk.traceVisit"; input = { site = $arm.site; event = $event } } → entry
+    yield concat($text, "\n\n", $entry) → text
+  let result = if(count($visits), $text, concat($header, "\n\n<em class=\"rich-note\">", if($arm.differencesOnly, "No differing visit in this arm.", "No event at this address."), "</em>"))
+
+process desk.traceSite:
+  let site = $eventInput
+  let instruction = { kind = $site.kind; process = $site.process; diagnostic = $site.diagnostic }
+  port kernel.invoke { query = "desk.traceArm"; input = { site = $instruction; visits = $site.lexical; differencesOnly = $site.differencesOnly } } → lexical
+  port kernel.invoke { query = "desk.traceArm"; input = { site = $instruction; visits = $site.pagerank; differencesOnly = $site.differencesOnly } } → pagerank
+  let result = { lexical = $lexical; pagerank = $pagerank }
+
+process desk.compareVisits:
+  fold $eventInput as site; sites starts list():
+    let changed = map($site, "visit", if($visit.paired,
+      map(filter($visit.fields, "field", not($field.equal)), "field", $field.key), list("visit presence")))
+    yield append($sites, list({ differs = some($changed, "fields", count($fields)); changed = $changed })) → sites
+  let result = $sites

@@ -1,0 +1,43 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    sections = list(
+      {
+        subject = "web";
+        entry = "web.release";
+        applicationRoot = "encounter-claimipedia";
+        application = "products/claimipedia/application.rel";
+        grant = list(
+          "kernel.invoke",
+          "application.data",
+          "record.fromEntries",
+          "text.trim",
+          "text.slice",
+          "text.lowerCase",
+          "text.indexOf",
+          "number.calculate"
+        );
+        module = "encounter-claimipedia/source/products/claimipedia/release.encounter"
+      },
+      {
+        subject = "encounter-claimipedia/source/products/claimipedia/release.encounter";
+        sha256 = "b7f0ca58e0bf88f9bbfdd92e67223f3d6c35ba22eab9730ef947201a6a4765ca"
+      },
+      { subject = "web"; module = "encounter-claimipedia/source/products/claimipedia/view.encounter" },
+      {
+        subject = "encounter-claimipedia/source/products/claimipedia/view.encounter";
+        sha256 = "b053ff14c12a6de253b0eb915e3d375c2d7a954a5df5be782f54259c491ca956"
+      },
+      { subject = "web"; module = "encounter-claimipedia/source/products/shared/portfolio-ui.encounter" },
+      {
+        subject = "encounter-claimipedia/source/products/shared/portfolio-ui.encounter";
+        sha256 = "019a34a84bacde440f9ed1b014c48b4835f44f504ae660977230003dc4a88454"
+      },
+      { subject = "web"; module = "encounter-runtime/source/claimipedia-web.encounter" },
+      {
+        subject = "encounter-runtime/source/claimipedia-web.encounter";
+        sha256 = "787ac81aa6fd105c06d5a5b2dae7bb8a5789c2aa86bf5e62800eecb30b09c68e"
+      }
+    )
+  }

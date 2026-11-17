@@ -89,3 +89,100 @@ process test.portfolio.crm:
   call portfolio.test.sees
   let text = "Intake → In delivery · Rowan · Scoping visit booked"
   call portfolio.test.sees
+  let text = "Occurrence: unscheduled"
+  call portfolio.test.sees
+  let appointment = "2026-11-16T09:30:00+08:00"
+  let field = "Appointment"
+  let value = $appointment
+  call portfolio.test.fill
+  let field = "Scheduling reason"
+  let value = "Confirm the scoping visit"
+  call portfolio.test.fill
+  let button = "Review schedule"
+  call portfolio.test.submit
+  let text = "Occurrence: unscheduled"
+  call portfolio.test.sees
+  let text = concat("Review occurrence change: unscheduled → scheduled · Appointment: ", $appointment, " · Reason: Confirm the scoping visit")
+  call portfolio.test.sees
+  let button = "Confirm occurrence change"
+  call portfolio.test.submit
+  let text = "Occurrence: scheduled"
+  call portfolio.test.sees
+  let text = concat("Appointment: ", $appointment)
+  call portfolio.test.sees
+
+  let field = "Cancellation reason"
+  let value = "Site access withdrawn"
+  call portfolio.test.fill
+  let button = "Review cancellation"
+  call portfolio.test.submit
+  let text = concat("Review occurrence change: scheduled → cancelled · Appointment: ", $appointment, " · Reason: Site access withdrawn")
+  call portfolio.test.sees
+  let pendingPage = $page
+  port browser.page { browser = $opened.browser; independent = true } → other
+  let page = $other.page
+  let field = "Activity note"
+  let value = "Customer notified of site access changes"
+  call portfolio.test.fill
+  let button = "Save case update"
+  call portfolio.test.submit
+  let page = $pendingPage
+  let button = "Confirm occurrence change"
+  call portfolio.test.submit
+  let text = "This view is out of date. Review the current state and try again."
+  call portfolio.test.sees
+  let text = "Occurrence: scheduled"
+  call portfolio.test.sees
+
+  let field = "Cancellation reason"
+  let value = "Site access withdrawn"
+  call portfolio.test.fill
+  let button = "Review cancellation"
+  call portfolio.test.submit
+  let button = "Confirm occurrence change"
+  call portfolio.test.submit
+  let text = "Occurrence: cancelled"
+  call portfolio.test.sees
+  let text = concat("Appointment: ", $appointment)
+  call portfolio.test.sees
+  let text = "Cancelled: Site access withdrawn"
+  call portfolio.test.sees
+  let field = "Activity note"
+  let value = "Closed the case follow-up"
+  call portfolio.test.fill
+  let button = "Save case update"
+  call portfolio.test.submit
+
+  port browser.reopen { browser = $opened.browser } → reopened
+  let page = $reopened.page
+  let text = "Occurrence: cancelled"
+  call portfolio.test.sees
+  let text = concat("Appointment: ", $appointment)
+  call portfolio.test.sees
+  let text = concat("Scheduled: ", $appointment, " · Confirm the scoping visit")
+  call portfolio.test.sees
+  let text = "Cancelled: Site access withdrawn"
+  call portfolio.test.sees
+  let scheduleBase = list({ css = "form"; has = list({ role = "button"; name = "Review schedule" }) }, { css = "input[name=base]" })
+  port browser.observe { page = $page; locator = $scheduleBase; property = "value" } → before
+  let field = "Appointment"
+  let value = "Replacement appointment"
+  call portfolio.test.fill
+  let field = "Scheduling reason"
+  let value = "Try to schedule a cancelled visit"
+  call portfolio.test.fill
+  let button = "Review schedule"
+  call portfolio.test.submit
+  let text = "OCCURRENCE: This command is unavailable in the current phase."
+  call portfolio.test.sees
+  let text = concat("Appointment: ", $appointment)
+  call portfolio.test.sees
+  port browser.observe { page = $page; locator = $scheduleBase; property = "value" } → after
+  assert eq($after, $before)
+    otherwise "A terminal refusal advanced the saved revision."
+  port browser.observe { page = $page; locator = list({ role = "list"; name = "Occurrence events" }, { role = "listitem" }); property = "count" } → events
+  assert eq($events, 2)
+    otherwise "The case must retain one scheduling and one cancellation event."
+  port browser.observe { page = $page; property = "overflow" } → overflow
+  assert not($overflow)
+    otherwise "The occurrence controls overflow the phone viewport."

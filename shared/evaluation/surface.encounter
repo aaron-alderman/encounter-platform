@@ -1,0 +1,111 @@
+process-module "temple/surface-process-module/1"
+
+process evaluation.rows:
+  let packet = $eventInput
+  fold $packet.trials as trial; rows starts list():
+    let judgment = at(filter($packet.judgments, "judgment", eq($judgment.trialSha256, $trial.sha256)), 0)
+    let scores = if($judgment, $judgment.scores, list())
+    fold $scores as criterion; score starts 0:
+      yield add($score, $criterion.value) → score
+    let label = if($judgment, concat($score, "/", count(append($scores, $scores))), "Pending")
+    yield append($rows, list({ trial = $trial; scores = $scores; score = $label; north = or(at($packet, "northReplay"), null) })) → rows
+  let result = $rows
+
+process evaluation.review:
+  let packet = $eventInput
+  let trials = filter($packet.trials, "trial", count($trial.reply))
+  fold $trials as trial; reviewed starts list():
+    let north = eq($trial.application, "north-river")
+    let prompt = $trial.prompt
+    when $north:
+      port text.indexOf { value = $prompt; search = "\n\nOptional context (navigation only):\n" } → boundary
+      assert not(eq($boundary, -1))
+        otherwise "North River review requires the comparison context boundary."
+      port text.slice { value = $prompt; start = 0; end = $boundary } → prompt
+    let rubric = if($north, $packet.suite.rubric.northRiver, $packet.suite.rubric.usewords)
+    yield append($reviewed, list({ trialSha256 = $trial.sha256; task = $trial.objective; prompt = $prompt; reply = $trial.reply; rubric = $rubric })) → reviewed
+  port evaluation.sortReview { trials = $reviewed } → ordered
+  let result = { instructions = "Judge each reply using only its task and rubric. Give an exact reply quote and a short reason for each score. Use 0, 1 or 2."; rubricSha256 = $packet.rubricSha256; trials = $ordered }
+
+process evaluation.escape:
+  port value.string { value = $eventInput } → text
+  port text.replaceAll { value = $text; search = "&"; replacement = "&amp;" } → text
+  port text.replaceAll { value = $text; search = "<"; replacement = "&lt;" } → text
+  port text.replaceAll { value = $text; search = ">"; replacement = "&gt;" } → text
+  port text.replaceAll { value = $text; search = "\"" ; replacement = "&quot;" } → result
+
+process evaluation.trialView:
+  let row = $eventInput
+  let trial = $row.trial
+  port kernel.invoke { query = "evaluation.escape"; input = $trial.id } → id
+  port kernel.invoke { query = "evaluation.escape"; input = $trial.arm } → arm
+  port kernel.invoke { query = "evaluation.escape"; input = $trial.validation.status } → status
+  port kernel.invoke { query = "evaluation.escape"; input = $trial.objective } → objective
+  port kernel.invoke { query = "evaluation.escape"; input = $trial.prompt } → prompt
+  port kernel.invoke { query = "evaluation.escape"; input = $trial.reply } → reply
+  port kernel.invoke { query = "evaluation.escape"; input = $trial.model.model } → modelName
+  port kernel.invoke { query = "evaluation.escape"; input = $trial.sha256 } → pin
+  port kernel.invoke { query = "evaluation.escape"; input = at($trial.validation, "diagnostic") } → diagnostic
+  port evaluation.formatMs { milliseconds = $trial.metrics.totalMs } → time
+  let selected = ""
+  when eq($trial.application, "north-river"):
+    port text.join { values = $trial.selection.selected; separator = ", " } → names
+    port kernel.invoke { query = "evaluation.escape"; input = $names } → names
+    let selected = concat("<p><strong>Optional sources</strong> ", $names, "</p>")
+  fold $row.scores as criterion; reasons starts "":
+    port kernel.invoke { query = "evaluation.escape"; input = $criterion.id } → name
+    port kernel.invoke { query = "evaluation.escape"; input = $criterion.reason } → reason
+    port kernel.invoke { query = "evaluation.escape"; input = $criterion.evidence } → quote
+    yield concat($reasons, "<li><strong>", $name, " · ", $criterion.value, "/2</strong><p>", $reason, "</p><blockquote>", $quote, "</blockquote></li>") → reasons
+  let result = concat(
+    "<tr><th scope=\"row\"><a href=\"#", $id, "\">", $id, "</a></th><td>", $arm, "</td><td>", $status, "</td><td>", $time, "</td><td>", $row.score, "</td></tr>"
+  )
+  port kernel.invoke { query = "evaluation.semanticView"; input = { trial = $trial; north = $row.north } } → semantics
+  let detail = concat(
+    "<article id=\"", $id, "\"><h3>", $id, "</h3><p>", $objective, "</p><p><strong>Model</strong> ", $modelName,
+    " · <strong>Encounter</strong> ", $status, " · <strong>Judge</strong> ", $row.score, "</p>", $selected,
+    if(at($trial.validation, "diagnostic"), concat("<p>", $diagnostic, "</p>"), ""),
+    $semantics, "<details><summary>Judge’s rubric and evidence</summary><ul class=\"criteria\">", $reasons, "</ul></details>",
+    "<details><summary>Prompt and reply</summary><h4>Prompt</h4><pre>", $prompt, "</pre><h4>Reply</h4><pre>", $reply, "</pre></details>",
+    "<details><summary>Trial identity</summary><code>", $pin, "</code></details></article>"
+  )
+  let result = { row = $result; detail = $detail }
+
+process evaluation.group:
+  let section = $eventInput
+  fold $section.rows as row; group starts { table = ""; details = "" }:
+    port kernel.invoke { query = "evaluation.trialView"; input = $row } → trial
+    yield { table = concat($group.table, $trial.row); details = concat($group.details, $trial.detail) } → group
+  let result = concat(
+    "<section aria-labelledby=\"", $section.id, "-heading\" id=\"", $section.id, "\"><h2 id=\"", $section.id, "-heading\">",
+    $section.title, "</h2><p>", $section.description, "</p><div class=\"table\"><table><thead><tr><th>Trial</th><th>Arm</th><th>Encounter</th><th>Elapsed</th><th>Judge</th></tr></thead><tbody>",
+    $group.table, "</tbody></table></div><div class=\"trials\">", $group.details, "</div></section>"
+  )
+
+process evaluation.page:
+  let packet = $eventInput
+  port kernel.invoke { query = "evaluation.rows"; input = $packet } → rows
+  let usewords = filter($rows, "row", eq($row.trial.application, "usewords-lightning"))
+  let north = filter($rows, "row", eq($row.trial.application, "north-river"))
+  let passed = count(filter($rows, "row", eq($row.trial.validation.status, "pass")))
+  port kernel.invoke { query = "evaluation.escape"; input = $packet.judge.identity } → judge
+  port kernel.invoke { query = "evaluation.escape"; input = or(at($packet.judge, "independence"), "independence unrecorded") } → independence
+  port kernel.invoke { query = "evaluation.group"; input = { id = "usewords"; title = "Usewords Lightning"; description = "Two matter briefs, each run through the fast and deep Ollama slots."; rows = $usewords } } → usewordsView
+  port kernel.invoke { query = "evaluation.group"; input = { id = "north-river"; title = "North River"; description = "One timesheet repair case. Both selectors use the same mandatory prompt, model and optional byte budget. The four runs do not establish a speed advantage."; rows = $north } } → northView
+  fold list("lexical", "pagerank") as arm; comparisons starts "":
+    let armRows = filter($north, "row", eq($row.trial.arm, $arm))
+    let accepted = count(filter($armRows, "row", eq($row.trial.validation.status, "pass")))
+    port text.join { values = map($armRows, "row", $row.score); separator = ", " } → scores
+    yield concat($comparisons, "<p><strong>", if(eq($arm, "pagerank"), "PageRank", "Lexical"), "</strong> · ", $accepted, " of ", count($armRows), " admissible · judge scores ", $scores, "</p>") → comparisons
+  let result = concat(
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Encounter · Model Evaluation</title><link rel=\"stylesheet\" href=\"/evaluation.css\"></head><body>",
+    "<header><div class=\"wrap\"><p class=\"eyebrow\">Encounter · Assurance</p><h1>Model evaluation</h1><p class=\"lede\">Inspect what Ollama was asked to do, what Encounter checked, and how a reviewer scored each reply.</p><div class=\"summary\"><span><strong>", count($rows), "</strong> trials</span><span><strong>", $passed, "</strong> passed Encounter</span><span><strong>", count($packet.judgments), "</strong> judged</span></div></div></header>",
+    "<main class=\"wrap\"><nav aria-label=\"Benchmark sections\"><a href=\"#usewords\">Usewords Lightning</a><a href=\"#north-river\">North River</a><a href=\"/receipt.rel\">Download receipt</a>",
+    if(at($packet, "hasDecompiler"), "<a href=\"/decompiler\">North River semantic decompiler</a>", ""), "</nav>",
+    "<aside><strong>Reviewer</strong> ", $judge, " · ", $independence, ". Reconstruction projects typed claims and observed checks from each receipt. Source pins identify selected context. Judge scores assess usefulness separately.</aside>",
+    "<section class=\"comparison\" aria-label=\"Selector comparison\"><h2>PageRank vs lexical</h2>", $comparisons, "</section>",
+    $usewordsView, $northView, "</main></body></html>"
+  )
+
+process evaluation.styles:
+  let result = ":root{color-scheme:light;background:#f6f7f5;color:#182b2b;font:16px/1.55 system-ui,sans-serif}*{box-sizing:border-box}body{margin:0}.wrap{width:min(100% - 2rem,72rem);margin:auto}header{background:#123a38;color:#fff;padding:3rem 0 2rem}.eyebrow{letter-spacing:.13em;text-transform:uppercase;color:#b7ded2;font-weight:700;font-size:.8rem}h1{font-size:clamp(2.2rem,7vw,4rem);line-height:1.08;margin:.4rem 0}h2{font-size:1.8rem;margin-bottom:.25rem}.lede{max-width:48rem;color:#e2f1ea}.summary,nav{display:flex;gap:.7rem;flex-wrap:wrap}.summary span{background:#215350;padding:.4rem .8rem;border-radius:.4rem}nav{margin:1.4rem 0}a{color:#075950;text-underline-offset:.17em}nav a{padding:.35rem .6rem}.comparison{margin:1.2rem 0 2rem;padding:.1rem 1rem .55rem;background:white;border:1px solid #d7e1db;border-radius:.6rem}.comparison p{margin:.45rem 0}aside{border-left:4px solid #2c8776;padding:.75rem 1rem;background:#e4f0eb}.table{overflow:auto}table{border-collapse:collapse;width:100%;background:white}td,th{text-align:left;border-bottom:1px solid #d7e1db;padding:.6rem .8rem;white-space:nowrap}thead{background:#e4f0eb}.trials{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,28rem),1fr));gap:1rem;margin:1rem 0 2.5rem}article{background:white;border:1px solid #d7e1db;border-radius:.6rem;padding:1rem;min-width:0;scroll-margin:1rem}article h3{margin:.15rem 0;overflow-wrap:anywhere}dt{font-weight:700;margin-top:.35rem}dd{margin-left:0}details{border-top:1px solid #d7e1db;padding:.55rem 0}summary{cursor:pointer;color:#075950;font-weight:650}pre,code,blockquote{overflow-wrap:anywhere;white-space:pre-wrap}pre{background:#eff4f1;padding:.65rem;border-radius:.25rem}.criteria{padding-left:1.25rem}.criteria p,blockquote{margin:.3rem 0 .55rem}blockquote{border-left:2px solid #81b8a8;padding-left:.5rem;color:#35504d}:focus-visible{outline:2px solid #ac5529;outline-offset:3px}"

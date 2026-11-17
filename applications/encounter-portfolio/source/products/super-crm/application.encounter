@@ -13,7 +13,7 @@ process product.change:
   let cases = $command.state.cases
   let id = $command.id
   let notice = ""
-  assert includes(list("account", "case", "update"), $fields.action)
+  assert includes(list("account", "case", "update", "schedule", "cancel", "confirm-occurrence", "discard-occurrence"), $fields.action)
     otherwise "Choose an available CRM action."
   when eq($fields.action, "account"):
     port kernel.invoke { query = "portfolio.text"; input = { text = $fields.name; limit = 120 } } → name
@@ -45,6 +45,8 @@ process product.change:
     let cases = map($cases, "entry", if(eq($entry.id, $id), $updated, $entry))
     let notice = "Case updated and activity recorded."
   let result = { state = { accounts = $accounts; cases = $cases }; target = $id; notice = $notice }
+  when includes(list("schedule", "cancel", "confirm-occurrence", "discard-occurrence"), $fields.action):
+    port kernel.invoke { query = "crm.occurrenceCommand"; input = $command } → result
 
 process crm.card:
   let card = $eventInput
@@ -56,14 +58,16 @@ process crm.card:
     { name = "note"; label = "Activity note"; type = "textarea"; maxlength = 500; required = true }
   )
   port kernel.invoke { query = "portfolio.form"; input = { screen = $card.screen; inputs = $inputs; action = "update"; target = $entry.id; button = "Save case update" } } → form
-  let activity = map($entry.activity, "event", { tag = "li"; attrs = {}; children = list(concat($event.from, " → ", $event.to, " · ", $event.owner, " · ", $event.note)) })
+  let caseUpdates = filter($entry.activity, "event", eq(at($event, "occurrence"), at({}, "absent")))
+  let activity = map($caseUpdates, "event", { tag = "li"; attrs = {}; children = list(concat($event.from, " → ", $event.to, " · ", $event.owner, " · ", $event.note)) })
+  port kernel.invoke { query = "crm.occurrenceView"; input = $card } → occurrence
   let heading = concat("case-", $entry.id)
-  let result = { tag = "article"; attrs = { "aria-labelledby" = $heading }; children = list(
+  let result = { tag = "article"; attrs = { "aria-labelledby" = $heading }; children = append(list(
     { tag = "h3"; attrs = { id = $heading }; children = list($entry.title) },
     { tag = "p"; attrs = {}; children = list(concat($entry.stage, " · ", $entry.owner)) },
     $form,
     { tag = "ul"; attrs = { "aria-label" = "Case activity" }; children = $activity }
-  ) }
+  ), $occurrence) }
 
 process product.view:
   let screen = $eventInput
@@ -92,4 +96,5 @@ process product.view:
     let content = append(list({ tag = "p"; attrs = {}; children = list(concat("Primary contact: ", $account.contact)) }), $caseCards)
     port kernel.invoke { query = "portfolio.section"; input = { title = $account.name; content = $content } } → card
     yield append($cards, list($card)) → cards
-  let result = { title = "Super CRM"; summary = "See each customer account, its delivery cases, and the activity behind each update."; content = append(list($addAccount), append($opening, $cards)) }
+  port kernel.invoke { query = "crm.asterContextMarker"; input = $screen } → marker
+  let result = { title = "Super CRM"; summary = "See each customer account, its delivery cases, and the activity behind each update."; content = append(list($marker, $addAccount), append($opening, $cards)) }

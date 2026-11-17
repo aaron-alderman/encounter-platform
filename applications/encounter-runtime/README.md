@@ -124,7 +124,10 @@ The differential, browser, release and transfer reconciliation programmes
 are under `test/programmes/`. The CJS entry points supply the independent
 oracles and the process, browser, filesystem and SQLite transports. The
 app-specific upgrade workflows are defined in `upgrade-workflows.encounter`. The read-only Claimipedia browser scenario requires
-source bytes that match the pins in `profiles/claimipedia-web.rel`.
+the Claimipedia package in the workspace's `projects/applications` tree. The
+runtime checks the module bytes against the pins generated from
+`profiles/claimipedia-web.loader.encounter` and verifies the corpus against its
+application declaration.
 
 `encounter test` launches fresh Rust processes against disposable journals
 and runs the actual source through the independent JS Encounter front door.
@@ -166,18 +169,28 @@ and Claimipedia pilot profiles continue to use narrower entry sets.
 
 ## Package and verify a Linux release
 
-From this directory in a fresh platform checkout, with the aaron-dev Rust and
-browser profiles loaded, stage the Temple3 input before building. On aaron-dev
-`TEMPLE3_SOURCE` is the workspace's `projects/research/temple3` intake. The
-staging script copies the files listed in `temple3.sha256`, checks their hashes,
-and only then installs them at the path used by Cargo and the Node reference
-tests.
+From this directory in a fresh platform checkout, use the Encounter Core
+release driver as `ENCOUNTER_CORE`. With the aaron-dev Rust profile loaded,
+stage the Temple3 input before building. On aaron-dev, `TEMPLE3_SOURCE` is the
+workspace's `projects/research/temple3` intake. The command checks all files
+against `temple3.sha256` before publishing them at the path used by Cargo and
+the reference tests.
 
 ```bash
-./stage-temple3.sh "$TEMPLE3_SOURCE"
+"$ENCOUNTER_CORE" stage-temple3 . "$TEMPLE3_SOURCE"
 cargo build --locked --offline --release
-./package-release.sh 0.1.7 target/release/encounter "$RELEASE_DIRECTORY"
+"$ENCOUNTER_CORE" package-platform-release . 0.1.7 target/release/encounter \
+  "$RELEASE_DIRECTORY" "$PLATFORM_BINARY_SHA256"
 ```
+
+Use the runtime digest from the trusted build for `PLATFORM_BINARY_SHA256`.
+To package a binary built from the Encounter repository, pass its absolute path
+in place of `target/release/encounter` and use the digest from that build.
+The packager checks the platform loader projections and verifies the
+Harborboard and Super CRM guard locks against the shared Encounter guard
+release before admitting their compiled images.
+For an individual guarded release image, run
+`"$ENCOUNTER_CORE" build-guarded-image "$DEV_ROOT/projects" APPLICATION 0.1.7 BINARY OUTPUT_IMAGE "$PLATFORM_BINARY_SHA256"`.
 
 The archive has a versioned directory, a Rust executable, compiled images for
 all 12 applications in `release-applications-platform.rel`, and `release.rel`

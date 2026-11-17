@@ -51,6 +51,9 @@ pub(crate) fn validate_path(relative: &str, extension: &str) -> Result<()> {
 fn read_disk(root: &Path, relative: &str, extension: &str, limit: usize) -> Result<(PathBuf, String)> {
     validate_path(relative, extension)?;
     let path = contained(root, relative)?;
+    if path.extension() != Path::new(relative).extension() {
+        return Err(fail("declared path extension differs from the resolved file"));
+    }
     if fs::metadata(&path)?.len() > limit as u64 {
         return Err(fail(format!("application file size limit at {relative}")));
     }

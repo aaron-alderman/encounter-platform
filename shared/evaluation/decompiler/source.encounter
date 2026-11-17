@@ -1,0 +1,4 @@
+process-module "temple/surface-process-module/1"
+
+process desk.syntax:
+  port kernel.invoke { query = "semantic.syntax"; input = $eventInput } → result

@@ -1,4 +1,5 @@
 mod application;
+mod package;
 mod attachment;
 mod claimipedia;
 mod declared_web;
@@ -72,12 +73,14 @@ fn execute(args: &[String]) -> Result<ExitCode> {
                 .map(|_| ExitCode::SUCCESS),
         [command, journal] if command == "serve" => web::serve(Path::new(journal), 4187).map(|_| ExitCode::SUCCESS),
         [command, journal, port] if command == "serve" => web::serve(Path::new(journal), port.parse()?).map(|_| ExitCode::SUCCESS),
+        [command, root] if command == "check-package" =>
+            package::check(Path::new(root)).map(|_| ExitCode::SUCCESS),
         [command, root, declaration] if command == "check" => {
             let admitted = application::Application::load(Path::new(root), declaration)?.check()?;
             Ok(if admitted { ExitCode::SUCCESS } else { ExitCode::from(2) })
         }
         [command] if command == "test" => verification::run(&profile::root()).map(|_| ExitCode::SUCCESS),
-        _ => Err(fail("usage: encounter --version | encounter --config FILE COMMAND | encounter run JOURNAL BASIS OPERATION TITLE | encounter serve JOURNAL [PORT] | encounter serve --app claimipedia [PORT] | encounter serve --declaration APP_ROOT DECLARATION STORE PORT | encounter build APP_ROOT DECLARATION OUTPUT | encounter serve --image IMAGE SHA256 STORE PORT | encounter check APP_ROOT DECLARATION | encounter test")),
+        _ => Err(fail("usage: encounter --version | encounter --config FILE COMMAND | encounter run JOURNAL BASIS OPERATION TITLE | encounter serve JOURNAL [PORT] | encounter serve --app claimipedia [PORT] | encounter serve --declaration APP_ROOT DECLARATION STORE PORT | encounter build APP_ROOT DECLARATION OUTPUT | encounter serve --image IMAGE SHA256 STORE PORT | encounter check-package PACKAGE_DIRECTORY | encounter check APP_ROOT DECLARATION | encounter test")),
     }
 }
 

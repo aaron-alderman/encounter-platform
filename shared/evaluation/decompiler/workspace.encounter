@@ -1,0 +1,72 @@
+process-module "temple/surface-process-module/1"
+
+process desk.option:
+  let doc = $eventInput
+  port kernel.invoke { query = "evaluation.escape"; input = $doc.title } → title
+  let names = { "employee-link" = "Employee reference"; "session-check" = "Session access"; "import-and-entry" = "CSV import and time entry" }
+  let short = at($names, $doc.id)
+  when not($short):
+    let short = at($names, at($doc, "caseId"))
+  let result = concat("<option value=\"", $doc.id, "\" data-short=\"", if($short, $short, $title), "\">", $title, "</option>")
+
+process desk.page:
+  let view = $eventInput
+  port kernel.invoke { query = "desk.asterContext" } → aster
+  fold $view.groups as group; options starts "":
+    fold $group.docs as doc; rows starts "":
+      port kernel.invoke { query = "desk.option"; input = $doc } → option
+      yield concat($rows, $option) → rows
+    yield concat($options, "<optgroup label=\"", $group.label, "\">", $rows, "</optgroup>") → options
+  let tabs = list("overview", "context", "reply", "trace", "effects", "pins", "files")
+  fold $tabs as id; buttons starts "":
+    port kernel.invoke { query = "notebook.presentation.view"; input = $id } → tab
+    yield concat($buttons, "<button type=\"button\" data-tab=\"", $id, "\" data-evidence-role=\"", $tab.role, "\" aria-pressed=\"false\">", $tab.label, "</button>") → buttons
+  port kernel.invoke { query = "notebook.presentation.caption"; input = { title = "Semantic decompiler"; section = "Evidence and replay" } } → caption
+  let result = concat(
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+    "<title>North River · Semantic Decompiler</title><link rel=\"stylesheet\" href=\"/decompiler/desk.css\"><script type=\"module\" src=\"/decompiler/desk.js\"></script></head>",
+    "<body>", $aster.marker, "<main class=\"notes\"><header class=\"caption\"><span aria-hidden=\"true\" class=\"mark\">", $caption.mark, "</span><h1>", $caption.title, "</h1><span class=\"edition\">", $caption.product, " · ", $caption.section, "</span></header>",
+    "<div class=\"menu\"><a href=\"/evaluation\">Evaluation</a><button type=\"button\" data-menu=\"files\">File</button><button type=\"button\" data-menu=\"brief\">Case brief</button><button type=\"button\" data-menu=\"mandatory\">Mandatory context</button></div>",
+    "<div class=\"toolbar\"><label for=\"case\">Document</label><select id=\"case\">", $options, "</select>",
+    if($view.hasIdentityTrace, "<a href=\"?case=identity-management&amp;platform=1\">Identity Management trace</a>", ""), "</div>",
+    "<div class=\"workbench\"><nav aria-label=\"Case folders\" id=\"folders\"></nav><section class=\"book\" aria-labelledby=\"document-title\">",
+    "<div class=\"tabs\" role=\"group\" aria-label=\"Evidence views\">", $buttons, "</div>",
+    "<div><header class=\"document-head\"><h2 id=\"document-title\"", $aster.document, ">North River repairs</h2><span id=\"collection\"></span></header>",
+    "<div class=\"trace-controls\" id=\"trace-controls\" hidden>",
+    "<div class=\"trace-pickers\"><label>Delivery <select id=\"trace-delivery\"><option value=\"1\">Live replacement</option><option value=\"0\">Original refusal</option></select></label>",
+    "<label>Show <select id=\"trace-filter\"><option value=\"all\">All sites</option><option value=\"when\">Branches</option><option value=\"assert\">Checks</option><option value=\"port-end\">Effects</option><option value=\"catch\">Caught refusals</option></select></label></div>",
+    "<div class=\"trace-pickers\"><button type=\"button\" id=\"trace-previous\" aria-label=\"Previous instruction\">◀</button>",
+    "<label class=\"site-picker\">Instruction <select id=\"trace-site\" aria-label=\"Instruction\"></select></label>",
+    "<button type=\"button\" id=\"trace-next\" aria-label=\"Next instruction\">▶</button></div>",
+    "<div class=\"trace-search-row\"><input id=\"trace-search\" type=\"search\" placeholder=\"Find instruction\" aria-label=\"Find instruction\">",
+    "<div class=\"trace-mode\"><label><input id=\"trace-differences\" type=\"checkbox\"> Differences only</label><span id=\"trace-position\" role=\"status\"></span></div></div>",
+    "<a id=\"trace-source\" href=\"#source\">Encounter source</a></div>",
+    "<div class=\"reply-controls\" id=\"reply-controls\" hidden>",
+    "<label><input id=\"reply-differences\" type=\"checkbox\" aria-label=\"Reply differences only\"> Differences only</label>",
+    "<button type=\"button\" id=\"reply-previous\" aria-label=\"Previous field\">◀</button>",
+    "<span id=\"reply-position\" role=\"status\"></span><button type=\"button\" id=\"reply-next\" aria-label=\"Next field\">▶</button></div>",
+    "<div class=\"trace-controls source-controls\" id=\"source-controls\" hidden><button type=\"button\" id=\"source-back\">◀ Back to Trace</button><span id=\"source-coordinate\"></span>",
+    "<div class=\"source-tools\"><button type=\"button\" id=\"source-executed\">Executed statement</button>",
+    "<form id=\"source-goto\"><label>Line <input id=\"source-line\" type=\"number\" min=\"1\" required></label><button>Go</button></form>",
+    "<form id=\"source-find\"><input type=\"search\" id=\"source-search\" placeholder=\"Find in source\" aria-label=\"Find in source\"><button>Find next</button></form></div></div></div>",
+    "<div id=\"reading\" class=\"reading\" aria-live=\"polite\">",
+    "<article class=\"column\" id=\"left\"><h3>Lexical</h3><pre></pre></article><article class=\"column\" id=\"right\"><h3>PageRank</h3><pre></pre></article></div>",
+    "<div id=\"files\" class=\"filebox\" hidden><h3>Selected case files</h3><div>",
+    "<a href=\"/decompiler/offline-replay.tar\">Offline replay bundle</a><a href=\"/decompiler/image.rel.gz\">Admitted image</a><a href=\"/decompiler/trace.rel.gz\">Both traces</a><a href=\"/decompiler/encounter.gz\">Pinned Linux runtime</a><a href=\"/decompiler/manifest.rel\">Capture manifest</a></div>",
+    "<button type=\"button\" id=\"verify\">Verify offline replay</button><button id=\"benchmark-experiment\" type=\"button\">Latest experiment</button><button id=\"benchmark-feedback\" type=\"button\">Context Hub feedback</button><section id=\"benchmark\" hidden><button id=\"benchmark-start\" type=\"button\">Run benchmark</button><p id=\"benchmark-status\" role=\"status\"></p><a id=\"benchmark-download\" href=\"/decompiler/offline-replay.tar\" hidden>Download fresh capture</a><button id=\"benchmark-judge\" type=\"button\" hidden>Judge capture</button><button id=\"benchmark-review\" type=\"button\" hidden>View judgment</button><button id=\"benchmark-compare\" type=\"button\" hidden>Open reviewed capture</button><a id=\"benchmark-review-download\" href=\"/decompiler/benchmark\" hidden>Download judgment</a></section></div>",
+    "<footer class=\"status\"><span id=\"view-name\"", $aster.view, ">Overview</span><button type=\"button\" id=\"previous\">◀ Previous</button><span id=\"counter\"", $aster.page, " role=\"status\"></span><button type=\"button\" id=\"next\">Next ▶</button></footer>",
+    "</section></div></main><div hidden>", $view.sheets, "</div></body></html>"
+  )
+
+
+# Bind only the Decompiler's navigation labels. Existing view changes
+# update these labels through its normal renderer.
+process desk.asterContext:
+  let adapter = " data-sourcery-frame-adapter=\"decompiler\""
+  let field = concat($adapter, " data-sourcery-frame-context-field=\"")
+  let result = {
+    marker = concat("<span hidden", $adapter, " data-sourcery-frame-context=\"Semantic Decompiler.\"></span>");
+    document = concat($field, "Document\"");
+    view = concat($field, "View\"");
+    page = concat($field, "Position\"")
+  }

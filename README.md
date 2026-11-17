@@ -4,9 +4,38 @@ This source baseline records four packages from aaron-dev: Encounter Authoring, 
 
 Package paths under `applications/` retain the sibling layout used by the release catalogue and browser transport. Each package owns its existing application declaration and verification assertions. The included vendor files are measured foundation inputs.
 
+## Repository ownership
+
+- The [Encounter repository](https://github.com/aaron-alderman/encounter) owns native runtime development and its implementation tests. Platform owns the release catalogue and its packaging and verification adapters. The existing Platform runtime snapshot still supports reproducing older releases.
+- Platform owns Home, [Portfolio](applications/encounter-portfolio/products/PORTFOLIO.md) and [Work Boards](applications/encounter-work-boards/README.md). Edit their product declarations and application modules in `applications/`.
+- Platform owns the shared authoring and rendering modules under `shared/` and the application libraries under `applications/encounter-libraries/`. Their consumers select these sources in their application declarations.
+
+## Front Gate
+
+[Front Gate](applications/front-gate/README.md) is the aaron-dev entry point for
+Encounter applications, workspace previews and running host service units.
+
+## Loader declarations
+
+Edit the `*.loader.encounter` owners beside the product declarations, runtime
+profiles and current release catalogue. The three default declarations share
+`shared/authoring/application.loader.encounter`. The shared compiler projects
+the ordered sections, module selections and grants to the existing REL paths.
+
+```sh
+node shared/node/loader-declarations.cjs --write
+node shared/node/loader-declarations.cjs --check
+```
+
+The release build checks those projections before packaging. Keeping the
+generated REL at the existing paths lets the Node and standalone Rust loaders
+consume the same bytes and preserves release pins. The foundation trust root,
+published specifications and historical release catalogue keep their own
+contracts. North River can use the same tool with its explicit declaration path.
+
 ## Dependencies and qualification
 
-- Stage the exact Temple3 input with `applications/encounter-runtime/stage-temple3.sh TEMPLE3_SOURCE`. The SHA-256 lock records the Rust library, model and pilot evidence from `a78ee5ce96c7e05eed28e05ef9456e39892032db`. The staging command verifies every file and supplies the existing Cargo path at `research/temple3/`. Use the tested offline Rust and Node/browser profiles on aaron-dev.
+- Stage the exact Temple3 input with `encounter stage-temple3 applications/encounter-runtime TEMPLE3_SOURCE` using the Encounter Core driver. The SHA-256 lock records the Rust library, model and pilot evidence from `a78ee5ce96c7e05eed28e05ef9456e39892032db`. The staging command verifies every file before publishing the existing Cargo path at `research/temple3/`. Use the tested offline Rust and browser profiles on aaron-dev.
 - The [standalone Linux release](applications/encounter-runtime/README.md#package-and-verify-a-linux-release) uses the checked-in 12-app platform catalogue. The separate 13-app catalogue remains available to the historical upgrade harness. Claimipedia has its own source and release boundary.
 - The three Node app bootstraps use the REL codec and isolated regex mechanism under `shared/node/`. Each app retains its own lazy regex worker and queue. The Node hosts measure both bootstrap entry files and shared implementations. This changes the host basis. Prepare new reviews on the new basis when changing versions.
 - The compiler front door and policy machine implementation also live in `shared/node/`. Each bootstrap supplies its own foundation path, seed mechanisms, observation ports and regex service. Policy machine caches are app-local. Hosts measure both the local adapters and the shared implementations.

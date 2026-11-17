@@ -16,6 +16,7 @@ impl Mount {
     pub fn open(root: &Path) -> Result<Self> {
         let root = root.canonicalize()?;
         if !root.is_dir() { return Err(fail("attachment root must be a directory")); }
+        crate::package::check(&root)?;
         Ok(Self(root))
     }
 
@@ -32,6 +33,7 @@ impl Mount {
             return Err(fail("invalid attachment path"));
         }
         let file = self.0.join(path);
+        crate::package::check_path(&file)?;
         if file.canonicalize()? != file { return Err(fail("attachment path changed")); }
         let opened = OpenOptions::new().read(true)
             .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK).open(file)?;

@@ -1,0 +1,62 @@
+process-module "temple/surface-process-module/1"
+
+process desk.field:
+  let field = $eventInput
+  port kernel.invoke { query = "desk.richField"; input = $field } → safe
+  let result = concat("<pre data-field=\"", $field.id, "\">", $safe, "</pre>")
+
+process desk.fields:
+  fold $eventInput as field; fields starts "":
+    port kernel.invoke { query = "desk.field"; input = $field } → html
+    yield concat($fields, $html) → fields
+  let result = $fields
+
+process desk.arm:
+  let arm = $eventInput
+  let status = if(eq($arm.outcome, "admissible"), "Admitted to the question stage", "Blocked")
+  let overview = concat("OUTCOME\n", $status)
+  when at($arm, "observation"):
+    port evaluation.milliseconds { us = $arm.modelUs } → milliseconds
+    port evaluation.formatMs { milliseconds = $milliseconds } → duration
+    let remaining = $arm.observation.remainingIssues
+    let overview = concat($overview, "\n\nSCOPE\n", $arm.observation.initialIssues, " → ", if(eq($remaining, null), "scope not reached", $remaining),
+      if($arm.observation.unaffectedPreserved, " · Unflagged steps preserved", ""),
+      "\n\nOLLAMA\n", $duration, " · ", $arm.promptTokens, " prompt / ", $arm.replyTokens, " reply tokens")
+  when and(at($arm, "observation"), not(eq(at($arm, "refusalCheck"), null))):
+    let overview = concat($overview, "\n\nSESSION ACCESS-REFUSAL INVARIANT\n", if($arm.refusalCheck, "Passed", "Refused"))
+  when at($arm, "review"):
+    let overview = concat($overview, "\n\nREPLY REVIEW · ", $arm.review.assessment, "\n", $arm.review.note)
+  when and(not(at($arm, "observation")), $arm.reportPreserved):
+    let overview = concat($overview, "\n\nReport step preserved.")
+  fold $arm.writes as delivery; effects starts { index = 0; text = "" }:
+    fold $delivery as write; lines starts "":
+      yield concat($lines, "\nstorage.cas · revision ", $write.revision, "\n", $write.sourceHash, "\n") → lines
+    let name = if(eq($effects.index, 0), "ORIGINAL REFUSAL", "LIVE REPLACEMENT")
+    yield { index = add($effects.index, 1); text = concat($effects.text, $name, "\n", if(count($delivery), $lines, "No recorded writes.\n"), "\n") } → effects
+  port text.join { values = $arm.selected; separator = ", " } → ids
+  port kernel.invoke { query = "desk.fields"; input = list(
+    { id = "overview"; text = $overview },
+    { id = "context"; text = concat($arm.optionalBytes, " OPTIONAL BYTES\n", $ids, "\n\n", $arm.context) },
+    { id = "reply"; text = $arm.reply },
+    { id = "effects"; text = $effects.text }
+  ) } → fields
+  let result = concat("<div data-arm=\"", $arm.arm, "\">", $fields, "</div>")
+
+process desk.sheet:
+  let doc = $eventInput
+  let pair = $doc.comparison
+  port kernel.invoke { query = "evaluation.escape"; input = $doc.title } → title
+  fold $pair.arms as arm; cards starts "":
+    port kernel.invoke { query = "desk.arm"; input = $arm } → card
+    yield concat($cards, $card) → cards
+  port kernel.invoke { query = "desk.replyDifferences"; input = $pair.arms } → differences
+  let brief = concat("REQUEST\n", $doc.objective)
+  when $doc.expectation:
+    let first = if(eq(at($doc.order, 0), "lexical"), "Lexical", "PageRank")
+    let brief = concat($brief, "\n\nEXPECTED REPAIR\n", $doc.expectation, "\n\nRETRIEVAL QUERY\n", $doc.query, "\n\nRUN ORDER\n", $first, " ran first.")
+  port kernel.invoke { query = "desk.fields"; input = list(
+    { id = "brief"; text = $brief },
+    { id = "mandatory"; text = concat($pair.budgetBytes, "-byte optional context cap\n\n", $pair.mandatory) },
+    { id = "pins"; text = concat("MODEL\n", $doc.model, "\n", $doc.digest, "\n\nIMAGE\n", $doc.image, "\n\nRUNTIME\n", $doc.runtime, "\n\nTRACE\n", $doc.trace, "\n\nMANIFEST\n", $doc.manifestSha256) }
+  ) } → shared
+  let result = concat("<section data-sheet=\"", $doc.id, "\" data-title=\"", $title, "\" hidden>", $cards, $shared, $differences, "</section>")

@@ -1,0 +1,33 @@
+process-module "temple/surface-process-module/1"
+
+# The directory host invokes this entry with its current loopback observations.
+process gate.page:
+  let view = $eventInput
+  let services = map($view.services, "service", {
+    id = $service.id; group = $service.group; name = $service.name; detail = $service.detail; online = $service.online
+  })
+  let units = map($view.units, "group", { scope = $group.scope; names = $group.names })
+  let result = {
+    schema = "encounter/front-gate-status/1";
+    time = $view.time;
+    services = $services;
+    units = $units;
+    timers = or(at($view, "timers"), list())
+  }
+  port json.stringify { value = $result } → result
+
+process test.directory:
+  port kernel.invoke { query = "gate.page"; input = {
+    port = 24220; time = "09:00:00";
+    units = list({ scope = "system"; names = null }, { scope = "user"; names = list("preview<&>.service") });
+    services = list({ id = "app"; name = "App & tools"; group = "Workspace"; detail = "<preview>"; port = 24187; online = true });
+    timers = list({ scope = "system"; timers = list(); runs = list() })
+  } } → body
+  port json.parse { text = $body } → status
+  let service = at($status.services, 0)
+  let unit = at($status.units, 1)
+  let result = and(eq($status.schema, "encounter/front-gate-status/1"), eq($status.time, "09:00:00"),
+    eq($service.name, "App & tools"), eq($service.detail, "<preview>"), $service.online,
+    not(at($service, "port")), not(at($status, "port")),
+    eq(at($unit.names, 0), "preview<&>.service"), eq(at(at($status.units, 0), "names"), null),
+    eq(at(at($status.timers, 0), "scope"), "system"))

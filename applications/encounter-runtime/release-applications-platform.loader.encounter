@@ -1,0 +1,19 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    sections = list(
+      { subject = "encounter"; encounter = "bootstrap/application.rel" },
+      { subject = "foundry-mine-to-port"; "encounter-portfolio" = "products/foundry-mine-to-port/application.rel" },
+      { subject = "harborboard"; "encounter-work-boards" = "products/harborboard/application.rel" },
+      { subject = "industrial-systems-optimizer"; "encounter-portfolio" = "products/industrial-systems-optimizer/application.rel" },
+      { subject = "outcome-value-navigator"; "encounter-portfolio" = "products/outcome-value-navigator/application.rel" },
+      { subject = "relationship-navigator"; "encounter-portfolio" = "products/relationship-navigator/application.rel" },
+      { subject = "sourcery-desktop"; "encounter-portfolio" = "products/sourcery-desktop/application.rel" },
+      { subject = "super-crm"; "encounter-portfolio" = "products/super-crm/application.rel" },
+      { subject = "timesheet"; "encounter-portfolio" = "products/timesheet/application.rel" },
+      { subject = "tradie"; "encounter-portfolio" = "products/tradie/application.rel" },
+      { subject = "workgarden"; "encounter-work-boards" = "products/workgarden/application.rel" },
+      { subject = "world"; "encounter-portfolio" = "products/world/application.rel" }
+    )
+  }

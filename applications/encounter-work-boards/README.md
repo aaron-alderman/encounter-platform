@@ -29,8 +29,10 @@ the event website and unrelated advanced platform contracts remain later work.
 Requires Node 24 with `node:sqlite`. No npm install, external generator, build
 step or original worktree is required for the application runtime.
 
+From the Platform repository root, open the [authoring application](../encounter/README.md).
+
 ```powershell
-cd C:\Users\aaron\grand-theory\.worktrees\encounter-restart\encounter
+Set-Location applications/encounter
 node bootstrap/server.cjs .local/my-workspace
 ```
 
@@ -52,8 +54,8 @@ or every programme form has been delivered.
 
 ## Run the work boards
 
-From this directory, run either command in PowerShell. Use separate terminals
-to run both at once.
+From the Platform repository root, change to `applications/encounter-work-boards`
+in each terminal. Use separate terminals to run both boards at once.
 
 ```powershell
 $env:ENCOUNTER_PORT = '4190'
@@ -68,7 +70,8 @@ node bootstrap/server.cjs .local/harborboard products/harborboard/application.re
 - [Workgarden](http://127.0.0.1:4190) saves work items and their completion state.
 - [Harborboard](http://127.0.0.1:4191) organizes work into Backlog, In progress
   and Done, with optional epics and dependencies. Completing a blocker updates
-  the dependent card. Circular dependencies are refused.
+  the dependent card. A dependent item can move to Done only when every blocker
+  is Done. Circular dependencies are refused.
 
 Each board opens an empty local store on its first launch and reopens the same
 data when launched with the same directory. The product manifests select

@@ -1,0 +1,118 @@
+process-module "temple/surface-process-module/1"
+
+process decompiler.verification:
+  let report = $eventInput
+  let failed = filter($report.results, "run", not(eq($run.status, "match")))
+  let first = at(filter($report.results, "run", eq($run.status, "mismatch")), 0)
+  let detail = "<p>No trace mismatch was reported.</p>"
+  when count($failed):
+    let detail = "<p>Review the arm results below for any execution errors.</p>"
+  when $first:
+    let mismatch = $first.mismatch
+    let name = if(eq($first.arm, "lexical"), "Lexical", "PageRank")
+    port kernel.invoke { query = "evaluation.escape"; input = $mismatch.field } → field
+    port decompiler.literal { value = $mismatch.expected } → expected
+    port decompiler.literal { value = $mismatch.observed } → observed
+    port kernel.invoke { query = "evaluation.escape"; input = $expected } → expectedText
+    port kernel.invoke { query = "evaluation.escape"; input = $observed } → observedText
+    let detail = concat("<p><strong>", $name, " · ", $field, "</strong>", if($mismatch.delivery, concat(" · Delivery ", $mismatch.delivery), ""),
+      if($mismatch.event, concat(" · Event ", $mismatch.event), ""), "</p><div class=\"compare-grid\"><div><h3>Recorded</h3><pre>", $expectedText,
+      "</pre></div><div><h3>Replayed</h3><pre>", $observedText, "</pre></div></div>")
+  fold $report.results as run; cards starts "":
+    port kernel.invoke { query = "decompiler.verifiedArm"; input = $run } → card
+    yield concat($cards, $card) → cards
+  let action = "/decompiler/verify"
+  let identity = ""
+  when at($report, "caseId"):
+    port kernel.invoke { query = "evaluation.escape"; input = $report.caseId } → caseId
+    let action = concat($action, "?case=", $caseId)
+    let identity = concat("<p>Capture <code>", $caseId, "</code></p>")
+  let result = concat(
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>North River · Offline replay verification</title><link rel=\"stylesheet\" href=\"/decompiler/notebook.css\"></head><body><div class=\"frame\">",
+    "<header class=\"titlebar\"><b>▤ Encounter Notebook</b><span>North River · Assurance</span></header><div class=\"pathbar\"><a href=\"/decompiler\">Back to comparison</a></div>",
+    "<main class=\"document\"><div class=\"doc-head\"><span class=\"label\">Recorded replies · Fresh stores</span><h1>Offline replay verification</h1><p>",
+    if(count($failed), "Verification did not pass for every arm.", "Both arms matched their recorded traces."),
+    "</p><p>The verifier compares instruction order, branch outcomes, assertion results, observed operands, port results and storage revisions. Fresh run hashes are counted separately.</p></div>",
+    "<div class=\"compare-grid\">", $cards, "</div><section id=\"first-mismatch\"><h2>First mismatch</h2>", $detail,
+    "</section><p>Reviewed manifest <code>", $report.manifestPin, "</code></p>", $identity, "<form action=\"", $action, "\" method=\"post\"><button type=\"submit\">Verify offline replay</button></form></main></div></body></html>"
+  )
+
+process decompiler.verifiedArm:
+  let run = $eventInput
+  let name = if(eq($run.arm, "lexical"), "Lexical", "PageRank")
+  let status = if(eq($run.status, "match"), "Matched", if(eq($run.status, "mismatch"), "Mismatch", "Execution error"))
+  let error = ""
+  when $run.error:
+    port kernel.invoke { query = "evaluation.escape"; input = $run.error } → error
+  fold $run.deliveries as phase; rows starts "":
+    yield concat($rows, "<li>Delivery ", $phase.delivery, " · ", $phase.matched, " of ", $phase.expected, " events matched · ",
+      $phase.branches, " branches · ", $phase.checks, " checks · ", $phase.ports, " port returns</li>") → rows
+  fold $run.normalized as entry; normalized starts "":
+    port kernel.invoke { query = "evaluation.escape"; input = $entry.kind } → kind
+    yield concat($normalized, "<li>", $kind, " · ", $entry.count, " observations</li>") → normalized
+  fold $run.effects as effect; effects starts "":
+    port kernel.invoke { query = "evaluation.escape"; input = $effect.port } → portName
+    port text.join { values = $effect.revisions; separator = ", " } → revisions
+    yield concat($effects, "<li><code>", $portName, "</code> · ", $effect.count, " returns",
+      if(count($effect.revisions), concat(" · revisions ", $revisions), ""), "</li>") → effects
+  let result = concat("<article class=\"compare-card\" aria-label=\"", $name, "\"><h2>", $name, "</h2><p><strong>", $status,
+    "</strong></p>", if($run.error, concat("<p>", $error, "</p>"), ""), "<h3>Matched</h3><ul>", $rows,
+    "</ul>", if($effects, concat("<details><summary>Matched port effects</summary><ul>", $effects, "</ul></details>"), ""),
+    "<h3>Normalized</h3>", if($normalized, concat("<ul>", $normalized, "</ul>"), "<p>No hash values normalized.</p>"),
+    "</article>")
+
+process decompiler.benchmarkReview:
+  let review = $eventInput
+  port kernel.invoke { query = "desk.richInline"; input = { role = "heading"; text = concat("Judge · ", $review.judge.identity, " · ", $review.judge.method) } } → title
+  let header = concat($title, "\nJudge model SHA-256 ", $review.judge.digest, "\nRubric SHA-256 ", $review.rubricSha256,
+    "\nCapture manifest ", $review.manifest, "\n\n", $review.rubric.criterion)
+  fold $review.judgments as judgment; rows starts $header:
+    let arm = if(eq($judgment.arm, "lexical"), "Lexical", "PageRank")
+    port kernel.invoke { query = "desk.richInline"; input = { role = "heading"; text = concat($arm, " · ", $judgment.value, " / 2") } } → score
+    port kernel.invoke { query = "desk.richInline"; input = { role = "note"; text = $judgment.quote } } → quote
+    port kernel.invoke { query = "evaluation.escape"; input = $judgment.reason } → reason
+    yield concat($rows, "\n\n", $score, "\nRuntime · ", $judgment.runtime,
+      if($judgment.disagreement, " · Judge and runtime differ", ""), "\n", $quote, "\n", $reason, "\nReply SHA-256 ", $judgment.replySha256) → rows
+  let result = $rows
+
+process decompiler.experiment:
+  let report = $eventInput
+  let title = concat("Held-out experiment · ", $report.experiment, "\n\n")
+  fold $report.arms as arm; summary starts $title:
+    let label = if(eq($arm.arm, "lexical"), "Lexical", "PageRank")
+    port kernel.invoke { query = "desk.richInline"; input = { role = "heading"; text = $label } } → name
+    yield concat($summary, $name, "\nAdmitted ", $arm.totals.admitted, " / ", $arm.count, " · Mean score ", $arm.meanScore, " / 2",
+      "\nMean model time ", $arm.meanModel, " s · Mean terminal time ", $arm.meanTerminal, " s",
+      "\nJudge and runtime disagreements ", $arm.totals.disagreements, "\n\n") → summary
+  fold $report.pairs as pair; rows starts $summary:
+    port kernel.invoke { query = "evaluation.escape"; input = concat($pair.caseId, " · ", $pair.trialId) } → label
+    yield concat($rows, "<a href=\"#reviewed/", $pair.capture, "\">", $label, "</a> · Seed ", $pair.generation.seed,
+      " · First selector ", at($pair.order, 0), "\n") → rows
+  let result = concat($rows, "\nJudging used the same pinned model as generation.\nRubric SHA-256 ", $report.pins.rubric)
+
+process decompiler.feedbackScore:
+  let result = $eventInput
+  let score = $result.score
+  port text.join { values = $result.ids; separator = ", " } → ids
+  let result = concat($score.hits, "/", $score.eligible, " relevant", if($score.first, concat(" · First at ", $score.first), ""), " · ", $ids)
+
+process decompiler.contextFeedback:
+  let report = $eventInput
+  let title = "Context Hub retrieval feedback\n\n"
+  fold $report.candidates as candidate; summary starts $title:
+    let decision = if(eq($candidate.disposition, "needs-live-pair"), "Propose a controlled live comparison", "Retain recorded PageRank")
+    port kernel.invoke { query = "desk.richInline"; input = { role = "heading"; text = concat("Mixing ", $candidate.mixing, " · ", $decision) } } → outcome
+    yield concat($summary, $outcome, "\nRegression checks ", if($candidate.regressionsSafe, "pass", "found a loss"),
+      " · Fresh cases ", if($candidate.freshSafe, "preserved", "found a loss"), if($candidate.freshGain, " with a gain", ""), "\n\n") → summary
+  fold $report.cases as case; rows starts $summary:
+    port kernel.invoke { query = "desk.richInline"; input = { role = "heading"; text = concat($case.id, " · ", $case.split) } } → label
+    port kernel.invoke { query = "decompiler.feedbackScore"; input = $case.lexical } → lexical
+    port kernel.invoke { query = "decompiler.feedbackScore"; input = $case.baseline } → baseline
+    fold $report.candidates as candidate; details starts "":
+      let result = at($case.candidates, concat($candidate.mixing))
+      port kernel.invoke { query = "decompiler.feedbackScore"; input = $result } → score
+      yield concat($details, "\nMixing ", $candidate.mixing, " · ", $score) → details
+    let missing = or(at($case, "missing"), "")
+    yield concat($rows, $label, "\n", if($missing, concat($missing, "\n"), ""),
+      "Lexical · ", $lexical, "\nRecorded PageRank · ", $baseline, $details, "\n\n") → rows
+  let result = concat($rows, "Candidates were evaluated on source selection within the recorded byte budget. Live repair outcomes belong to the recorded selectors.")

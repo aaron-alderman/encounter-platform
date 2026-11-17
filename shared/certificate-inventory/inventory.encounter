@@ -1,0 +1,50 @@
+process-module "temple/surface-process-module/1"
+
+process inventory.values:
+  fold $facts as row; values starts list():
+    let selected = and(eq(at($row, 0), $subject), eq(at($row, 1), $property))
+    yield if($selected, append($values, list(at($row, 2))), $values) → result
+
+process inventory.field:
+  call inventory.values
+  assert eq(count($result), 1)
+    otherwise "Expected exactly one certificate profile field."
+  let result = at($result, 0)
+
+process inventory.plan:
+  let facts = $eventInput
+  let subject = "inventory"
+  let property = "certificate"
+  call inventory.values
+  assert eq(count($result), 2)
+    otherwise "Expected two managed certificate profiles."
+  fold $result as profile; plan starts list():
+    let subject = $profile
+    let property = "name"
+    call inventory.field
+    let name = $result
+    let property = "leaf"
+    call inventory.field
+    let leaf = $result
+    let property = "issuer"
+    call inventory.field
+    let issuer = $result
+    let property = "authority"
+    call inventory.field
+    yield append($plan, list({ name = $name; leaf = $leaf; issuer = $issuer; authority = $result })) → result
+
+process inventory.route:
+  let request = $eventInput
+  let result = if(and(eq($request.host, $request.loopback), eq($request.path, "/inventory")),
+    if(eq($request.method, "GET"), 200, 405), 404)
+
+process inventory.response:
+  fold $eventInput as row; response starts { certificates = list(); keys = list() }:
+    let leaf = $row.leaf
+    let issuer = $row.issuer
+    let certificate = { name = $row.name; subject = $leaf.subject; serial = $leaf.serial;
+      fingerprint = $leaf.fingerprint; expires = $leaf.expires; issuer = $issuer.subject; issuerExpires = $issuer.expires }
+    let keys = list(
+      { name = $row.name; algorithm = $leaf.algorithm; fingerprint = $leaf.keyFingerprint },
+      { name = $row.authority; algorithm = $issuer.algorithm; fingerprint = $issuer.keyFingerprint })
+    yield { certificates = append($response.certificates, list($certificate)); keys = append($response.keys, $keys) } → result

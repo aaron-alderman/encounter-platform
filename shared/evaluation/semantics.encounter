@@ -1,0 +1,71 @@
+process-module "temple/surface-process-module/1"
+
+process evaluation.reconstruct:
+  let trial = $eventInput.trial
+  let north = $eventInput.north
+  let result = { kind = "unavailable" }
+  when count($trial.reply):
+    try:
+      port evaluation.decodeReply { text = $trial.reply } → decoded
+      when eq($trial.application, "north-river"):
+        let step = at($decoded, "model")
+        when $step:
+          let selected = $trial.selection.selected
+          let pins = list()
+          let before = null
+          when $north:
+            let before = $north.rejected.steps.model.change
+            let required = at($north.runs, 0)
+            let ids = append($required.selected.required, $selected)
+            let pins = map(filter($north.sourcePins, "pin", includes($ids, $pin.id)), "pin", {
+              id = $pin.id; path = $pin.path; process = $pin.process; sha256 = $pin.sha256;
+              role = if(includes($selected, $pin.id), "Selected", "Mandatory")
+            })
+          let result = { kind = "repair"; step = "model"; target = $step.target; checkKind = $step.checkKind; before = $before; after = $step.change; check = $step.check; reportPreserved = $trial.validation.unaffectedReport; origins = $pins }
+      when eq($trial.application, "usewords-lightning"):
+        let items = at($decoded, "items")
+        when isArray($items):
+          let graph = map($items, "item", {
+            id = $item.id; title = $item.title; voice = $item.voice; parent = $item.issue;
+            standing = if(eq($item.kind, "issue"), "Open issue", if(eq($item.kind, "position"), "Unconfirmed position", "Proposed approach"))
+          })
+          let result = { kind = "suggestions"; items = $graph; brief = $trial.comparison.briefSha256; validator = "mw.checkSuggestions / mw.checkModelRun" }
+    catch invalid:
+      let result = { kind = "unavailable" }
+
+process evaluation.semanticView:
+  port kernel.invoke { query = "evaluation.reconstruct"; input = $eventInput } → meaning
+  let trial = $eventInput.trial
+  let body = "<p>The recorded reply could not be projected into the trial’s typed response shape.</p>"
+  when eq($meaning.kind, "repair"):
+    port kernel.invoke { query = "evaluation.escape"; input = $meaning.target } → target
+    port kernel.invoke { query = "evaluation.escape"; input = $meaning.checkKind } → checkKind
+    port kernel.invoke { query = "evaluation.escape"; input = $meaning.before } → before
+    port kernel.invoke { query = "evaluation.escape"; input = $meaning.after } → after
+    port kernel.invoke { query = "evaluation.escape"; input = $meaning.check } → check
+    fold $meaning.origins as origin; origins starts "":
+      port kernel.invoke { query = "evaluation.escape"; input = $origin.id } → id
+      port kernel.invoke { query = "evaluation.escape"; input = $origin.path } → path
+      port kernel.invoke { query = "evaluation.escape"; input = $origin.process } → owner
+      port kernel.invoke { query = "evaluation.escape"; input = $origin.sha256 } → pin
+      yield concat($origins, "<li><strong>", $origin.role, " · ", $id, "</strong> · <code>", $owner, "</code><br><code>", $path, "</code><br><code>", $pin, "</code></li>") → origins
+    let body = concat(
+      "<dl><dt>Repair target</dt><dd><code>model → ", $target, "</code></dd><dt>Check contract</dt><dd><code>", $checkKind, "</code></dd>",
+      if($meaning.before, concat("<dt>Rejected step</dt><dd>", $before, "</dd>"), ""),
+      "<dt>Proposed replacement</dt><dd>", $after, "</dd><dt>Proposed check</dt><dd>", $check, "</dd>",
+      if($meaning.reportPreserved, "<dt>Observed invariant</dt><dd>The report step was preserved.</dd>", ""),
+      "</dl>", if($origins, concat("<h4>Context source pins</h4><ul>", $origins, "</ul>"), "")
+    )
+  when eq($meaning.kind, "suggestions"):
+    port kernel.invoke { query = "evaluation.escape"; input = $meaning.brief } → brief
+    fold $meaning.items as item; items starts "":
+      port kernel.invoke { query = "evaluation.escape"; input = $item.id } → id
+      port kernel.invoke { query = "evaluation.escape"; input = $item.title } → title
+      port kernel.invoke { query = "evaluation.escape"; input = $item.parent } → parent
+      port kernel.invoke { query = "evaluation.escape"; input = $item.voice } → voice
+      yield concat($items, "<li><strong>", $item.standing, "</strong> <code>", $id, "</code> · ", $title,
+        if($item.parent, concat("<br>Responds to <code>", $parent, "</code>"), ""),
+        if($item.voice, concat("<br>Stated priority: ", $voice), ""), "</li>") → items
+    let body = concat("<p><strong>Validator</strong> <code>", $meaning.validator, "</code></p><p><strong>Exact brief</strong> <code>", $brief, "</code></p><ul>", $items,
+      "</ul><p>Recorded outcome: ", if(eq($trial.validation.status, "pass"), "eligible for participant review", "validation did not pass"), ".</p>")
+  let result = concat("<details><summary>Reconstruct recorded meaning</summary>", $body, "</details>")

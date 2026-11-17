@@ -11,7 +11,7 @@ ENCOUNTER_RUST_FAULT_HOST=$(realpath -- "$2")
 [[ -x $ENCOUNTER_RUST_FAULT_HOST ]]
 export ENCOUNTER_RUST_FAULT_HOST
 applications=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
-scratch=$(mktemp -d /tmp/encounter-install.XXXXXX)
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/encounter-install.XXXXXX")
 trap 'rm -r -- "$scratch"' EXIT
 export ENCOUNTER_RUST_RELEASE="$scratch/release"
 export ENCOUNTER_RUST_HOST="$ENCOUNTER_RUST_RELEASE/bin/encounter"

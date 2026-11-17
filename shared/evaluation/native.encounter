@@ -1,0 +1,125 @@
+process-module "temple/surface-process-module/1"
+
+process evaluation.publication:
+  port kernel.invoke { query = "heldOut.pins"; input = "access-refusal" } → current
+  port kernel.invoke { query = "heldOut.pins"; input = "baseline" } → previous
+  let result = {
+    index = "5aee8fa7f8b6cdafa8dba44ff1324921a401e7fba5440e685742c69a5236dde9";
+    identity = "880b7d1291622013c17f41eadb16ae3a86465c5217f04bab3ce634ce8dcc5d14";
+    cases = {
+      regression = "002d876b7aa60819375a9560bed07a3dbb6adec38c82767efe3aeb34a5b7b7eb";
+      "employee-link" = at($current, "employee-link");
+      "session-check" = at($current, "session-check");
+      "import-and-entry" = at($current, "import-and-entry");
+      "before-employee-link" = at($previous, "employee-link");
+      "before-session-check" = at($previous, "session-check");
+      "before-import-and-entry" = at($previous, "import-and-entry")
+    }
+  }
+
+process evaluation.route:
+  let request = $eventInput
+  let path = $request.path
+  let query = $request.parameters
+  let method = $request.method
+  let caseId = at($query, "case")
+  port value.type { value = $caseId } → caseType
+  when eq($caseType, "undefined"):
+    let caseId = "regression"
+  let manifest = at($request.cases, $caseId)
+  let readable = or(eq($method, "GET"), eq($method, "HEAD"))
+  let result = { status = 404 }
+  when $readable:
+    let html = "text/html; charset=utf-8"
+    let css = "text/css; charset=utf-8"
+    let script = "text/javascript; charset=utf-8"
+    let data = "application/json; charset=utf-8"
+    let binary = "application/octet-stream"
+    let pages = {
+      "/" = { asset = "evaluation.html"; type = $html };
+      "/evaluation" = { asset = "evaluation.html"; type = $html };
+      "/evaluation.css" = { asset = "evaluation.css"; type = $css };
+      "/receipt.rel" = { asset = "receipt.rel"; type = $binary; filename = "evaluation.rel" };
+      "/decompiler" = { asset = "desk.html"; type = $html };
+      "/decompiler/lexical" = { asset = "lexical.html"; type = $html };
+      "/decompiler/pagerank" = { asset = "pagerank.html"; type = $html };
+      "/decompiler/notebook.css" = { asset = "notebook.css"; type = $css };
+      "/decompiler/desk.css" = { asset = "desk.css"; type = $css };
+      "/decompiler/desk.js" = { asset = "desk.js"; type = $script };
+      "/decompiler/desk-rich.js" = { asset = "desk-rich.js"; type = $script };
+      "/decompiler/desk-editor.js" = { asset = "desk-editor.js"; type = $script }
+    }
+    let asset = at($pages, $path)
+    when and(eq($path, "/decompiler"), eq($caseId, "identity-management")):
+      let asset = null
+      port value.type { value = at($query, "download") } → downloadType
+      when eq($downloadType, "undefined"):
+        let asset = { asset = "identity.html"; type = $html }
+      when eq(at($query, "download"), "trace"):
+        let asset = { asset = "identity.rel"; type = $binary; filename = "identity-management-trace.rel" }
+    when and($manifest, eq($caseType, "string")):
+      when eq($path, "/decompiler/trace-data"):
+        let asset = { asset = concat("case/", $caseId, "/index.wire"); type = $data }
+      when and(eq($path, "/decompiler/trace-site"), includes(list("0", "1"), at($query, "phase"))):
+        port text.matches { value = if(at($query, "site"), at($query, "site"), ""); pattern = "\\A[0-9]+\\z" } → validSite
+        when $validSite:
+          port number.parse { value = at($query, "site"); radix = 10 } → site
+          when not(eq($site, null)):
+            let mode = if(eq(at($query, "differences"), "1"), "1", "0")
+            let asset = { asset = concat("case/", $caseId, "/", $query.phase, "/", $site, "-", $mode, ".wire"); type = $data }
+    when eq($path, "/decompiler/source-data"):
+      let pin = if(at($query, "pin"), at($query, "pin"), "")
+      port text.matches { value = $pin; pattern = "\\A[a-f0-9]{64}\\z" } → validPin
+      when $validPin:
+        let asset = { asset = concat("source/", $pin, ".wire"); type = $data }
+    let downloads = {
+      "/decompiler/image.rel.gz" = { file = "image.gz"; type = "application/gzip"; name = "repair-image.rel.gz" };
+      "/decompiler/trace.rel.gz" = { file = "trace.gz"; type = "application/gzip"; name = "repair-run.rel.gz" };
+      "/decompiler/encounter.gz" = { file = "runtime.gz"; type = "application/gzip"; name = "encounter.gz" };
+      "/decompiler/manifest.rel" = { file = "manifest.rel"; type = $binary; name = "manifest.rel" };
+      "/decompiler/offline-replay.tar" = { file = "replay.tar"; type = "application/x-tar"; name = "north-river-offline-replay.tar" }
+    }
+    let download = at($downloads, $path)
+    when and($manifest, $download):
+      let name = if(eq($caseId, "regression"), $download.name, concat($caseId, "-", $download.name))
+      let asset = { asset = concat("case/", $caseId, "/", $download.file); type = $download.type; filename = $name; omitHeadLength = true }
+    when $asset:
+      let result = { status = 200; asset = $asset.asset; type = $asset.type; filename = at($asset, "filename");
+        omitLength = and(eq($method, "HEAD"), at($asset, "omitHeadLength"));
+        desk = eq($path, "/decompiler"); platform = eq(at($query, "platform"), "1") }
+  when or(and(eq($path, "/decompiler/verify"), $manifest), eq($path, "/decompiler/benchmark"),
+      and(eq($path, "/decompiler/benchmark-action"), eq($method, "POST"))):
+    port text.matches { value = $request.host; pattern = "\\A(?:127\\.0\\.0\\.1|localhost|evaluation\\.localhost):[0-9]+\\z" } → local
+    let trusted = and($local, eq($request.origin, concat("http://", $request.host)))
+    when eq($path, "/decompiler/verify"):
+      let result = { status = 405; allow = "POST" }
+      when eq($method, "POST"):
+        let result = { status = 403; body = "Wrong origin." }
+        when $trusted:
+          let result = { status = 200; replay = $caseId; manifest = $manifest; type = "text/html; charset=utf-8" }
+    when not(eq($path, "/decompiler/verify")):
+      port kernel.invoke { query = "evaluation.benchmark"; input = { method = $method; action = at($query, "action"); trusted = $trusted } } → result
+
+process evaluation.benchmark:
+  let request = $eventInput
+  let type = "application/json; charset=utf-8"
+  let result = { status = 405; allow = "GET, POST"; type = $type }
+  when eq($request.method, "GET"):
+    let result = { status = 404; type = $type; message = "Benchmark job not found." }
+    when eq($request.action, "feedback"):
+      let result = { status = 500; type = $type; message = "Benchmark review could not be displayed." }
+    when eq($request.action, "experiment"):
+      let result = { status = 404; type = $type; message = "No completed experiment is available." }
+  when eq($request.method, "POST"):
+    let result = { status = 403; type = $type; message = "Wrong origin." }
+    when $request.trusted:
+      let result = { status = 503; type = $type; message = "The benchmark runtime is unavailable." }
+      when eq($request.action, "judge"):
+        let result = { status = 400; type = $type; message = "Select an offline-verified benchmark capture." }
+
+process evaluation.replayPlan:
+  let result = list(
+    { action = "create-project"; fields = { project = "North River Science Labs" } },
+    { action = "create-task"; fields = { objective = $eventInput; agent = "north-river-agent" } },
+    { action = "start-live"; scope = "timesheet"; fields = {} }
+  )

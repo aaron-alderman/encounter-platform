@@ -1,0 +1,223 @@
+process-module "temple/surface-process-module/1"
+
+process gateway.route:
+  let request = $eventInput
+  let live = eq($request.mode, "run")
+  let path = $request.path
+  when eq($path, "/task"):
+    let path = if($live, "/", "/approval")
+  when and(eq($request.path, "/"), eq($request.method, "GET"), or(not($live), not($request.task))):
+    let path = if($live, "/project", "/approval")
+  let websocket = eq($path, "/encounter-events")
+  let permitted = if($live, includes(list("/", "/project", "/styles.css", "/encounter-events.js"), $path), includes(list("/", "/approval", "/styles.css", "/timesheet", "/report"), $path))
+  let status = 404
+  when $permitted:
+    let status = if(or(eq($request.method, "GET"), and($live, eq($request.method, "POST"), includes(list("/", "/project"), $path))), 200, 405)
+  when or($request.upgrade, $websocket):
+    let status = if(and($request.upgrade, $websocket, $live, eq($request.method, "GET")), 200, 403)
+  let stage = includes($request.path, "/stage-")
+  let timesheetDemo = includes($request.path, "/timesheet-preview/")
+  let reportDemo = includes($request.path, "/report-preview/")
+  let mounted = and($request.mount, or(
+    and($stage, includes(list("/sick-leave", "/timesheet", "/report", "/styles.css"), $request.mount)),
+    and($timesheetDemo, includes(list("/timesheet", "/styles.css"), $request.mount)),
+    and($reportDemo, includes(list("/report", "/styles.css"), $request.mount))))
+  let destination = null
+  when or($stage, $timesheetDemo, $reportDemo):
+    let status = if(not($mounted), 404, if($request.upgrade, 403, if(eq($request.method, "GET"), 200, 405)))
+    let path = $request.mount
+    let destination = if(and($mounted, $live), "preview", null)
+  let result = { readOnly = $mounted; previewCommentFrame = and($mounted, not($live), not(eq($path, "/styles.css"))); queryForm = if(and($mounted, eq($path, "/report")), $path, null); mounted = and($mounted, not($live)); redirect = $destination; unavailable = and($stage, not($mounted)); status = $status; path = $path; upgrade = and($websocket, $request.upgrade); taskLink = if($live, "/task", null); homeLink = if($live, "/project", null) }
+  when and(not($live), includes(list("/timesheet", "/report", "/report-preview/approval"), $request.path)):
+    let destination = if(eq($request.path, "/timesheet"), "/timesheet-preview/timesheet",
+      if(eq($request.path, "/report"), "/report-preview/report", "/approval"))
+    let status = if($request.upgrade, 403, if(eq($request.method, "GET"), 200, 405))
+    let result = { status = $status; redirect = "preview"; redirectPath = $destination }
+  when includes(list("/co-build/", "/co-build/styles.css", "/co-build/encounter-events.js", "/co-build/encounter-canvas.js", "/co-build/encounter-events"), $request.path):
+    let coBuild = and($live, includes(list("/", "/styles.css", "/encounter-events.js", "/encounter-canvas.js", "/encounter-events"), $request.mount))
+    let socket = eq($request.mount, "/encounter-events")
+    let upgrade = and($socket, $request.upgrade, eq($request.method, "GET"))
+    let allowedMethod = or(eq($request.method, "GET"), and(eq($request.method, "POST"), eq($request.mount, "/")))
+    let status = if(not($coBuild), 404,
+      if(or($socket, $request.upgrade), if($upgrade, 200, 403), if($allowedMethod, 200, 405)))
+    let result = { mounted = $coBuild; status = $status; path = $request.mount; upgrade = $upgrade }
+
+  when includes(list("/co-build/review-media/first-cut-review.mp4", "/co-build/review-media/first-cut-review.vtt", "/co-build/review-media/narration-current.mp4", "/co-build/review-media/narration-cori.mp4", "/co-build/review-media/narration-joe.mp4", "/co-build/review-media/opening-candidate-review.mp4", "/co-build/review-media/opening-candidate-review.vtt", "/co-build/review-media/motion-candidate-review.mp4", "/co-build/review-media/product-candidate-review.mp4", "/co-build/review-media/field-guide-candidate-review.mp4", "/co-build/review-media/field-guide-polished-review.mp4", "/co-build/review-media/harbour-ui-review.mp4", "/co-build/review-media/harbour-illustrated-review.mp4", "/co-build/review-media/harbour-canvas-review.mp4", "/co-build/review-media/canvas-narration.mp4", "/co-build/review-media/harbour-canvas-sourcery-review.mp4", "/co-build/review-media/harbour-canvas-sourcery.vtt"), $request.path):
+    let media = and($live, includes(list("/review-media/first-cut-review.mp4", "/review-media/first-cut-review.vtt", "/review-media/narration-current.mp4", "/review-media/narration-cori.mp4", "/review-media/narration-joe.mp4", "/review-media/opening-candidate-review.mp4", "/review-media/opening-candidate-review.vtt", "/review-media/motion-candidate-review.mp4", "/review-media/product-candidate-review.mp4", "/review-media/field-guide-candidate-review.mp4", "/review-media/field-guide-polished-review.mp4", "/review-media/harbour-ui-review.mp4", "/review-media/harbour-illustrated-review.mp4", "/review-media/harbour-canvas-review.mp4", "/review-media/canvas-narration.mp4", "/review-media/harbour-canvas-sourcery-review.mp4", "/review-media/harbour-canvas-sourcery.vtt"), $request.mount))
+    let status = if(not($media), 404, if($request.upgrade, 403, if(eq($request.method, "GET"), 200, 405)))
+    let result = { mounted = $media; status = $status; path = $request.mount; upgrade = false; reviewMedia = $media; reviewVideo = and($media, includes(list("/review-media/field-guide-polished-review.mp4", "/review-media/harbour-ui-review.mp4", "/review-media/harbour-illustrated-review.mp4", "/review-media/harbour-canvas-review.mp4", "/review-media/harbour-canvas-sourcery-review.mp4"), $request.mount)) }
+
+  when includes(list("/preview-comments/", "/preview-comments/styles.css"), $request.path):
+    let page = eq($request.path, "/preview-comments/")
+    let allowed = and(not($live), not($request.upgrade),
+      or(eq($request.method, "GET"), and($page, eq($request.method, "POST"))))
+    let result = { status = if($allowed, 200, 405); path = if($page, "/", "/styles.css"); commentPane = $allowed }
+
+  when eq($request.path, "/preview-context.js"):
+    let allowed = and(not($live), eq($request.method, "GET"), not($request.upgrade))
+    let result = { status = if($allowed, 200, 405); previewContextScript = $allowed }
+
+  when eq($request.path, "/chrome.css"):
+    let allowed = and(eq($request.method, "GET"), not($request.upgrade))
+    let result = { status = if($allowed, 200, 405); chrome = $allowed }
+
+process gateway.page:
+  let view = $eventInput
+  let result = $view.html
+  when and($view.mount, not(eq(at($view.mount, "name"), "co-build"))):
+    port kernel.invoke { query = "pilot.mountedPage"; input = $view } → result
+  when and(not($view.mount), not($view.commentPane)):
+    port kernel.invoke { query = "pilot.workspacePage"; input = $view } → result
+  when eq(at($view.mount, "name"), "co-build"):
+    port kernel.invoke { query = "pilot.coBuildPage"; input = $view } → result
+  let link = concat("<link rel=\"stylesheet\" href=\"", $view.prefix, "/chrome.css\">")
+  port text.replaceAll { value = $result; search = "</head>"; replacement = concat($link, "</head>") } → result
+
+process gateway.notice:
+  let notice = $eventInput
+  let home = concat($notice.origins.run, $notice.prefix, "/")
+  let result = concat("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>", $notice.title, " · Encounter Pilot</title><style>", $notice.styles, "</style></head><body class=\"pilot-recovery\"><main class=\"pilot-recovery-window\"><header><h1 class=\"pilot-recovery-title\">", $notice.title, "</h1></header><div class=\"pilot-recovery-content\"><p>", $notice.message, "</p><a class=\"pilot-primary\" href=\"", $home, "\">Open Encounter Pilot</a></div></main></body></html>")
+
+process pilot.coBuildPage:
+  let view = $eventInput
+  port kernel.invoke { query = "pilot.header"; input = { view = $view; toolbar = "" } } → shell
+  port text.replaceAll { value = $view.html; search = "<body>"; replacement = concat("<body>", $shell) } → body
+  port text.replaceAll { value = $body; search = "<main>"; replacement = "<main id=\"pilot-main\" tabindex=\"-1\">" } → result
+
+process pilot.header:
+  let shell = $eventInput
+  let view = $shell.view
+  let appdev = concat($view.origins.run, "/")
+  let home = concat($view.origins.run, $view.prefix, "/")
+  let task = if(at($view.coordinates, "review-task"), at($view.coordinates, "review-task"), at($view.coordinates, "task"))
+  let preview = concat($view.origins.preview, $view.prefix, "/timesheet-preview/timesheet",
+    if($task, concat("?review-task=", $task), ""))
+  let live = eq($view.mode, "run")
+  let coBuild = eq(at($view.mount, "name"), "co-build")
+  let result = concat("<a class=\"pilot-skip\" href=\"#pilot-main\">Skip to content</a><div class=\"pilot-shell\" role=\"banner\"><div class=\"pilot-bar\"><a class=\"pilot-appdev\" href=\"", $appdev, "\">Sourcery Notes</a><a class=\"pilot-brand\" href=\"", $home, "\"><span aria-hidden=\"true\" class=\"pilot-mark\">NR</span><span>North River<small>Encounter workspace</small></span></a><nav aria-label=\"Workspace views\" class=\"pilot-nav\"><a href=\"", $home, "\"", if($live, if($coBuild, ">Live workspace", " aria-current=\"location\">Live workspace"), ">Back to live Project home"), "</a><a href=\"", $preview, "\"", if($live, ">Open read-only preview", ">Read-only preview"), "</a>",
+    if($live, concat("<a href=\"", $view.prefix, "/co-build/\"", if($coBuild, " aria-current=\"location\"", ""), ">Co-build workbench</a>"), ""),
+    "</nav></div>", $shell.toolbar, "</div>")
+
+process pilot.mountedPage:
+  let view = $eventInput
+  let mount = $view.mount
+  let editor = concat($view.origins.run, $view.prefix)
+  port text.replaceAll { value = $mount.returnPath; search = "&"; replacement = "&amp;" } → back
+  port text.replaceAll { value = $back; search = "view=scenario"; replacement = "view=decision" } → decision
+  let context = ""
+  let frame = concat($view.prefix, "/preview-comments", $back, "&amp;view=preview-comments")
+  port text.replaceAll { value = $frame; search = "&amp;view=scenario"; replacement = "" } → frame
+  let route = concat("&amp;review-route=", $view.path)
+  let demo = includes(list("timesheet-preview", "report-preview"), $mount.name)
+  when $demo:
+    let receipt = concat($view.origins.preview, $view.prefix, "/approval")
+    let task = at($view.coordinates, "review-task")
+    let return = if($task, concat("/?task=", $task, "&amp;work=1"), $back)
+    let entry = at($view.coordinates, "entry")
+    let record = if(and($entry, includes($view.html, "<h2>Correct entry</h2>")), concat("&amp;review-entry=", $entry), "")
+    let frame = concat($view.prefix, "/preview-comments", $return, "&amp;view=preview-comments", $route, $record)
+    let label = if(eq($mount.name, "report-preview"), "Read-only Timesheet report", "Read-only Timesheet preview")
+    let context = concat("<nav class=\"pilot-stage\" aria-label=\"Preview review\"><p>", $label, "</p><a href=\"", $editor, $return, "\">Back to the editor</a> · <a href=\"#preview-comments\">Add comment</a> · <a href=\"", $editor, $return, "&amp;view=decision", $route, $record, "\">Request changes</a> · <a href=\"", $receipt, "\">Demo approval receipt</a></nav>")
+  when not($demo):
+    let frame = concat($frame, $route)
+    let links = map($mount.siblings, "item", concat("<a href=\"", $view.prefix, "/", $item.name, $view.path, "\"",
+      if(eq($item.name, $mount.name), " aria-current=\"step\"", ""), ">", $item.label, "</a>"))
+    port text.join { values = $links; separator = " · " } → steps
+    let runs = map($mount.collections, "item", concat("<a href=\"", $view.prefix, "/", $item.name, $item.route, "\"",
+      if($item.current, " aria-current=\"page\"", ""), ">", $item.title, "</a>"))
+    port text.join { values = $runs; separator = " · " } → scenarios
+    let context = concat("<nav class=\"pilot-stage\" aria-label=\"Staged app\"><p>", $mount.label, " · Read-only staging</p><a href=\"", $mount.prefix, "/sick-leave\">Sick leave</a> · <a href=\"", $mount.prefix, "/timesheet\">Timesheet</a> · <a href=\"", $mount.prefix, "/report\">Reports</a> · <a href=\"", $editor, $back, "\">Back to the editor</a> · <a href=\"#preview-comments\">Add comment</a> · <a href=\"", $editor, $back, "\">Review and approve</a> · <a href=\"", $editor, $decision, $route, "\">Request changes</a></nav><nav class=\"pilot-stage-steps\" aria-label=\"Scenarios\">", $scenarios, "</nav><nav class=\"pilot-stage-steps\" aria-label=\"Scenario steps\">", $steps, "</nav>")
+  let body = $view.html
+  let task = at($view.coordinates, "review-task")
+  when and(eq($mount.name, "timesheet-preview"), $task):
+    let start = concat("href=\"", $mount.prefix, "/timesheet?entry=")
+    port text.replaceAll { value = $body; search = $start;
+      replacement = concat("href=\"", $mount.prefix, "/timesheet?review-task=", $task, "&amp;entry=") } → body
+  when and(eq($mount.name, "report-preview"), $task):
+    port text.replaceAll { value = $body; search = "</form>"; replacement = concat("<input type=\"hidden\" name=\"review-task\" value=\"", $task, "\"></form>") } → body
+  let picker = "<div class=\"pilot-context-tools\"><button type=\"button\" id=\"pilot-context-picker\" aria-pressed=\"false\" hidden>Pick on preview</button><span id=\"pilot-context-status\" role=\"status\"></span></div>"
+  let toolbar = concat("<div class=\"pilot-review-toolbar\"><div class=\"pilot-review-inner\"><p class=\"pilot-review-label\">Encounter review</p>", $context, $picker, "</div></div>")
+  port kernel.invoke { query = "pilot.header"; input = { view = $view; toolbar = $toolbar } } → header
+  port text.replaceAll { value = $body; search = "<body>"; replacement = concat("<body>", $header) } → body
+  port text.replaceAll { value = $body; search = "<main>"; replacement = "<div class=\"pilot-preview-layout\"><div class=\"pilot-preview-surface\"><div class=\"pilot-app-scope\"><span>Whole app</span></div><main id=\"pilot-main\" tabindex=\"-1\">" } → body
+  let support = concat("<a class=\"pilot-aster-support\" href=\"", $view.origins.run, "/?view=aster&amp;support=1\" referrerpolicy=\"no-referrer\">Ask Aster · Platform support</a>")
+  let sidebar = concat("</main></div><aside class=\"pilot-preview-comments\" id=\"preview-comments\" aria-label=\"Context comments\" tabindex=\"-1\">", $support, "<iframe title=\"Context comments\" sandbox=\"allow-forms allow-same-origin\" src=\"", $frame, "\"></iframe></aside></div>")
+  port text.replaceAll { value = $body; search = "</main>"; replacement = $sidebar } → body
+  let script = concat("<script src=\"", $view.prefix, "/preview-context.js\" defer></script>")
+  port text.replaceAll { value = $body; search = "</head>"; replacement = concat($script, "</head>") } → result
+
+process pilot.workspacePage:
+  let view = $eventInput
+  let live = eq($view.mode, "run")
+  let project = and($live, eq($view.path, "/project"))
+  let setup = or(includes($view.html, "name=\"action\" type=\"hidden\" value=\"create-project\""), includes($view.html, "name=\"action\" type=\"hidden\" value=\"create-task\""))
+  let receipt = and(not($live), includes($view.html, "<h2>Demo approval receipt</h2>"))
+  let newTask = concat($view.origins.run, $view.prefix, "/project?new=1")
+  port kernel.invoke { query = "pilot.header"; input = { view = $view; toolbar = "" } } → shell
+  let context = concat("<aside class=\"pilot-context\" aria-label=\"Read-only preview\"><div><p class=\"pilot-label\">Read-only preview</p><p>You’re viewing the approved North River demo. You can inspect its evidence and release receipt here.</p></div><a class=\"pilot-primary\" href=\"", $newTask, "\">Create a task in live workspace</a></aside>")
+  when $live:
+    let action = if(or($project, $setup), "", concat("<a class=\"pilot-primary\" href=\"", $newTask, "\">New task</a>"))
+    let context = concat("<aside class=\"pilot-context\" aria-label=\"Live workspace\"><div><p class=\"pilot-label\">", if($project, "Project home", "Task workspace"), "</p><p>", if($project, "Create tasks, find work in progress, and see what needs your decision.", "Follow this task’s run, answer its questions, and review its plan."), "</p></div>", $action, "</aside>")
+  let nativePresentation = or(includes($view.html, "data-presentation="),
+    includes($view.html, "data-notebook-profile="), includes($view.html, "class=\"task-workbench"))
+  when and($live, $nativePresentation):
+    let context = ""
+  let body = $view.html
+  when not($live):
+    port text.replaceAll { value = $body; search = concat("<p><a href=\"", $view.prefix, "/\">Back to North River task</a></p>"); replacement = "" } → body
+  when $receipt:
+    let context = concat($context, "<nav class=\"pilot-jump\" aria-label=\"On this page\"><a href=\"#preview-receipt\">Release receipt</a><a href=\"#preview-trace\">Plan trace</a></nav>")
+    port text.replaceAll { value = $body; search = "<h2>Trace the approved plan</h2>"; replacement = "<h2 id=\"preview-trace\">Trace the approved plan</h2>" } → body
+    port text.replaceAll { value = $body; search = "<h2>Demo approval receipt</h2>"; replacement = "<h2 id=\"preview-receipt\">Demo approval receipt</h2>" } → body
+    # The pinned approval page puts the two digest identifiers in this paragraph.
+    port text.replaceAll { value = $body; search = "<p>Approved plan: "; replacement = "<details><summary>Plan and import identifiers</summary><p>Approved plan: " } → body
+    port text.replaceAll { value = $body; search = "</p><h2>Candidate image"; replacement = "</p></details><h2>Candidate image" } → body
+  let bodyTag = concat("<body>", $shell)
+  port text.replaceAll { value = $body; search = "<body>"; replacement = $bodyTag } → body
+  port text.replaceAll { value = $body; search = "<main>"; replacement = concat("<main id=\"pilot-main\" tabindex=\"-1\">", $context) } → result
+
+process test.routes:
+  port kernel.invoke { query = "gateway.route"; input = { mode = "run"; path = "/"; method = "GET"; task = false; upgrade = false } } → home
+  port kernel.invoke { query = "gateway.route"; input = { mode = "run"; path = "/task"; method = "POST"; task = true; upgrade = false } } → task
+  port kernel.invoke { query = "gateway.route"; input = { mode = "preview"; path = "/task"; method = "POST"; task = false; upgrade = false } } → refused
+  port kernel.invoke { query = "gateway.route"; input = { mode = "run"; path = "/encounter-events"; method = "GET"; task = false; upgrade = true } } → events
+  port kernel.invoke { query = "gateway.route"; input = { mode = "preview"; path = "/chrome.css"; method = "GET"; upgrade = false } } → chrome
+  port kernel.invoke { query = "gateway.route"; input = { mode = "preview"; path = "/preview-comments/"; method = "POST"; task = true; upgrade = false } } → comments
+  port kernel.invoke { query = "gateway.route"; input = { mode = "preview"; path = "/stage-test/sick-leave"; mount = "/sick-leave"; method = "POST"; task = false; upgrade = false } } → stage
+  port kernel.invoke { query = "gateway.route"; input = { mode = "run"; path = "/preview-comments/"; method = "POST"; task = true; upgrade = false } } → liveComments
+  let result = and($comments.commentPane, eq($comments.path, "/"), eq($stage.status, 405), eq($liveComments.status, 405), $chrome.chrome, eq($chrome.status, 200), eq($home.path, "/project"), eq($task.status, 200), eq($task.path, "/"), eq($refused.status, 405), eq($events.upgrade, true))
+
+process test.preview:
+  let html = "<body><main><h2>Trace the approved plan</h2><h2>Demo approval receipt</h2></main></body>"
+  port kernel.invoke { query = "gateway.page"; input = { html = $html; prefix = "/encounter-pilot"; mode = "preview"; path = "/approval"; origins = { run = "https://run.test"; preview = "https://preview.test" } } } → page
+  let result = and(includes($page, "Read-only preview"), includes($page, "https://run.test/encounter-pilot/project?new=1"), includes($page, "id=\"preview-receipt\""))
+
+process test.liveNotebook:
+  let html = "<body><main><div class=\"task-workbench\">Your next decision</div></main></body>"
+  port kernel.invoke { query = "gateway.page"; input = { html = $html; prefix = "/encounter-pilot"; mode = "run"; path = "/project"; origins = { run = "https://run.test"; preview = "https://preview.test" } } } → page
+  let result = and(includes($page, "Your next decision"), includes($page, "Open read-only preview"), not(includes($page, "class=\"pilot-context\"")))
+
+process test.coBuild:
+  port kernel.invoke { query = "gateway.route"; input = { mode = "run"; path = "/co-build/"; method = "GET"; mount = "/"; upgrade = false } } → open
+  port kernel.invoke { query = "gateway.route"; input = { mode = "run"; path = "/co-build/"; method = "POST"; mount = "/"; upgrade = false } } → save
+  port kernel.invoke { query = "gateway.route"; input = { mode = "run"; path = "/co-build/styles.css"; method = "GET"; mount = "/styles.css"; upgrade = false } } → styles
+  port kernel.invoke { query = "gateway.route"; input = { mode = "run"; path = "/co-build/styles.css"; method = "POST"; mount = "/styles.css"; upgrade = false } } → invalid
+  port kernel.invoke { query = "gateway.route"; input = { mode = "run"; path = "/co-build/"; method = "GET"; mount = null; upgrade = false } } → unbound
+  port kernel.invoke { query = "gateway.route"; input = { mode = "preview"; path = "/co-build/"; method = "GET"; mount = "/"; upgrade = false } } → preview
+  port kernel.invoke { query = "gateway.route"; input = { mode = "run"; path = "/co-build/"; method = "GET"; mount = "/"; upgrade = true } } → upgrade
+  port kernel.invoke { query = "gateway.route"; input = { mode = "run"; path = "/co-build/encounter-events"; method = "GET"; mount = "/encounter-events"; upgrade = true } } → socket
+  port kernel.invoke { query = "gateway.route"; input = { mode = "run"; path = "/co-build/encounter-events"; method = "GET"; mount = "/encounter-events"; upgrade = false } } → noUpgrade
+  port kernel.invoke { query = "gateway.route"; input = { mode = "run"; path = "/co-build/encounter-events.js"; method = "GET"; mount = "/encounter-events.js"; upgrade = false } } → client
+  let film = "/co-build/review-media/harbour-canvas-sourcery-review.mp4"
+  let attachment = "/review-media/harbour-canvas-sourcery-review.mp4"
+  port kernel.invoke { query = "gateway.route"; input = { mode = "run"; path = $film; method = "GET"; mount = $attachment; upgrade = false } } → filmReview
+  port kernel.invoke { query = "gateway.route"; input = { mode = "preview"; path = $film; method = "GET"; mount = $attachment; upgrade = false } } → filmPreview
+  port kernel.invoke { query = "gateway.route"; input = { mode = "run"; path = $film; method = "POST"; mount = $attachment; upgrade = false } } → filmPost
+  let html = "<body><main><form method=\"post\"></form></main></body>"
+  port kernel.invoke { query = "gateway.page"; input = { html = $html; mount = { name = "co-build" }; mode = "run"; prefix = "/encounter-pilot"; origins = { run = "https://run.test"; preview = "https://preview.test" } } } → editor
+  port kernel.invoke { query = "gateway.page"; input = { html = "<body><main></main></body>"; mode = "run"; path = "/project"; prefix = "/encounter-pilot"; origins = { run = "https://run.test"; preview = "https://preview.test" } } } → project
+  let result = and(eq($open.status, 200), $open.mounted, eq($save.status, 200), eq($styles.path, "/styles.css"), eq($styles.status, 200),
+    eq($invalid.status, 405), eq($unbound.status, 404), eq($preview.status, 404), eq($upgrade.status, 403),
+    includes($editor, "<form method=\"post\"></form>"), includes($editor, "id=\"pilot-main\""),
+    includes($editor, "href=\"/encounter-pilot/co-build/\" aria-current=\"location\""), includes($project, "/encounter-pilot/co-build/"),
+    eq($socket.status, 200), $socket.upgrade, eq($noUpgrade.status, 403), eq($client.status, 200), eq($filmReview.status, 200), $filmReview.reviewMedia, $filmReview.reviewVideo, eq($filmPreview.status, 404), eq($filmPost.status, 405))

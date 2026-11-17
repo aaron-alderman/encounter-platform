@@ -1,0 +1,43 @@
+process-module "temple/surface-process-module/1"
+
+process test.evaluationRoutes:
+  let cases = { regression = "manifest" }
+  port kernel.invoke { query = "evaluation.route"; input = { path = "/evaluation"; method = "GET"; parameters = {}; cases = $cases } } → page
+  assert and(eq($page.status, 200), eq($page.asset, "evaluation.html"))
+    otherwise "The Model Evaluation page is missing."
+  port kernel.invoke { query = "evaluation.route"; input = { path = "/decompiler/trace-site"; method = "GET";
+      parameters = { case = "regression"; phase = "1"; site = "002"; differences = "1" }; cases = $cases } } → site
+  assert and(eq($site.status, 200), eq($site.asset, "case/regression/1/2-1.wire"))
+    otherwise "The decompiler did not select the requested trace site."
+  port kernel.invoke { query = "evaluation.route"; input = { path = "/decompiler/verify"; method = "POST";
+      host = "localhost:24228"; origin = "http://example.com"; parameters = {}; cases = $cases } } → rejected
+  assert eq($rejected.status, 403)
+    otherwise "An untrusted origin reached replay."
+  port kernel.invoke { query = "evaluation.route"; input = { path = "/decompiler/verify"; method = "POST";
+      host = "localhost:24228"; origin = "http://localhost:24228"; parameters = {}; cases = $cases } } → allowed
+  assert and(eq($allowed.status, 200), eq($allowed.replay, "regression"))
+    otherwise "An authorized loopback replay was refused."
+  let result = true
+
+process test.replayComparison:
+  let event = { kind = "port-end"; process = "nr.save"; data = {
+    port = "storage.cas"; ok = true; revision = 4; sourceHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  } }
+  let observed = { kind = "port-end"; process = "nr.save"; data = {
+    port = "storage.cas"; ok = true; revision = 4; sourceHash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  } }
+  let changed = { kind = "port-end"; process = "nr.save"; data = {
+    port = "storage.cas"; ok = true; revision = 5; sourceHash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  } }
+  let reference = { trace = { dropped = 0; events = list($event) } }
+  let phase = { trace = { dropped = 0; events = list($observed) } }
+  let changedPhase = { trace = { dropped = 0; events = list($changed) } }
+  port kernel.invoke { query = "evaluation.compareReplay"; input = { arm = "lexical"; recorded = list($reference); observed = list($phase);
+      page = "Your answer is needed"; outcome = "admissible" } } → matched
+  assert and(eq($matched.status, "match"), eq(at(at($matched.deliveries, 0), "matched"), 1), eq(at(at($matched.normalized, 0), "count"), 1))
+    otherwise "A valid replay did not retain its event and normalization counts."
+  port kernel.invoke { query = "evaluation.compareReplay"; input = { arm = "lexical"; recorded = list($reference); observed = list($changedPhase);
+      page = "Your answer is needed"; outcome = "admissible" } } → mismatch
+  assert and(eq($mismatch.status, "mismatch"), eq($mismatch.mismatch.field, "Instruction event"), eq($mismatch.mismatch.event, 1))
+    otherwise "Replay accepted a changed storage revision."
+  let result = true

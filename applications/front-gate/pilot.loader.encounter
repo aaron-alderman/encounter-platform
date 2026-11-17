@@ -1,0 +1,32 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    sections = list(
+      {
+        subject = "application";
+        stateProfile = "encounter/front-gate/1";
+        module = list(
+          "encounter-platform/applications/front-gate/pilot.encounter",
+          "encounter-platform/applications/front-gate/pilot-presentation.encounter",
+          "applications/encounter-libraries/workflows/sourcery-presentation.encounter",
+        "applications/encounter/algebra/css/css.renderPlan.encounter"
+        );
+        entry = list(
+          "gateway.route",
+          "gateway.page",
+          "gateway.notice",
+          "gateway.styles",
+          "test.routes",
+          "test.preview",
+          "test.liveNotebook",
+          "test.coBuild"
+        );
+        grant = list(
+          "kernel.invoke",
+          "text.replaceAll",
+          "text.join"
+        )
+      }
+    )
+  }

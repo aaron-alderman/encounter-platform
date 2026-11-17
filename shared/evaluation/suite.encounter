@@ -1,0 +1,24 @@
+process-module "temple/surface-process-module/1"
+
+process evaluation.suite:
+  let result = {
+    id = "usewords-north-river-v1";
+    usewords = list(
+      { id = "workshop"; title = "A shared workshop"; description = "A community group is considering a shared workshop. Some members want low fees. Others want enough paid staff to keep opening hours reliable. Costs and likely use are still unknown." },
+      { id = "garden"; title = "Community garden access"; description = "A garden committee is considering evening access. Shift workers want a way to tend plots after work. Nearby residents want quiet after dark. Lighting costs and the number of evening users are unknown. The committee has made no decision." }
+    );
+    northRiver = { id = "timesheet-model-repair"; objective = "I want to set up a timesheet app for my business."; order = list("lexical", "pagerank", "pagerank", "lexical") };
+    rubric = {
+      scale = list("0 missing or contradicted", "1 partial or vague", "2 explicit and useful");
+      usewords = list(
+        { id = "grounding"; rule = "Preserves the material unknowns and competing interests without inventing facts, agreement or a decision." },
+        { id = "scope"; rule = "Keeps the issue open and gives a substantive position whose stated priority matches its body." },
+        { id = "nextMove"; rule = "Offers a concrete, provisional next step that could distinguish the competing needs or close an evidence gap." }
+      );
+      northRiver = list(
+        { id = "grounding"; rule = "Uses a required employee reference or link to the Employee model, rather than a generic employee field or the signed-in account." },
+        { id = "scope"; rule = "Changes only model definition and its check. Report rendering belongs to the report step." },
+        { id = "nextMove"; rule = "Gives an actionable model constraint check, such as refusal of an absent or unknown employee reference." }
+      )
+    }
+  }

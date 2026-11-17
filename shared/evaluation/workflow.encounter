@@ -1,0 +1,100 @@
+process-module "temple/surface-process-module/1"
+
+process evaluation.collect:
+  let command = $eventInput
+  port kernel.invoke { query = "evaluation.north"; input = { file = $command.north; scenario = $command.suite.northRiver } } → north
+  fold $command.suite.usewords as scenario; usewords starts list():
+    port evaluation.brief { scenario = $scenario } → brief
+    fold list("fast", "deep") as arm; pair starts list():
+      port kernel.invoke { query = "evaluation.usewordsTrial"; input = { scenario = $scenario; brief = $brief; arm = $arm } } → trial
+      yield append($pair, list($trial)) → pair
+    yield append($usewords, $pair) → usewords
+  port evaluation.pin { trials = append($usewords, $north) } → trials
+  let result = { protocol = "encounter/evaluation/1"; phase = "collected"; suite = $command.suite; rubricSha256 = $command.rubricSha256; policySha256 = $command.policySha256; trials = $trials; judgments = list() }
+
+process evaluation.compare:
+  let packet = $eventInput.packet
+  assert eq($packet.phase, "collected")
+    otherwise "Compare requires an unreviewed receipt."
+  let usewords = filter($packet.trials, "trial", eq($trial.application, "usewords-lightning"))
+  port kernel.invoke { query = "evaluation.north"; input = { file = $eventInput.north; scenario = $packet.suite.northRiver } } → north
+  port evaluation.pin { trials = $north } → pinned
+  port record.put { record = $packet; key = "trials"; value = append($usewords, $pinned) } → result
+
+process evaluation.seal:
+  let packet = $eventInput.packet
+  assert eq($packet.phase, "collected")
+    otherwise "Seal requires an unreviewed receipt."
+  port record.put { record = $packet; key = "phase"; value = "reviewed" } → next
+  port record.put { record = $next; key = "judge"; value = $eventInput.review.judge } → next
+  port record.put { record = $next; key = "judgments"; value = $eventInput.review.judgments } → result
+
+process evaluation.report:
+  port kernel.invoke { query = "evaluation.rows"; input = $eventInput } → rows
+  fold $rows as row; report starts "trial | arm | Encounter | total ms | rubric score":
+    let trial = $row.trial
+    yield concat($report, "\n", $trial.id, " | ", $trial.arm, " | ", $trial.validation.status, " | ", $trial.metrics.totalMs, " | ", $row.score) → report
+  let result = $report
+
+process evaluation.north:
+  let scenario = $eventInput.scenario
+  port evaluation.replay { file = $eventInput.file } → replay
+  let evidence = $replay.evidence
+  assert and(eq($evidence.format, "encounter/north-river-pagerank-replay/1"), eq($evidence.objective, $scenario.objective), eq($evidence.order, $scenario.order))
+    otherwise "North River evidence does not match the selected replay case."
+  port evaluation.sha { text = $evidence.required } → mandatory
+  assert eq($mandatory, $evidence.mandatory)
+    otherwise "North River mandatory context pin differs."
+  let required = concat("Mandatory context (same for every arm):\n", $evidence.required)
+  let header = "\n\nOptional context (navigation only):\n"
+  let first = at($evidence.runs, 0)
+  port evaluation.split { text = $first.prompt; separator = $header } → parts
+  let common = at($parts, 0)
+  port evaluation.ends { text = $common; suffix = $required } → complete
+  assert $complete
+    otherwise "North River mandatory context is absent."
+  let comparison = {
+    receiptSha256 = $replay.sha256; image = $evidence.image; runtime = $evidence.runtime; programme = $evidence.programme;
+    index = $evidence.index; selector = $evidence.selector; mandatory = $mandatory;
+    rejectedSha256 = $replay.rejectedSha256; budgetBytes = $evidence.budgetBytes
+  }
+  fold $evidence.runs as run; trials starts list():
+    port evaluation.split { text = $run.prompt; separator = $header } → parts
+    assert and(eq(count($parts), 2), eq(at($parts, 0), $common))
+      otherwise "North River prompt comparison differs from its controls."
+    port evaluation.ends { text = $run.prompt; suffix = $run.selected.text } → selected
+    port evaluation.bytes { text = at($parts, 1) } → size
+    port evaluation.bounded { size = $size; limit = $evidence.budgetBytes } → bounded
+    assert and($selected, eq($size, $run.selected.optionalBytes), $bounded)
+      otherwise "North River optional context differs from its controls."
+    port evaluation.sha { text = $run.prompt } → promptHash
+    port evaluation.milliseconds { us = $run.terminalUs } → total
+    port evaluation.milliseconds { us = $run.modelUs } → modelMs
+    port evaluation.milliseconds { us = $run.selectionUs } → selectionMs
+    port evaluation.milliseconds { us = $run.validateCommitUs } → validationMs
+    let trial = {
+      id = concat("north-river-repair-", add(count($trials), 1)); application = "north-river"; caseId = $scenario.id;
+      arm = $run.arm; model = { model = $evidence.model; digest = $evidence.digest }; comparison = $comparison;
+      objective = $evidence.objective; prompt = $run.prompt; requestSha256 = $promptHash; reply = $run.reply;
+      selection = { selected = $run.selected.ids; omitted = $run.omitted; optionalBytes = $size };
+      validation = { status = if(eq($run.outcome, "admissible"), "pass", "refused"); unaffectedReport = $run.unaffectedReport };
+      metrics = { totalMs = $total; modelMs = $modelMs; selectionMs = $selectionMs; validationCommitMs = $validationMs; promptTokens = $run.promptTokens; replyTokens = $run.replyTokens }
+    }
+    yield append($trials, list($trial)) → trials
+  let result = $trials
+
+process evaluation.usewordsTrial:
+  let scenario = $eventInput.scenario
+  let arm = $eventInput.arm
+  port evaluation.usewords { brief = $eventInput.brief; arm = $arm } → observed
+  let validation = { status = "pass"; diagnostic = null }
+  when $observed.validationError:
+    let validation = { status = "refused"; diagnostic = $observed.validationError }
+  when $observed.generationError:
+    let validation = { status = "error"; diagnostic = $observed.generationError }
+  let result = {
+    id = concat("usewords-", $scenario.id, "-", $arm); application = "usewords-lightning"; caseId = $scenario.id;
+    arm = $arm; model = $observed.model; comparison = $observed.comparison;
+    objective = $scenario.description; prompt = $observed.prompt; requestSha256 = $observed.requestSha256;
+    reply = $observed.reply; record = $observed.record; validation = $validation; metrics = $observed.metrics
+  }

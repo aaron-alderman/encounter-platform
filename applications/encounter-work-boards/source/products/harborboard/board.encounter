@@ -5,18 +5,20 @@ process harbor.card:
   let item = $view.item
   let board = $view.board
   let itemField = { tag = "input"; attrs = { type = "hidden"; name = "item"; value = $item.id }; children = list() }
-  let states = map($view.statuses, "status", { tag = "option"; attrs = { value = $status; selected = eq($status, $item.status) }; children = list($status) })
+  let planningStates = filter($view.statuses, "status", or(not(eq($status, "Done")), eq($item.status, "Done")))
+  let states = map($planningStates, "status", { tag = "option"; attrs = { value = $status; selected = eq($status, $item.status) }; children = list($status) })
   let epicOptions = append(list({ tag = "option"; attrs = { value = ""; selected = eq($item.epic, "") }; children = list("No epic") }), map($board.state.epics, "epic", { tag = "option"; attrs = { value = $epic.id; selected = eq($item.epic, $epic.id) }; children = list($epic.title) }))
   let statusLabel = concat("status-label-", $item.id)
   let epicLabel = concat("epic-label-", $item.id)
   let statusField = { tag = "label"; attrs = {}; children = list({ tag = "span"; attrs = { id = $statusLabel }; children = list("Status") }, { tag = "select"; attrs = { name = "status"; "aria-labelledby" = $statusLabel }; children = $states }) }
   let epicField = { tag = "label"; attrs = {}; children = list({ tag = "span"; attrs = { id = $epicLabel }; children = list("Epic") }, { tag = "select"; attrs = { name = "epic"; "aria-labelledby" = $epicLabel }; children = $epicOptions }) }
   port kernel.invoke { query = "work.form"; input = { csrf = $board.csrf; revision = $board.revision; action = "plan"; fields = list($itemField, $statusField, $epicField); button = "Save plan"; style = "inline" } } → plan
-  let blockers = filter($board.state.items, "other", includes($item.dependencies, $other.id))
-  let incomplete = filter($blockers, "other", not(eq($other.status, "Done")))
+  port kernel.invoke { query = "harbor.readiness"; input = { item = $item; items = $board.state.items } } → gate
+  let blockers = $gate.blockers
+  let incomplete = $gate.blocked
   fold $blockers as blocker; dependencies starts list():
     let blockerField = { tag = "input"; attrs = { type = "hidden"; name = "blocker"; value = $blocker.id }; children = list() }
-    port kernel.invoke { query = "work.form"; input = { csrf = $board.csrf; revision = $board.revision; action = "remove-dependency"; fields = list($itemField, $blockerField); button = concat("Remove dependency: ", $blocker.title); style = "inline" } } → remove
+    port kernel.invoke { query = "work.form"; input = { csrf = $board.csrf; revision = $board.revision; action = "remove-dependency"; fields = list($itemField, $blockerField); button = concat("Remove dependency: ", $blocker.label); style = "inline" } } → remove
     yield append($dependencies, list($remove)) → dependencies
   let candidates = filter($board.state.items, "other", and(not(eq($other.id, $item.id)), not(includes($item.dependencies, $other.id))))
   when count($candidates):
@@ -29,14 +31,17 @@ process harbor.card:
   let summary = if($epic, concat("Epic: ", $epic.title), "No epic")
   let readiness = list()
   when count($blockers):
-    port text.join { values = map($blockers, "blocker", $blocker.title); separator = ", " } → names
+    port text.join { values = map($blockers, "blocker", $blocker.label); separator = ", " } → names
     let readiness = list({ tag = "p"; attrs = { class = "quiet" }; children = list(concat("Depends on: ", $names)) })
   when count($incomplete):
-    port text.join { values = map($incomplete, "blocker", $blocker.title); separator = ", " } → names
-    let readiness = append($readiness, list({ tag = "p"; attrs = { class = "error" }; children = list(concat("Blocked by: ", $names)) }))
+    port text.join { values = map($incomplete, "blocker", $blocker.label); separator = ", " } → names
+    let readiness = append($readiness, list({ tag = "p"; attrs = { class = "error" }; children = list(concat(if(eq($item.status, "Done"), "Done with open blockers: ", "Blocked by: "), $names)) }))
   let heading = concat("item-", $item.id)
   let details = { tag = "details"; attrs = {}; children = append(list({ tag = "summary"; attrs = {}; children = list("Edit plan and dependencies") }, $plan), $dependencies) }
   let content = append(list({ tag = "h3"; attrs = { id = $heading }; children = list($item.title) }, { tag = "p"; attrs = { class = "quiet" }; children = list($summary) }), $readiness)
+  when not(eq($item.status, "Done")):
+    port kernel.invoke { query = "work.form"; input = { csrf = $board.csrf; revision = $board.revision; action = "mark-done"; fields = list($itemField); button = "Mark done"; style = "inline" } } → completion
+    let content = append($content, list($completion))
   let result = { tag = "article"; attrs = { "aria-labelledby" = $heading; class = if(eq($item.status, "Done"), "done", "") }; children = append($content, list($details)) }
 
 process product.view:

@@ -1,0 +1,99 @@
+process-module "temple/surface-process-module/1"
+
+process crm.occurrenceEvents:
+  let entry = $eventInput
+  # Case activity is newest first. Replay only occurrence events in chronological order.
+  let activity = filter($entry.activity, "entry", not(eq(at($entry, "occurrence"), at({}, "absent"))))
+  fold $activity as item; result starts list():
+    yield append(list($item.occurrence), $result) → result
+  let ids = map($result, "event", at($event, "id"))
+  assert eq(count($ids), count(distinct($ids)))
+    otherwise "Occurrence event identities must be unique."
+  assert every($result, "event", and(eq(at($event, "thing"), $entry.id), at($event, "id"), at($event, "reason")))
+    otherwise "Every occurrence event must belong to this case and retain its reason."
+
+process crm.occurrenceCommand:
+  let command = $eventInput
+  let fields = $command.fields
+  let action = $fields.action
+  let target = $fields.target
+  let entry = at(filter($command.state.cases, "entry", eq($entry.id, $target)), 0)
+  assert $entry
+    otherwise "Choose an existing customer case."
+  port scalar.read { text = $fields.base } → base
+  when includes(list("schedule", "cancel"), $action):
+    port kernel.invoke { query = "crm.occurrenceEvents"; input = $entry } → events
+    let values = {}
+    when not(eq(at($fields, "appointment"), at({}, "absent"))):
+      let values = { appointment = $fields.appointment }
+    port kernel.invoke { query = "portfolio.text"; input = { text = at($fields, "reason"); limit = 500 } } → reason
+    let input = { events = $events; kind = $action; values = $values; reason = $reason; thing = $target; operationId = $command.id }
+    port kernel.invoke { query = "occurrence.prepare"; input = $input } → proposal
+    when eq($action, "schedule"):
+      port kernel.invoke { query = "portfolio.text"; input = { text = $proposal.appointment; limit = 160 } } → _
+    let review = { id = $command.id; target = $target; base = $base; kind = $action; values = $values; reason = $reason; proposal = $proposal }
+    let result = { state = $command.state; target = $target; persist = false; session = { occurrenceReview = $review }; notice = "Review the occurrence change before confirming." }
+  when includes(list("confirm-occurrence", "discard-occurrence"), $action):
+    let review = at($command.session, "occurrenceReview")
+    assert and($review, eq($review.target, $target), eq($review.id, $fields.review))
+      otherwise "This decision belongs to a different occurrence review."
+    when eq($action, "discard-occurrence"):
+      let result = { state = $command.state; target = $target; persist = false; session = {}; notice = "Occurrence review discarded." }
+    when eq($action, "confirm-occurrence"):
+      assert eq($base, $review.base)
+        otherwise "This occurrence review is out of date. Prepare a fresh review."
+      port kernel.invoke { query = "crm.occurrenceEvents"; input = $entry } → events
+      port kernel.invoke { query = "occurrence.prepare"; input = { events = $events; kind = $review.kind; values = $review.values; reason = $review.reason; thing = $target; operationId = $review.id } } → proposal
+      port kernel.invoke { query = "guarded.review"; input = { base = $review.base; head = $base; reviewed = $review.proposal; candidate = $proposal; approved = true } } → guard
+      assert $guard.allowed
+        otherwise "The occurrence proposal changed. Prepare a fresh review."
+      let event = at($proposal.events, count($events))
+      let note = if(eq($event.kind, "schedule"), concat("Appointment: ", $event.appointment, " · ", $event.reason), $event.reason)
+      let activity = { from = $proposal.from; to = $proposal.phase; owner = $entry.owner; note = $note; occurrence = $event }
+      port record.put { record = $entry; key = "activity"; value = append(list($activity), $entry.activity) } → updated
+      let cases = map($command.state.cases, "entry", if(eq($entry.id, $target), $updated, $entry))
+      let notice = if(eq($review.kind, "schedule"), "Occurrence scheduled.", "Occurrence cancelled.")
+      let result = { state = { accounts = $command.state.accounts; cases = $cases }; target = $target; session = {}; notice = $notice }
+
+process crm.occurrenceView:
+  let card = $eventInput
+  let entry = $card.entry
+  let lifecycle = null
+  try:
+    port kernel.invoke { query = "crm.occurrenceEvents"; input = $entry } → events
+    port kernel.invoke { query = "occurrence.replay"; input = $events } → lifecycle
+  catch fault:
+    let result = list({ tag = "p"; attrs = { class = "error" }; children = list(concat("Occurrence history conflict: ", $fault.message)) })
+  when $lifecycle:
+    let appointment = if(count($lifecycle.appointment), $lifecycle.appointment, "None")
+    let history = map($events, "event", { tag = "li"; attrs = {}; children = list(if(eq($event.kind, "schedule"), concat("Scheduled: ", $event.appointment, " · ", $event.reason), concat("Cancelled: ", $event.reason))) })
+    let result = list(
+      { tag = "p"; attrs = {}; children = list(concat("Occurrence: ", $lifecycle.phase)) },
+      { tag = "p"; attrs = {}; children = list(concat("Appointment: ", $appointment)) },
+      { tag = "ol"; attrs = { "aria-label" = "Occurrence events" }; children = $history }
+    )
+  when and($lifecycle, not(eq(at($card.screen, "occurrenceMode"), "read"))):
+    let review = at($card.screen.session, "occurrenceReview")
+    let reviewing = and($review, eq(at($review, "target"), $entry.id), eq(at($review, "base"), $card.screen.revision))
+    when $reviewing:
+      let proposal = $review.proposal
+      let summary = concat("Review occurrence change: ", $lifecycle.phase, " → ", $proposal.phase, " · Appointment: ", if(count($proposal.appointment), $proposal.appointment, "None"), " · Reason: ", $review.reason)
+      let fields = list(
+        { tag = "input"; attrs = { type = "hidden"; name = "target"; value = $entry.id }; children = list() },
+        { tag = "input"; attrs = { type = "hidden"; name = "review"; value = $review.id }; children = list() }
+      )
+      port kernel.invoke { query = "work.form"; input = { csrf = $card.screen.csrf; revision = $review.base; action = "confirm-occurrence"; fields = $fields; button = "Confirm occurrence change"; style = "entry" } } → confirm
+      port kernel.invoke { query = "work.form"; input = { csrf = $card.screen.csrf; revision = $review.base; action = "discard-occurrence"; fields = $fields; button = "Discard occurrence review"; style = "entry" } } → discard
+      let result = append($result, list({ tag = "p"; attrs = {}; children = list($summary) }, $confirm, $discard))
+    when not($reviewing):
+      fold list("schedule", "cancel") as kind; content starts $result:
+        port kernel.invoke { query = "occurrence.rule"; input = { kind = $kind; phase = $lifecycle.phase } } → rule
+        let label = if(eq($kind, "schedule"), "Review schedule", "Review cancellation")
+        let fields = list({ name = "reason"; label = if(eq($kind, "schedule"), "Scheduling reason", "Cancellation reason"); type = "text"; maxlength = 500; required = true })
+        when eq($kind, "schedule"):
+          let fields = append(list({ name = "appointment"; label = "Appointment"; type = "text"; maxlength = 160; required = true }), $fields)
+        when count($rule.message):
+          let content = append($content, list({ tag = "p"; attrs = {}; children = list(concat($label, " unavailable. ", $rule.message)) }))
+        port kernel.invoke { query = "portfolio.form"; input = { screen = $card.screen; inputs = $fields; action = $kind; target = $entry.id; button = $label } } → form
+        yield append($content, list($form)) → content
+      let result = $content

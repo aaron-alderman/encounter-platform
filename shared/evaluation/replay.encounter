@@ -1,0 +1,119 @@
+process-module "temple/surface-process-module/1"
+
+process evaluation.normalizeEvent:
+  let event = $eventInput
+  let data = $event.data
+  let markers = list()
+  let valid = true
+  when and(eq($event.kind, "port-end"), at($data, "ok")):
+    when eq(at($data, "port"), "storage.cas"):
+      port text.matches { value = if(at($data, "sourceHash"), at($data, "sourceHash"), ""); pattern = "\\A[0-9a-f]{64}\\z" } → valid
+      port record.put { record = $data; key = "sourceHash"; value = null } → data
+      let markers = list("Stored-document hash")
+    when or(and(eq($event.process, "nr.hashPlan"), eq(at($data, "port"), "digest.sha256")),
+        and(eq($event.process, "app.agentResult"), eq(at($data, "query"), "nr.hashPlan"))):
+      port text.matches { value = if(at($data.result, "value"), at($data.result, "value"), ""); pattern = "\\A[0-9a-f]{64}\\z" } → hash
+      let valid = and($valid, eq($data.result.kind, "text"), $hash)
+      port record.put { record = $data.result; key = "value"; value = "<run-specific plan hash>" } → plan
+      port record.put { record = $data; key = "result"; value = $plan } → data
+      let markers = append($markers, list("Run-specific plan hash"))
+  port record.put { record = $event; key = "data"; value = $data } → comparable
+  let result = { value = $comparable; markers = $markers; valid = $valid }
+
+process evaluation.compareEvents:
+  let input = $eventInput
+  let phase = { delivery = $input.delivery; expected = count($input.recorded); matched = 0; branches = 0; checks = 0; ports = 0 }
+  let initial = { phase = $phase; mismatch = null; effects = $input.effects; normalized = $input.normalized }
+  fold $input.recorded as reference; state starts $initial:
+    let next = $state
+    when eq($state.mismatch, null):
+      let phase = $state.phase
+      let sequence = $phase.matched
+      let event = at($input.observed, $sequence)
+      let effects = $state.effects
+      let normalized = $state.normalized
+      let mismatch = null
+      when not($event):
+        let mismatch = { field = "Event count"; delivery = $phase.delivery; event = add($sequence, 1);
+          expected = $phase.expected; observed = count($input.observed) }
+      when $event:
+        port kernel.invoke { query = "evaluation.normalizeEvent"; input = $event } → observed
+        port kernel.invoke { query = "evaluation.normalizeEvent"; input = $reference } → recorded
+        let same = and($observed.valid, $recorded.valid, eq($observed.value, $recorded.value))
+        when not($same):
+          let mismatch = { field = "Instruction event"; delivery = $phase.delivery; event = add($sequence, 1);
+            expected = $reference; observed = $event }
+        when $same:
+          let returned = eq($event.kind, "port-end")
+          let phase = { delivery = $phase.delivery; expected = $phase.expected; matched = add($phase.matched, 1);
+            branches = add($phase.branches, if(eq($event.kind, "when"), 1, 0));
+            checks = add($phase.checks, if(eq($event.kind, "assert"), 1, 0));
+            ports = add($phase.ports, if($returned, 1, 0)) }
+          when $returned:
+            let port = $event.data.port
+            let row = or(at($effects, $port), { port = $port; count = 0; revisions = list() })
+            let revisions = $row.revisions
+            when and(eq($port, "storage.cas"), not(eq(at($event.data, "revision"), null))):
+              let revisions = append($revisions, list($event.data.revision))
+            port record.put { record = $effects; key = $port; value = { port = $port; count = add($row.count, 1); revisions = $revisions } } → effects
+          fold $observed.markers as kind; counts starts $normalized:
+            let count = or(at($counts, $kind), 0)
+            port record.put { record = $counts; key = $kind; value = add($count, 1) } → updated
+            yield $updated → counts
+          let normalized = $counts
+      let next = { phase = $phase; mismatch = $mismatch; effects = $effects; normalized = $normalized }
+    yield $next → state
+  let result = $state
+  when and(eq($state.mismatch, null), not(eq($state.phase.expected, count($input.observed)))):
+    let result = { phase = $state.phase; effects = $state.effects; normalized = $state.normalized;
+      mismatch = { field = "Event count"; delivery = $state.phase.delivery; event = add($state.phase.matched, 1);
+        expected = $state.phase.expected; observed = count($input.observed) } }
+
+process evaluation.compareDelivery:
+  let input = $eventInput
+  let recorded = $input.recorded
+  let observed = $input.observed
+  let mismatch = null
+  let fields = list("entry", "repair", "basis", "replySha256", "completed")
+  let changed = at(filter($fields, "field", not(eq(at($recorded, $field), at($observed, $field)))), 0)
+  when $changed:
+    let mismatch = { field = $changed; delivery = $input.delivery; event = null;
+      expected = at($recorded, $changed); observed = at($observed, $changed) }
+  when and(eq($mismatch, null), not(eq($observed.trace.dropped, 0))):
+    let mismatch = { field = "Dropped events"; delivery = $input.delivery; event = null; expected = 0; observed = $observed.trace.dropped }
+  let result = { phase = { delivery = $input.delivery; expected = count($recorded.trace.events);
+      matched = 0; branches = 0; checks = 0; ports = 0 };
+    mismatch = $mismatch; effects = $input.effects; normalized = $input.normalized }
+  when eq($mismatch, null):
+    port kernel.invoke { query = "evaluation.compareEvents"; input = { delivery = $input.delivery;
+      recorded = $recorded.trace.events; observed = $observed.trace.events;
+      effects = $input.effects; normalized = $input.normalized } } → result
+
+process evaluation.compareReplay:
+  let run = $eventInput
+  let mismatch = null
+  when not(eq(count($run.recorded), count($run.observed))):
+    let mismatch = { field = "Delivery count"; delivery = null; event = null;
+      expected = count($run.recorded); observed = count($run.observed) }
+  let initial = { deliveries = list(); mismatch = $mismatch; normalized = {}; effects = {} }
+  fold $run.recorded as recorded; report starts $initial:
+    let next = $report
+    when eq($report.mismatch, null):
+      let index = count($report.deliveries)
+      port kernel.invoke { query = "evaluation.compareDelivery"; input = {
+        delivery = add($index, 1); recorded = $recorded; observed = at($run.observed, $index);
+        effects = $report.effects; normalized = $report.normalized
+      } } → checked
+      let next = { deliveries = append($report.deliveries, list($checked.phase));
+        mismatch = $checked.mismatch; normalized = $checked.normalized; effects = $checked.effects }
+    yield $next → report
+  let mismatch = $report.mismatch
+  when eq($mismatch, null):
+    let outcome = if(includes($run.page, "Your answer is needed"), "admissible", if(includes($run.page, "Critical · Blocked"), "blocked", "unknown"))
+    when not(eq($outcome, $run.outcome)):
+      let mismatch = { field = "Terminal outcome"; delivery = 2; event = null; expected = $run.outcome; observed = $outcome }
+  port record.entries { value = $report.effects } → effects
+  port record.entries { value = $report.normalized } → normalized
+  let result = { arm = $run.arm; status = if($mismatch, "mismatch", "match"); deliveries = $report.deliveries;
+    effects = map($effects, "entry", at($entry, 1)); normalized = map($normalized, "entry", { kind = at($entry, 0); count = at($entry, 1) });
+    mismatch = $mismatch; error = null }
