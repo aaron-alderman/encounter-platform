@@ -1,0 +1,71 @@
+process-module "temple/surface-process-module/1"
+
+process nr.reportChart:
+  let chart = $eventInput
+  let rows = $chart.rows
+  fold $rows as row; maximum starts 0:
+    port number.calculate { operation = "max"; values = list($maximum, $row.minutes) } → higher
+    yield $higher → maximum
+  let scale = if(eq($maximum, 0), 1, $maximum)
+  fold $rows as row; bars starts list():
+    port number.calculate { operation = "divide"; values = list($row.minutes, $scale) } → fraction
+    port number.calculate { operation = "multiply"; values = list($fraction, 100) } → width
+    let track = { tag = "rect"; attrs = { x = 0; y = 0; width = 100; height = 10; fill = "#d8e5e1" }; children = list() }
+    let bar = { tag = "rect"; attrs = { x = 0; y = 0; width = $width; height = 10; fill = "#1b685b"; "data-plot" = "minutes" }; children = list() }
+    let graphic = { tag = "svg"; attrs = { viewBox = "0 0 100 10"; preserveAspectRatio = "none"; width = "100%"; height = 16; "aria-hidden" = true }; children = list($track, $bar) }
+    let item = { tag = "li"; attrs = {}; children = list({ tag = "p"; attrs = {}; children = list(concat($row.label, " · ", $row.minutes, " minutes")) }, $graphic) }
+    yield append($bars, list($item)) → bars
+  let content = if(count($bars), { tag = "ul"; attrs = {}; children = $bars }, { tag = "p"; attrs = {}; children = list("No entries in this selection.") })
+  let result = { tag = "section"; attrs = { "aria-label" = $chart.title }; children = list({ tag = "h2"; attrs = {}; children = list($chart.title) }, $content) }
+
+process nr.reportTable:
+  let data = $eventInput
+  let headings = map(list("Employee", "Entries", "Minutes"), "label", { tag = "th"; attrs = { scope = "col" }; children = list($label) })
+  let head = { tag = "thead"; attrs = {}; children = list({ tag = "tr"; attrs = {}; children = $headings }) }
+  let rows = append($data.employees, list({ label = "Total"; entries = $data.count; minutes = $data.minutes }))
+  let body = map($rows, "row", { tag = "tr"; attrs = {}; children = list(
+    { tag = "th"; attrs = { scope = "row" }; children = list($row.label) },
+    { tag = "td"; attrs = {}; children = list($row.entries) },
+    { tag = "td"; attrs = {}; children = list($row.minutes) }
+  ) })
+  let result = { tag = "table"; attrs = { "aria-label" = "Employee totals" }; children = list($head, { tag = "tbody"; attrs = {}; children = $body }) }
+
+process nr.reportPage:
+  let view = $eventInput
+  let content = list()
+  when $view.account:
+    let content = list({ tag = "p"; attrs = {}; children = list(concat("Signed in as ", $view.account)) })
+  when and(not($view.ready), not($view.error)):
+    let content = append($content, list({ tag = "p"; attrs = {}; children = list("The report opens after the employee import is approved.") }))
+  when $view.ready:
+    let choices = append(list({ id = ""; displayName = "All employees" }), $view.employees)
+    let options = map($choices, "employee", { tag = "option"; attrs = { value = $employee.id; selected = eq($employee.id, $view.selector.employee) }; children = list($employee.displayName) })
+    let employee = { tag = "label"; attrs = {}; children = list("Employee", { tag = "select"; attrs = { name = "employee"; "aria-label" = "Employee" }; children = $options }) }
+    let from = { tag = "label"; attrs = {}; children = list("From", { tag = "input"; attrs = { name = "from"; type = "date"; value = $view.selector.from }; children = list() }) }
+    let through = { tag = "label"; attrs = {}; children = list("Through", { tag = "input"; attrs = { name = "through"; type = "date"; value = $view.selector.through }; children = list() }) }
+    let form = { tag = "form"; attrs = { method = "get"; action = "/report"; class = "entry decision-command" }; children = list($employee, $from, $through, { tag = "button"; attrs = { type = "submit" }; children = list("Apply filters") }) }
+    port kernel.invoke { query = "sourcery.presentation.decision"; input = {
+      attrs = { class = "decision-form"; "data-presentation" = "vb6"; "aria-label" = "Report filters" };
+      properties = list({ label = "Data revision"; value = $view.revision }); legend = "Report filters";
+      body = list({ tag = "p"; attrs = {}; children = list("Date endpoints are inclusive. Leave either date blank for an open range.") }, $form);
+      commands = list()
+    } } → filters
+    let content = append($content, list($filters))
+  when $view.data:
+    port kernel.invoke { query = "nr.reportTable"; input = $view.data } → table
+    port kernel.invoke { query = "nr.reportChart"; input = { title = "Minutes by employee"; rows = $view.data.employees } } → employeeChart
+    port kernel.invoke { query = "nr.reportChart"; input = { title = "Minutes by date"; rows = $view.data.days } } → dailyChart
+    let contributions = map($view.data.employees, "row", { tag = "details"; attrs = {}; children = list(
+      { tag = "summary"; attrs = {}; children = list(concat($row.label, " · ", $row.minutes, " minutes")) },
+      { tag = "ul"; attrs = {}; children = map($row.contributions, "entry", { tag = "li"; attrs = {}; children = list(concat($entry.date, " · ", $entry.minutes, " minutes")) }) }
+    ) })
+    let trace = { tag = "details"; attrs = {}; children = append(list(
+      { tag = "summary"; attrs = {}; children = list("Calculation and evidence") },
+      { tag = "p"; attrs = {}; children = list(concat("Approved plan ", $view.plan, " · timesheet.rel at revision ", $view.revision)) },
+      { tag = "p"; attrs = {}; children = list("nr.reportCalculate in report.encounter selects employees and an inclusive range of work dates, groups retained entries, then counts entries and sums whole minutes.") },
+      { tag = "p"; attrs = {}; children = list("The employee table and chart use the same employee totals. The daily chart uses the date totals from the same selected entries. Each chart scales its bars against its own largest category.") },
+      { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = "/approval?trace=report" }; children = list("Review the report trace (owner account)") }) }
+    ), $contributions) }
+    let content = append($content, list({ tag = "h2"; attrs = {}; children = list(concat($view.data.minutes, " minutes across ", $view.data.count, " entries")) }, $table, $employeeChart, $dailyChart, $trace))
+  let summary = if($view.ready, concat($view.project, " · Demo"), "Demo workspace")
+  port kernel.invoke { query = "work.page"; input = { page = { title = "Timesheet report"; summary = $summary; content = $content }; notice = $view.notice; error = $view.error } } → result

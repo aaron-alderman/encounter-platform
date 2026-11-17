@@ -1,0 +1,151 @@
+process-module "temple/surface-process-module/1"
+
+process nr.projectPlan:
+  let project = $eventInput
+  let head = at($project, "planHead")
+  when and(not($head), $task.approval, eq($task.approval.plan, $task.candidate.hash)):
+    let head = { revision = 1; hash = $task.approval.plan; original = $task.approval.sha256; plan = $task.candidate.plan }
+  fold $snapshot.documents as document; changes starts list():
+    port text.indexOf { value = $document.path; search = "plan-changes/"; from = 0 } → prefix
+    let next = $changes
+    when eq($prefix, 0):
+      port rel.decode { text = $document.text; kind = "NorthRiverProjectPlanChange" } → change
+      let next = append($changes, list($change))
+    yield $next → changes
+  let result = { head = $head; changes = $changes }
+
+process nr.proposePlanChange:
+  let head = $eventInput
+  assert and($head, eq($head.hash, $fields.plan))
+    otherwise "STALE: Reopen the Plan tab before proposing a change."
+  let step = at(filter($head.plan.steps, "item", eq($item.id, $fields.step)), 0)
+  assert $step
+    otherwise "PLAN CHANGE: Choose a step in the current plan."
+  port kernel.invoke { query = "mw.text"; input = { value = $fields.work; required = true; maximum = 700 } } → _
+  port kernel.invoke { query = "mw.text"; input = { value = $fields.check; required = true; maximum = 700 } } → _
+  port kernel.invoke { query = "mw.text"; input = { value = $fields.reason; required = true; maximum = 900 } } → _
+  assert not(and(eq($step.change, $fields.work), eq($step.check, $fields.check)))
+    otherwise "PLAN CHANGE: Change the work or the planned check."
+  let id = concat("change-", $request.nonce)
+  let proposal = { id = $id; step = $step.id; title = $step.title; base = $head.hash; revision = $head.revision; work = $fields.work; check = $fields.check; reason = $fields.reason }
+  port rel.encode { value = $proposal; kind = "NorthRiverProjectPlanProposal" } → bytes
+  port digest.sha256 { text = $bytes } → hash
+  let result = { id = $id; proposal = $proposal; hash = $hash; receipt = null }
+
+process nr.approvePlanChange:
+  let change = $eventInput
+  let head = $plan.head
+  assert and($change, not($change.receipt), eq($fields.proposal, $change.hash), eq($head.hash, $change.proposal.base), eq($fields.plan, $head.hash))
+    otherwise "STALE: Open a pending change against the current plan revision."
+  let proposal = $change.proposal
+  let steps = filter($head.plan.steps, "step", eq($step.id, $proposal.step))
+  assert eq(count($steps), 1)
+    otherwise "PLAN CHANGE: The proposed step is missing from the current plan."
+  fold $head.plan.steps as step; revised starts list():
+    let next = $step
+    when eq($step.id, $proposal.step):
+      port record.put { record = $next; key = "change"; value = $proposal.work } → next
+      port record.put { record = $next; key = "check"; value = $proposal.check } → next
+    yield append($revised, list($next)) → revised
+  port record.put { record = $head.plan; key = "steps"; value = $revised } → amended
+  let revision = add($head.revision, 1)
+  let coordinate = { original = $head.original; previous = $head.hash; revision = $revision; proposal = $change.hash; plan = $amended }
+  port rel.encode { value = $coordinate; kind = "NorthRiverProjectPlanRevision" } → bytes
+  port digest.sha256 { text = $bytes } → hash
+  let receipt = { revision = $revision; plan = $hash; previous = $head.hash; original = $head.original; proposal = $change.hash; reviewer = $actor.id; operation = $request.nonce }
+  port record.put { record = $change; key = "receipt"; value = $receipt } → approved
+  let result = { change = $approved; head = { revision = $revision; hash = $hash; original = $head.original; plan = $amended } }
+
+process nr.savePlanChange:
+  let project = $eventInput
+  let change = null
+  let documents = list()
+  let notice = "Plan change submitted for review."
+  when eq($fields.action, "propose-plan-change"):
+    port kernel.invoke { query = "nr.proposePlanChange"; input = $plan.head } → change
+  when eq($fields.action, "approve-plan-change"):
+    let selected = at(filter($plan.changes, "item", eq($item.id, $fields.change)), 0)
+    port kernel.invoke { query = "nr.approvePlanChange"; input = $selected } → approval
+    let change = $approval.change
+    port record.put { record = $project; key = "planHead"; value = $approval.head } → updated
+    port rel.encode { value = $updated; kind = "NorthRiverProject" } → projectBytes
+    let documents = list({ path = "project.rel"; text = $projectBytes })
+    let notice = concat("Plan change approved. Project plan revision ", $approval.head.revision, " is current.")
+  port rel.encode { value = $change; kind = "NorthRiverProjectPlanChange" } → changeBytes
+  let documents = append($documents, list({ path = concat("plan-changes/", $change.id, ".rel"); text = $changeBytes }))
+  port kernel.invoke { query = "nr.persist"; input = { documents = $documents; notice = $notice; target = $change.id; goal = "Record the project plan change" } } → _
+  let result = $notice
+
+process nr.projectPlanForm:
+  let spec = $eventInput
+  port kernel.invoke { query = "work.form"; input = { csrf = $view.csrf; revision = $view.revision; action = $spec.action; fields = $spec.fields; button = $spec.button; style = if(at($spec, "primary"), "entry decision-command", "entry") } } → form
+  port record.put { record = $form.attrs; key = "action"; value = "/project" } → attrs
+  port record.put { record = $form; key = "attrs"; value = $attrs } → result
+
+process nr.projectPlanView:
+  let head = $eventInput
+  let result = list({ tag = "h2"; attrs = {}; children = list("Project plan") }, { tag = "p"; attrs = {}; children = list("Approve the first task’s plan to establish a project plan.") })
+  when $head:
+    let options = map($head.plan.steps, "step", { tag = "option"; attrs = { value = $step.id }; children = list($step.title) })
+    let fields = list(
+      { tag = "input"; attrs = { type = "hidden"; name = "plan"; value = $head.hash }; children = list() },
+      { tag = "label"; attrs = {}; children = list("Plan step", { tag = "select"; attrs = { name = "step"; required = true }; children = $options }) },
+      { tag = "label"; attrs = {}; children = list("Proposed work", { tag = "textarea"; attrs = { name = "work"; required = true; maxlength = 700; rows = 2 }; children = list() }) },
+      { tag = "label"; attrs = {}; children = list("Proposed check", { tag = "textarea"; attrs = { name = "check"; required = true; maxlength = 700; rows = 2 }; children = list() }) },
+      { tag = "label"; attrs = {}; children = list("Why change it?", { tag = "textarea"; attrs = { name = "reason"; required = true; maxlength = 900; rows = 2 }; children = list() }) }
+    )
+    port kernel.invoke { query = "nr.projectPlanForm"; input = { action = "propose-plan-change"; fields = $fields; button = "Propose plan change" } } → form
+    let steps = map($head.plan.steps, "step", { tag = "li"; attrs = {}; children = list(
+      { tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list($step.title) },
+        { tag = "p"; attrs = {}; children = list($step.change) }, { tag = "p"; attrs = {}; children = list(concat("Check: ", $step.check)) }) }
+    ) })
+    let result = list(
+      { tag = "h2"; attrs = {}; children = list(concat("Project plan · Revision ", $head.revision)) },
+      { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = "/?task=1#approval-record" }; children = list({ tag = "span"; attrs = { class = "task-reference"; "aria-hidden" = "true" }; children = list("#1") }, "Original approval receipt") }) },
+      { tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list("Inspect current steps") }, { tag = "ul"; attrs = {}; children = $steps }) },
+      $form
+    )
+    let approval = at(filter($plan.changes, "item", and($item.receipt, eq($item.receipt.plan, $head.hash))), 0)
+    when and(not($approval), eq($head.hash, $task.approval.plan)):
+      port kernel.invoke { query = "nr.implementationForm"; input = { id = "primary"; plan = $head.hash; operation = $task.approval.operation } } → continue
+      let result = append(list(at($result, 0), at($result, 1), at($result, 2), $continue), list($form))
+    when $approval:
+      port kernel.invoke { query = "nr.implementationForm"; input = { id = "project"; plan = $head.hash; operation = $approval.receipt.operation } } → continue
+      let result = append(list(at($result, 0), at($result, 1), at($result, 2), $continue), list($form))
+
+process nr.projectChangeView:
+  let change = $eventInput
+  let proposal = $change.proposal
+  let head = $plan.head
+  let reviewable = and(not($change.receipt), eq($proposal.base, $head.hash))
+  let result = list(
+    { tag = "h2"; attrs = {}; children = list(concat("Plan change · ", $proposal.title)) },
+    { tag = "p"; attrs = {}; children = list(concat("Proposed against revision ", $proposal.revision)) },
+    { tag = "p"; attrs = {}; children = list($proposal.reason) },
+    { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = "/project?plan=1" }; children = list("Project plan") }) }
+  )
+  when $reviewable:
+    let step = at(filter($head.plan.steps, "item", eq($item.id, $proposal.step)), 0)
+    let comparison = { tag = "details"; attrs = { open = true }; children = list(
+      { tag = "summary"; attrs = {}; children = list("Work and planned check") },
+      { tag = "h3"; attrs = {}; children = list("Current") }, { tag = "p"; attrs = {}; children = list($step.change) }, { tag = "p"; attrs = {}; children = list($step.check) },
+      { tag = "h3"; attrs = {}; children = list("Proposed") }, { tag = "p"; attrs = {}; children = list($proposal.work) }, { tag = "p"; attrs = {}; children = list($proposal.check) }
+    ) }
+    let fields = map(list(list("change", $change.id), list("proposal", $change.hash), list("plan", $head.hash)), "pair", { tag = "input"; attrs = { type = "hidden"; name = at($pair, 0); value = at($pair, 1) }; children = list() })
+    port kernel.invoke { query = "nr.projectPlanForm"; input = { action = "approve-plan-change"; fields = $fields; button = "Approve plan change"; primary = true } } → form
+    let result = append($result, list($comparison, $form))
+  when $change.receipt:
+    let result = append($result, list(
+      { tag = "h3"; attrs = {}; children = list("Plan change receipt") },
+      { tag = "p"; attrs = {}; children = list(concat("Approved by ", $change.receipt.reviewer, " · Project plan revision ", $change.receipt.revision)) },
+      { tag = "p"; attrs = {}; children = list(concat("Plan: ", $change.receipt.plan)) },
+      { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = "/?task=1#approval-record" }; children = list({ tag = "span"; attrs = { class = "task-reference"; "aria-hidden" = "true" }; children = list("#1") }, "Original approval receipt") }) }
+    ))
+  when and(not($reviewable), not($change.receipt)):
+    let result = append($result, list({ tag = "p"; attrs = {}; children = list("Superseded by a newer project plan. Open the Plan tab to propose again.") }))
+  port kernel.invoke { query = "sourcery.presentation.decision"; input = {
+    attrs = { class = "decision-form"; "data-presentation" = "vb6"; "aria-label" = "Plan change decision" };
+    properties = list({ label = "Status"; value = if($reviewable, "Ready for review", if($change.receipt, "Approved", "Superseded")) });
+    legend = "Plan change"; body = $result; commands = list()
+  } } → panel
+  let result = list($panel)

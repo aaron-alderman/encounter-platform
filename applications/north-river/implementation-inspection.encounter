@@ -1,0 +1,131 @@
+process-module "temple/surface-process-module/1"
+
+process nr.reviewEvidence:
+  let diff = $eventInput
+  let result = null
+  when count($diff):
+    port digest.sha256 { text = $diff } → hash
+    port application.data { name = "implementation-evidence" } → data
+    port value.describe { value = $data } → shape
+    let packets = if($shape.array, $data, list($data))
+    let matches = filter($packets, "packet", eq($hash, $packet.diff))
+    when eq(count($matches), 1):
+      let result = at($matches, 0)
+
+process nr.reviewFlow:
+  let evidence = $eventInput
+  let stages = map($evidence.stages, "stage", { tag = "li"; attrs = { class = concat("nr-flow-stage nr-flow-", $stage.kind) }; children = list(
+    { tag = "p"; attrs = { class = "nr-flow-role" }; children = list($stage.role) },
+    { tag = "h2"; attrs = {}; children = list($stage.title) },
+    { tag = "p"; attrs = {}; children = list($stage.effect) },
+    { tag = "p"; attrs = { class = "nr-flow-outcome" }; children = list($stage.outcome) }) })
+  let result = list(
+    { tag = "p"; attrs = {}; children = list($evidence.flowIntro) },
+    { tag = "ol"; attrs = { class = "nr-flow"; "aria-label" = "Sick-leave process stages" }; children = $stages })
+
+process nr.diffTokens:
+  let line = $eventInput
+  port text.slice { value = $line; start = 1 } → body
+  port text.trim { value = $body } → trimmed
+  port text.indexOf { value = $trimmed; search = " " } → space
+  let end = if(eq($space, -1), count($trimmed), $space)
+  port text.slice { value = $trimmed; start = 0; end = $end } → word
+  let nodes = list()
+  let cursor = 0
+  when includes(list("process", "let", "port", "when", "assert", "otherwise", "fold", "yield", "try", "catch", "call"), $word):
+    port text.indexOf { value = $body; search = $word } → wordOffset
+    let start = add($wordOffset, 1)
+    port text.slice { value = $line; start = 0; end = $start } → prefix
+    let nodes = list($prefix, { tag = "span"; attrs = { class = "nr-token-keyword" }; children = list($word) })
+    let cursor = add($start, count($word))
+  port text.slice { value = $line; start = $cursor } → remaining
+  port text.indexOf { value = $remaining; search = "\"" } → open
+  when not(eq($open, -1)):
+    let quote = add($cursor, $open)
+    port text.slice { value = $line; start = add($quote, 1) } → following
+    port text.indexOf { value = $following; search = "\"" } → close
+    when not(eq($close, -1)):
+      port text.slice { value = $line; start = $cursor; end = $quote } → between
+      let cursor = add(add($quote, $close), 2)
+      port text.slice { value = $line; start = $quote; end = $cursor } → literal
+      let nodes = append($nodes, list($between, { tag = "span"; attrs = { class = "nr-token-string" }; children = list($literal) }))
+  port text.slice { value = $line; start = $cursor } → tail
+  let result = append($nodes, list($tail))
+
+process nr.diffLines:
+  let diff = $eventInput
+  port text.replaceAll { value = $diff; search = "\n"; replacement = "" } → joined
+  port number.calculate { operation = "subtract"; values = list(count($diff), count($joined)) } → lineCount
+  fold range($lineCount) as index; reader starts { rest = $diff; lines = list() }:
+    port text.indexOf { value = $reader.rest; search = "\n" } → newline
+    port text.slice { value = $reader.rest; start = 0; end = $newline } → line
+    port text.slice { value = $reader.rest; start = add($newline, 1) } → rest
+    yield { rest = $rest; lines = append($reader.lines, list($line)) } → reader
+  let result = append($reader.lines, list($reader.rest))
+
+
+process nr.reviewDiff:
+  let diff = $eventInput
+  let result = list({ tag = "p"; attrs = {}; children = list("No source diff was recorded for this run.") })
+  when count($diff):
+    port kernel.invoke { query = "nr.diffLines"; input = $diff } → lines
+    fold $lines as line; listing starts { number = 0; rows = list(); files = list() }:
+      let number = add($listing.number, 1)
+      port text.slice { value = $line; start = 0; end = 4 } → prefix
+      port text.slice { value = $line; start = 0; end = 2 } → hunk
+      port text.slice { value = $line; start = 0; end = 1 } → marker
+      let file = eq($prefix, "+++ ")
+      let header = or($file, includes(list("--- ", "diff"), $prefix), eq($hunk, "@@"))
+      let plus = eq($marker, "+")
+      let minus = eq($marker, "-")
+      let id = concat("diff-line-", $number)
+      let kind = if($header, "header", if($plus, "added", if($minus, "removed", "context")))
+      let files = $listing.files
+      when $file:
+        port text.slice { value = $line; start = 4 } → path
+        let files = append($files, list({ tag = "a"; attrs = { href = concat("#", $id) }; children = list($path) }))
+      let source = list($line)
+      when not($header):
+        port kernel.invoke { query = "nr.diffTokens"; input = $line } → source
+      let row = { tag = "div"; attrs = { class = concat("nr-diff-row nr-diff-", $kind); id = $id }; children = list(
+        { tag = "span"; attrs = { class = "nr-diff-number"; "aria-hidden" = true }; children = list($number) },
+        { tag = "code"; attrs = {}; children = $source }) }
+      yield { number = $number; rows = append($listing.rows, list($row)); files = $files } → listing
+    let result = list(
+      { tag = "p"; attrs = {}; children = list("Source changes recorded by the runner. Original indentation and hunk coordinates are preserved.") },
+      if(count($listing.files), { tag = "nav"; attrs = { class = "nr-inspection-nav"; "aria-label" = "Changed files" }; children = $listing.files }, null),
+      { tag = "div"; attrs = { class = "nr-diff"; "aria-label" = "Source diff" }; children = $listing.rows })
+
+process nr.reviewInspection:
+  let spec = $eventInput
+  let selected = $spec.pane
+  let url = $spec.url
+  let item = at(filter(at($spec.evidence, "items"), "entry", eq($entry.id, at($fields, "item"))), 0)
+  let url = if($item, concat($url, "&item=", $item.id), $url)
+  let output = $spec.output
+  let evidence = $spec.evidence
+  let title = "Implementation summary"
+  let content = list({ tag = "p"; attrs = { class = "nr-full-text" }; children = list($spec.summary) })
+  when eq($selected, "flow"):
+    let title = "Approval flow"
+    port kernel.invoke { query = "nr.reviewFlow"; input = $evidence } → content
+  when eq($selected, "diff"):
+    let title = "Source diff"
+    port kernel.invoke { query = "nr.reviewDiff"; input = at($output, "diff") } → content
+  when eq($selected, "checks"):
+    let title = "Checks"
+    let content = list({ tag = "pre"; attrs = {}; children = list(if(at($output, "checks"), $output.checks, "No checks recorded.")) })
+  when eq($selected, "activity"):
+    let title = "Run activity"
+    let rows = map($spec.events, "event", { tag = "li"; attrs = {}; children = list($event.text) })
+    let content = list(if(count($rows), { tag = "ol"; attrs = {}; children = $rows }, { tag = "p"; attrs = {}; children = list("No activity recorded.") }))
+  when eq($selected, "plan"):
+    let title = "Approved plan and receipt"
+    let content = list({ tag = "pre"; attrs = {}; children = list($spec.plan) })
+  let links = map($spec.links, "item", { tag = "a"; attrs = { href = concat($url, "&pane=", $item.id); "aria-current" = if(eq($selected, $item.id), "page", null) }; children = list($item.label) })
+  let body = { tag = "div"; attrs = { class = "nr-inspection" }; children = append(list(
+    { tag = "a"; attrs = { href = $url }; children = list("Back to task") },
+    { tag = "h1"; attrs = {}; children = list($title) },
+    { tag = "p"; attrs = { class = "quiet" }; children = list($spec.taskTitle) },
+    { tag = "nav"; attrs = { class = "nr-inspection-nav"; "aria-label" = "Review views" }; children = $links }), $content) }
+  port kernel.invoke { query = "work.page"; input = { page = { title = $title; summary = $spec.taskTitle; content = list($body) }; notice = ""; error = false } } → result

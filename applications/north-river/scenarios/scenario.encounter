@@ -1,0 +1,63 @@
+process-module "temple/surface-process-module/1"
+
+process scenario.sickExpectation:
+  let step = $eventInput
+  let action = $step.action
+  let slot = $step.actor
+  let minutes = $step.minutes
+  let result = { kind = "refused"; next = $state; check = null }
+  when and(eq($action, "notify-sick"), eq($slot, "employee"), not($state.exists), $minutes):
+    let result = { kind = "committed"; next = { exists = true; requested = $minutes; approved = 0; pending = 0 }; check = "notice" }
+  when and(eq($action, "approve-sick"), $state.exists, not($state.approved)):
+    when eq($slot, "recipient-manager"):
+      let result = { kind = "committed"; next = { exists = true; requested = $state.requested; approved = $state.requested; pending = 0 }; check = "initial-approval" }
+    when eq($slot, "unrelated-manager"):
+      let result = { kind = "refused"; next = $state; check = "manager-refusal" }
+  when and(eq($action, "adjust-sick"), eq($slot, "recipient-manager"), $state.approved, not($state.pending), $minutes, not(eq($minutes, $state.approved))):
+    port number.calculate { operation = "greater"; values = list($minutes, $state.approved) } → increase
+    let result = { kind = "committed"; next = { exists = true; requested = $state.requested; approved = if($increase, $minutes, $state.approved); pending = if($increase, 0, $minutes) };
+      check = if($increase, "immediate-increase", "pending-reduction") }
+  when and(eq($action, "approve-reduction"), $state.pending):
+    when eq($slot, "employee"):
+      let result = { kind = "committed"; next = { exists = true; requested = $state.requested; approved = $state.pending; pending = 0 }; check = "employee-confirmation" }
+    when eq($slot, "unrelated-employee"):
+      let result = { kind = "refused"; next = $state; check = "employee-refusal" }
+
+process scenario.choose:
+  let search = $eventInput
+  let state = $search.state
+  let result = null
+  fold $search.candidates as step; selected starts null:
+    let next = $selected
+    when not($selected):
+      port kernel.invoke { query = "scenario.sickExpectation"; input = $step } → expectation
+      when eq(at($expectation, "check"), $search.check):
+        let next = { step = $step; expectation = $expectation }
+    yield $next → selected
+  let result = $selected
+
+process cli.main:
+  port rel.decode { text = at($eventInput, 0); kind = "EncounterScenarioContext" } → input
+  let check = $input.check.check
+  assert and(eq($input.check.checkKind, "access-refusal"), includes($check, "initial management approval"), includes($check, "deny an unauthorized manager"),
+    includes($check, "increase takes effect immediately"), includes($check, "decrease leaves totals unchanged while pending"), includes($check, "only the affected employee can approve it"))
+    otherwise "SCENARIO EVIDENCE GAP: The approved check does not supply the notice, role and minute expectations for this adapter."
+  fold $input.actions as action; candidates starts list():
+    fold $input.roles as role; rows starts $candidates:
+      let values = if(includes(list("notify-sick", "adjust-sick"), $action.id), list(120, 90, 150), list(0))
+      let steps = map($values, "minutes", { actor = $role; action = $action.id; title = $action.button; minutes = $minutes })
+      yield append($rows, $steps) → rows
+    yield $rows → candidates
+  let obligations = list("notice", "manager-refusal", "initial-approval", "pending-reduction", "employee-refusal", "employee-confirmation", "immediate-increase")
+  fold $obligations as required; run starts { state = { exists = false; requested = 0; approved = 0; pending = 0 }; steps = list() }:
+    port kernel.invoke { query = "scenario.choose"; input = { check = $required; candidates = $candidates; state = $run.state } } → chosen
+    assert $chosen
+      otherwise "SCENARIO EVIDENCE GAP: The approved check has no eligible command in the current staged state."
+    let step = $chosen.step
+    let expectation = $chosen.expectation
+    let row = { id = add(count($run.steps), 1); title = if(eq($expectation.kind, "refused"), concat("Try to ", $step.title), $step.title);
+      actor = $step.actor; action = $step.action; minutes = $step.minutes; check = $required; expected = { outcome = $expectation.kind; record = $expectation.next } }
+    yield { state = $expectation.next; steps = append($run.steps, list($row)) } → run
+  port rel.encode { value = { title = $input.check.title; draft = $input.draft; image = $input.image; plan = $input.plan; approvedCheck = $input.check.check;
+    steps = $run.steps }; kind = "EncounterScenario" } → result
+

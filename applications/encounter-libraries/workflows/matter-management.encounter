@@ -1,0 +1,159 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process mm.initial:
+  let result = { purpose = ""; scope = ""; reason = ""; outcome = null; participants = list({ id = "alice"; role = "coordinator"; capacity = "Initial coordinator (simulated)" }, { id = "bob"; role = "contributor"; capacity = "Participant (simulated)" }, { id = "casey"; role = "observer"; capacity = "Observer (simulated)" }); requests = list(); links = list() }
+
+process mm.get:
+  let result = at($eventInput, "management")
+  when not($result):
+    port kernel.invoke { query = "mm.initial"; input = { } } → result
+
+process mm.validate:
+  let matter = $eventInput
+  let m = $matter.management
+  port kernel.invoke { query = "mw.exact"; input = { value = $m; keys = list("purpose", "scope", "reason", "outcome", "participants", "requests", "links") } } → valid
+  assert includes(list("open", "waiting", "paused", "concluded", "archived"), $matter.status)
+    otherwise "MM-STATE: Unknown matter lifecycle."
+  each list($m.purpose, $m.scope, $m.reason) as text:
+    port kernel.invoke { query = "mw.text"; input = { value = $text; required = false; maximum = 1200 } } → valid
+  when not(eq($matter.status, "open")):
+    port kernel.invoke { query = "mw.text"; input = { value = $m.reason; required = true; maximum = 1200 } } → valid
+  assert if(includes(list("concluded", "archived"), $matter.status), includes(list("agreement", "disagreement", "withdrawal", "stopped"), $m.outcome), eq($m.outcome, null))
+    otherwise "MM-OUTCOME: A conclusion records its kind; other lifecycle states claim no outcome."
+  assert and(isArray($m.participants), eq(count($m.participants), 3))
+    otherwise "MM-PARTICIPANT: This simulation has three declared personas."
+  each $m.participants as p:
+    port kernel.invoke { query = "mw.exact"; input = { value = $p; keys = list("id", "role", "capacity") } } → valid
+    port kernel.invoke { query = "cw.member"; input = $p.id } → actor
+    assert eq(count(filter($m.participants, "r", eq($r.id, $p.id))), 1)
+      otherwise "MM-PARTICIPANT: Duplicate persona."
+    assert includes(list("coordinator", "contributor", "observer"), $p.role)
+      otherwise "MM-ROLE: Unknown role."
+    assert or($actor.canChange, eq($p.role, "observer"))
+      otherwise "MM-ROLE: Matter roles cannot expand native persona authority."
+    port kernel.invoke { query = "mw.text"; input = { value = $p.capacity; required = true; maximum = 240 } } → valid
+  assert not(eq(count(filter($m.participants, "p", eq($p.role, "coordinator"))), 0))
+    otherwise "MM-COORDINATOR: Keep at least one coordinator."
+  assert eq(count(filter($m.participants, "p", not(eq($p.role, "observer")))), 2)
+    otherwise "MM-REVIEW: Keep two contributors for independent review."
+  each list($m.requests, $m.links) as entries:
+    assert isArray($entries)
+      otherwise "MM-SHAPE: Requests and links must be lists."
+    port number.calculate { operation = "lessEqual"; values = list(count($entries), 6) } → bounded
+    assert $bounded
+      otherwise "MM-LIMIT: Six requests and six links per matter."
+  each $m.requests as r:
+    port kernel.invoke { query = "mw.exact"; input = { value = $r; keys = list("id", "title", "assignee", "status", "response") } } → valid
+    port kernel.invoke { query = "ws.id"; input = $r.id } → valid
+    assert eq(count(filter($m.requests, "x", eq($x.id, $r.id))), 1)
+      otherwise "MM-REQUEST: Duplicate request."
+    port kernel.invoke { query = "mw.text"; input = { value = $r.title; required = true; maximum = 240 } } → valid
+    assert eq(count(filter($m.participants, "p", and(eq($p.id, $r.assignee), not(eq($p.role, "observer"))))), 1)
+      otherwise "MM-ASSIGNEE: Choose a contributing participant."
+    assert includes(list("open", "answered", "withdrawn"), $r.status)
+      otherwise "MM-REQUEST: Unknown request standing."
+    port kernel.invoke { query = "mw.text"; input = { value = $r.response; required = not(eq($r.status, "open")); maximum = 1200 } } → valid
+    assert or(not(eq($r.status, "open")), eq($r.response, ""))
+      otherwise "MM-REQUEST: An unanswered request has no response."
+  each $m.links as link:
+    port kernel.invoke { query = "mw.exact"; input = { value = $link; keys = list("matterId", "relation", "note") } } → valid
+    port kernel.invoke { query = "ws.id"; input = $link.matterId } → valid
+    assert and(not(eq($link.matterId, $matter.id)), eq(count(filter($m.links, "x", eq($x.matterId, $link.matterId))), 1))
+      otherwise "MM-LINK: Related identifiers must be unique and distinct from this matter."
+    assert includes(list("related", "part-of", "depends-on"), $link.relation)
+      otherwise "MM-LINK: Unknown relationship."
+    port kernel.invoke { query = "mw.text"; input = { value = $link.note; required = true; maximum = 600 } } → valid
+  let result = true
+
+process mm.authority:
+  port kernel.invoke { query = "mm.get"; input = $eventInput.matter } → m
+  let actor = at(filter($m.participants, "p", eq($p.id, $eventInput.actor)), 0)
+  assert and($actor, not(eq($actor.role, "observer")))
+    otherwise "MM-AUTHORITY: A contributing participant is required."
+  when eq($eventInput.change.kind, "matter-manage"):
+    when not(eq($eventInput.change.operation, "respond")):
+      assert eq($actor.role, "coordinator")
+        otherwise "MM-AUTHORITY: A coordinator proposes management changes."
+    when eq($eventInput.change.operation, "respond"):
+      let request = at(filter($m.requests, "r", eq($r.id, $eventInput.change.payload.id)), 0)
+      assert and($request, eq($request.assignee, $actor.id))
+        otherwise "MM-AUTHORITY: Only the assigned participant can propose their response."
+  let result = true
+
+process mm.apply:
+  let matter = $eventInput.document.matter
+  let change = $eventInput.change
+  port kernel.invoke { query = "mw.exact"; input = { value = $change; keys = list("kind", "matterId", "operation", "payload", "baseRevision") } } → valid
+  assert and($matter, eq($change.matterId, $matter.id))
+    otherwise "MM-SCOPE: Management change belongs to another matter."
+  port kernel.invoke { query = "mm.get"; input = $matter } → m
+  let p = $change.payload
+  let op = $change.operation
+  assert includes(list("orient", "participant", "transition", "request", "respond", "withdraw", "link", "unlink"), $op)
+    otherwise "MM-OPERATION: Unknown management operation."
+  assert or(eq($op, "transition"), not(includes(list("concluded", "archived"), $matter.status)))
+    otherwise "MM-CLOSED: Reopen the matter before adding or changing work."
+  when eq($op, "orient"):
+    port kernel.invoke { query = "mw.exact"; input = { value = $p; keys = list("purpose", "scope") } } → valid
+    port record.put { record = $m; key = "purpose"; value = $p.purpose } → m
+    port record.put { record = $m; key = "scope"; value = $p.scope } → m
+  when eq($op, "participant"):
+    port kernel.invoke { query = "mw.exact"; input = { value = $p; keys = list("id", "role", "capacity") } } → valid
+    assert eq(count(filter($m.participants, "x", eq($x.id, $p.id))), 1)
+      otherwise "MM-PARTICIPANT: Choose a declared persona."
+    port record.put { record = $m; key = "participants"; value = map($m.participants, "x", if(eq($x.id, $p.id), $p, $x)) } → m
+  when eq($op, "transition"):
+    port kernel.invoke { query = "mw.exact"; input = { value = $p; keys = list("status", "reason", "outcome") } } → valid
+    assert not(eq($matter.status, $p.status))
+      otherwise "MM-TRANSITION: Choose a different lifecycle state."
+    assert if(eq($matter.status, "concluded"), includes(list("open", "archived"), $p.status), if(eq($matter.status, "archived"), eq($p.status, "open"), includes(list("open", "waiting", "paused", "concluded"), $p.status)))
+      otherwise "MM-TRANSITION: Archive a concluded matter; reopen concluded or archived matters to resume work."
+    port kernel.invoke { query = "mw.text"; input = { value = $p.reason; required = true; maximum = 1200 } } → valid
+    when eq($p.status, "archived"):
+      assert eq($p.outcome, $m.outcome)
+        otherwise "MM-OUTCOME: Archiving preserves the recorded conclusion."
+    port record.put { record = $matter; key = "status"; value = $p.status } → matter
+    port record.put { record = $m; key = "reason"; value = $p.reason } → m
+    port record.put { record = $m; key = "outcome"; value = $p.outcome } → m
+  when eq($op, "request"):
+    port kernel.invoke { query = "mw.exact"; input = { value = $p; keys = list("id", "title", "assignee") } } → valid
+    assert eq(count(filter($m.requests, "r", eq($r.id, $p.id))), 0)
+      otherwise "MM-REQUEST: This request already exists."
+    port record.put { record = $m; key = "requests"; value = append($m.requests, list({ id = $p.id; title = $p.title; assignee = $p.assignee; status = "open"; response = "" })) } → m
+  when includes(list("respond", "withdraw"), $op):
+    port kernel.invoke { query = "mw.exact"; input = { value = $p; keys = list("id", "response") } } → valid
+    let request = at(filter($m.requests, "r", eq($r.id, $p.id)), 0)
+    assert and($request, eq($request.status, "open"))
+      otherwise "MM-REQUEST: Choose an open request."
+    port record.put { record = $request; key = "status"; value = if(eq($op, "respond"), "answered", "withdrawn") } → request
+    port record.put { record = $request; key = "response"; value = $p.response } → request
+    port record.put { record = $m; key = "requests"; value = map($m.requests, "r", if(eq($r.id, $p.id), $request, $r)) } → m
+  when eq($op, "link"):
+    port kernel.invoke { query = "mw.exact"; input = { value = $p; keys = list("matterId", "relation", "note") } } → valid
+    port record.put { record = $m; key = "links"; value = append($m.links, list($p)) } → m
+  when eq($op, "unlink"):
+    port kernel.invoke { query = "mw.exact"; input = { value = $p; keys = list("matterId") } } → valid
+    assert eq(count(filter($m.links, "x", eq($x.matterId, $p.matterId))), 1)
+      otherwise "MM-LINK: Choose an existing relationship."
+    port record.put { record = $m; key = "links"; value = filter($m.links, "x", not(eq($x.matterId, $p.matterId))) } → m
+  port record.put { record = $matter; key = "management"; value = $m } → matter
+  port kernel.invoke { query = "mw.validate"; input = $matter } → valid
+  port record.put { record = $eventInput.document; key = "matter"; value = $matter } → result
+
+process mm.summary:
+  let board = $eventInput
+  let matter = $board.head.document.matter
+  port kernel.invoke { query = "mm.get"; input = $matter } → m
+  let result = { id = $matter.id; title = $matter.title; status = $matter.status; requests = count(filter($m.requests, "r", eq($r.status, "open"))); proposals = count(filter($board.proposals, "p", eq($p.status, "open"))); revision = $board.revision }
+
+process mm.overview:
+  let board = $eventInput.board
+  let matter = $board.head.document.matter
+  port kernel.invoke { query = "cw.member"; input = $eventInput.actor } → actor
+  port kernel.invoke { query = "mm.get"; input = $matter } → m
+  let needsResponse = filter($m.requests, "r", and(eq($r.status, "open"), eq($r.assignee, $actor.id)))
+  let pending = filter($board.proposals, "p", eq($p.status, "open"))
+  let stale = filter($pending, "p", not(eq($p.content.baseHash, $board.head.documentHash)))
+  let review = filter($pending, "p", and(not(eq($p.content.author, $actor.id)), eq(count(filter($p.reviews, "r", eq($r.actor, $actor.id))), 0), eq($p.content.baseHash, $board.head.documentHash)))
+  let result = { matter = $matter; management = $m; responseRequests = $needsResponse; needsReview = if($actor.canChange, $review, list()); staleProposals = $stale; unresolvedIssues = count(filter($matter.items, "r", eq($r.item.kind, "issue"))); recordMeaning = "Lifecycle and record acceptance do not establish truth, participant endorsement or resolution." }

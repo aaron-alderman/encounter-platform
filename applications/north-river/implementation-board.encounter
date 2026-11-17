@@ -1,0 +1,348 @@
+process-module "temple/surface-process-module/1"
+
+process nr.implementationForTask:
+  let taskId = $eventInput
+  port kernel.invoke { query = "nr.implementationReviews"; input = $snapshot } → reviews
+  port kernel.invoke { query = "nr.tasks"; input = $snapshot } → tasks
+  let item = at(filter($tasks, "item", eq($item.id, $taskId)), 0)
+  let taskPlan = at(at(at($item, "task"), "approval"), "plan")
+  let head = at(at($plan, "head"), "hash")
+  port kernel.invoke { query = "nr.currentImplementation"; input = { taskId = $taskId; taskPlan = $taskPlan; head = $head; reviews = $reviews } } → result
+  when not($result):
+    let source = if(and(eq($taskId, "primary"), not(eq($taskPlan, $head))), "project", $taskId)
+    port kernel.invoke { query = "nr.implementationSource"; input = $source } → approval
+    when $approval:
+      let result = { id = concat("implementation-", $approval.source, "-", $approval.hash); approval = $approval }
+
+process nr.currentImplementation:
+  let work = $eventInput
+  let primary = eq($work.taskId, "primary")
+  let direct = filter($work.reviews, "review", and(eq($review.approval.source, $work.taskId), eq($review.approval.hash, $work.taskPlan), or(not($primary), eq($work.taskPlan, $work.head))))
+  let project = filter($work.reviews, "review", and($primary, eq($review.approval.source, "project"), eq($review.approval.hash, $work.head)))
+  let result = at(append($project, $direct), 0)
+process nr.previewReviewSections:
+  let result = if(eq($eventInput, "/report"), list(
+    { id = "filters"; label = "Report filters" },
+    { id = "employee-totals"; label = "Employee totals" },
+    { id = "minutes-by-employee"; label = "Minutes by employee" }), list())
+
+process nr.reviewCommentContext:
+  let spec = $eventInput
+  let coordinates = $spec.coordinates
+  let result = null
+  let route = at($coordinates, "review-route")
+  let scenario = at($coordinates, "scenario")
+  let picked = at($coordinates, "review-context")
+  let appScope = eq($picked, "app")
+  when $scenario:
+    port application.data { name = "scenario-stages" } → stages
+    let runs = filter($stages, "stage", and(eq($stage.task, $spec.task), eq($stage.attempt, $spec.review.start.operation),
+      eq($stage.draft, $spec.draft), eq($stage.plan, $spec.review.approval.hash), eq($stage.scenario, $scenario)))
+    assert eq(count($runs), 1)
+      otherwise "STALE: This scenario belongs to a different implementation attempt."
+    let run = at($runs, 0)
+    let binding = at(filter($run.steps, "step", eq(concat("", $step.id), at($coordinates, "step"))), 0)
+    let route = if($route, $route, at($binding, "route"))
+    assert and($binding, includes(list("/sick-leave", "/timesheet", "/report"), $route))
+      otherwise "STALE: The staged screen is unavailable for this step."
+    let presentation = at($run, "presentationImage")
+    let result = { kind = "scenario"; image = if($presentation, $presentation, $run.image);
+      scenario = $scenario; step = $binding.id; route = $route; actor = $binding.actor; revision = $binding.revision }
+    when $presentation:
+      port record.put { record = $result; key = "evidenceImage"; value = $run.image } → result
+  when and(not($scenario), $route):
+    assert includes(list("/timesheet", "/report"), $route)
+      otherwise "REVIEW: The preview screen is unavailable."
+    port application.data { name = "review-preview" } → preview
+    assert or(eq($preview.route, $route), and(eq($route, "/report"), $preview.reportActor))
+      otherwise "REVIEW: This preview has no release binding."
+    let entry = if(and(eq($route, "/timesheet"), $picked, not($appScope)), $picked, at($coordinates, "review-entry"))
+    let row = if(eq($route, "/timesheet"), at(filter($preview.entries, "item", eq($item.id, $entry)), 0), null)
+    assert or(not($entry), $row)
+      otherwise "REVIEW: This Timesheet entry is unavailable in the approved preview."
+    let result = { kind = "preview"; route = $route; image = $preview.image; actor = if(eq($route, "/report"), $preview.reportActor, $preview.actor);
+      revision = $preview.revision; entry = if($row, $row.id, null); date = if($row, $row.date, null); minutes = if($row, $row.minutes, null) }
+    let sectionId = if(and(eq($route, "/report"), $picked, not($appScope)), $picked, at($coordinates, "review-section"))
+    when $sectionId:
+      port kernel.invoke { query = "nr.previewReviewSections"; input = $route } → sections
+      let section = at(filter($sections, "entry", eq($entry.id, $sectionId)), 0)
+      assert $section
+        otherwise "REVIEW: This section is unavailable in the approved preview."
+      port record.put { record = $result; key = "reportSection"; value = $section.id } → result
+      port record.put { record = $result; key = "reportSectionLabel"; value = $section.label } → result
+  let id = if(and($scenario, $picked, not($appScope)), $picked, at($coordinates, "review-item"))
+  when and($id, not($appScope)):
+    port kernel.invoke { query = "nr.reviewEvidence"; input = $spec.review.result.diff } → evidence
+    let item = at(filter($evidence.items, "entry", eq($entry.id, $id)), 0)
+    assert $item
+      otherwise "STALE: The selected evidence is unavailable for this draft."
+    let subject = { id = $item.id; label = $item.label; source = $item.source.path; process = $item.source.process;
+      line = $item.source.line; sha256 = $item.source.lexemeSha256; node = $item.node.id }
+    port record.put { record = if($result, $result, { kind = "evidence" }); key = "subject"; value = $subject } → result
+  when $appScope:
+    assert and($route, $result, eq(at($coordinates, "view"), "preview-comments"))
+      otherwise "REVIEW: Open the app preview to add an app-wide comment."
+    let result = { kind = "app"; draft = $spec.draft }
+
+process nr.implementationDecision:
+  let decision = $eventInput
+  let review = $decision.review
+  let action = $fields.action
+  let state = at($review, "state")
+  assert and($review, eq($fields.implementation, $review.id), eq($actor.id, $task.owner))
+    otherwise "STALE: Reopen the task’s current implementation."
+  let editing = includes(list("stage-review-comment", "discard-review-comment"), $action)
+  let allowed = or(
+    and(eq($state, "review"), or($editing, includes(list("accept-implementation", "return-implementation"), $action))),
+    and(includes(list("blocked", "returned"), $state), eq($action, "retry-implementation")))
+  assert $allowed
+    otherwise "This action is unavailable for the current implementation state."
+  port kernel.invoke { query = "nr.roundTripState"; input = $review } → linked
+  assert not(and($linked.open, includes(list("return-implementation", "accept-implementation"), $action)))
+    otherwise "WAITING: Return the linked investigation before deciding this draft."
+  let next = $review
+  let notice = ""
+  let operation = if(at($decision, "operation"), $decision.operation, $request.nonce)
+  let goal = if(at($decision, "operation"), "accept-implementation", "Record the implementation decision")
+  when eq($action, "retry-implementation"):
+    let notice = "Implementation queued again."
+    let next = { id = $review.id; approval = $review.approval; openedBy = $actor.id; state = "queued"; start = { operation = $request.nonce; approver = $actor.id; base = $base }; previous = if(at($review, "decision"), $review.decision, null); investigations = if(at($review, "investigations"), $review.investigations, list()); roundTripReceipts = if(at($review, "roundTripReceipts"), $review.roundTripReceipts, list()) }
+  when not(eq($action, "retry-implementation")):
+    port digest.sha256 { text = at($review.result, "diff") } → draft
+    let stored = at($review, "comments")
+    let comments = if($stored, $stored, list())
+    let note = if(at($fields, "review-note"), at($fields, "review-note"), "")
+    when or(eq($action, "stage-review-comment"), and(eq($action, "return-implementation"), $note)):
+      port kernel.invoke { query = "mw.text"; input = { value = $note; required = true; maximum = 300 } } → _
+      assert not(includes(map($comments, "comment", $comment.id), $request.nonce))
+        otherwise "This comment has already been staged."
+      assert not(at($comments, 19))
+        otherwise "REVIEW: The draft holds up to 20 comments."
+      port kernel.invoke { query = "nr.reviewCommentContext"; input = { review = $review; task = $selected.id; draft = $draft; coordinates = $fields } } → context
+      let comments = append($comments, list({ id = $request.nonce; text = $note; context = $context }))
+    when eq($action, "discard-review-comment"):
+      let comments = filter($comments, "comment", not(eq($comment.id, at($fields, "comment-id"))))
+    when $editing:
+      port record.put { record = $review; key = "comments"; value = $comments } → next
+      let notice = if(eq($action, "stage-review-comment"), "Comment staged for this draft.", "Staged comment removed.")
+      let goal = "Update staged review comments"
+    when not($editing):
+      let returning = eq($action, "return-implementation")
+      assert or(not($returning), count($comments))
+        otherwise "REVIEW: Add a change request before returning this draft."
+      let state = if($returning, "returned", "accepted")
+      let notice = if(at($decision, "notice"), $decision.notice, if($returning, "Implementation draft returned for changes.", if(count($comments), "Implementation draft accepted with comments.", "Implementation draft accepted for handoff.")))
+      let subject = null
+      when $note:
+        let last = at($comments, add(count($comments), -1))
+        let subject = at($last.context, "subject")
+      let record = { state = $state; reviewer = $actor.id; note = $note; subject = $subject; draft = $draft;
+        plan = $review.approval.hash; run = $review.start.operation; operation = $operation; subpackets = $comments }
+      port record.put { record = $review; key = "state"; value = $state } → next
+      port record.put { record = $next; key = "decision"; value = $record } → next
+  port rel.encode { value = $next; kind = "NorthRiverImplementationReview" } → text
+  port kernel.invoke { query = "nr.persist"; input = { documents = list({ path = concat("implementation-reviews/", $review.id, ".rel"); text = $text }); notice = $notice; target = $review.id; goal = $goal; operation = if(at($decision, "operation"), $operation, null) } } → _
+  let result = $notice
+
+process nr.boardForm:
+  let spec = $eventInput
+  let coordinate = { tag = "input"; attrs = { type = "hidden"; name = "implementation"; value = $review.id }; children = list() }
+  let fields = append(list($coordinate), $spec.fields)
+  when at($spec, "task"):
+    let fields = append($fields, list({ tag = "input"; attrs = { type = "hidden"; name = "task"; value = $spec.task }; children = list() }))
+  when includes(list("open-investigation", "return-investigation", "accept-implementation", "acknowledge-handoff"), $spec.action):
+    let fields = append($fields, list({ tag = "input"; attrs = { type = "hidden"; name = "operation"; value = $request.nonce }; children = list() }))
+  port kernel.invoke { query = "work.form"; input = { csrf = $view.csrf; revision = $view.revision; action = $spec.action; fields = $fields; button = $spec.button; style = if(at($spec, "primary"), "nr-board-form decision-command", "nr-board-form") } } → form
+  port record.put { record = $form.attrs; key = "action"; value = if(at($spec, "url"), $spec.url, $url) } → attrs
+  port record.put { record = $form; key = "attrs"; value = $attrs } → result
+
+process nr.implementationBoard:
+  let spec = $eventInput
+  let notebook = and($spec.live, $spec.current, at($spec, "project"), not(at($spec.review, "state")), not(at($fields, "pane")))
+  when $notebook:
+    port kernel.invoke { query = "nr.implementationNotebookV1"; input = $spec } → result
+  when not($notebook):
+    port kernel.invoke { query = "nr.implementationLegacyBoard"; input = $spec } → result
+
+process nr.implementationLegacyBoard:
+  let spec = $eventInput
+  let review = $spec.review
+  let view = $spec.view
+  let id = $spec.taskId
+  let url = if($spec.current, concat("/?task=", $id, "&work=1"), concat("/project?implementation=", $review.id))
+  let state = at($review, "state")
+  let output = at($review, "result")
+  let decision = at($review, "decision")
+  let current = $spec.current
+  port kernel.invoke { query = "nr.implementationAttention"; input = $review } → attention
+  port kernel.invoke { query = "nr.implementationActivity"; input = { id = $review.id; history = $view.history; after = 0 } } → events
+  let latest = at(at($events, add(count($events), -1)), "text")
+  let blocker = if(at($output, "reason"), $output.reason, at($output, "summary"))
+  let status = if($current, $attention.label, "Earlier implementation")
+  let brief = if($blocker, $blocker, if(at($output, "summary"), $output.summary, if($latest, $latest, "The approved plan is ready to start.")))
+  let action = null
+  let alternate = null
+  let hint = if(eq($state, "queued"), "Waiting for an authorized runner to claim this task.", "The task updates as the runner reports activity.")
+  when not($current):
+    let hint = "This run belongs to an earlier approved plan."
+  when and($current, not($state)):
+    let hint = "Queue work against this approved plan revision."
+    port kernel.invoke { query = "nr.implementationForm"; input = { id = $review.approval.source; plan = $review.approval.hash; operation = $review.approval.receipt.operation } } → action
+  when and($current, includes(list("blocked", "returned"), $state)):
+    let hint = if(eq($state, "returned"), at($decision, "note"), if(at($output, "next"), $output.next, "Review the blocker before retrying."))
+    port kernel.invoke { query = "nr.boardForm"; input = { action = "retry-implementation"; task = $id; fields = list(); button = "Queue again"; primary = true } } → action
+  when and($current, eq($state, "review")):
+    let hint = "Review the draft and checks before deciding."
+    port kernel.invoke { query = "nr.boardForm"; input = { action = "accept-implementation"; task = $id; fields = list(); button = "Accept draft"; primary = true } } → action
+    let note = { tag = "label"; attrs = { class = "nr-review-note" }; children = list("Required change",
+      { tag = "input"; attrs = { name = "review-note"; required = true; maxlength = 300 }; children = list() }) }
+    port kernel.invoke { query = "nr.boardForm"; input = { action = "return-implementation"; task = $id; fields = list($note); button = "Return draft" } } → alternate
+  when eq($state, "accepted"):
+    let hint = "Accepted for handoff. Source is unchanged."
+  let title = if($spec.title, $spec.title, $review.approval.title)
+  let selected = at($fields, "pane")
+  let approved = $review.approval
+  let receipt = at(at($approved, "receipt"), "operation")
+  port text.join { values = map($approved.plan.steps, "step", concat($step.title, "\n", $step.change, "\n", $step.check)); separator = "\n\n" } → steps
+  let plan = concat("Plan revision ", $approved.revision, "\n", $steps, "\n\nReceipt ", $receipt, "\nPlan ", $approved.hash)
+  let blocked = eq($state, "blocked")
+  let summary = if($blocked, concat($brief, "\n\nNext step\n", $hint), if(eq($state, "returned"), concat($brief, "\n\nRequired change\n", $hint), $brief))
+  port kernel.invoke { query = "nr.reviewEvidence"; input = at($output, "diff") } → evidence
+  let reviewLinks = list()
+  when $evidence:
+    let reviewLinks = list(
+      { id = "flow"; label = "Inspect approval flow"; detail = "Roles, decisions and effects" })
+  let links = append($reviewLinks, list(
+    { id = "summary"; label = if($blocked, "Blocker details", "Full summary") },
+    { id = "checks"; label = "Checks" },
+    { id = "activity"; label = "Activity" },
+    { id = "plan"; label = "Plan and receipt" },
+    { id = "diff"; label = "Source diff" }))
+  let primaryLinks = map($reviewLinks, "item", { tag = "a"; attrs = { href = concat($url, "&pane=", $item.id) }; children = list(
+    { tag = "strong"; attrs = {}; children = list($item.label) },
+    { tag = "span"; attrs = {}; children = list($item.detail) }) })
+  let secondaryLinks = map(filter($links, "item", not(includes(list("surface", "flow"), $item.id))), "item",
+    { tag = "a"; attrs = { href = concat($url, "&pane=", $item.id) }; children = list($item.label) })
+  port number.calculate { operation = "lessEqual"; values = list(count($brief), 200) } → briefFits
+  port number.calculate { operation = "lessEqual"; values = list(count($hint), 105) } → hintFits
+  let briefText = if($briefFits, $brief, if($blocked, "Read the recorded blocker and next step.", "The run has a recorded update. Open the full summary."))
+  let hintText = if($hintFits, $hint, if($blocked, "See blocker details before retrying.", "See the full summary for details."))
+  let headline = { tag = "div"; attrs = { class = "nr-board-title" }; children = list(
+    { tag = "nav"; attrs = { "aria-label" = "Task navigation" }; children = list(
+      { tag = "a"; attrs = { href = "/project" }; children = list("Project") },
+      { tag = "a"; attrs = { href = concat("/?task=", $id, "&planning=1") }; children = list("Task plan") }) },
+    { tag = "h1"; attrs = { id = "implementation-results"; title = $title }; children = list($title) },
+    { tag = "p"; attrs = { class = "quiet" }; children = list(concat("Implementation · Plan ", $approved.revision)) }) }
+  port kernel.invoke { query = "sourcery.presentation.decision"; input = {
+    attrs = { class = "decision-form"; "data-presentation" = "vb6"; "data-state" = $state; "aria-label" = "Implementation status" };
+    properties = list({ label = "Status"; value = $status; status = true }, { label = "Revision"; value = $approved.revision });
+    legend = "Next step";
+    body = list({ tag = "p"; attrs = { class = "nr-board-brief" }; children = list($briefText) },
+      { tag = "p"; attrs = { class = "nr-board-hint" }; children = list($hintText) }, $alternate);
+    commands = list($action)
+  } } → card
+  let travel = null
+  when and($current, eq($state, "review"), eq($actor.role, "author"), eq($actor.id, $task.owner)):
+    let travel = { tag = "a"; attrs = { href = concat("../workspace/mobile?pilot=", $id) }; children = list("Take this review on a trip") }
+  let board = { tag = "div"; attrs = { class = "decision-workspace nr-board"; "aria-label" = "Task implementation";
+    "data-encounter-events" = if(and($state, $spec.live), concat("/encounter-events?implementation=", $review.id), null);
+    "data-rendered" = $view.revision }; children = list(
+    $headline, $card, $travel,
+    { tag = "details"; attrs = { class = "decision-inspector"; "aria-label" = "Review implementation" }; children = list(
+      { tag = "summary"; attrs = {}; children = list("Review implementation") },
+      if(count($primaryLinks), { tag = "nav"; attrs = { class = "nr-review-primary"; "aria-label" = "User surface and process" }; children = $primaryLinks },
+        { tag = "p"; attrs = { class = "quiet" }; children = list("This run has no attached user-surface or process preview.") }),
+      { tag = "nav"; attrs = { class = "nr-review-secondary"; "aria-label" = "Technical evidence" }; children = $secondaryLinks }) },
+    if(and($state, $spec.live), { tag = "script"; attrs = { src = "/encounter-events.js"; defer = true }; children = list() }, null)) }
+  port kernel.invoke { query = "work.page"; input = { page = { title = $title; summary = "Task implementation"; content = list($board) }; notice = if($view.error, $view.notice, ""); error = $view.error } } → result
+  when some($links, "item", eq($item.id, $selected)):
+    port kernel.invoke { query = "nr.reviewInspection"; input = { pane = $selected; url = $url; output = $output; evidence = $evidence; taskTitle = $title; summary = $summary; events = $events; plan = $plan; links = $links } } → result
+  when and(count(at($evidence, "items")), not(some($links, "item", eq($item.id, $selected)))):
+    port kernel.invoke { query = "nr.editorWorkscreen"; input = { review = $review; view = $view; evidence = $evidence; title = $title; url = $url;
+      status = $status; action = $action; current = $current; live = $spec.live; taskId = $id; links = $links } } → result
+
+process nr.roundTripState:
+  let review = $eventInput
+  let all = at($review, "investigations")
+  let investigations = if($all, $all, list())
+  let run = at(at($review, "start"), "operation")
+  let current = filter($investigations, "entry", eq($entry.run, $run))
+  let open = at(filter($current, "entry", eq($entry.state, "open")), 0)
+  let result = { investigations = $investigations; current = $current; open = $open; handoff = at($review, "handoff") }
+
+
+process nr.travelRequest:
+  let reply = { status = "unavailable" }
+  let status = 403
+  when $human:
+    port kernel.invoke { query = "nr.projectLoad"; input = $snapshot } → project
+    port kernel.invoke { query = "nr.projectPlan"; input = $project } → plan
+    port kernel.invoke { query = "nr.implementationForTask"; input = $selected.id } → review
+    let status = 200
+    when eq(at($review, "state"), "review"):
+      port digest.sha256 { text = $review.result.diff } → diff
+      port digest.sha256 { text = concat($review.id, "/", $review.start.operation, "/", $diff) } → pin
+      let comments = if($review.comments, $review.comments, list())
+      let wanted = at($fields, "comment")
+      let comment = at(filter($comments, "entry", eq($entry.id, $wanted)), 0)
+      let base = "new"
+      when $comment:
+        port json.stringify { value = $comment } → packed
+        port digest.sha256 { text = $packed } → base
+      when eq($request.method, "GET"):
+        when eq(at($fields, "sync"), "1"):
+          let reply = { status = "open"; csrf = $request.csrf }
+        when and(not(eq(at($fields, "sync"), "1")), or(not($wanted), $comment)):
+          call nr.travelExport
+      when eq($request.method, "POST"):
+        let currentBase = $base
+        call nr.travelSave
+  port json.stringify { value = $reply } → body
+  let result = { session = $session; text = $body; status = $status }
+
+process nr.travelExport:
+  let steps = map($review.approval.plan.steps, "step", concat($step.title, "\n", $step.change, "\nCheck: ", $step.check))
+  port text.join { values = $steps; separator = "\n\n" } → approved
+  let items = list(
+    { id = "pilot-review"; title = concat("Pilot review · ", $task.objective); text = if($review.result.summary, $review.result.summary, $task.objective) },
+    { id = "pilot-plan"; title = "Approved plan"; text = $approved })
+  when $review.result.checks:
+    let items = append($items, list({ id = "pilot-checks"; title = "Recorded checks"; text = $review.result.checks }))
+  port kernel.invoke { query = "nr.reviewEvidence"; input = $review.result.diff } → evidence
+  when $evidence:
+    fold $evidence.items as item; references starts list():
+      let source = $item.source
+      let reference = { id = concat("pilot-ref-", count($references)); title = concat($item.label, " · ", $source.path);
+        text = concat($source.process, " · line ", $source.line, "\n\n", $source.text) }
+      yield append($references, list($reference)) → references
+    let items = append($items, $references)
+  when and(not($evidence), $review.result.diff):
+    let items = append($items, list({ id = "pilot-diff"; title = "Recorded source diff"; text = $review.result.diff }))
+  let id = if($comment, $comment.id, concat("trip-", $request.nonce))
+  let draft = { task = $selected.id; pin = $pin; id = $id; base = $base }
+  let items = append($items, list({ id = "pilot-draft"; title = "Review comment draft"; text = if($comment, $comment.text, ""); draft = $draft }))
+  let reply = { status = "open"; packet = { items = $items } }
+
+process nr.travelSave:
+  let text = at($fields, "review-note")
+  let requestedBase = at($fields, "draft-base")
+  let reply = { status = "conflict"; current = if($comment, $comment.text, null) }
+  when eq(at($fields, "pin"), $pin):
+    when and($comment, eq($comment.text, $text)):
+      let reply = { status = "saved"; base = $currentBase }
+    when and(eq($requestedBase, $currentBase), not(and($comment, eq($comment.text, $text)))):
+      port text.matches { value = if($wanted, $wanted, ""); pattern = "^trip-[a-f0-9]{48}$" } → newId
+      when or($comment, and($newId, not(at($comments, 19)))):
+        try:
+          port kernel.invoke { query = "mw.text"; input = { value = $text; required = true; maximum = 300 } } → _
+          let entry = { id = $wanted; text = $text; context = if($comment, $comment.context, null) }
+          let nextComments = if($comment, map($comments, "previous", if(eq($previous.id, $wanted), $entry, $previous)), append($comments, list($entry)))
+          port record.put { record = $review; key = "comments"; value = $nextComments } → next
+          port rel.encode { value = $next; kind = "NorthRiverImplementationReview" } → document
+          let base = $snapshot.revision
+          port kernel.invoke { query = "nr.persist"; input = { documents = list({ path = concat("implementation-reviews/", $review.id, ".rel"); text = $document }); notice = "Phone draft staged for review."; target = $review.id; goal = "Update staged review comments" } } → _
+          port json.stringify { value = $entry } → packed
+          port digest.sha256 { text = $packed } → newBase
+          let reply = { status = "saved"; base = $newBase }
+        catch fault:
+          let reply = { status = "retry" }

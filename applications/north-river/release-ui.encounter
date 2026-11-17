@@ -1,0 +1,117 @@
+process-module "temple/surface-process-module/1"
+
+process nr.releaseTrace:
+  let row = $eventInput
+  let task = $view.task
+  let assumptions = filter($task.candidate.plan.assumptions, "item", includes($row.assumptions, $item.id))
+  let details = map($assumptions, "item", { tag = "li"; attrs = {}; children = list(concat($item.area, " · ", $item.text, " · ", $item.origin)) })
+  let processes = map($row.processes, "process", { tag = "li"; attrs = {}; children = list(
+    { tag = "a"; attrs = { href = concat("/approval?trace=", $row.id, "&process=", $process.name) }; children = list($process.name) },
+    " · ", { tag = "a"; attrs = { href = concat("/approval?trace=", $row.id, "&source=", $process.path) }; children = list($process.path) }
+  ) })
+  let content = list(
+    { tag = "h2"; attrs = {}; children = list($row.title) },
+    { tag = "h3"; attrs = {}; children = list("Approved assumptions") },
+    { tag = "ul"; attrs = {}; children = $details },
+    { tag = "h3"; attrs = {}; children = list("Reviewed typed change") },
+    { tag = "p"; attrs = {}; children = list($row.change) },
+    { tag = "h3"; attrs = {}; children = list("Compiled lowerings") },
+    { tag = "ul"; attrs = {}; children = $processes },
+    { tag = "h3"; attrs = {}; children = list("Running app and browser evidence") },
+    { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = $row.surface }; children = list($row.surfaceLabel) }) }
+  )
+  when $view.release.evidence:
+    let evidence = $view.release.evidence.value
+    let observed = at(filter($evidence.verification.cases, "case", eq($case.id, $row.id)), 0)
+    let content = append($content, list({ tag = "p"; attrs = {}; children = list($observed.observed) }, { tag = "p"; attrs = {}; children = list(concat("Observed by ", $evidence.verifier, " at data revision ", $evidence.verification.revision)) }))
+  when not($view.release.evidence):
+    let content = append($content, list({ tag = "p"; attrs = {}; children = list("Browser evidence is missing.") }))
+  let process = at($view.fields, "process")
+  when some($row.processes, "item", eq($item.name, $process)):
+    port reflection.image { process = $process } → instructions
+    port rel.encode { value = $instructions; kind = "EncounterCompiledProcessInspection" } → lowered
+    let tags = map($instructions, "instruction", at($instruction, 0))
+    port text.join { values = $tags; separator = " · " } → sequence
+    let content = append($content, list({ tag = "section"; attrs = { "aria-label" = "Selected lowering" }; children = list(
+      { tag = "h3"; attrs = {}; children = list(concat("Emitted instructions for ", $process)) },
+      { tag = "p"; attrs = {}; children = list($sequence) },
+      { tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list("Exact compiled instructions in REL") }, { tag = "pre"; attrs = {}; children = list($lowered) }) }
+    ) }))
+  let result = { tag = "section"; attrs = { "aria-label" = "Behavior trace" }; children = $content }
+
+process nr.releasePage:
+  let view = $eventInput
+  let task = $view.task
+  let content = list(
+    { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { href = "/" }; children = list("Back to North River task") }) },
+    { tag = "h2"; attrs = {}; children = list("Original request") },
+    { tag = "blockquote"; attrs = {}; children = list($task.objective) }
+  )
+  when $view.coordinates:
+    let image = $view.coordinates.image
+    let files = map($image.files, "file", { tag = "li"; attrs = {}; children = list({ tag = "a"; attrs = { href = concat("/approval?source=", $file.path) }; children = list($file.path) }, " · ", $file.sha256) })
+    let roles = map($image.operators, "operator", { tag = "li"; attrs = {}; children = list(concat($operator.id, " · ", $operator.role)) })
+    port text.join { values = $image.grants; separator = ", " } → grants
+    let content = append($content, list(
+      { tag = "p"; attrs = {}; children = list(concat("Approved plan: ", $view.coordinates.plan, " · Employee import receipt: ", $view.coordinates.import)) },
+      { tag = "h2"; attrs = {}; children = list("Candidate image") },
+      { tag = "p"; attrs = {}; children = list("The pinned source inventory is the baseline for this image.") },
+      { tag = "p"; attrs = {}; children = list(concat("Image SHA-256: ", $image.sha256)) },
+      { tag = "p"; attrs = {}; children = list(concat("Runtime SHA-256: ", $image.runtimeSha256)) },
+      { tag = "p"; attrs = {}; children = list(concat("Compiled programme SHA-256: ", $image.programmeSha256)) },
+      { tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list("Declared grants and demo account roles") }, { tag = "p"; attrs = {}; children = list($grants) }, { tag = "ul"; attrs = {}; children = $roles }) },
+      { tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list("Pinned source and REL inventory") }, { tag = "ul"; attrs = {}; children = $files }) }
+    ))
+    let trace = map($view.trace, "row", { tag = "li"; attrs = {}; children = list({ tag = "a"; attrs = { href = concat("/approval?trace=", $row.id) }; children = list($row.title) }) })
+    let content = append($content, list({ tag = "h2"; attrs = {}; children = list("Trace the approved plan") }, { tag = "ul"; attrs = {}; children = $trace }))
+    let selected = filter($view.trace, "row", eq($row.id, at($view.fields, "trace")))
+    when eq(count($selected), 1):
+      port kernel.invoke { query = "nr.releaseTrace"; input = at($selected, 0) } → detail
+      let content = append($content, list($detail))
+    let path = at($view.fields, "source")
+    when some($image.files, "file", eq($file.path, $path)):
+      port reflection.image { path = $path } → source
+      let content = append($content, list({ tag = "section"; attrs = { "aria-label" = "Selected source" }; children = list(
+        { tag = "h2"; attrs = {}; children = list($path) },
+        { tag = "p"; attrs = {}; children = list(concat("Source SHA-256: ", $source.sha256)) },
+        { tag = "pre"; attrs = {}; children = list($source.text) }
+      ) }))
+    let evidence = $view.release.evidence
+    let receipt = $view.release.receipt
+    when not($evidence):
+      let content = append($content, list({ tag = "p"; attrs = {}; children = list("Approval blocked. Browser evidence is missing for this review.") }))
+    when and($evidence, not($receipt)):
+      let current = eq($evidence.value.verification.context, $view.coordinates)
+      when not($current):
+        let content = append($content, list({ tag = "p"; attrs = {}; children = list("Approval blocked. The candidate or verified inputs have changed.") }))
+      when $current:
+        let coordinate = { tag = "input"; attrs = { type = "hidden"; name = "evidence"; value = $evidence.sha256 }; children = list() }
+        let hidden = map(list(list("_csrf", $view.csrf), list("base", $view.revision), list("action", "approve-demo")), "pair", { tag = "input"; attrs = { type = "hidden"; name = at($pair, 0); value = at($pair, 1) }; children = list() })
+        let form = { tag = "form"; attrs = { method = "post"; action = "/approval"; class = "entry decision-command" }; children = append($hidden, list($coordinate, { tag = "button"; attrs = { type = "submit" }; children = list("Approve this North River demo image") })) }
+        port kernel.invoke { query = "sourcery.presentation.decision"; input = {
+          attrs = { class = "decision-form"; "data-presentation" = "vb6"; "aria-label" = "Approve exact image and evidence" };
+          title = "Approve exact image and evidence"; legend = "Release approval";
+          properties = list({ label = "Data revision"; value = $evidence.value.verification.revision },
+            { label = "Browser evidence"; value = $evidence.sha256 });
+          body = list({ tag = "p"; attrs = {}; children = list("Approval records this image for the private North River demo.") });
+          commands = list($form)
+        } } → dialog
+        let content = append($content, list($dialog))
+    when $receipt:
+      port kernel.invoke { query = "nr.releaseReceipt"; input = $receipt } → receiptView
+      let content = append($content, list($receiptView))
+  port kernel.invoke { query = "work.page"; input = { page = { title = "North River demo approval"; summary = $task.project; content = $content }; notice = $view.notice; error = $view.error } } → result
+
+process nr.releaseReceipt:
+  let receipt = $eventInput
+  let image = $view.coordinates.image
+  let current = eq($image, $view.release.evidence.value.verification.context.image)
+  port storage.operation { operationId = $receipt.operation } → commit
+  let result = { tag = "section"; attrs = { "aria-label" = "Demo approval receipt" }; children = list(
+    { tag = "h2"; attrs = {}; children = list("Demo approval receipt") },
+    { tag = "p"; attrs = {}; children = list(if($current, "Approved for the private North River demo.", "Historical approval. The running image or operator roles differ.")) },
+    { tag = "p"; attrs = {}; children = list(concat("Approved by ", $receipt.approver, " · Decision time (UTC epoch ms): ", $receipt.time, " · Decision revision ", $receipt.revision)) },
+    { tag = "p"; attrs = {}; children = list(concat("Image SHA-256: ", $receipt.image, " · Runtime SHA-256: ", $receipt.runtime)) },
+    { tag = "p"; attrs = {}; children = list(concat("Evidence SHA-256: ", $receipt.evidence, " · Verified data revision ", $receipt.verifiedRevision)) },
+    { tag = "p"; attrs = {}; children = list(concat("Decision SHA-256: ", $receipt.sha256, " · Committed change SHA-256: ", $commit.sourceHash)) }
+  ) }

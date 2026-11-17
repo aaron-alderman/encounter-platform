@@ -1,0 +1,40 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    sections = list(
+      {
+        subject = "application";
+        stateProfile = "encounter/north-river-scope-test/1";
+        module = list(
+          "north-river/test/scope.encounter",
+          "north-river/live-scope.encounter",
+          "usewords-lightning/source/matters.encounter",
+          "encounter-libraries/workflows/workspace.encounter"
+        );
+        dataSource = "north-river/test/scoped-proposal.rel";
+        entry = list(
+          "test.scope.report-dependency",
+          "test.scope.misplaced-prose",
+          "test.scope.typed-mismatch",
+          "test.scope.session-repair"
+        );
+        grant = list(
+          "kernel.invoke",
+          "application.data",
+          "record.put",
+          "record.entries",
+          "value.describe",
+          "number.calculate",
+          "text.trim",
+          "text.lowerCase",
+          "text.indexOf"
+        )
+      },
+      {
+        subject = "application";
+        module = "encounter-libraries/workflows/attention.encounter";
+        entry = list("test.attention.blocker-first", "test.attention.review-next")
+      }
+    )
+  }

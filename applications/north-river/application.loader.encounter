@@ -1,0 +1,119 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    sections = list(
+      {
+        subject = "application";
+        stateProfile = "encounter/north-river-plan/1";
+        module = list(
+          "north-river/task.encounter",
+          "north-river/project.encounter",
+          "north-river/project-plan.encounter",
+          "north-river/implementation-review.encounter",
+          "north-river/implementation-board.encounter",
+          "north-river/round-trip.encounter",
+          "north-river/round-trip-ui.encounter",
+          "north-river/implementation-inspection.encounter",
+          "north-river/editor-workscreen.encounter",
+          "north-river/scenario-replay.encounter",
+          "north-river/plan.encounter",
+          "north-river/live.encounter",
+          "north-river/live-scope.encounter",
+          "north-river/request-plan.encounter",
+          "encounter-libraries/workflows/attention.encounter",
+          "north-river/import.encounter",
+          "north-river/timesheet.encounter",
+          "north-river/timesheet-ui.encounter",
+          "north-river/report.encounter",
+          "north-river/report-ui.encounter",
+          "north-river/release.encounter",
+          "north-river/release-ui.encounter",
+          "north-river/ui.encounter",
+          "north-river/notebook-v1.encounter",
+          "encounter-libraries/workflows/notebook-v1.encounter",
+          "encounter-libraries/workflows/notebook-presentation.encounter",
+        "encounter/algebra/css/css.renderPlan.encounter",
+          "encounter-libraries/semantic/notes.encounter",
+          "encounter-libraries/workflows/matter-management.encounter",
+          "encounter-libraries/workflows/workspace.encounter",
+          "usewords-lightning/source/matters.encounter",
+          "encounter-libraries/workflows/sourcery-presentation.encounter",
+          "encounter-libraries/workflows/sourcery-notebook-web.encounter",
+          "encounter-portfolio/source/products/shared/work-ui.encounter",
+          "encounter-portfolio/source/products/timesheet/application.encounter",
+          "encounter/algebra/html/html.escape.encounter",
+          "encounter/algebra/html/html.cssText.encounter",
+          "encounter/algebra/html/html.serialize.encounter"
+        );
+        entry = list(
+          "app.newSession",
+          "app.request",
+          "ui.presentationStyles"
+        );
+        grant = list(
+          "kernel.invoke",
+          "rel.encode",
+          "rel.decode",
+          "scalar.read",
+          "storage.cas",
+          "storage.operation",
+          "storage.snapshot",
+          "storage.history",
+          "digest.sha256",
+          "json.stringify"
+        );
+        dataSource = "north-river/evidence.rel"
+      },
+      {
+        subject = "application";
+        grant = list(
+          "application.data",
+          "text.matches",
+          "text.join",
+          "text.replaceAll",
+          "text.trim",
+          "value.describe",
+          "value.string",
+          "value.type",
+          "record.entries",
+          "record.put",
+          "number.calculate",
+          "csv.read",
+          "text.indexOf",
+          "text.slice",
+          "text.split"
+        );
+        dataset = "review-map"
+      },
+      { subject = "data.review-map"; source = "north-river/review-map.rel" },
+      {
+        subject = "application";
+        grant = "reflection.image";
+        entry = list(
+          "app.events",
+          "app.agentNext",
+          "app.agentResult"
+        )
+      },
+      {
+        subject = "application";
+        grant = list(
+          "record.fromEntries",
+          "text.lowerCase"
+        );
+        dataset = "repair-index"
+      },
+      { subject = "data.repair-index"; source = "north-river/test/repair-index.rel" },
+      { subject = "application"; dataset = "implementation-evidence" },
+      { subject = "data.implementation-evidence"; source = "north-river/implementation-evidence.rel" },
+      { subject = "application"; dataset = "review-source-files" },
+      { subject = "data.review-source-files"; source = "north-river/review-source-files.rel" },
+      { subject = "application"; dataset = "scenario-evidence" },
+      { subject = "data.scenario-evidence"; source = "north-river/scenario-evidence.rel" },
+      { subject = "application"; dataset = "scenario-stages" },
+      { subject = "data.scenario-stages"; source = "north-river/scenario-stages.rel" },
+      { subject = "application"; dataset = "review-preview" },
+      { subject = "data.review-preview"; source = "north-river/review-preview.rel" }
+    )
+  }

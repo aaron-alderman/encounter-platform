@@ -1,0 +1,78 @@
+process-module "temple/surface-process-module/1"
+
+process nr.reportDate:
+  port kernel.invoke { query = "timesheet.date"; input = $eventInput } → date
+  port text.replaceAll { value = $date; search = "-"; replacement = "" } → digits
+  port scalar.read { text = $digits } → result
+
+process nr.reportMinutes:
+  fold $eventInput as entry; minutes starts 0:
+    yield add($minutes, $entry.minutes) → minutes
+  port number.calculate { operation = "lessEqual"; values = list($minutes, 9007199254740991) } → exact
+  assert $exact
+    otherwise "The selected total exceeds the exact whole-minute range."
+  let result = $minutes
+
+process nr.reportCalculate:
+  let selector = $eventInput
+  assert or(eq($selector.employee, ""), some($employees, "employee", eq($employee.id, $selector.employee)))
+    otherwise "Choose an employee from this project."
+  let lower = 0
+  let upper = 99991231
+  when not(eq($selector.from, "")):
+    port kernel.invoke { query = "nr.reportDate"; input = $selector.from } → lower
+  when not(eq($selector.through, "")):
+    port kernel.invoke { query = "nr.reportDate"; input = $selector.through } → upper
+  port number.calculate { operation = "lessEqual"; values = list($lower, $upper) } → ordered
+  assert $ordered
+    otherwise "From must be on or before Through."
+  let selected = filter($employees, "employee", or(eq($selector.employee, ""), eq($selector.employee, $employee.id)))
+  port kernel.invoke { query = "nr.timeLoad"; input = $snapshot.documents } → entries
+  fold $entries as entry; matching starts list():
+    when some($selected, "employee", eq($employee.id, $entry.employee)):
+      port kernel.invoke { query = "nr.reportDate"; input = $entry.date } → date
+      port number.calculate { operation = "greaterEqual"; values = list($date, $lower) } → from
+      port number.calculate { operation = "lessEqual"; values = list($date, $upper) } → through
+      when and($from, $through):
+        let matching = append($matching, list($entry))
+    yield $matching → matching
+  port kernel.invoke { query = "nr.reportMinutes"; input = $matching } → total
+  fold $selected as employee; groups starts list():
+    let own = filter($matching, "entry", eq($entry.employee, $employee.id))
+    port kernel.invoke { query = "nr.reportMinutes"; input = $own } → minutes
+    yield append($groups, list({ label = $employee.displayName; entries = count($own); minutes = $minutes; contributions = map($own, "entry", { date = $entry.date; minutes = $entry.minutes }) })) → groups
+  let dates = distinct(map($matching, "entry", $entry.date))
+  fold $dates as date; days starts list():
+    let onDate = filter($matching, "entry", eq($entry.date, $date))
+    port kernel.invoke { query = "nr.reportMinutes"; input = $onDate } → minutes
+    yield append($days, list({ label = $date; minutes = $minutes })) → days
+  let result = { employees = $groups; days = $days; minutes = $total; count = count($matching) }
+
+process nr.reportRequest:
+  let authorized = eq(at($actor, "role"), "manager")
+  let ready = and($authorized, eq($task.phase, "imported"))
+  let employees = list()
+  let data = null
+  let notice = ""
+  let error = false
+  let selector = {
+    employee = if(eq(at($fields, "employee"), at({}, "absent")), "", $fields.employee);
+    from = if(eq(at($fields, "from"), at({}, "absent")), "", $fields.from);
+    through = if(eq(at($fields, "through"), at({}, "absent")), "", $fields.through)
+  }
+  let approvedPlan = ""
+  when $ready:
+    let employees = $task.import.employees
+    let approvedPlan = $task.approval.plan
+  try:
+    assert $authorized
+      otherwise "ACCESS: The timesheet report is available only to managers."
+    assert eq($request.method, "GET")
+      otherwise "The timesheet report is read-only."
+    when $ready:
+      port kernel.invoke { query = "nr.reportCalculate"; input = $selector } → data
+  catch fault:
+    let notice = $fault.message
+    let error = true
+  port kernel.invoke { query = "nr.reportPage"; input = { account = at($actor, "id"); project = $task.project; ready = $ready; employees = $employees; selector = $selector; revision = $snapshot.revision; plan = $approvedPlan; data = $data; notice = $notice; error = $error } } → html
+  let result = { html = $html; session = $session }

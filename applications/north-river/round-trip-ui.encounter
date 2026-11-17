@@ -1,0 +1,59 @@
+process-module "temple/surface-process-module/1"
+
+process nr.investigationForm:
+  let form = $eventInput
+  let coordinate = { tag = "input"; attrs = { type = "hidden"; name = $form.coordinate; value = $form.id }; children = list() }
+  let mode = { tag = "input"; attrs = { type = "hidden"; name = "view"; value = "investigate" }; children = list() }
+  let text = { tag = "label"; attrs = {}; children = list($form.label,
+    { tag = "textarea"; attrs = { name = $form.name; required = true; maxlength = $form.maximum; "data-encounter-draft" = "" };
+      children = list(if($view.error, at($fields, $form.name), "")) }) }
+  port kernel.invoke { query = "nr.boardForm"; input = { action = $form.action; task = $form.task;
+    fields = list($coordinate, $mode, $text); button = $form.button; url = $form.url } } → result
+
+process nr.investigationView:
+  let spec = $eventInput
+  let linked = $spec.linked
+  let open = $linked.open
+  let requested = at($fields, "investigation")
+  let record = if($requested, at(filter($linked.current, "entry", eq($entry.id, $requested)), 0), $open)
+  let subject = if($record, at($record, "subject"), $spec.item)
+  let label = if($record, concat("Investigation #", $record.number), "New investigation")
+  let heading = if($record, $record.question, "What needs investigating?")
+  let back = $spec.selection
+  let action = null
+  when and(not($open), not($requested), not($record), eq($spec.review.state, "review"), $spec.current):
+    port kernel.invoke { query = "nr.investigationForm"; input = { coordinate = "review-item"; id = $spec.item.id; label = "Question";
+      name = "question"; maximum = 500; action = "open-investigation"; task = $spec.taskId; button = "Open investigation"; url = $spec.selection } } → action
+  when and($record, eq($record.state, "open"), $spec.current, eq($spec.review.state, "review")):
+    port kernel.invoke { query = "nr.investigationForm"; input = { coordinate = "investigation"; id = $record.id; label = "Finding";
+      name = "finding"; maximum = 1200; action = "return-investigation"; task = $spec.taskId; button = "Return finding to review"; url = $spec.selection } } → action
+  let finding = at($record, "finding")
+  let result = { tag = "section"; attrs = { class = "nb1-decision"; id = "current-decision"; tabindex = -1; "data-tone" = if($finding, "saved", "decision");
+    "aria-label" = "Current decision" }; children = list(
+      { tag = "p"; attrs = { class = "nb1-label" }; children = list("Ad hoc · ", $label) },
+      { tag = "h2"; attrs = {}; children = list(if(and($requested, not($record)), "Investigation unavailable", $heading)) },
+      { tag = "p"; attrs = {}; children = list(if($subject, concat("Linked change · ", $subject.label), "Linked to this implementation review.")) },
+      if($finding, { tag = "p"; attrs = {}; children = list($finding.text) }, null),
+      $action,
+      { tag = "nav"; attrs = { class = "nb1-actions"; "aria-label" = "Investigation links" }; children = list(
+        { tag = "a"; attrs = { href = $back }; children = list("Back to implementation review") },
+        { tag = "a"; attrs = { href = "#handoff-approval" }; children = list("Approved plan and receipt") }) },
+      { tag = "p"; attrs = { role = "status"; "data-encounter-pending" = "" }; children = list() },
+      { tag = "button"; attrs = { type = "button"; hidden = true; "data-encounter-apply" = "" }; children = list("Show latest activity") }
+    ) }
+
+process nr.handoffQueuePage:
+  let assigned = $eventInput
+  let links = map($assigned, "entry", { tag = "li"; attrs = {}; children = list(
+    { tag = "a"; attrs = { href = $entry.href }; children = list("Handoff #", $entry.handoff.number, " · ", $entry.title) }) })
+  port kernel.invoke { query = "notebook.v1.titlebar"; input = "Project home" } → title
+  let decision = { tag = "section"; attrs = { class = "nb1-decision"; "aria-label" = "Your next decision" }; children = list(
+    { tag = "h2"; attrs = {}; children = list("Your next decision") },
+    if(count($assigned), { tag = "ul"; attrs = {}; children = $links },
+      { tag = "p"; attrs = {}; children = list("No handoff is waiting for you.") })) }
+  let paper = { tag = "div"; attrs = { class = "nb1-paper" }; children = list($decision) }
+  let live = eq(at($request, "liveModel"), true)
+  let content = { tag = "div"; attrs = { class = "nb1"; "data-encounter-events" = if($live, "/encounter-events?queue=handoffs", null);
+    "data-rendered" = $snapshot.revision }; children = list($title, $paper,
+      if($live, { tag = "script"; attrs = { src = "/encounter-events.js"; defer = true }; children = list() }, null)) }
+  port kernel.invoke { query = "work.page"; input = { page = { title = "North River"; summary = "Project home"; content = list($content) }; notice = ""; error = false } } → result

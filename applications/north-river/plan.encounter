@@ -1,0 +1,64 @@
+process-module "temple/surface-process-module/1"
+
+process nr.sequence:
+  port value.describe { value = $eventInput.value } → shape
+  port number.calculate { operation = "lessEqual"; values = list(count($eventInput.value), $eventInput.limit) } → bounded
+  assert and($shape.array, count($eventInput.value), $bounded)
+    otherwise "PLAN: Supply a nonempty bounded list."
+  let result = true
+
+process nr.plan:
+  let plan = $eventInput
+  port kernel.invoke { query = "mw.exact"; input = { value = $plan; keys = list("assumptions", "steps", "question", "evidence") } } → _
+  port kernel.invoke { query = "nr.sequence"; input = { value = $plan.assumptions; limit = 16 } } → _
+  port kernel.invoke { query = "nr.sequence"; input = { value = $plan.steps; limit = 12 } } → _
+  let requestScope = eq(at(at($task, "run"), "scope"), "request")
+  let evidence = $reference.sha256
+  when $requestScope:
+    port digest.sha256 { text = $task.objective } → evidence
+  assert eq($plan.evidence, $evidence)
+    otherwise "EVIDENCE: Cite the source pinned for this planning scope."
+  let assumptionIds = map($plan.assumptions, "item", $item.id)
+  assert eq(count($assumptionIds), count(distinct($assumptionIds)))
+    otherwise "PLAN: Assumption IDs must be unique."
+  each $plan.assumptions as item:
+    port kernel.invoke { query = "mw.exact"; input = { value = $item; keys = list("id", "area", "text", "origin") } } → _
+    each list($item.id, $item.area) as text:
+      port kernel.invoke { query = "mw.text"; input = { value = $text; required = true; maximum = 900 } } → _
+    let maximum = if(and($requestScope, eq($item.origin, "request")), 2000, 900)
+    port kernel.invoke { query = "mw.text"; input = { value = $item.text; required = true; maximum = $maximum } } → _
+    assert includes(list("request", "proposed", "human-answer"), $item.origin)
+      otherwise "PLAN: Choose a declared assumption origin."
+    when eq($item.origin, "request"):
+      assert eq($item.text, $task.objective)
+        otherwise "PLAN: A request attribution must quote the recorded request exactly."
+    when eq($item.origin, "human-answer"):
+      assert and($task.answer, eq($item.id, $task.candidate.plan.question.assumption), eq($item.text, $task.answer.text))
+        otherwise "PLAN: A human answer must match the recorded answer exactly."
+    assert some($plan.steps, "step", includes($step.assumptions, $item.id))
+      otherwise "PLAN: Link each assumption to a step."
+  fold $plan.steps as step; prior starts list():
+    let keys = list("id", "title", "change", "check", "assumptions", "dependsOn")
+    when at($task, "run"):
+      let keys = append($keys, list("target", "checkKind"))
+    port kernel.invoke { query = "mw.exact"; input = { value = $step; keys = $keys } } → _
+    each list($step.id, $step.title, $step.change, $step.check) as text:
+      port kernel.invoke { query = "mw.text"; input = { value = $text; required = true; maximum = 1400 } } → _
+    port value.describe { value = $step.dependsOn } → links
+    port kernel.invoke { query = "nr.sequence"; input = { value = $step.assumptions; limit = 16 } } → _
+    assert and($links.array, every($step.dependsOn, "id", includes($prior, $id)), not(includes($prior, $step.id)), every($step.assumptions, "id", includes($assumptionIds, $id)))
+      otherwise "PLAN: Steps must have unique IDs, depend on earlier steps and cite declared assumptions."
+    yield append($prior, list($step.id)) → prior
+  port kernel.invoke { query = "mw.exact"; input = { value = $plan.question; keys = list("text", "why", "assumption") } } → _
+  each list($plan.question.text, $plan.question.why) as text:
+    port kernel.invoke { query = "mw.text"; input = { value = $text; required = true; maximum = 900 } } → _
+  assert includes($assumptionIds, $plan.question.assumption)
+    otherwise "PLAN: Link the blocking question to an assumption."
+  when $task.answer:
+    assert and(eq($plan.question, $task.candidate.plan.question), some($plan.assumptions, "item", and(eq($item.id, $plan.question.assumption), eq($item.origin, "human-answer"))))
+      otherwise "PLAN: The revised candidate must retain the question and incorporate its recorded answer."
+  let result = $plan
+
+process nr.hashPlan:
+  port rel.encode { value = $eventInput; kind = "NorthRiverPlanReview" } → encoded
+  port digest.sha256 { text = $encoded } → result

@@ -1,0 +1,196 @@
+process-module "temple/surface-process-module/1"
+
+process nr.liveRules:
+  let result = list(
+    { id = "model"; title = "Define the model"; target = "model-definition"; check = "model-constraint" },
+    { id = "import"; title = "Preview employee import"; target = "csv-import"; check = "row-validation" },
+    { id = "entry"; title = "Author time entry"; target = "entry-command"; check = "entry-validation" },
+    { id = "sessions"; title = "Exercise separate sessions"; target = "account-access"; check = "access-refusal" },
+    { id = "report"; title = "Build the report"; target = "report-projection"; check = "report-values" }
+  )
+
+process nr.liveStepSchema:
+  let rule = $eventInput
+  let text = { type = "string"; minLength = 1; maxLength = 450 }
+  let checkSchema = $text
+  when at($rule, "structuredCheck"):
+    port kernel.invoke { query = "nr.sessionRepairSchema"; input = null } → checkSchema
+  let target = { type = "string"; enum = list($rule.target) }
+  let check = { type = "string"; enum = list($rule.check) }
+  port kernel.invoke { query = "nr.liveObject"; input = { keys = list("target", "checkKind", "change", "check"); properties = { target = $target; checkKind = $check; change = $text; check = $checkSchema } } } → result
+
+process nr.liveScope:
+  let proposal = $eventInput
+  port kernel.invoke { query = "nr.liveRules"; input = null } → rules
+  let steps = $proposal.value
+  when eq($proposal.stage, "initial"):
+    let steps = $proposal.value.steps
+  when eq($proposal.stage, "resume"):
+    let rules = filter($rules, "rule", eq($rule.id, "sessions"))
+    let steps = { sessions = $proposal.value }
+  port kernel.invoke { query = "mw.exact"; input = { value = $steps; keys = map($rules, "rule", $rule.id) } } → _
+  fold $rules as rule; issues starts list():
+    let step = at($steps, $rule.id)
+    port kernel.invoke { query = "mw.exact"; input = { value = $step; keys = list("target", "checkKind", "change", "check") } } → _
+    let sessionRepair = and(eq($rule.id, "sessions"), at($proposal, "sessionRepair"))
+    let structured = and($sessionRepair, not(eq(at($proposal, "sessionCheckFormat"), "legacy")))
+    let fields = list($step.target, $step.checkKind, $step.change)
+    when not($structured):
+      let fields = append($fields, list($step.check))
+    each $fields as field:
+      port kernel.invoke { query = "mw.text"; input = { value = $field; required = true; maximum = 450 } } → _
+    let excerpt = if($structured, $step.change, concat($step.change, " · Check: ", $step.check))
+    let issue = null
+    when not(and(eq($step.target, $rule.target), eq($step.checkKind, $rule.check))):
+      let issue = { rule = $rule; kind = "typed-mismatch"; excerpt = $excerpt; diagnostic = concat($rule.title, " expects ", $rule.target, " / ", $rule.check, ". The reply declares ", $step.target, " / ", $step.checkKind, ".") }
+    when and(not($issue), eq($rule.id, "model")):
+      port kernel.invoke { query = "nr.reportWording"; input = list($step.change, $step.check) } → wording
+      when $wording:
+        let issue = { rule = $rule; kind = "suspected-prose-mismatch"; excerpt = $wording; diagnostic = "Define the model appears to propose report work. Define a type, field, reference or constraint here. Render or check report values in Build the report." }
+    when and(not($issue), $sessionRepair):
+      let explicit = false
+      when $structured:
+        port kernel.invoke { query = "nr.sessionRepairCheck"; input = $step.check } → explicit
+      when not($structured):
+        port kernel.invoke { query = "nr.legacySessionRepairCheck"; input = $step.check } → explicit
+      when not($explicit):
+        let issue = { rule = $rule; kind = "missing-access-refusal"; excerpt = $excerpt; diagnostic = "Session repair must specify a supported forbidden actor, action and resource with an expected denial." }
+    yield if($issue, append($issues, list($issue)), $issues) → issues
+  let result = $issues
+
+process nr.legacySessionRefusalChecks:
+  let result = list(
+    "As an employee, attempt to open the manager report. Expect access denied.",
+    "As a manager, attempt to edit employee time. Expect access denied.",
+    "As an employee, attempt to edit another employee's time. Expect access denied."
+  )
+
+process nr.legacySessionRepairCheck:
+  port kernel.invoke { query = "nr.legacySessionRefusalChecks"; input = null } → supported
+  port text.trim { value = $eventInput } → trimmed
+  port text.lowerCase { value = $trimmed } → actual
+  fold $supported as check; matches starts false:
+    port text.lowerCase { value = $check } → normalized
+    yield or($matches, eq($actual, $normalized)) → matches
+  let result = $matches
+
+process nr.sessionRefusalPolicy:
+  let result = list(
+    { actor = "employee"; resource = "manager-report"; actions = list("read"); label = "the manager report" },
+    { actor = "manager"; resource = "employee-time"; actions = list("create", "update"); label = "employee time" },
+    { actor = "employee"; resource = "other-employee-time"; actions = list("read", "create", "update"); label = "another employee's time" }
+  )
+
+process nr.sessionRepairCheck:
+  let check = $eventInput
+  let result = false
+  try:
+    port kernel.invoke { query = "mw.exact"; input = { value = $check; keys = list("actor", "action", "resource", "expected") } } → _
+    port kernel.invoke { query = "nr.sessionRefusalPolicy"; input = null } → policy
+    let result = and(eq($check.expected, "denied"), some($policy, "rule",
+      and(eq($check.actor, $rule.actor), eq($check.resource, $rule.resource), includes($rule.actions, $check.action))))
+  catch fault:
+    let result = false
+
+process nr.sessionRepairSchema:
+  port kernel.invoke { query = "nr.sessionRefusalPolicy"; input = null } → policy
+  port kernel.invoke { query = "nr.liveObject"; input = {
+    keys = list("actor", "action", "resource", "expected");
+    properties = { actor = { type = "string"; enum = distinct(map($policy, "rule", $rule.actor)) };
+      action = { type = "string"; enum = list("read", "create", "update") };
+      resource = { type = "string"; enum = map($policy, "rule", $rule.resource) };
+      expected = { type = "string"; enum = list("denied") } }
+  } } → result
+
+process nr.sessionCheckText:
+  let check = $eventInput
+  port kernel.invoke { query = "nr.sessionRefusalPolicy"; input = null } → policy
+  let rule = at(filter($policy, "rule", and(eq($rule.actor, $check.actor), eq($rule.resource, $check.resource))), 0)
+  let actor = if(eq($check.actor, "employee"), "an employee", "a manager")
+  let result = concat("As ", $actor, ", attempt to ", $check.action, " ", $rule.label, ". Expect access denied.")
+
+process nr.projectSessionCheck:
+  let proposal = $eventInput
+  let step = if(eq($job.stage, "initial"), $proposal.steps.sessions, $proposal)
+  port kernel.invoke { query = "nr.sessionCheckText"; input = $step.check } → text
+  port record.put { record = $step; key = "check"; value = $text } → step
+  let result = $step
+  when eq($job.stage, "initial"):
+    port record.put { record = $proposal.steps; key = "sessions"; value = $step } → steps
+    port record.put { record = $proposal; key = "steps"; value = $steps } → result
+
+process nr.reportWording:
+  fold $eventInput as phrase; flagged starts null:
+    let match = $flagged
+    when not($match):
+      port text.trim { value = $phrase } → trimmed
+      port text.lowerCase { value = $trimmed } → lower
+      port text.indexOf { value = $lower; search = "render "; from = 0 } → render
+      port text.indexOf { value = $lower; search = "plot "; from = 0 } → plot
+      port text.indexOf { value = $lower; search = "display "; from = 0 } → display
+      port text.indexOf { value = $lower; search = "verify the report"; from = 0 } → verify
+      port text.indexOf { value = $lower; search = "build the report"; from = 0 } → build
+      let report = or(includes($lower, "report"), includes($lower, "chart"), includes($lower, "dashboard"))
+      when and($report, or(eq($render, 0), eq($plot, 0), eq($display, 0), eq($verify, 0), eq($build, 0))):
+        let match = $phrase
+    yield $match → flagged
+  let result = $flagged
+
+process nr.liveRepair:
+  let repair = $eventInput
+  let sessionRepair = some($repair.issues, "issue", eq($issue.rule.id, "sessions"))
+  fold $repair.issues as issue; properties starts list():
+    let rule = $issue.rule
+    when eq($rule.id, "sessions"):
+      port record.put { record = $rule; key = "structuredCheck"; value = true } → rule
+    port kernel.invoke { query = "nr.liveStepSchema"; input = $rule } → schema
+    yield append($properties, list(list($issue.rule.id, $schema))) → properties
+  port record.fromEntries { entries = $properties } → properties
+  port kernel.invoke { query = "nr.liveObject"; input = { keys = map($repair.issues, "issue", $issue.rule.id); properties = $properties } } → schema
+  fold $repair.issues as issue; details starts "":
+    yield concat($details, "\n", $issue.rule.title, " [", $issue.rule.id, "]: ", $issue.diagnostic, "\nFlagged reply: ", $issue.excerpt) → details
+  let answerContext = if($task.answer, concat("\nThe recorded human answer is: ", $task.answer.text), "")
+  let prompt = concat("Repair only the following North River timesheet plan steps. Return an object keyed by exactly the listed step IDs, with target, checkKind, change and check. The schema pins target and checkKind. ",
+    "Keep the work under its correct step. For model, propose Employee, DemoAccountLink or TimesheetEntry definitions or constraints, and check one such constraint. Report rendering belongs in the separate report step. Use short English sentences. Preserve the human answer and all unlisted steps.",
+    "\nOriginal request: ", $task.objective, $answerContext, $details)
+  when $sessionRepair:
+    port kernel.invoke { query = "nr.sessionRefusalPolicy"; input = null } → policy
+    fold $policy as rule; choices starts "":
+      port text.join { values = $rule.actions; separator = "/" } → actions
+      yield concat($choices, "\nactor=", $rule.actor, ", action=", $actions, ", resource=", $rule.resource) → choices
+    let prompt = concat($prompt, "\nFor the sessions repair, check is an object with actor, action, resource, and expected. Set expected to denied. Choose a matching role, action and resource for the requested refusal:", $choices)
+  let context = at($repair, "context")
+  when $context:
+    port kernel.invoke { query = "nr.replayContext"; input = $context } → packet
+    let prompt = concat($prompt, "\n\n", $packet)
+  let result = { id = concat($job.id, "-repair"); stage = $job.stage; model = $job.model; digest = $job.digest; prompt = $prompt; schema = $schema; repair = true; sessionCheckFormat = if($sessionRepair, "structured", null); issues = $repair.issues; original = $repair.value }
+
+process nr.liveMergeRepair:
+  let reply = $eventInput
+  port kernel.invoke { query = "mw.exact"; input = { value = $reply; keys = map($job.issues, "issue", $issue.rule.id) } } → _
+  let result = at($reply, "sessions")
+  when eq($job.stage, "initial"):
+    fold $job.issues as issue; steps starts $job.original.steps:
+      let id = $issue.rule.id
+      port record.put { record = $steps; key = $id; value = at($reply, $id) } → updated
+      yield $updated → steps
+    port record.put { record = $job.original; key = "steps"; value = $steps } → result
+
+process nr.replayContext:
+  let chosen = $eventInput
+  port application.data { name = "repair-index" } → index
+  assert eq(count($chosen), count(distinct($chosen)))
+    otherwise "EXPERIMENT: Optional unit IDs must be unique."
+  let required = filter($index.units, "unit", not($unit.optional))
+  let optional = filter($index.units, "unit", $unit.optional)
+  assert every($chosen, "id", some($optional, "unit", eq($unit.id, $id)))
+    otherwise "EXPERIMENT: The selector can include only indexed optional units."
+  let selected = map($chosen, "id", at(filter($optional, "unit", eq($unit.id, $id)), 0))
+  let fixed = map($required, "unit", concat("[", $unit.id, "] ", $unit.text))
+  let supporting = map($selected, "unit", concat("[", $unit.id, "] ", $unit.text))
+  port text.join { values = $fixed; separator = "\n" } → fixed
+  port text.join { values = $supporting; separator = "\n" } → supporting
+  port number.calculate { operation = "lessEqual"; values = list(count($supporting), $index.budgetBytes) } → bounded
+  assert $bounded
+    otherwise "EXPERIMENT: Optional context exceeds the budget."
+  let result = concat("Mandatory context (same for every arm):\n", $fixed, "\n\nOptional context (navigation only):\n", $supporting)

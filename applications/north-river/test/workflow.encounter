@@ -1,0 +1,61 @@
+process-module "temple/surface-process-module/1"
+
+process cli.main:
+  let check = at($eventInput, 0)
+  port rel.decode { kind = "NorthRiverWorkflowObservation"; text = at($eventInput, 1) } → evidence
+  assert includes(list("assigned", "approval", "initial-events", "resumed-events", "isolated-runs", "distinct-plans", "repair-scope", "ranking"), $check)
+    otherwise "Unknown North River workflow assertion."
+  when eq($check, "assigned"):
+    assert and(eq($evidence.task.objective, $evidence.objective), eq($evidence.grants, list("read-assigned-task", "propose-plan")))
+      otherwise "The proposer must see the assigned request and only the planning grants."
+  when eq($check, "approval"):
+    assert and(eq($evidence.task.phase, "approved"), eq($evidence.revision, 6), eq($evidence.task.approval.plan, $evidence.plan), eq($evidence.task.approval.reviewer, $evidence.owner))
+      otherwise "Restart must recover the owner's approval of the exact plan at revision six."
+  when eq($check, "initial-events"):
+    let ordinary = list("run-started", "question")
+    let repaired = list("run-started", "repair-requested", "question")
+    assert or(eq($evidence.events, $repaired), and(not($evidence.requiresRepair), eq($evidence.events, $ordinary)))
+      otherwise "The first question must follow run start and any required repair."
+  when eq($check, "resumed-events"):
+    let expected = append($evidence.initial, list("answer-saved", "run-resumed"))
+    when $evidence.resumeRepair:
+      let expected = append($expected, list("repair-requested"))
+    let expected = append($expected, list("revised-plan"))
+    assert eq($evidence.events, $expected)
+      otherwise "The resumed run must replay the exact event order."
+    let repairs = filter($evidence.events, "event", eq($event, "repair-requested"))
+    assert includes(list(0, 1), count($repairs))
+      otherwise "The run must request at most one repair."
+  when eq($check, "isolated-runs"):
+    port kernel.invoke { query = "check.isolatedRuns"; input = $evidence } → _
+  when eq($check, "distinct-plans"):
+    assert not(eq($evidence.first, $evidence.second))
+      otherwise "Independent tasks must have distinct approval candidates."
+  when eq($check, "repair-scope"):
+    port record.entries { value = $evidence } → entries
+    assert and(eq(map($entries, "entry", at($entry, 0)), list("model")), eq($evidence.model.target, "model-definition"), eq($evidence.model.checkKind, "model-constraint"))
+      otherwise "The repair must change only the model definition and its constraint check."
+  when eq($check, "ranking"):
+    assert eq($evidence.ranked, $evidence.repeated)
+      otherwise "Repeating the PageRank arm must return the same ranking."
+    assert and(not(eq($evidence.control.ids, $evidence.treatment.ids)), eq($evidence.control.required, $evidence.treatment.required))
+      otherwise "The ranking arms must differ in optional context and retain identical mandatory context."
+  let result = "pass"
+
+process check.isolatedRuns:
+  let evidence = $eventInput
+  assert not(eq($evidence.first.run, $evidence.second.run))
+    otherwise "Each task must receive a distinct run."
+  each list($evidence.first, $evidence.second) as task:
+    assert and(eq($task.streams, list($task.run)), includes($task.events, "question"))
+      otherwise "A browser tab must receive its own run stream and question."
+  let result = true
+
+process test.workflow.cross-task-run:
+  let result = false
+  try:
+    let first = { run = "first"; streams = list("first"); events = list("question") }
+    let second = { run = "second"; streams = list("first"); events = list("question") }
+    port kernel.invoke { query = "check.isolatedRuns"; input = { first = $first; second = $second } } → _
+  catch fault:
+    let result = includes($fault.message, "own run stream")

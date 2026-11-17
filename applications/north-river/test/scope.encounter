@@ -1,0 +1,111 @@
+process-module "temple/surface-process-module/1"
+
+process test.scope.withModel:
+  port application.data {} → proposal
+  port record.put { record = $proposal.steps; key = "model"; value = $eventInput } → steps
+  port record.put { record = $proposal; key = "steps"; value = $steps } → updated
+  port kernel.invoke { query = "nr.liveScope"; input = { stage = "initial"; value = $updated } } → result
+
+process test.scope.report-dependency:
+  port application.data {} → proposal
+  port kernel.invoke { query = "nr.liveScope"; input = { stage = "initial"; value = $proposal } } → issues
+  let result = eq(count($issues), 0)
+
+process test.scope.misplaced-prose:
+  port application.data {} → proposal
+  port record.put { record = $proposal.steps.model; key = "change"; value = "render report tables and charts" } → misplaced
+  port kernel.invoke { query = "test.scope.withModel"; input = $misplaced } → issues
+  assert eq(count($issues), 1)
+    otherwise "Misplaced report work should be flagged once."
+  let issue = at($issues, 0)
+  let result = and(eq($issue.kind, "suspected-prose-mismatch"), eq($issue.rule.id, "model"), eq($issue.excerpt, "render report tables and charts"))
+
+process test.scope.typed-mismatch:
+  port application.data {} → proposal
+  port kernel.invoke { query = "test.scope.withModel"; input = $proposal.steps.report } → issues
+  assert eq(count($issues), 1)
+    otherwise "A report projection in the model slot should be refused."
+  let issue = at($issues, 0)
+  let result = and(eq($issue.kind, "typed-mismatch"), eq($issue.rule.id, "model"))
+
+process test.attention.blocker-first:
+  port kernel.invoke { query = "attention.project"; input = { standing = "blocked"; label = "Repair required"; reason = "Misplaced report work"; next = "wait-repair"; canDecide = true } } → view
+  let result = and(eq($view.standing, "blocked"), eq($view.primary.kind, "critical"), eq($view.primary.next, "wait-repair"), eq($view.supporting, "ordinary"), eq($view.evidence, "reference"))
+
+process test.attention.review-next:
+  let state = { standing = "reviewable"; label = "Plan ready to review"; reason = ""; next = "approve"; canDecide = true }
+  port kernel.invoke { query = "attention.project"; input = $state } → owner
+  port record.put { record = $state; key = "canDecide"; value = false } → observer
+  port kernel.invoke { query = "attention.project"; input = $observer } → readOnly
+  let result = and(eq($owner.primary.kind, "decision"), eq($readOnly.primary.kind, "working"), eq($readOnly.standing, $owner.standing))
+
+process test.scope.request-plan:
+  let objective = "Employees can notify management they are sick."
+  let task = { objective = $objective; run = { scope = "request" }; answer = null }
+  let reference = { sha256 = "timesheet-template-evidence" }
+  let job = { stage = "initial"; scope = "request" }
+  let step = { title = "Send a sick-leave notice"; work = "Let an employee notify their manager."; check = "Confirm the manager receives it."; requestQuote = "notify management they are sick" }
+  let reply = { question = "Which manager receives the notice?"; why = "The answer sets the recipient."; assumption = "The recipient is still open." }
+  port kernel.invoke { query = "nr.requestPlan"; input = $reply } → first
+  assert and(eq(count($first.steps), 1), eq(at(at($first.steps, 0), "id"), "scope"), not(eq($first.evidence, $reference.sha256)))
+    otherwise "Ask the scope question before drafting implementation steps and bind the request as evidence."
+  let answer = "Send it to the employee’s direct manager."
+  let task = { objective = $objective; run = { scope = "request" }; candidate = { plan = $first }; answer = { text = $answer } }
+  let job = { stage = "resume"; scope = "request" }
+  let failed = false
+  try:
+    port record.put { record = $step; key = "requestQuote"; value = "Preview employee import" } → unrelated
+    port kernel.invoke { query = "nr.requestPlan"; input = { steps = list($unrelated) } } → _
+  catch fault:
+    let failed = includes($fault.message, "quote the recorded request")
+  assert $failed
+    otherwise "A step with a fabricated quote must refuse."
+  port kernel.invoke { query = "nr.requestPlan"; input = { steps = list({ title = "Notify the direct manager"; work = "Notify the direct manager."; check = "Confirm delivery to the direct manager."; requestQuote = $step.requestQuote }) } } → revised
+  assert and(eq($revised.question, $first.question), eq(at(at($revised.steps, 0), "title"), "Notify the direct manager"), some($revised.assumptions, "item", and(eq($item.origin, "human-answer"), eq($item.text, $answer))))
+    otherwise "Draft from scope and retain the exact question and answer."
+  let passage = "The owner must confirm the notification recipient, the minimum information employees need to send, and what they should see after delivery. "
+  let long = concat($objective, " ", $passage, $passage, $passage, $passage, $passage, $passage, $passage, $passage, $passage)
+  let task = { objective = $long; run = { scope = "request" }; answer = null }
+  let job = { stage = "initial"; scope = "request" }
+  port kernel.invoke { query = "nr.requestPlan"; input = $reply } → longPlan
+  assert eq(at(at($longPlan.assumptions, 0), "text"), $long)
+    otherwise "Preserve the full recorded request up to the task limit."
+  let result = true
+
+process test.scope.session-repair:
+  port application.data {} → proposal
+  let step = $proposal.steps.sessions
+  let inadequate = list(
+    "As an employee, attempt to open the manager report. Expect access denied.",
+    { actor = "employee"; action = "read"; resource = "manager-report"; expected = "allowed" },
+    { actor = "manager"; action = "read"; resource = "manager-report"; expected = "denied" },
+    { actor = "employee"; action = "update"; resource = "manager-report"; expected = "denied" },
+    { actor = "employee"; action = "update"; resource = "own-time"; expected = "denied" },
+    { actor = "employee"; action = "read"; resource = "manager-report" },
+    { actor = "employee"; action = "read"; resource = "manager-report"; expected = "denied"; extra = true }
+  )
+  each $inadequate as check:
+    port record.put { record = $step; key = "check"; value = $check } → candidate
+    port kernel.invoke { query = "nr.liveScope"; input = { stage = "resume"; value = $candidate; sessionRepair = true } } → issues
+    assert and(eq(count($issues), 1), eq(at(at($issues, 0), "kind"), "missing-access-refusal"))
+      otherwise "Reject prose, malformed checks and tuples outside the refusal policy."
+  let supported = list(
+    { actor = "employee"; action = "read"; resource = "manager-report"; expected = "denied" },
+    { actor = "manager"; action = "create"; resource = "employee-time"; expected = "denied" },
+    { actor = "employee"; action = "read"; resource = "other-employee-time"; expected = "denied" },
+    { actor = "employee"; action = "update"; resource = "other-employee-time"; expected = "denied" }
+  )
+  each $supported as check:
+    port record.put { record = $step; key = "check"; value = $check } → candidate
+    port kernel.invoke { query = "nr.liveScope"; input = { stage = "resume"; value = $candidate; sessionRepair = true } } → resumed
+    assert eq(count($resumed), 0)
+      otherwise "Accept a supported refusal tuple when revising the plan."
+    port record.put { record = $proposal.steps; key = "sessions"; value = $candidate } → steps
+    port record.put { record = $proposal; key = "steps"; value = $steps } → initial
+    port kernel.invoke { query = "nr.liveScope"; input = { stage = "initial"; value = $initial; sessionRepair = true } } → first
+    assert eq(count($first), 0)
+      otherwise "Accept the same supported tuple in an initial repair."
+  let old = "As an employee, attempt to open the manager report. Expect access denied."
+  port record.put { record = $step; key = "check"; value = $old } → queued
+  port kernel.invoke { query = "nr.liveScope"; input = { stage = "resume"; value = $queued; sessionRepair = true; sessionCheckFormat = "legacy" } } → legacy
+  let result = eq(count($legacy), 0)

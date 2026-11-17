@@ -1,0 +1,53 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    sections = list(
+      {
+        subject = "application";
+        stateProfile = "encounter/north-river-notebook-test/1";
+        module = list(
+          "north-river/test/notebook.encounter",
+          "north-river/ui.encounter",
+          "north-river/implementation-board.encounter",
+          "north-river/implementation-review.encounter",
+          "encounter-libraries/workflows/attention.encounter",
+        "encounter/algebra/css/css.renderPlan.encounter",
+          "encounter-libraries/workflows/sourcery-presentation.encounter",
+          "encounter-portfolio/source/products/shared/work-ui.encounter"
+        );
+        entry = "test.notebook.decision-first";
+        grant = list(
+          "kernel.invoke",
+          "text.join",
+          "record.entries",
+          "record.put",
+          "storage.history",
+          "storage.operation"
+        )
+      },
+      {
+        subject = "application";
+        module = "north-river/project.encounter";
+        entry = "test.notebook.project-queue";
+        grant = list(
+          "text.indexOf",
+          "rel.decode",
+          "rel.encode",
+          "storage.snapshot",
+          "scalar.read"
+        )
+      },
+      {
+        subject = "application";
+        entry = "test.notebook.approval-handoff";
+        grant = "number.calculate";
+        module = "north-river/project-plan.encounter"
+      },
+      {
+        subject = "application";
+        grant = "digest.sha256";
+        entry = list("test.notebook.plan-change-approval", "test.notebook.implementation-attachment")
+      }
+    )
+  }

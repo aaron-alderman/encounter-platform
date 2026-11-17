@@ -1,0 +1,50 @@
+process-module "temple/surface-process-module/1"
+
+process nr.requestJob:
+  let spec = $eventInput
+  let text = { type = "string"; minLength = 1; maxLength = 450 }
+  port kernel.invoke { query = "nr.liveObject"; input = { keys = list("question", "why", "assumption"); properties = { question = $text; why = $text; assumption = $text } } } → schema
+  let prompt = concat(
+    "Ask one concise question that resolves an important product decision in the recorded request. Ask about the user's workflow, recipients, access, or what they need to observe. Do not assume or choose a technology, platform, integration, or delivery channel. ",
+    "Explain why the answer matters and describe the unresolved assumption without treating it as a requirement. Return only the object matching the schema.",
+    "\nRecorded request: ", $spec.objective)
+  when eq($spec.stage, "resume"):
+    port text.slice { value = $spec.objective; start = 0; end = 160 } → anchor
+    when not(includes($spec.objective, $anchor)):
+      port text.slice { value = $spec.objective; start = 0; end = 159 } → anchor
+    let quote = { type = "string"; enum = list($anchor) }
+    port kernel.invoke { query = "nr.liveObject"; input = { keys = list("title", "work", "check", "requestQuote"); properties = { title = $text; work = $text; check = $text; requestQuote = $quote } } } → step
+    let steps = { type = "array"; minItems = 1; maxItems = 5; items = $step }
+    port kernel.invoke { query = "nr.liveObject"; input = { keys = list("steps"); properties = { steps = $steps } } } → schema
+    let prompt = concat(
+      "Draft workflow steps for the recorded request and answer together. Choose one to five steps with short behavior titles, work, and a testable acceptance check. Include only work required by the request or explicitly confirmed in the answer. ",
+      "Do not assume a platform or delivery channel. Do not add a mobile app, installations, training, employee imports, timesheets, dashboards or integrations unless explicitly requested. For requestQuote, copy the allowed quote from the schema byte for byte. Return only the object matching the schema.",
+      "\nRecorded request: ", $spec.objective, "\nBlocking question: ", $spec.previous.question.text, "\nRecorded answer: ", $spec.answer)
+  let result = { id = concat($spec.id, "-", $spec.stage); stage = $spec.stage; scope = "request"; model = "qwen2.5:3b"; digest = "357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b"; prompt = $prompt; schema = $schema }
+
+process nr.requestPlan:
+  let reply = $eventInput
+  port digest.sha256 { text = $task.objective } → evidence
+  let initial = eq($job.stage, "initial")
+  let keys = if($initial, list("question", "why", "assumption"), list("steps"))
+  port kernel.invoke { query = "mw.exact"; input = { value = $reply; keys = $keys } } → _
+  let assumption = { id = "scope-answer"; area = "Open scope decision"; text = at($reply, "assumption"); origin = "proposed" }
+  let question = { text = at($reply, "question"); why = at($reply, "why"); assumption = "scope-answer" }
+  let links = list("request", "scope-answer")
+  let built = list({ id = "scope"; title = "Confirm the request scope"; target = "request-work"; checkKind = "acceptance-check"; change = "Resolve the blocking scope question before drafting steps."; check = "Record the owner’s answer."; assumptions = $links; dependsOn = list() })
+  when not($initial):
+    port kernel.invoke { query = "nr.sequence"; input = { value = $reply.steps; limit = 5 } } → _
+    fold $reply.steps as step; built starts list():
+      port kernel.invoke { query = "mw.exact"; input = { value = $step; keys = list("title", "work", "check", "requestQuote") } } → _
+      each list($step.title, $step.work, $step.check, $step.requestQuote) as field:
+        port kernel.invoke { query = "mw.text"; input = { value = $field; required = true; maximum = 450 } } → _
+      assert includes($task.objective, $step.requestQuote)
+        otherwise "SCOPE: Each proposed step must quote the recorded request exactly."
+      let id = concat("step-", add(count($built), 1))
+      let item = { id = $id; title = $step.title; target = "request-work"; checkKind = "acceptance-check"; change = $step.work; check = $step.check; assumptions = $links; dependsOn = list() }
+      yield append($built, list($item)) → built
+    let assumption = { id = "scope-answer"; area = "Scope decision"; text = $task.answer.text; origin = "human-answer" }
+    let question = $task.candidate.plan.question
+  let assumptions = list({ id = "request"; area = "Recorded request"; text = $task.objective; origin = "request" }, $assumption)
+  let plan = { assumptions = $assumptions; steps = $built; question = $question; evidence = $evidence }
+  port kernel.invoke { query = "nr.plan"; input = $plan } → result
