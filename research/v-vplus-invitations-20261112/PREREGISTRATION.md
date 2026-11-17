@@ -1,0 +1,19 @@
+# Blinded Claimipedia test of invitation mechanisms and refusal consequences
+
+## Question
+
+Can source-grounded V/V+ coding distinguish an invitation that directly opens an action, one that influences how an option is understood, and one that durably shapes the space of available options? Separately, does the same record establish that the affected party can decline without penalty? V identifies the recipient's uptake or refusal. V+ identifies the action, communication, or arrangement that changes the recipient's options. The refusal assessment is a kenotic question about what the inviter or arrangement permits and protects. It does not automatically follow from the invitation's mechanism.
+
+## Fresh sample
+
+Use both parts of the Claimipedia identity map and the world-collapse project statements as in the previous power study. Exclude prior experiments and examples, including both power panels, and their transitive exact normalized-text or human-confirmed equivalence components. Take one per remaining component. Require at least 12 word tokens and exclude question-form records. Draw 24 sequentially using the frozen cue expressions and SHA-256 ranks within each stratum. The strata are six explicit-invitation cues, six refusal-plus-consequence cues, five durable-arrangement-plus-opening cues, four permission cues, and three symbol controls lacking invitation, refusal, consequence and permission cues. Rank by the literal `claimipedia-invitations-v1|`, stratum name, a pipe and record ID. Cue strata are sampling aids and may contain false positives. Keep all records and freeze the input files, protocol, code, rubric and IDs before opening their texts.
+
+## Annotation and blinding
+
+One investigator codes invitation status, all applicable orders, decline status and basis from source text. Apply the definitions in the review rubric. For every positive invitation, order or known penalty status, retain an exact source span. Mark a nominal invitation as such in the reason when the record specifies a practical cost of declining. Code protection only when a usable way to decline and absence of imposed penalty are stated, including explicit protections where appropriate. Neither an unsupported inference about a symbol nor silence about penalty establishes a result. Keep reported portrayals separate from proposals and hypotheses. Freeze annotations before releasing the review packet.
+
+A fresh, separate Codex reviewer independently codes the same texts from the rubric in shuffled opaque-ID order. The reviewer sees no sampling stratum, source identifier, prior conversation, investigator annotation, or hypothesis about a given record. This is a descriptive agreement test using two readings of the same texts. The source records support text-level judgments, including claims about refusal; actual behavior and enforcement would require additional evidence.
+
+## Outcomes
+
+Report invitation yes, no and unclear counts for both readers and their exact agreement. For each order report investigator and reviewer positives, common positives, precision and recall relative to the blinded review, and exact multilabel agreement among records called invitations by either reader. A mechanism meets the descriptive criterion if the reviewer identifies at least three positives and both precision and recall are at least two thirds. Report order overlap and disagreements. Score protected, penalized and unknown separately on invitations identified by the reviewer. The refusal distinction is adequately tested only if the reviewer identifies at least three protected and three penalized cases, with at least two thirds of each reproduced by the investigator. Report missingness and whether any apparent protection or penalty is reported or only proposed. Score the symbol-control subset descriptively. No substitutions, significance claims or post hoc threshold changes are planned.

@@ -1,0 +1,104 @@
+{
+  "protocol": "claimipedia-authority-resolver-heldout/1.0",
+  "status": "frozen-before-resolver-implementation-and-actor-dispatch",
+  "frozenAtUtc": "2026-11-11T16:48:06.945399+00:00",
+  "archiveBindingsSha256": "8a81a7083e1f5b49188b0dbe85e2e4b236306acbfdeb768ba5c3ae8a5d814a8c",
+  "goldSha256": "c97642409a4484d033695aa3bff52982ee2857d30ced7bf11e6d94c77efed076",
+  "rankerSha256": "sha256:455bd6c09cf78943c4b5595344b5b718aae573a60f2310b70e3601e227ec2530",
+  "actor": {
+    "requestedModel": "gpt-6.1-sol",
+    "launcherSha256": "0a9cdd3607f816a91b46bc49135e609d5da82c82bd1affbe642d0f4b80d772a4"
+  },
+  "design": "Twelve unseen IAC2/IAC3/IAC4/IAC6 decision/checkpoint tasks, four approved and eight pending. Six exact actions each evaluated at review and decision checkpoints. Ordinary and version-aware each receive one fresh isolated actor response per task. Deterministic resolver answers the same twelve tasks directly, with no model mediation. All methods read the same hash-pinned archive and the same checkpoint availability policy.",
+  "retrieval": "Ordinary uses Context Hub default hybrid top-2 over the archived record projections available as of the checkpoint. Version-aware uses the same ranking and replaces a retrieved review with its verified in-checkpoint decision ledger, deduplicating and filling from lower ranked records. Receipts provide identity and lineage checks and are not ranked documents. Native human directive and ledger are both valid citations for an adjudicated decision if they explicitly govern the exact scoped target. Review output is the valid pending citation before adjudication.",
+  "resolver": "Read-only exact subject/scope binding, checkpoint eligibility, receipt and artifact digest verification, authorized successor selection and exact disposition decoding. Return approved, pending, or unresolved with provenance. Read archive bindings, not gold or actor results. Unresolved is not approved and has no fabricated citation.",
+  "scoring": "Missed approvals = gold approved with any other decision, including unavailable/invalid. False approvals = gold pending with approved decision. Report correct decisions, citation accuracy (one exact eligible governing filename regardless of response verdict) and joint decision+citation accuracy across all twelve tasks per arm. Missing/invalid is scored incorrect and disclosed. Cite only an artifact delivered to an actor. Test tampering, unavailable receipt, unknown checkpoint and cross-scope queries separately from holdout totals.",
+  "stopping": "No replacement or schema repair; one model response per retrieval method/task. Freeze retrieval receipts before dispatch. Do not revise the holdout or gold after results.",
+  "limits": "Curated archive slices and read-only pilot for one programme family. Existing retained approvals are evidence only for their declared scope. No canonical or deployment effect.",
+  "tasks": [
+    {
+      "id": "IAC2/agency-method/review",
+      "decision": "IAC2/agency-method",
+      "asOf": "IAC2-review",
+      "question": "Had IAC2 admitted the agency-assignment criteria as a provisional successor method?",
+      "query": "IAC2 agency criteria provisional successor method"
+    },
+    {
+      "id": "IAC2/agency-method/decision",
+      "decision": "IAC2/agency-method",
+      "asOf": "IAC2-decision",
+      "question": "Had IAC2 admitted the agency-assignment criteria as a provisional successor method?",
+      "query": "IAC2 agency criteria provisional successor method"
+    },
+    {
+      "id": "IAC2/fixture-02-resolution/review",
+      "decision": "IAC2/fixture-02-resolution",
+      "asOf": "IAC2-review",
+      "question": "Had IAC2 resolved the disagreement for agency fixture 02?",
+      "query": "IAC2 agency fixture 02 disagreement resolution"
+    },
+    {
+      "id": "IAC2/fixture-02-resolution/decision",
+      "decision": "IAC2/fixture-02-resolution",
+      "asOf": "IAC2-decision",
+      "question": "Had IAC2 resolved the disagreement for agency fixture 02?",
+      "query": "IAC2 agency fixture 02 disagreement resolution"
+    },
+    {
+      "id": "IAC3/typed-bridge/review",
+      "decision": "IAC3/typed-bridge",
+      "asOf": "IAC3-review",
+      "question": "Had IAC3 admitted the exact information-to-provenance-artifact typed bridge?",
+      "query": "IAC3 information provenance artifact typed bridge admission"
+    },
+    {
+      "id": "IAC3/typed-bridge/decision",
+      "decision": "IAC3/typed-bridge",
+      "asOf": "IAC3-decision",
+      "question": "Had IAC3 admitted the exact information-to-provenance-artifact typed bridge?",
+      "query": "IAC3 information provenance artifact typed bridge admission"
+    },
+    {
+      "id": "IAC3/near-miss-mapping/review",
+      "decision": "IAC3/near-miss-mapping",
+      "asOf": "IAC3-review",
+      "question": "Had IAC3 admitted the redemptive-provenance near-miss as a successor mapping?",
+      "query": "IAC3 redemptive provenance near miss candidate mapping admission"
+    },
+    {
+      "id": "IAC3/near-miss-mapping/decision",
+      "decision": "IAC3/near-miss-mapping",
+      "asOf": "IAC3-decision",
+      "question": "Had IAC3 admitted the redemptive-provenance near-miss as a successor mapping?",
+      "query": "IAC3 redemptive provenance near miss candidate mapping admission"
+    },
+    {
+      "id": "IAC4/mapping-family/review",
+      "decision": "IAC4/mapping-family",
+      "asOf": "IAC4-review",
+      "question": "Had IAC4 admitted the exact redemptive-provenance proposition mapping family?",
+      "query": "IAC4 redemptive provenance proposition mapping family admission"
+    },
+    {
+      "id": "IAC4/mapping-family/decision",
+      "decision": "IAC4/mapping-family",
+      "asOf": "IAC4-decision",
+      "question": "Had IAC4 admitted the exact redemptive-provenance proposition mapping family?",
+      "query": "IAC4 redemptive provenance proposition mapping family admission"
+    },
+    {
+      "id": "IAC6/shadow-candidate/review",
+      "decision": "IAC6/shadow-candidate",
+      "asOf": "IAC6-review",
+      "question": "Had IAC6 admitted the exact identity algebra v2 successor candidate for read-only shadow inspection?",
+      "query": "IAC6 v2 successor candidate read only shadow inspection admission"
+    },
+    {
+      "id": "IAC6/shadow-candidate/decision",
+      "decision": "IAC6/shadow-candidate",
+      "asOf": "IAC6-decision",
+      "question": "Had IAC6 admitted the exact identity algebra v2 successor candidate for read-only shadow inspection?",
+      "query": "IAC6 v2 successor candidate read only shadow inspection admission"
+    }
+  ]
+}
