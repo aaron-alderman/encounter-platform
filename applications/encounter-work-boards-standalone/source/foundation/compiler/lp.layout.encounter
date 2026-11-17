@@ -1,0 +1,159 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lp.layout:
+  let raw = at($eventInput, "tokens")
+  fold $raw as rawToken; state starts {
+    tokens = list();
+    groups = list();
+    line = 1;
+    column = 1;
+    indent = 0;
+    leading = true;
+    lineHasCode = false
+  }:
+    let v = at($rawToken, "text")
+    let line = at($state, "line")
+    let column = at($state, "column")
+    let indent = at($state, "indent")
+    let leading = at($state, "leading")
+    let lineHasCode = at($state, "lineHasCode")
+    let groups = at($state, "groups")
+    let tokens = at($state, "tokens")
+    let token = {
+      text = $v;
+      start = at($rawToken, "start");
+      end = at($rawToken, "end");
+      line = $line;
+      column = $column;
+      indent = $indent;
+      synthetic = false
+    }
+    port text.matches { value = $v; pattern = "\\t" } → tabs
+    when not(not($tabs)):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-LAYOUT";
+          summary = "Tabs are not layout whitespace.";
+          token = $token
+        }
+      } → unused
+    when not(not(eq($v, "\r"))):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = { code = "PROC-TEXT-LEX"; summary = "Bare CR is not a source newline."; token = $token }
+      } → unused
+    let newline = includes(list("\n", "\r\n"), $v)
+    port text.matches { value = $v; pattern = "^ +$" } → spaces
+    port text.matches { value = $v; pattern = "^#" } → comment
+    when $newline:
+      when and(eq(count($groups), 0), $lineHasCode):
+        let tokens = append(
+          $tokens,
+          list(
+            {
+              text = "\n";
+              start = at($rawToken, "start");
+              end = at($rawToken, "end");
+              line = $line;
+              column = $column;
+              indent = $indent;
+              synthetic = false
+            }
+          )
+        )
+      let line = add($line, 1)
+      let column = 1
+      let indent = 0
+      let leading = true
+      let lineHasCode = false
+    when not($newline):
+      when $spaces:
+        when $leading:
+          let indent = add($indent, count($v))
+      when $comment:
+        when not(not($lineHasCode)):
+          port kernel.invoke {
+            query = "lp.fail";
+            input = {
+              code = "PROC-TEXT-SYNTAX";
+              summary = "Only whole-line comments are supported.";
+              token = $token
+            }
+          } → unused
+      when and(not($spaces), not($comment)):
+        port record.put { record = $token; key = "indent"; value = $indent } → token
+        when includes(list("(", "{"), $v):
+          let groups = append($groups, list($v))
+          when not(includes(range(64), count($groups))):
+            port kernel.invoke {
+              query = "lp.fail";
+              input = { code = "PROC-TEXT-LIMIT"; summary = "Expression nesting exceeds 64."; token = $token }
+            } → unused
+        when includes(list(")", "}"), $v):
+          when not(eq(at($groups, add(count($groups), -1)), if(eq($v, ")"), "(", "{"))):
+            port kernel.invoke {
+              query = "lp.fail";
+              input = {
+                code = "PROC-TEXT-SYNTAX";
+                summary = "Unmatched expression delimiter.";
+                token = $token
+              }
+            } → unused
+          let groups = fold(
+            range(add(count($groups), -1)),
+            "n",
+            "prefix",
+            list(),
+            append($prefix, list(at($groups, add($n, -1))))
+          )
+        let tokens = append($tokens, list($token))
+        let leading = false
+        let lineHasCode = true
+      let column = add($column, count($v))
+    yield {
+    tokens = $tokens;
+    groups = $groups;
+    line = $line;
+    column = $column;
+    indent = $indent;
+    leading = $leading;
+    lineHasCode = $lineHasCode
+  } → state
+  let i = 0
+  let endToken = {
+    text = "<eof>";
+    start = count($lpText);
+    end = count($lpText);
+    line = at($state, "line");
+    column = at($state, "column");
+    indent = 0;
+    synthetic = true
+  }
+  when not(eq(count(at($state, "groups")), 0)):
+    port kernel.invoke {
+      query = "lp.fail";
+      input = {
+        code = "PROC-TEXT-SYNTAX";
+        summary = "Unterminated expression group.";
+        token = $endToken
+      }
+    } → unused
+  let tokens = at($state, "tokens")
+  when not(eq(at(at($tokens, add(count($tokens), -1)), "text"), "\n")):
+    let tokens = append(
+      $tokens,
+      list(
+        {
+          text = "\n";
+          start = count($lpText);
+          end = count($lpText);
+          line = at($state, "line");
+          column = at($state, "column");
+          indent = 0;
+          synthetic = true
+        }
+      )
+    )
+  let result = append($tokens, list($endToken))

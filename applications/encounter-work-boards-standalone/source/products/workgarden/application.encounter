@@ -1,0 +1,39 @@
+process-module "temple/surface-process-module/1"
+
+# Workgarden owns its boolean completion rule.
+
+process product.empty:
+  let result = { items = list() }
+
+process product.change:
+  let command = $eventInput
+  let fields = $command.fields
+  let items = $command.state.items
+  let action = $fields.action
+  assert includes(list("add", "toggle"), $action)
+    otherwise "Choose a Workgarden action."
+  let notice = ""
+  let target = $command.id
+  when eq($action, "add"):
+    port kernel.invoke { query = "work.label"; input = { text = $fields.title; limit = 500 } } → title
+    let items = append($items, list({ id = $target; title = $title; completed = false }))
+    let notice = "Work item added."
+  when eq($action, "toggle"):
+    let target = $fields.item
+    port kernel.invoke { query = "work.item"; input = { items = $items; id = $target } } → selected
+    let changed = { id = $selected.id; title = $selected.title; completed = not($selected.completed) }
+    let items = map($items, "item", if(eq($item.id, $target), $changed, $item))
+    let notice = if($changed.completed, "Work item completed.", "Work item reopened.")
+  let result = { state = { items = $items }; notice = $notice; target = $target }
+
+process product.view:
+  let board = $eventInput
+  port kernel.invoke { query = "work.addForm"; input = $board } → add
+  fold $board.state.items as item; rows starts list():
+    let target = { tag = "input"; attrs = { type = "hidden"; name = "item"; value = $item.id }; children = list() }
+    port kernel.invoke { query = "work.form"; input = { csrf = $board.csrf; revision = $board.revision; action = "toggle"; fields = list($target); button = if($item.completed, "Reopen", "Complete"); style = "inline" } } → toggle
+    let row = { tag = "li"; attrs = { class = if($item.completed, "done", "") }; children = list({ tag = "h3"; attrs = {}; children = list($item.title) }, { tag = "p"; attrs = { class = "quiet" }; children = list(if($item.completed, "Completed", "Open")) }, $toggle) }
+    yield append($rows, list($row)) → rows
+  let listing = if(count($rows), { tag = "ul"; attrs = {}; children = $rows }, { tag = "p"; attrs = { class = "quiet" }; children = list("No work items yet.") })
+  let work = { tag = "section"; attrs = {}; children = list({ tag = "h2"; attrs = {}; children = list("Work items") }, $add, $listing) }
+  let result = { title = "Workgarden"; summary = "A simple list for the work you want to finish."; content = list($work) }

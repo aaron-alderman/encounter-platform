@@ -4,7 +4,7 @@ const { createHash } = require('node:crypto');
 const { replyPairs } = require('./reply-differences.cjs');
 const { readFileSync, writeFileSync } = require('node:fs');
 const path = require('node:path');
-const applications = path.resolve(__dirname, '../../../applications');
+const applications = path.resolve(__dirname, '../../applications');
 const { computationalPorts } = require(path.join(applications, 'encounter/bootstrap/ports/browser-effects.cjs'));
 const { createFrontDoor } = require(path.join(applications, 'encounter/bootstrap/encounter-source-front.cjs'));
 const rel = require('../node/rel-values.cjs');
@@ -180,11 +180,12 @@ function loadEncounter(bindingsFile) {
   const desk = ['documents', 'workspace', 'styles', 'trace', 'source', 'rich-text', 'reply-diff', 'identity-trace']
     .map(module => hydrate('decompiler/' + module + '.encounter'));
   const notes = front.hydrate('encounter-libraries/semantic/notes.encounter', readFileSync(path.resolve(__dirname,
-    '../../../applications/encounter-libraries/semantic/notes.encounter'), 'utf8'));
+    '../../applications/encounter-libraries/semantic/notes.encounter'), 'utf8'));
   const notebookPresentation = front.hydrate('encounter-libraries/workflows/notebook-presentation.encounter',
-    readFileSync(path.resolve(__dirname, '../../../applications/encounter-libraries/workflows/notebook-presentation.encounter'), 'utf8'));
-  const css = front.hydrate('encounter/algebra/css/css.renderPlan.encounter',
-    readFileSync(path.join(applications, 'encounter/algebra/css/css.renderPlan.encounter'), 'utf8'));
+    readFileSync(path.resolve(__dirname, '../../applications/encounter-libraries/workflows/notebook-presentation.encounter'), 'utf8'));
+  const { readApplicationModules } = require('../node/application-modules.cjs');
+  const [renderer] = readApplicationModules(path.join(applications, 'encounter'), ['algebra/css/css.renderPlan.encounter']);
+  const css = front.hydrate('encounter/' + renderer.file, renderer.text);
   const decompilerEntries = ['decompiler.page', 'decompiler.identityTrace', 'decompiler.styles', 'decompiler.verification', 'decompiler.benchmarkReview', 'decompiler.experiment', 'decompiler.contextFeedback', 'desk.compareReplies', 'desk.compareVisits', 'desk.sheet', 'desk.traceSite', 'desk.syntax', 'desk.page', 'desk.styles'];
   const presentation = front.admit(front.link([surface, workflow, semantics, decompiler, comparison, notes, notebookPresentation, css, ...desk], {
     roots: ['evaluation.rows', 'evaluation.review', 'evaluation.page', 'evaluation.styles', 'evaluation.report', ...decompilerEntries]

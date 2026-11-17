@@ -1,0 +1,66 @@
+process-module "temple/surface-process-module/1"
+
+# Durable request handling shared by the two work boards.
+
+process work.label:
+  let candidate = or($eventInput.text, "")
+  port text.trim { value = if($candidate, $candidate, "") } → label
+  port text.matches { value = $label; pattern = concat("^[\\s\\S]{1,", $eventInput.limit, "}$") } → valid
+  assert $valid
+    otherwise "Enter a nonblank name within the field's character limit."
+  let result = $label
+
+process work.item:
+  let item = at(filter($eventInput.items, "item", eq($item.id, $eventInput.id)), 0)
+  assert $item
+    otherwise "Choose an existing work item."
+  let result = $item
+
+process work.load:
+  let snapshot = $eventInput
+  let result = null
+  when eq($snapshot.revision, 0):
+    port kernel.invoke { query = "product.empty" } → result
+  when not(eq($snapshot.revision, 0)):
+    let document = at($snapshot.documents, 0)
+    assert and(eq(count($snapshot.documents), 1), eq($document.path, "work-items.rel"))
+      otherwise "The saved workspace is missing its work-item data."
+    port rel.decode { text = $document.text; kind = "WorkItemState" } → result
+
+process app.newSession:
+  let result = {}
+
+process app.request:
+  let request = $eventInput
+  assert eq($request.path, "/")
+    otherwise "Open the work board at /."
+  let snapshot = $request.snapshot
+  port kernel.invoke { query = "work.load"; input = $snapshot } → state
+  let notice = ""
+  let error = false
+  when eq($request.method, "POST"):
+    try:
+      port scalar.read { text = $request.fields.base } → base
+      assert eq($base, $snapshot.revision)
+        otherwise "This view is out of date. Review the current board and try again."
+      port kernel.invoke { query = "product.change"; input = { state = $state; fields = $request.fields; id = $request.nonce } } → change
+      port rel.encode { value = $change.state; kind = "WorkItemState" } → data
+      let receipt = null
+      try:
+        port storage.cas { base = $base; operationId = $request.nonce; profile = $request.profile; basis = $request.basis; documents = list({ path = "work-items.rel"; text = $data }); reason = $change.notice; target = $change.target; goal = "Update the work board"; source = "products"; description = $change.notice } → receipt
+      catch fault:
+        port storage.operation { operationId = $request.nonce } → receipt
+        assert $receipt
+          otherwise "The change could not be saved. Review the current board and try again."
+      port storage.snapshot {} → snapshot
+      port kernel.invoke { query = "work.load"; input = $snapshot } → state
+      let notice = $change.notice
+    catch fault:
+      let notice = $fault.message
+      let error = true
+      port storage.snapshot {} → snapshot
+      port kernel.invoke { query = "work.load"; input = $snapshot } → state
+  let screen = { state = $state; csrf = $request.csrf; revision = $snapshot.revision }
+  port kernel.invoke { query = "product.view"; input = $screen } → page
+  port kernel.invoke { query = "work.page"; input = { page = $page; notice = $notice; error = $error } } → html
+  let result = { session = $request.session; html = $html }

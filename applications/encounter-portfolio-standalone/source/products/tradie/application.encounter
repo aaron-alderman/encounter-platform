@@ -1,0 +1,75 @@
+process-module "temple/surface-process-module/1"
+
+process product.empty:
+  let result = { enquiries = list() }
+
+process tradie.steps:
+  let result = list(
+    { from = "New"; action = "claim"; to = "Claimed"; label = "Claim enquiry"; field = "Operator" },
+    { from = "Escalated"; action = "claim"; to = "Claimed"; label = "Claim enquiry"; field = "Operator" },
+    { from = "Claimed"; action = "complete"; to = "Completed"; label = "Complete enquiry"; field = "Completion note" },
+    { from = "Claimed"; action = "escalate"; to = "Escalated"; label = "Escalate enquiry"; field = "Escalation reason" }
+  )
+
+process product.change:
+  let command = $eventInput
+  let fields = $command.fields
+  let enquiries = $command.state.enquiries
+  let id = $command.id
+  let notice = "Enquiry recorded."
+  when eq($fields.action, "add"):
+    port kernel.invoke { query = "portfolio.text"; input = { text = $fields.customer; limit = 120 } } → customer
+    port kernel.invoke { query = "portfolio.text"; input = { text = $fields.site; limit = 200 } } → site
+    port kernel.invoke { query = "portfolio.text"; input = { text = $fields.request; limit = 800 } } → brief
+    let entry = { id = $id; customer = $customer; site = $site; brief = $brief; status = "New"; operator = ""; history = list() }
+    let enquiries = append(list($entry), $enquiries)
+  when not(eq($fields.action, "add")):
+    let id = $fields.target
+    let entry = at(filter($enquiries, "entry", eq($entry.id, $id)), 0)
+    assert $entry
+      otherwise "Choose a saved enquiry."
+    port kernel.invoke { query = "tradie.steps" } → steps
+    let step = at(filter($steps, "step", and(eq($step.from, $entry.status), eq($step.action, $fields.action))), 0)
+    assert $step
+      otherwise "That action is unavailable for this enquiry."
+    port kernel.invoke { query = "portfolio.text"; input = { text = $fields.note; limit = if(eq($step.action, "claim"), 120, 500) } } → note
+    let operator = if(eq($step.action, "claim"), $note, $entry.operator)
+    let updated = { id = $entry.id; customer = $entry.customer; site = $entry.site; brief = $entry.brief; status = $step.to; operator = $operator; history = append(list({ status = $step.to; note = $note }), $entry.history) }
+    let enquiries = map($enquiries, "entry", if(eq($entry.id, $id), $updated, $entry))
+    let notice = concat("Enquiry moved to ", $step.to, ".")
+  let result = { state = { enquiries = $enquiries }; target = $id; notice = $notice }
+
+process tradie.card:
+  let screen = $eventInput.screen
+  let entry = $eventInput.entry
+  let steps = filter($eventInput.steps, "step", eq($step.from, $entry.status))
+  fold $steps as step; controls starts list():
+    let input = { name = "note"; label = $step.field; type = "text"; maxlength = if(eq($step.action, "claim"), 120, 500); required = true }
+    port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; action = $step.action; target = $entry.id; inputs = list($input); button = $step.label } } → control
+    yield append($controls, list($control)) → controls
+  let summary = concat($entry.status, if($entry.operator, concat(" · ", $entry.operator), ""))
+  let history = map($entry.history, "event", { tag = "li"; attrs = {}; children = list(concat($event.status, " · ", $event.note)) })
+  let log = if(count($history), list({ tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list("Enquiry history") }, { tag = "ul"; attrs = {}; children = $history }) }), list())
+  let heading = concat("enquiry-", $entry.id)
+  let result = { tag = "article"; attrs = { "aria-labelledby" = $heading }; children = append(list(
+    { tag = "h3"; attrs = { id = $heading }; children = list($entry.customer) },
+    { tag = "p"; attrs = {}; children = list($entry.site) },
+    { tag = "p"; attrs = {}; children = list($entry.brief) },
+    { tag = "p"; attrs = {}; children = list($summary) }
+  ), append($controls, $log)) }
+
+process product.view:
+  let screen = $eventInput
+  let inputs = list(
+    { name = "customer"; label = "Customer"; type = "text"; maxlength = 120; required = true },
+    { name = "site"; label = "Job site"; type = "text"; maxlength = 200; required = true },
+    { name = "request"; label = "Work requested"; type = "textarea"; maxlength = 800; required = true }
+  )
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = $inputs; action = "add"; button = "Record enquiry" } } → form
+  port kernel.invoke { query = "tradie.steps" } → steps
+  port kernel.invoke { query = "portfolio.recent"; input = { rows = $screen.state.enquiries; limit = 20 } } → recent
+  fold $recent as entry; cards starts list():
+    port kernel.invoke { query = "tradie.card"; input = { screen = $screen; entry = $entry; steps = $steps } } → card
+    yield append($cards, list($card)) → cards
+  port kernel.invoke { query = "portfolio.section"; input = { title = "Enquiry queue"; content = $cards } } → queue
+  let result = { title = "Tradie"; summary = "Record enquiries, claim work, and complete or escalate it with a note."; content = list($form, $queue) }

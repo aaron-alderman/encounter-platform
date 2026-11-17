@@ -1,0 +1,208 @@
+process-module "temple/surface-process-module/1"
+
+process nr.liveObject:
+  let result = { type = "object"; properties = $eventInput.properties; required = $eventInput.keys; additionalProperties = false }
+
+process nr.liveJob:
+  let spec = $eventInput
+  let requestScope = eq(at($spec, "scope"), "request")
+  when $requestScope:
+    port kernel.invoke { query = "nr.requestJob"; input = $spec } → result
+  when not($requestScope):
+    port kernel.invoke { query = "nr.timesheetJob"; input = $spec } → result
+
+process nr.timesheetJob:
+  let spec = $eventInput
+  let string = { type = "string"; minLength = 1; maxLength = 450 }
+  port kernel.invoke { query = "nr.liveRules"; input = null } → rules
+  let sessions = at(filter($rules, "rule", eq($rule.id, "sessions")), 0)
+  port kernel.invoke { query = "nr.liveStepSchema"; input = $sessions } → schema
+  let prompt = ""
+  when eq($spec.stage, "initial"):
+    let areas = list("accounts", "access", "time", "lifecycle", "csv", "report", "demo")
+    let stages = map($rules, "rule", $rule.id)
+    port record.fromEntries { entries = map($areas, "key", list($key, $string)) } → assumptions
+    fold $rules as rule; schemas starts list():
+      port kernel.invoke { query = "nr.liveStepSchema"; input = $rule } → step
+      yield append($schemas, list(list($rule.id, $step))) → schemas
+    port record.fromEntries { entries = $schemas } → steps
+    port kernel.invoke { query = "nr.liveObject"; input = { keys = $areas; properties = $assumptions } } → assumptions
+    port kernel.invoke { query = "nr.liveObject"; input = { keys = $stages; properties = $steps } } → steps
+    port kernel.invoke { query = "nr.liveObject"; input = { keys = list("question", "why", "assumptions", "steps"); properties = { question = $string; why = $string; assumptions = $assumptions; steps = $steps } } } → schema
+    let prompt = concat("Propose a small timesheet application plan for ", $spec.project, ". The user's request is: ", $spec.objective,
+      "\nReturn one JSON object matching the supplied schema. Write in English. Use one concise sentence per string.",
+      "\nGive assumptions about stable employee IDs and fake account links; employee-scoped access; dates and positive whole minutes; employee corrections without timesheet sign-off; create-only CSV with employee_id, display_name and account_ref; inclusive report filters with shared table/chart totals; and disposable demo accounts.",
+      "\nLeave manager edit permission unresolved. Ask ONE concrete blocking question about whether managers can edit employee time or only view reports. Explain why it matters.",
+      "\nFor steps.model define Employee, DemoAccountLink and TimesheetEntry types and test a constraint. For steps.import preview CSV and refuse duplicates. For steps.entry enter and validate own time. For steps.sessions verify separate demo accounts and cross-account refusal. For steps.report render and check report tables and charts. The existing Timesheet example is context, but this demo uses whole minutes and no timesheet sign-off. Reference: ", $spec.reference.path, " SHA-256 ", $spec.reference.sha256, ".")
+  when eq($spec.stage, "resume"):
+    fold $spec.previous.assumptions as item; prior starts "":
+      yield concat($prior, $item.area, ": ", $item.text, "\n") → prior
+    let previousSteps = $spec.previous.steps
+    let oldAccess = at(filter($previousSteps, "step", eq($step.id, "sessions")), 0)
+    let prompt = concat("Revise only the timesheet account access step for ", $spec.project, ". Original request: ", $spec.objective,
+      "\nThe human answered: ", $spec.answer,
+      "\nTreat that answer as the approved authority rule. Return JSON with target, checkKind, change and check. In change, state the resulting permissions. In check, describe a browser test that refuses a manager attempting to edit employee time if the answer disallows it. Write concise English.",
+      "\nPrevious plan assumptions:\n", $prior, "\nPrevious access check: ", $oldAccess.check)
+  let result = { id = concat($spec.id, "-", $spec.stage); stage = $spec.stage; model = "qwen2.5:3b"; digest = "357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b"; prompt = $prompt; schema = $schema }
+
+process nr.liveEvent:
+  let input = $eventInput
+  let event = { sequence = add(count($input.run.events), 1); kind = $input.kind; text = $input.text }
+  port record.put { record = $input.run; key = "events"; value = append($input.run.events, list($event)) } → result
+
+process nr.liveStart:
+  assert and(eq(at($request, "liveModel"), true), eq($actor.role, "author"), eq($actor.id, $task.owner), eq($task.phase, "requested"), not(at($task, "run")))
+    otherwise "RUN: This task cannot start a live run."
+  let scope = at($fields, "scope")
+  assert includes(list("request", "timesheet"), $scope)
+    otherwise "SCOPE: Choose Plan from request or the Timesheet template before starting."
+  let id = concat("ollama-", $request.nonce)
+  port kernel.invoke { query = "nr.liveJob"; input = { stage = "initial"; scope = $scope; id = $id; project = $task.project; objective = $task.objective; reference = $reference } } → job
+  let run = { id = $id; scope = $scope; status = "working"; job = $job; attempts = list(); events = list() }
+  port kernel.invoke { query = "nr.liveEvent"; input = { run = $run; kind = "run-started"; text = "Run started · qwen2.5:3b" } } → run
+  port record.put { record = $task; key = "agent"; value = $id } → next
+  port record.put { record = $next; key = "run"; value = $run } → next
+  let result = { task = $next; notice = "Live run started." }
+
+process nr.liveResume:
+  let run = $eventInput
+  assert and(eq($run.status, "waiting"), eq(at($request, "liveModel"), true))
+    otherwise "RUN: This live run is not waiting for an answer."
+  port kernel.invoke { query = "nr.liveJob"; input = { stage = "resume"; scope = at($run, "scope"); id = $run.id; project = $task.project; objective = $task.objective; previous = $task.candidate.plan; answer = $answer.text } } → job
+  port record.put { record = $run; key = "job"; value = $job } → run
+  port record.put { record = $run; key = "status"; value = "working" } → run
+  port kernel.invoke { query = "nr.liveEvent"; input = { run = $run; kind = "answer-saved"; text = "Human answer saved." } } → run
+  port kernel.invoke { query = "nr.liveEvent"; input = { run = $run; kind = "run-resumed"; text = "Run resumed with the recorded answer." } } → result
+
+process nr.livePlan:
+  let reply = $eventInput
+  let stage = $job.stage
+  let plan = null
+  when eq($stage, "initial"):
+    let areas = list(
+      { id = "accounts"; label = "Employees and accounts" }, { id = "access"; label = "Access" },
+      { id = "time"; label = "Time" }, { id = "lifecycle"; label = "Entry lifecycle" },
+      { id = "csv"; label = "CSV" }, { id = "report"; label = "Reporting" }, { id = "demo"; label = "Environment" }
+    )
+    let steps = list(
+      { id = "model"; title = "Define the model"; assumptions = list("accounts", "time"); dependsOn = list() },
+      { id = "import"; title = "Preview employee import"; assumptions = list("csv", "accounts"); dependsOn = list("model") },
+      { id = "entry"; title = "Author time entry"; assumptions = list("access", "time", "lifecycle"); dependsOn = list("model", "import") },
+      { id = "sessions"; title = "Exercise separate sessions"; assumptions = list("accounts", "access", "demo"); dependsOn = list("entry") },
+      { id = "report"; title = "Build the report"; assumptions = list("report", "access"); dependsOn = list("entry", "sessions") }
+    )
+    let assumptions = map($areas, "area", { id = $area.id; area = $area.label; text = at($reply.assumptions, $area.id); origin = "proposed" })
+    fold $steps as step; built starts list():
+      let text = at($reply.steps, $step.id)
+      let item = { id = $step.id; title = $step.title; target = $text.target; checkKind = $text.checkKind; change = $text.change; check = $text.check; assumptions = $step.assumptions; dependsOn = $step.dependsOn }
+      yield append($built, list($item)) → built
+    let plan = { assumptions = $assumptions; steps = $built; question = { text = $reply.question; why = $reply.why; assumption = "access" }; evidence = $reference.sha256 }
+  when eq($stage, "resume"):
+    let previous = $task.candidate.plan
+    let assumptions = map($previous.assumptions, "item", if(eq($item.id, "access"), { id = $item.id; area = $item.area; text = $task.answer.text; origin = "human-answer" }, $item))
+    let steps = map($previous.steps, "item", if(eq($item.id, "sessions"), { id = $item.id; title = $item.title; target = $reply.target; checkKind = $reply.checkKind; change = $reply.change; check = $reply.check; assumptions = $item.assumptions; dependsOn = $item.dependsOn }, $item))
+    let plan = { assumptions = $assumptions; steps = $steps; question = $previous.question; evidence = $reference.sha256 }
+  port kernel.invoke { query = "nr.plan"; input = $plan } → result
+
+process app.agentNext:
+  port kernel.invoke { query = "nr.tasks"; input = $eventInput.snapshot } → tasks
+  let active = at(filter($tasks, "item", eq(at(at($item.task, "run"), "status"), "working")), 0)
+  let result = null
+  when $active:
+    let result = $active.task.run.job
+
+process app.agentResult:
+  let delivered = $eventInput
+  let snapshot = $delivered.snapshot
+  port kernel.invoke { query = "nr.tasks"; input = $snapshot } → tasks
+  let selected = at(filter($tasks, "item", eq(at(at($item.task, "run"), "job"), $delivered.job)), 0)
+  let task = at($selected, "task")
+  let run = at($task, "run")
+  let result = null
+  when and(eq(at($run, "status"), "working"), eq(at($run, "job"), $delivered.job)):
+    let job = $delivered.job
+    let response = $delivered.response
+    let next = $task
+    let base = $snapshot.revision
+    let actor = { id = $run.id; role = "live-proposer" }
+    let request = { nonce = $job.id; basis = $delivered.basis; profile = $delivered.profile }
+    port kernel.invoke { query = "nr.reference"; input = null } → reference
+    let diagnostic = $response.error
+    let accepted = false
+    let issues = list()
+    let proposal = $response.value
+    when eq($diagnostic, ""):
+      try:
+        assert $response.value
+          otherwise "Ollama returned an invalid structured proposal."
+        when at($job, "repair"):
+          port kernel.invoke { query = "nr.liveMergeRepair"; input = $response.value } → proposal
+        let requestScope = eq(at($job, "scope"), "request")
+        when not($requestScope):
+          let sessionRepair = and(at($job, "repair"), some(or(at($job, "issues"), list()), "issue", eq($issue.rule.id, "sessions")))
+          let sessionCheckFormat = or(at($job, "sessionCheckFormat"), "legacy")
+          port kernel.invoke { query = "nr.liveScope"; input = { stage = $job.stage; value = $proposal; sessionRepair = $sessionRepair; sessionCheckFormat = $sessionCheckFormat } } → issues
+          when and($sessionRepair, eq($sessionCheckFormat, "structured"), not(count($issues))):
+            port kernel.invoke { query = "nr.projectSessionCheck"; input = $proposal } → proposal
+        when count($issues):
+          port text.join { values = map($issues, "issue", $issue.diagnostic); separator = " " } → diagnostic
+        when not(count($issues)):
+          when $requestScope:
+            port kernel.invoke { query = "nr.requestPlan"; input = $proposal } → plan
+          when not($requestScope):
+            port kernel.invoke { query = "nr.livePlan"; input = $proposal } → plan
+          let review = { project = $task.project; objective = $task.objective; agent = $run.id; basis = $request.basis; answer = $task.answer; plan = $plan; base = $base }
+          port kernel.invoke { query = "nr.hashPlan"; input = $review } → hash
+          let candidate = { plan = $plan; hash = $hash; actor = $run.id; basis = $request.basis; base = $base }
+          port record.put { record = $next; key = "previous"; value = $task.candidate } → next
+          port record.put { record = $next; key = "candidate"; value = $candidate } → next
+          port record.put { record = $next; key = "phase"; value = if(eq($job.stage, "initial"), "question", "review") } → next
+          let accepted = true
+      catch fault:
+        let diagnostic = $fault.message
+    let status = if($accepted, if(eq($job.stage, "initial"), "waiting", "review"), "failed")
+    let event = if($accepted, if(eq($job.stage, "initial"), "question", "revised-plan"), "run-failed")
+    let notice = if($accepted, if(eq($job.stage, "initial"), "The model asked a blocking question.", "The model’s revised plan is ready for review."), concat("Run failed: ", $diagnostic))
+    let following = null
+    when and(count($issues), not(at($job, "repair")), not(some($run.attempts, "attempt", at($attempt.job, "repair")))):
+      port kernel.invoke { query = "nr.liveRepair"; input = { issues = $issues; value = $proposal; context = at($delivered, "context") } } → following
+      let status = "working"
+      let event = "repair-requested"
+      let notice = "Encounter flagged misplaced plan work and requested one targeted repair."
+    let attempt = { job = $job; reply = $response.raw; accepted = $accepted; diagnostic = $diagnostic; issues = $issues }
+    port record.put { record = $run; key = "attempts"; value = append($run.attempts, list($attempt)) } → run
+    port record.put { record = $run; key = "status"; value = $status } → run
+    port record.put { record = $run; key = "job"; value = $following } → run
+    port kernel.invoke { query = "nr.liveEvent"; input = { run = $run; kind = $event; text = $notice } } → run
+    port record.put { record = $next; key = "run"; value = $run } → next
+    port rel.encode { value = $next; kind = "NorthRiverTask" } → encoded
+    port kernel.invoke { query = "nr.persist"; input = { documents = list({ path = $selected.path; text = $encoded }); notice = $notice; target = if(eq($selected.id, "primary"), $task.project, $selected.id); goal = "Record the task step" } } → result
+
+process app.events:
+  let implementation = at($eventInput.fields, "implementation")
+  let queue = eq(at($eventInput.fields, "queue"), "handoffs")
+  when $queue:
+    let result = null
+    let actor = $eventInput.operator
+    let snapshot = $eventInput.snapshot
+    when eq($actor.role, "proposer"):
+      port kernel.invoke { query = "nr.handoffQueueEvents"; input = $eventInput.after } → result
+  when and(not($queue), $implementation):
+    port kernel.invoke { query = "nr.implementationSocket"; input = $eventInput } → result
+  when not(or($queue, $implementation)):
+    call nr.planningEvents
+
+process nr.planningEvents:
+  let request = $eventInput
+  port kernel.invoke { query = "nr.tasks"; input = $request.snapshot } → tasks
+  let id = at($request.fields, "run")
+  let selected = at(filter($tasks, "item", eq(at(at($item.task, "run"), "id"), $id)), 0)
+  let task = at($selected, "task")
+  let run = at($task, "run")
+  let actor = $request.operator
+  let result = null
+  when and($run, eq(at($actor, "role"), "author"), eq(at($actor, "id"), $task.owner), eq(at($run, "id"), at($request.fields, "run"))):
+    fold $run.events as event; outgoing starts list():
+      port number.calculate { operation = "greater"; values = list($event.sequence, $request.after) } → newer
+      yield if($newer, append($outgoing, list($event)), $outgoing) → outgoing
+    let result = $outgoing

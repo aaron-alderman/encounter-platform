@@ -1,0 +1,37 @@
+{
+ "protocol":"temple/surface-process-module/1",
+ "queries":{
+  "bts.plan":[
+   {"let":"p","value":"$eventInput.project"},
+   {"assert":["eq","$p.output.fps",25],"message":"BTS-P001: The capture and speech profile requires 25 fps."},
+   {"port":"number.grid","args":{"value":"$p.coldOpenSeconds","rate":25},"into":"cold"},
+   {"port":"number.grid","args":{"value":"$p.revealSeconds","rate":25},"into":"reveal"},
+   {"port":"number.grid","args":{"value":"$p.closingSeconds","rate":25},"into":"closing"},
+   {"assert":["and","$cold.exact","$reveal.exact","$closing.exact"],"message":"BTS-P002: The opening, reveal and return must be frame-exact."},
+   {"fold":"$eventInput.projections","as":"projection","accumulator":"state","initial":{"time":["add","$cold.index","$reveal.index"],"beats":["list"]},"steps":[
+    {"let":"v","value":"$projection.output.values"},
+    {"let":"matches","value":["filter","$eventInput.observations.chapters","audio",["eq","$audio.subject","$projection.source"]]},
+    {"assert":["eq",["count","$matches"],1],"message":"BTS-P003: Each narrated beat requires exactly one measured local voice file."},
+    {"let":"audio","value":["at","$matches",0]},
+    {"assert":["eq","$audio.text",["at","$v","B.text"]],"message":"BTS-P004: Spoken words differ from the Encounter projection; synthesize again."},
+    {"assert":["eq","$audio.voice","$p.voice.name"],"message":"BTS-P005: The measured voice differs from the explicitly selected voice."},
+    {"let":"scene","value":["at","$v","B.scene"]},
+    {"assert":["includes",["list","overview","rhythm","encounter","checks","outtakes","breathing"],"$scene"],"message":"BTS-P006: Unknown making-of scene."},
+    {"assert":["includes",["list","idle","waving","review","waiting","jumping"],["at","$v","B.sprite"]],"message":"BTS-P007: Unknown mascot animation state."},
+    {"port":"text.matches","args":{"value":["at","$v","B.filmIn"],"pattern":"^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,3})?$"},"into":"filmInValid"},
+    {"assert":"$filmInValid","message":"BTS-P008: Programme in must be explicit decimal seconds."},
+    {"port":"json.parse","args":{"text":["at","$v","B.filmIn"]},"into":"filmIn"},
+    {"port":"number.grid","args":{"value":"$filmIn","rate":25},"into":"filmGrid"},
+    {"assert":"$filmGrid.exact","message":"BTS-P009: Programme in must lie on the picture frame grid."},
+    {"port":"number.compare","args":{"left":"$audio.frames","right":0},"into":"positive"},
+    {"port":"number.compare","args":{"left":"$audio.frames","right":750},"into":"length"},
+    {"assert":["and",["eq","$positive",1],["not",["eq","$length",1]]],"message":"BTS-P010: Narrated beats must contain audio and stay within thirty seconds."},
+    {"port":"number.compare","args":{"left":["add","$filmGrid.index","$audio.frames"],"right":"$eventInput.film.frames"},"into":"sourceEnd"},
+    {"assert":["not",["eq","$sourceEnd",1]],"message":"BTS-P011: A programme window exceeds the retained film."},
+    {"let":"beat","value":{"id":"$audio.id","source":"$projection.source","title":["at","$v","B.title"],"text":["at","$v","B.text"],"reason":["at","$v","B.reason"],"focus":["at","$v","B.focus"],"scene":"$scene","sprite":["at","$v","B.sprite"],"filmIn":"$filmIn","inFrame":"$state.time","outFrame":["add","$state.time","$audio.frames"],"frames":"$audio.frames","audio":"$audio"}},
+    {"let":"next","value":{"time":["add","$state.time","$audio.frames"],"beats":["append","$state.beats",["list","$beat"]]}}
+   ],"yield":"$next","into":"composition"},
+   {"let":"result","value":{"protocol":"church-on-air/making-of-plan/1","title":"$p.title","subtitle":"$p.subtitle","output":"$p.output","voice":"$p.voice","audio":"$p.audio","narratorLabel":"$p.narratorLabel","credits":"$p.credits","coldFrames":"$cold.index","revealFrames":"$reveal.index","closingFrames":"$closing.index","voiceIn":["add","$cold.index","$reveal.index"],"voiceOut":"$composition.time","frames":["add","$composition.time","$closing.index"],"beats":"$composition.beats","film":"$eventInput.film"}}
+  ]
+ }
+}

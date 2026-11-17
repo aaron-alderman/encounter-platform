@@ -1,0 +1,41 @@
+process-module "temple/surface-process-module/1"
+
+process nr.timeForm:
+  let view = $eventInput
+  let editing = $view.entry
+  let employee = $view.employee
+  let option = { tag = "option"; attrs = { value = $employee.id; selected = true }; children = list($employee.displayName) }
+  let who = { tag = "label"; attrs = {}; children = list("Employee", { tag = "select"; attrs = { name = "employee"; "aria-label" = "Employee"; required = true }; children = list($option) }) }
+  let date = { tag = "label"; attrs = {}; children = list("Work date", { tag = "input"; attrs = { name = "date"; type = "date"; value = if($editing, $view.entry.date, ""); required = true }; children = list() }) }
+  let minutes = { tag = "label"; attrs = {}; children = list("Minutes worked", { tag = "input"; attrs = { name = "minutes"; type = "number"; min = 1; step = 1; value = if($editing, $view.entry.minutes, ""); required = true }; children = list() }) }
+  let fields = list($who, $date, $minutes)
+  when $editing:
+    let fields = append($fields, list({ tag = "input"; attrs = { type = "hidden"; name = "entry"; value = $view.entry.id }; children = list() }))
+  port kernel.invoke { query = "work.form"; input = { csrf = $view.csrf; revision = $view.revision; action = if($editing, "edit-time", "add-time"); fields = $fields; button = if($editing, "Save correction", "Save time entry"); style = "entry decision-command" } } → result
+
+process nr.timePage:
+  let view = $eventInput
+  let identity = if($view.account, $view.account, "Unavailable")
+  let coordinate = { tag = "span"; attrs = { id = "timesheet-session"; hidden = true; "data-csrf" = $view.csrf; "data-revision" = $view.revision }; children = list() }
+  let content = list({ tag = "p"; attrs = {}; children = list(concat("Signed in as ", $identity)) }, $coordinate)
+  when not($view.active):
+    let content = append($content, list({ tag = "p"; attrs = {}; children = list("The timesheet opens after the employee import is approved.") }))
+  when and($view.active, eq($view.role, "manager")):
+    let content = append($content, list({ tag = "p"; attrs = {}; children = list("Manager access is for reports. ", { tag = "a"; attrs = { href = "/report" }; children = list("Open timesheet report") }) }))
+  when and($view.active, eq($view.role, "employee"), not($view.employee)):
+    let content = append($content, list({ tag = "p"; attrs = {}; children = list("This account has no accepted employee assignment.") }))
+  when not(includes(list("employee", "manager"), $view.role)):
+    let content = append($content, list({ tag = "p"; attrs = {}; children = list("This account has no timesheet access.") }))
+  when $view.employee:
+    port kernel.invoke { query = "nr.timeForm"; input = $view } → form
+    let title = if($view.entry, "Correct entry", "Add time")
+    port kernel.invoke { query = "sourcery.presentation.decision"; input = {
+      attrs = { class = "decision-form"; "data-presentation" = "vb6"; "aria-label" = $title };
+      title = $title; properties = list(); legend = "Entry details"; body = list($form); commands = list()
+    } } → dialog
+    let content = append($content, list($dialog))
+    let rows = map($view.mine, "row", { tag = "li"; attrs = {}; children = list(concat($row.date, " · ", $row.minutes, " minutes"), " · ", { tag = "a"; attrs = { href = concat("/timesheet?entry=", $row.id) }; children = list(concat("Correct ", $row.date, " · ", $row.minutes, " minutes")) }) })
+    let listing = if(count($rows), { tag = "ul"; attrs = {}; children = $rows }, { tag = "p"; attrs = {}; children = list("You have no time entries.") })
+    let content = append($content, list({ tag = "section"; attrs = { "aria-label" = "Your entries" }; children = list({ tag = "h2"; attrs = {}; children = list("Your entries") }, $listing) }))
+  let summary = if($view.project, concat($view.project, " · Demo"), "Demo workspace")
+  port kernel.invoke { query = "work.page"; input = { page = { title = "Timesheet"; summary = $summary; content = $content }; notice = $view.notice; error = $view.error } } → result

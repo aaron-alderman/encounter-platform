@@ -1,0 +1,7 @@
+("application", "stateProfile", "encounter/north-river-workflow-test/1")
+("application", "module", "north-river/test/workflow.encounter")
+("application", "entry", "cli.main")
+("application", "entry", "test.workflow.cross-task-run")
+("application", "grant", "kernel.invoke")
+("application", "grant", "rel.decode")
+("application", "grant", "record.entries")

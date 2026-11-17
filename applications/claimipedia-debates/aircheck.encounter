@@ -1,0 +1,48 @@
+# Add the house broadcast treatment to a picture-locked master that has neither ident.
+# New episodes built from debates.plan already carry both idents and audioMaster.
+# All picture positions are 25 fps frame numbers; asset locators are repository-relative.
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process debates.aircheck:
+  let cut = $eventInput
+  port kernel.invoke { query = "debates.broadcastDefaults"; input = null } → broadcast
+  let ident = $broadcast.ident
+  each list($cut.episodeFrames, $cut.introFrames, $cut.scoreboardFrame, $cut.kingdomFrame) as frame:
+    port kernel.invoke { query = "debates.frame"; input = $frame } → checked
+  port number.calculate { operation = "less"; values = list($cut.introFrames, $cut.scoreboardFrame) } → introBeforeScoreboard
+  port number.calculate { operation = "less"; values = list($cut.scoreboardFrame, $cut.kingdomFrame) } → scoreboardBeforeKingdom
+  port number.calculate { operation = "less"; values = list($cut.kingdomFrame, $cut.episodeFrames) } → kingdomBeforeEnd
+  assert and(not(eq($cut.introFrames, 0)), $introBeforeScoreboard, $scoreboardBeforeKingdom, $kingdomBeforeEnd)
+    otherwise "DEBATE-AIRCHECK: Check the intro and finale cue order."
+  let debate = add($cut.introFrames, $ident.frames)
+  let scoreboard = add($cut.scoreboardFrame, $ident.frames)
+  let kingdom = add($cut.kingdomFrame, $ident.frames)
+  let signoff = add($cut.episodeFrames, $ident.frames)
+  let duration = add($signoff, $ident.frames)
+  port kernel.invoke { query = "debates.audioFilter"; input = { frames = $duration; sampleRate = $broadcast.sampleRate; audio = $broadcast.audio } } → audioFilter
+  let result = {
+    protocol = "claimipedia/debates-aircheck/1"; fps = 25; sampleRate = $broadcast.sampleRate;
+    durationFrames = $duration;
+    ident = $ident;
+    sections = list(
+      { kind = "episode"; outputFrame = 0; sourceIn = 0; sourceOut = $cut.introFrames },
+      { kind = "station-ident"; outputFrame = $cut.introFrames },
+      { kind = "episode"; outputFrame = $debate; sourceIn = $cut.introFrames; sourceOut = $cut.episodeFrames },
+      { kind = "station-ident"; outputFrame = $signoff }
+    );
+    chapters = list(
+      { title = "Intro"; frame = 0 },
+      { title = "Claimipedia Debates"; frame = $cut.introFrames },
+      { title = "Debate"; frame = $debate },
+      { title = "Scoreboard"; frame = $scoreboard },
+      { title = "Kingdom response"; frame = $kingdom },
+      { title = "Sign-off"; frame = $signoff }
+    );
+    audio = $broadcast.audio; audioFilter = $audioFilter
+  }
+
+process debates.episode01Aircheck:
+  let result = {
+    episodeFrames = 31474; introFrames = 253; scoreboardFrame = 27330; kingdomFrame = 29252
+  }

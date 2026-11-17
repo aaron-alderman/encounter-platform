@@ -1,0 +1,592 @@
+# Worked reference for the Claimipedia Debates broadcast template.
+# Copy this file, rename the process and replace the episode record for a new cut.
+# Use source frames at 25 fps. Set revealFrame = inFrame for an immediate picture reveal.
+# Measure narration holds including the head and tail padding. Review picture order and conduct cues against the source.
+# Keep summaries and assessment prose specific to individual arguments. Review neutral wording before export.
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process debates.episode01:
+  let result = {
+    label = "EP 01";
+    title = "Can work and family life coexist?";
+    topic = "Work / motherhood / the economy";
+    source = {
+      locator = "https://www.youtube.com/watch?v=cKNlJbX3v_8";
+      credit = "Modern-Day Debate";
+      durationFrames = 17646;
+      inFrame = 822;
+      revealFrame = 850;
+      outFrame = 16379
+    };
+    speakers = list(
+      { id = "left"; name = "Kyla Turner"; handle = "NotSoErudite" },
+      { id = "right"; name = "Rachel Wilson"; handle = null }
+    );
+    intro = { frames = 253; narration = "This is Claimipedia Debates. Rachel Wilson and Kyla Turner, known as Not So Erudite, discuss work, motherhood, and the economy." };
+    claims = list(
+      {
+        id = "claim-01";
+        sourceFrame = 1169;
+        holdFrames = 233;
+        speakers = list("right");
+        claimIds = list("R01");
+        title = "Future military manpower";
+        copy = "Wilson asks what a society should prioritize if it needs more future recruits. That comparison needs a forecast of recruitment as well as births.";
+        narration = "Wilson asks what a society should prioritize if it needs more future recruits. That comparison needs a forecast of recruitment as well as births."
+      },
+      {
+        id = "claim-02";
+        sourceFrame = 1374;
+        holdFrames = 356;
+        speakers = list("right");
+        claimIds = list("R02", "R03");
+        title = "45 million more workers?";
+        copy = "The closest source match estimates a hypothetical working-age population. To get from that to workers, we need birth and survival assumptions and a model of who would actually join the labor force. The one-third figure also needs a denominator.";
+        narration = "The closest source match estimates a hypothetical working-age population. To get from that to workers, we need birth and survival assumptions and a model of who would actually join the labor force. The one-third figure also needs a denominator."
+      },
+      {
+        id = "claim-03";
+        sourceFrame = 1626;
+        holdFrames = 279;
+        speakers = list("left");
+        claimIds = list("N01");
+        title = "Who bears the near-term cost?";
+        copy = "NotSoErudite raises public assistance and single parenthood. Assistance belongs in a net comparison. Her broader claim about who would parent alone needs separate evidence.";
+        narration = "NotSoErudite raises public assistance and single parenthood. Assistance belongs in a net comparison. Her broader claim about who would parent alone needs separate evidence."
+      },
+      {
+        id = "claim-04";
+        sourceFrame = 1683;
+        holdFrames = 241;
+        speakers = list("left", "right");
+        claimIds = list("N02", "R05");
+        title = "Was that accounted for?";
+        copy = "One speaker doubts the count and the other says her analysis accounted for the objection. The excerpt leaves the model and its treatment of public assistance unavailable.";
+        narration = "One speaker doubts the count and the other says her analysis accounted for the objection. The excerpt leaves the model and its treatment of public assistance unavailable."
+      },
+      {
+        id = "claim-05";
+        sourceFrame = 2058;
+        holdFrames = 344;
+        speakers = list("right");
+        claimIds = list("R04");
+        title = "US$26,000 over what period?";
+        copy = "The closest source match sums earnings changes around a first birth over about six years. Wilson describes lifetime earnings for women who would otherwise have had an abortion. Those are different time periods and comparison groups.";
+        narration = "The closest source match sums earnings changes around a first birth over about six years. Wilson describes lifetime earnings for women who would otherwise have had an abortion. Those are different time periods and comparison groups."
+      },
+      {
+        id = "claim-06";
+        sourceFrame = 2414;
+        holdFrames = 275;
+        speakers = list("left");
+        claimIds = list("N03");
+        title = "A dispute over sources";
+        copy = "NotSoErudite questions the statistics and refers to examples from Wilson’s book. The passage gives us no citations to trace that particular criticism.";
+        narration = "NotSoErudite questions the statistics and refers to examples from Wilson’s book. The passage gives us no citations to trace that particular criticism."
+      },
+      {
+        id = "claim-07";
+        sourceFrame = 2862;
+        holdFrames = 348;
+        speakers = list("right");
+        claimIds = list("R06");
+        title = "From labor supply to GDP";
+        copy = "The GDP prediction depends on the labor-force estimate and on how hours, productivity and parents’ employment respond. It also changes the one-third figure from a share of babies in the argument to a share of the labor force.";
+        narration = "The GDP prediction depends on the labor-force estimate and on how hours, productivity and parents’ employment respond. It also changes the one-third figure from a share of babies in the argument to a share of the labor force."
+      },
+      {
+        id = "claim-08";
+        sourceFrame = 3335;
+        holdFrames = 322;
+        speakers = list("left");
+        claimIds = list("N04");
+        title = "The opportunity cost of exclusion";
+        copy = "NotSoErudite introduces a real counterweight to the future labor supply argument. To quantify it, we need to know who would work fewer hours, who would leave paid work, and what arrangement is being proposed.";
+        narration = "NotSoErudite introduces a real counterweight to the future labor supply argument. To quantify it, we need to know who would work fewer hours, who would leave paid work, and what arrangement is being proposed."
+      },
+      {
+        id = "claim-09";
+        sourceFrame = 4010;
+        holdFrames = 214;
+        speakers = list("left");
+        claimIds = list("N05");
+        title = "A point of agreement";
+        copy = "NotSoErudite agrees that motherhood deserves more support. That concession leaves room for disagreement about causes and policy.";
+        narration = "NotSoErudite agrees that motherhood deserves more support. That concession leaves room for disagreement about causes and policy."
+      },
+      {
+        id = "claim-10";
+        sourceFrame = 4205;
+        holdFrames = 280;
+        speakers = list("left");
+        claimIds = list("N06");
+        title = "A proposal to change the arrangement";
+        copy = "The proposal is to make paid work and care easier to combine. Its effect depends on the work hours, childcare, leave, and household arrangements actually available.";
+        narration = "The proposal is to make paid work and care easier to combine. Its effect depends on the work hours, childcare, leave, and household arrangements actually available."
+      },
+      {
+        id = "claim-11";
+        sourceFrame = 4510;
+        holdFrames = 262;
+        speakers = list("right");
+        claimIds = list("R07");
+        title = "A claim that coexistence has failed";
+        copy = "The China and Russia examples would carry more weight if we knew which policies were tried, when, and by what measure they failed. The start of this exchange is fragmented.";
+        narration = "The China and Russia examples would carry more weight if we knew which policies were tried, when, and by what measure they failed. The start of this exchange is fragmented."
+      },
+      {
+        id = "claim-12";
+        sourceFrame = 4982;
+        holdFrames = 239;
+        speakers = list("left");
+        claimIds = list("N07");
+        title = "America as a causal example";
+        copy = "A successful economy can coexist with broad access to paid work. Estimating how much that access caused the success requires a separate comparison.";
+        narration = "A successful economy can coexist with broad access to paid work. Estimating how much that access caused the success requires a separate comparison."
+      },
+      {
+        id = "claim-13";
+        sourceFrame = 5374;
+        holdFrames = 268;
+        speakers = list("left");
+        claimIds = list("N08");
+        title = "Market and output indicators";
+        copy = "The Dow, a GDP gap and a growth trend measure different things. Their dates and definitions matter, and the figures alone cannot isolate the effects of a labor policy.";
+        narration = "The Dow, a GDP gap and a growth trend measure different things. Their dates and definitions matter, and the figures alone cannot isolate the effects of a labor policy."
+      },
+      {
+        id = "claim-14";
+        sourceFrame = 6298;
+        holdFrames = 276;
+        speakers = list("left");
+        claimIds = list("N09");
+        title = "GDP and cyber capability";
+        copy = "A larger budget can make investment possible. Establishing a cybersecurity advantage would require direct evidence about capabilities and how economic resources translate into them.";
+        narration = "A larger budget can make investment possible. Establishing a cybersecurity advantage would require direct evidence about capabilities and how economic resources translate into them."
+      },
+      {
+        id = "claim-15";
+        sourceFrame = 6504;
+        holdFrames = 246;
+        speakers = list("left");
+        claimIds = list("N10");
+        title = "Economic success leaves care open";
+        copy = "NotSoErudite explicitly returns to the need for change so mothers and fathers can have children. This narrows what her economic success claim can settle.";
+        narration = "NotSoErudite explicitly returns to the need for change so mothers and fathers can have children. This narrows what her economic success claim can settle."
+      },
+      {
+        id = "claim-16";
+        sourceFrame = 6784;
+        holdFrames = 342;
+        speakers = list("left");
+        claimIds = list("N11");
+        title = "The policy has to be specified";
+        copy = "NotSoErudite describes Wilson’s answer as pressure to leave paid work. Wilson’s closing makes a tradeoff claim. The excerpt leaves the mechanism and degree of pressure unspecified.";
+        narration = "NotSoErudite describes Wilson’s answer as pressure to leave paid work. Wilson’s closing makes a tradeoff claim. The excerpt leaves the mechanism and degree of pressure unspecified."
+      },
+      {
+        id = "claim-17";
+        sourceFrame = 6861;
+        holdFrames = 367;
+        speakers = list("left");
+        claimIds = list("N12");
+        title = "What the Pakistan example tests";
+        copy = "The comparison is aimed at the idea that high fertility by itself guarantees economic strength. Wilson’s closing gives fertility priority as a necessary condition. A counterexample to sufficiency leaves that claim open.";
+        narration = "The comparison is aimed at the idea that high fertility by itself guarantees economic strength. Wilson’s closing gives fertility priority as a necessary condition. A counterexample to sufficiency leaves that claim open."
+      },
+      {
+        id = "claim-18";
+        sourceFrame = 6990;
+        holdFrames = 216;
+        speakers = list("right");
+        claimIds = list("R08");
+        title = "Must parents be away all day?";
+        copy = "Wilson challenges a particular work arrangement for mothers with young children. The next answer proposes changing where the work happens.";
+        narration = "Wilson challenges a particular work arrangement for mothers with young children. The next answer proposes changing where the work happens."
+      },
+      {
+        id = "claim-19";
+        sourceFrame = 7068;
+        holdFrames = 290;
+        speakers = list("left");
+        claimIds = list("N13");
+        title = "Remote work as an option";
+        copy = "NotSoErudite proposes working from home. That may reduce time away from home. How much it helps with care depends on hours, the job, and who is available to care for the child.";
+        narration = "NotSoErudite proposes working from home. That may reduce time away from home. How much it helps with care depends on hours, the job, and who is available to care for the child."
+      },
+      {
+        id = "claim-20";
+        sourceFrame = 7283;
+        holdFrames = 295;
+        speakers = list("right");
+        claimIds = list("R09");
+        title = "A question about scale";
+        copy = "Wilson asks how many mothers can do productive work remotely. A single job example can show a possibility. Answering the scale question needs evidence across jobs and households.";
+        narration = "Wilson asks how many mothers can do productive work remotely. A single job example can show a possibility. Answering the scale question needs evidence across jobs and households."
+      },
+      {
+        id = "claim-21";
+        sourceFrame = 7414;
+        holdFrames = 234;
+        speakers = list("left");
+        claimIds = list("N14", "N15");
+        title = "An HR example and a fragment";
+        copy = "The HR example gives a possible occupation. The interrupted percentage has no clear denominator in the excerpt, so we leave it unscored.";
+        narration = "The HR example gives a possible occupation. The interrupted percentage has no clear denominator in the excerpt, so we leave it unscored."
+      },
+      {
+        id = "claim-22";
+        sourceFrame = 7487;
+        holdFrames = 239;
+        speakers = list("right");
+        claimIds = list("R10");
+        title = "A sarcastic challenge to scale";
+        copy = "The argument underneath the joke is that one occupation cannot supply a general solution. That is a fair scope question even if remote HR roles exist.";
+        narration = "The argument underneath the joke is that one occupation cannot supply a general solution. That is a fair scope question even if remote HR roles exist."
+      },
+      {
+        id = "claim-23";
+        sourceFrame = 7568;
+        holdFrames = 245;
+        speakers = list("left");
+        claimIds = list("N16");
+        title = "An employer example";
+        copy = "Musk’s example is relevant to whether a large company uses HR. It leaves its motives and the availability of remote roles unresolved.";
+        narration = "Musk’s example is relevant to whether a large company uses HR. It leaves its motives and the availability of remote roles unresolved."
+      },
+      {
+        id = "claim-24";
+        sourceFrame = 8270;
+        holdFrames = 383;
+        speakers = list("right");
+        claimIds = list("R11");
+        title = "Which law explains employer HR?";
+        copy = "Ordinary US workplace harassment claims fall under the Title Seven framework. Title Nine concerns federally funded education programs. Compliance may still influence HR staffing, but the proposed law and exclusive cause need correction.";
+        narration = "Ordinary US workplace harassment claims fall under the Title Seven framework. Title Nine concerns federally funded education programs. Compliance may still influence HR staffing, but the proposed law and exclusive cause need correction."
+      },
+      {
+        id = "claim-25";
+        sourceFrame = 8523;
+        holdFrames = 343;
+        speakers = list("left");
+        claimIds = list("N17");
+        title = "Ford’s early personnel work";
+        copy = "The Ford archive documents a Sociological Department around the 1914 Five Dollar Day. That supports the narrower chronology. The exact 1910 date and the claim that Ford invented HR require more evidence.";
+        narration = "The Ford archive documents a Sociological Department around the 1914 Five Dollar Day. That supports the narrower chronology. The exact 1910 date and the claim that Ford invented HR require more evidence."
+      },
+      {
+        id = "claim-26";
+        sourceFrame = 9238;
+        holdFrames = 337;
+        speakers = list("right");
+        claimIds = list("R12");
+        title = "Both appeal to corporate incentives";
+        copy = "The CEO monologue is sarcasm. Wilson argues that firms need an incentive. NotSoErudite gives one in the form of operational efficiency. The dispute is about which incentives explain which jobs.";
+        narration = "The CEO monologue is sarcasm. Wilson argues that firms need an incentive. NotSoErudite gives one in the form of operational efficiency. The dispute is about which incentives explain which jobs."
+      },
+      {
+        id = "claim-27";
+        sourceFrame = 9755;
+        holdFrames = 252;
+        speakers = list("right");
+        claimIds = list("R13", "R14");
+        title = "Two proposed motives";
+        copy = "Lower labor costs and higher tax receipts are distinct motive claims. An actor benefiting from a change and an actor organizing that change call for different evidence.";
+        narration = "Lower labor costs and higher tax receipts are distinct motive claims. An actor benefiting from a change and an actor organizing that change call for different evidence."
+      },
+      {
+        id = "claim-28";
+        sourceFrame = 10194;
+        holdFrames = 343;
+        speakers = list("right");
+        claimIds = list("R15");
+        title = "Ford Foundation grants and intent";
+        copy = "The Foundation’s annual report documents funding for women’s studies. Establishing that it created the field or intended the specific ideological and labor-market effects would require additional records.";
+        narration = "The Foundation’s annual report documents funding for women’s studies. Establishing that it created the field or intended the specific ideological and labor-market effects would require additional records."
+      },
+      {
+        id = "claim-29";
+        sourceFrame = 10523;
+        holdFrames = 291;
+        speakers = list("right");
+        claimIds = list("R16");
+        title = "A claim about persuasion";
+        copy = "Wilson says the project encouraged women to see careers as empowering and motherhood as risky. This claim depends on what the materials said, who saw them, and whether they changed choices.";
+        narration = "Wilson says the project encouraged women to see careers as empowering and motherhood as risky. This claim depends on what the materials said, who saw them, and whether they changed choices."
+      },
+      {
+        id = "claim-30";
+        sourceFrame = 11436;
+        holdFrames = 316;
+        speakers = list("right");
+        claimIds = list("R17");
+        title = "What happens to unpaid care?";
+        copy = "Wilson asks what paid employment might displace in family and community life. That is a separate outcome from GDP. Identifying its causes and size would require time-use and household evidence.";
+        narration = "Wilson asks what paid employment might displace in family and community life. That is a separate outcome from GDP. Identifying its causes and size would require time-use and household evidence."
+      },
+      {
+        id = "claim-31";
+        sourceFrame = 11466;
+        holdFrames = 226;
+        speakers = list("left");
+        claimIds = list("N18");
+        title = "A limited concession";
+        copy = "NotSoErudite accepts that losses are possible. She leaves open which losses occurred, how large they were, and what caused them.";
+        narration = "NotSoErudite accepts that losses are possible. She leaves open which losses occurred, how large they were, and what caused them."
+      },
+      {
+        id = "claim-32";
+        sourceFrame = 11955;
+        holdFrames = 266;
+        speakers = list("left");
+        claimIds = list("N19", "N20");
+        title = "Which manufacturing decline?";
+        copy = "The date depends on whether decline means employment, output, or share of the economy. The Triffin explanation needs its own causal evidence after the outcome and period are defined.";
+        narration = "The date depends on whether decline means employment, output, or share of the economy. The Triffin explanation needs its own causal evidence after the outcome and period are defined."
+      },
+      {
+        id = "claim-33";
+        sourceFrame = 12539;
+        holdFrames = 308;
+        speakers = list("left");
+        claimIds = list("N21");
+        title = "An historical comparison";
+        copy = "The argument connects restrictions on married women’s work and an earlier period of lower US geopolitical standing. The comparison leaves many other changes between the periods unaccounted for.";
+        narration = "The argument connects restrictions on married women’s work and an earlier period of lower US geopolitical standing. The comparison leaves many other changes between the periods unaccounted for."
+      },
+      {
+        id = "claim-34";
+        sourceFrame = 12892;
+        holdFrames = 270;
+        speakers = list("left");
+        claimIds = list("N22");
+        title = "Corporate uptake and legal duty";
+        copy = "Widespread use of HR can motivate a question about firm incentives. The claim about what fiduciary duty legally requires depends on the applicable law and corporate context.";
+        narration = "Widespread use of HR can motivate a question about firm incentives. The claim about what fiduciary duty legally requires depends on the applicable law and corporate context."
+      },
+      {
+        id = "claim-35";
+        sourceFrame = 13340;
+        holdFrames = 288;
+        speakers = list("left");
+        claimIds = list("N23");
+        title = "Operational efficiency as a mechanism";
+        copy = "Large firms have reasons to coordinate staffing. That explanation can coexist with compliance incentives. The debate gives no comparison of how much either mechanism accounts for.";
+        narration = "Large firms have reasons to coordinate staffing. That explanation can coexist with compliance incentives. The debate gives no comparison of how much either mechanism accounts for."
+      },
+      {
+        id = "claim-36";
+        sourceFrame = 13449;
+        holdFrames = 238;
+        speakers = list("left");
+        claimIds = list("N24");
+        title = "Granted for argument’s sake";
+        copy = "NotSoErudite grants Ford’s involvement for the sake of the reply. The concession leaves the precise institutional role and intent open.";
+        narration = "NotSoErudite grants Ford’s involvement for the sake of the reply. The concession leaves the precise institutional role and intent open."
+      },
+      {
+        id = "claim-37";
+        sourceFrame = 13949;
+        holdFrames = 324;
+        speakers = list("left");
+        claimIds = list("N25");
+        title = "A narrow chronology objection";
+        copy = "An activity that came later cannot explain the origin of one already in operation. Ford Motor Company’s early personnel work and Ford Foundation’s later funding are separate claims.";
+        narration = "An activity that came later cannot explain the origin of one already in operation. Ford Motor Company’s early personnel work and Ford Foundation’s later funding are separate claims."
+      },
+      {
+        id = "claim-38";
+        sourceFrame = 15920;
+        holdFrames = 389;
+        speakers = list("right");
+        claimIds = list("R18");
+        title = "Full-time work, full-time care and fertility";
+        copy = "Wilson makes a joint claim about hours, quality of care, and population replacement. NotSoErudite’s proposal changes the arrangement being compared. A test would need to measure all three outcomes under specified alternatives.";
+        narration = "Wilson makes a joint claim about hours, quality of care, and population replacement. NotSoErudite’s proposal changes the arrangement being compared. A test would need to measure all three outcomes under specified alternatives."
+      },
+      {
+        id = "claim-39";
+        sourceFrame = 16182;
+        holdFrames = 242;
+        speakers = list("right");
+        claimIds = list("R19");
+        title = "A forecast about abortion and marriage";
+        copy = "Wilson predicts continued abortion and unmarried parenthood. These are separate outcomes and need their own definitions, baseline rates, and causal evidence.";
+        narration = "Wilson predicts continued abortion and unmarried parenthood. These are separate outcomes and need their own definitions, baseline rates, and causal evidence."
+      },
+      {
+        id = "claim-40";
+        sourceFrame = 16366;
+        holdFrames = 293;
+        speakers = list("right");
+        claimIds = list("R20");
+        title = "A priority judgment";
+        copy = "Wilson places generational replacement ahead of other economic outcomes. That priority is a value judgment. It is possible to test the forecasts that give it urgency separately.";
+        narration = "Wilson places generational replacement ahead of other economic outcomes. That priority is a value judgment. It is possible to test the forecasts that give it urgency separately."
+      }
+    );
+    behaviours = list(
+      {
+        id = "conduct-01";
+        inFrame = 2133;
+        outFrame = 2201;
+        subject = "left";
+        label = "Patronizing address";
+        observation = "The familiar address accompanies a challenge to the book’s statistics. The substantive question is which sources can be checked."
+      },
+      {
+        id = "conduct-02";
+        inFrame = 2519;
+        outFrame = 2686;
+        subject = "moderator";
+        label = "Turn reset";
+        observation = "The moderator calls for a return to timed segments after several short overlapping exchanges. The transcript leaves some fragments unattributed."
+      },
+      {
+        id = "conduct-03";
+        inFrame = 7415;
+        outFrame = 7487;
+        subject = "right";
+        label = "Mocking shorthand";
+        observation = "Wilson caricatures the proposal as everyone taking an HR job. The underlying question is how far remote work scales."
+      },
+      {
+        id = "conduct-04";
+        inFrame = 9239;
+        outFrame = 9389;
+        subject = "left";
+        label = "Personal dismissal";
+        observation = "NotSoErudite comments on Wilson’s speaking pace and dismisses what she is saying before addressing the argument."
+      },
+      {
+        id = "conduct-05";
+        inFrame = 9390;
+        outFrame = 9458;
+        subject = "right";
+        label = "Competence jab";
+        observation = "Wilson questions her opponent’s knowledge of economics. The exchange leaves the specific disputed economic premise unstated here."
+      },
+      {
+        id = "conduct-06";
+        inFrame = 9460;
+        outFrame = 9524;
+        subject = "left";
+        label = "Personal comparison";
+        observation = "NotSoErudite uses a toddler comparison directed at Wilson’s delivery."
+      },
+      {
+        id = "conduct-07";
+        inFrame = 12043;
+        outFrame = 12179;
+        subject = "left";
+        label = "Belittling framing";
+        observation = "NotSoErudite characterizes the discussion as needing a more adult level of conversation and refers dismissively to the other women."
+      },
+      {
+        id = "conduct-08";
+        inFrame = 14289;
+        outFrame = 14526;
+        subject = "right";
+        label = "Status comparison";
+        observation = "Wilson replies by comparing her opponent’s accomplishments with her own. The comparison leaves the manufacturing claim unanswered."
+      },
+      {
+        id = "conduct-09";
+        inFrame = 14613;
+        outFrame = 14713;
+        subject = "left";
+        label = "Interjection during closing";
+        observation = "An age remark interrupts Wilson’s allotted closing. The moderator then asks that Wilson have a chance to speak."
+      },
+      {
+        id = "conduct-10";
+        inFrame = 14716;
+        outFrame = 14786;
+        subject = "right";
+        label = "Sharp demand for the floor";
+        observation = "Wilson tells her opponent to stop speaking during the closing. The demand follows the interruption and the moderator’s intervention."
+      },
+      {
+        id = "conduct-11";
+        inFrame = 14800;
+        outFrame = 15026;
+        subject = "right";
+        label = "Motive attributed";
+        observation = "Wilson describes the friendly opening as deliberate deception. The excerpt records the accusation and the surrounding exchanges."
+      },
+      {
+        id = "conduct-12";
+        inFrame = 15263;
+        outFrame = 15378;
+        subject = "right";
+        label = "Disability used as an insult";
+        observation = "Wilson uses autism as a put-down for her opponent’s delivery."
+      }
+    );
+    closing = {
+      summary = "Both speakers say motherhood needs more support. Wilson asks what happens to care and future generations when career demands rise. NotSoErudite asks whether families could have more choice through different working arrangements. The debate leaves the effect of specific arrangements on income, care, and fertility unresolved.";
+      summaryFrames = 473;
+      methodFrames = 300;
+      assessments = list(
+        {
+          tier = "Stands in a narrow form";
+          title = "Early Ford personnel work predates later Foundation grants";
+          speaker = "left";
+          claimIds = list("N25", "N17");
+          reason = "The chronology carries the narrow objection. The exact invention claim goes beyond the records.";
+          holdFrames = 308
+        },
+        {
+          tier = "Stands in a narrow form";
+          title = "A remote job example leaves a scale question";
+          speaker = "right";
+          claimIds = list("R09", "N14");
+          reason = "The existence of remote HR work cannot establish how widely parents could use it.";
+          holdFrames = 252
+        },
+        {
+          tier = "Plausible, with evidence still needed";
+          title = "Paid work can displace family and community care";
+          speaker = "right";
+          claimIds = list("R17");
+          reason = "The mechanism is plausible. The size and causes of the change need direct evidence.";
+          holdFrames = 272
+        },
+        {
+          tier = "Plausible, with evidence still needed";
+          title = "Different work arrangements could help parents combine roles";
+          speaker = "left";
+          claimIds = list("N06", "N13");
+          reason = "The proposal is testable once access, schedules and care outcomes are specified.";
+          holdFrames = 278
+        },
+        {
+          tier = "Material gap in the form argued";
+          title = "45 million more workers and $26,000 in lifetime losses";
+          speaker = "right";
+          claimIds = list("R02", "R04");
+          reason = "The likely source uses working age and an approximately six-year earnings window.";
+          holdFrames = 299
+        },
+        {
+          tier = "Material gap in the form argued";
+          title = "US growth demonstrates the causal effect of women’s participation";
+          speaker = "left";
+          claimIds = list("N07", "N08");
+          reason = "The indicators describe economic outcomes. The argument needs a way to isolate the contribution of the labor policy.";
+          holdFrames = 367
+        },
+        {
+          tier = "Material gap in the form argued";
+          title = "Full-time careers rule out above-replacement fertility";
+          speaker = "right";
+          claimIds = list("R18");
+          reason = "The excerpt provides neither a defined comparison nor evidence for the categorical forecast.";
+          holdFrames = 271
+        }
+      );
+      priorities = "Wilson puts replacement fertility first. NotSoErudite emphasizes access to work alongside parental choice. The ranking leaves the relative weight of those priorities open.";
+      prioritiesFrames = 291
+    }
+  }

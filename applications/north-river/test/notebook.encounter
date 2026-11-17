@@ -1,0 +1,171 @@
+process-module "temple/surface-process-module/1"
+
+process test.notebook.decision-first:
+  let step = { id = "sessions"; title = "Exercise separate sessions"; change = "Separate manager and employee access"; check = "Refuse a manager from another team"; assumptions = list(); dependsOn = list() }
+  let candidate = { hash = "candidate"; basis = "basis"; plan = { question = { text = "Who can see the report?"; why = "The answer sets the access rule." }; steps = list($step); assumptions = list() } }
+  let rejected = { job = { id = "first"; stage = "initial"; model = "fixture"; digest = "fixture"; prompt = "Plan a team report" }; accepted = false; diagnostic = "The check is outside the requested scope."; reply = "Rejected reply" }
+  each list("question", "repair", "review") as state:
+    let run = { id = "test-run"; status = "running"; attempts = if(eq($state, "repair"), list($rejected), list()); events = list(); job = { repair = eq($state, "repair") } }
+    let task = { phase = if(eq($state, "repair"), "review", $state); objective = "Plan a team report"; run = $run; candidate = $candidate; answer = { text = "Only the team’s manager." } }
+    let view = { task = $task; revision = "4"; csrf = "csrf"; primary = true; liveModel = false }
+    port kernel.invoke { query = "nr.liveWorkbench"; input = $run } → surface
+    let notebook = at($surface.children, 0)
+    let document = at($notebook.children, 1)
+    let decision = at($document.children, 2)
+    let planRecord = at($document.children, 3)
+    let evidence = at($document.children, 5)
+    let evidenceRecord = at($evidence.children, 1)
+    let fieldset = at($decision.children, 2)
+    assert and(eq($decision.attrs.id, "current-decision"), eq(at($decision.attrs, "data-presentation"), "vb6"),
+      eq($planRecord.tag, "details"), eq($planRecord.attrs.id, "current-plan-record"), eq($fieldset.tag, "fieldset"))
+      otherwise "Put the decision form ahead of the collapsible plan."
+    assert and(eq($evidence.tag, "details"), eq($evidenceRecord.attrs.id, "activity-record"))
+      otherwise "Keep activity in its collapsible evidence record."
+    let forms = filter($fieldset.children, "item", eq($item.tag, "form"))
+    when not(eq($state, "repair")):
+      let form = at($forms, 0)
+      let action = if(eq($state, "question"), "answer", "approve")
+      assert some($form.children, "item", and(eq(at($item.attrs, "name"), "action"), eq(at($item.attrs, "value"), $action)))
+        otherwise "The notebook must submit the existing task action."
+      assert some($form.children, "item", and(eq(at($item.attrs, "name"), "candidate"), eq(at($item.attrs, "value"), $candidate.hash)))
+        otherwise "The decision must bind to the displayed candidate."
+    when eq($state, "question"):
+      let heading = at($fieldset.children, 1)
+      assert and(eq(at($heading.children, 0), "Who can see the report?"), eq(count($forms), 1))
+        otherwise "Lead with the actual question and its answer form."
+    when eq($state, "repair"):
+      assert and(eq(at($decision.attrs, "data-attention"), "critical"), eq(count($forms), 0))
+        otherwise "A required repair must displace the approval control."
+    when eq($state, "review"):
+      let accessCheck = at($fieldset.children, 4)
+      assert and(eq($accessCheck.attrs.id, "proposed-access-check"), eq(count($forms), 1))
+        otherwise "The revised check and approval control must be available together."
+  let result = true
+
+process test.notebook.project-queue:
+  let view = { history = list() }
+  let reviews = list()
+  let opened = null
+  let plan = { head = null; changes = list() }
+  let fields = {}
+  let error = false
+  let repair = { id = "task-repair"; task = { objective = "Repair a plan"; phase = "review"; run = { status = "working"; job = { repair = true }; attempts = list({ diagnostic = "Repair is required." }) } } }
+  let review = { id = "primary"; task = { objective = "Approve the payroll plan"; phase = "review" } }
+  let question = { id = "task-question"; task = { objective = "Set the field team’s access rule"; phase = "question" } }
+  let working = { id = "task-open"; task = { objective = "Draft a plan"; phase = "requested" } }
+  let approved = { id = "task-done"; task = { objective = "Completed plan"; phase = "approved"; approval = { plan = "hash" } } }
+  let tasks = list($repair, $review, $question, $working, $approved)
+  port kernel.invoke { query = "nr.projectQueue"; input = $tasks } → queue
+  assert and(eq($queue.first.id, $question.id), eq($queue.first.href, "/?task=task-question#current-decision"))
+    otherwise "A blocking question must lead approval and open its own decision."
+  let other = at($queue.groups, 0)
+  assert eq(map($other.members, "member", $member.id), list($review.id))
+    otherwise "Show other actionable tasks once."
+  let blocked = at($queue.groups, 1)
+  assert eq(map($blocked.members, "member", $member.id), list($repair.id))
+    otherwise "Repair must never appear as an available approval."
+  port kernel.invoke { query = "nr.projectQueue"; input = list($repair, $working, $approved) } → idle
+  assert not($idle.first)
+    otherwise "Work in progress and completed work must not manufacture a decision."
+  port kernel.invoke { query = "nr.projectQueue"; input = list($review) } → ready
+  assert eq($ready.first.href, "/?task=primary#current-decision")
+    otherwise "Open the primary task decision at its original route."
+  port kernel.invoke { query = "nr.projectNotebook"; input = $tasks } → notebook
+  let panes = at($notebook.children, 1)
+  let taskList = at($panes.children, 0)
+  let decision = at($panes.children, 1)
+  assert and(eq($taskList.attrs.id, "task-index"), eq($decision.attrs.id, "next-decision"),
+    some($decision.children, "node", eq(at(at($node, "attrs"), "href"), $queue.first.href)))
+    otherwise "Keep the task list beside the recommended decision."
+  let fields = { selected = "task-open" }
+  port kernel.invoke { query = "nr.projectNotebook"; input = $tasks } → selected
+  let selectedPanes = at($selected.children, 1)
+  let content = at($selectedPanes.children, 1)
+  assert some($content.children, "node", and(eq(at($node, "tag"), "a"), eq(at(at($node, "children"), 0), "Open task"), eq(at(at($node, "attrs"), "href"), "/?task=task-open")))
+    otherwise "Selecting working work must offer an open command without manufacturing approval."
+  let result = true
+
+process test.notebook.approval-handoff:
+  let view = { primary = true; revision = 7; csrf = "fixture"; task = { phase = "approved"; run = { attempts = list() }; approval = { plan = "saved-plan"; operation = "original-approval" } } }
+  port kernel.invoke { query = "nr.taskAttention"; input = $view.task } → attention
+  port kernel.invoke { query = "nr.liveDecision"; input = $attention } → decision
+  let fields = at($decision.children, 2)
+  let form = at($fields.children, 3)
+  let actions = at($fields.children, 4)
+  let links = map($actions.children, "link", $link.attrs.href)
+  assert and(eq(at($links, 0), "/project"), eq(at($links, 1), "#approval-record"))
+    otherwise "Offer a return to the project and the saved receipt after approval."
+  assert and(eq($form.attrs.action, "/project?implementation=implementation-primary-saved-plan"),
+    some($form.children, "item", and(eq(at($item.attrs, "name"), "receipt"), eq(at($item.attrs, "value"), "original-approval"))),
+    some($form.children, "item", and(eq(at($item.attrs, "name"), "action"), eq(at($item.attrs, "value"), "approve-start-implementation"))),
+    some($form.children, "item", and(eq($item.tag, "button"), includes($item.children, "Approve and start"))))
+    otherwise "Approve and start submits the exact saved approval to the implementation queue."
+  let long = concat(
+    "Managers can view reports for their own teams. Employees can only edit their own time entries. ",
+    "Separate sessions must exercise both roles, including a manager from another team and a denied employee edit. ",
+    "Retain the exact outcome for each case and keep payroll decisions separate."
+  )
+  let view = { task = { phase = "answered"; run = { attempts = list() }; answer = { text = $long } } }
+  port kernel.invoke { query = "nr.taskAttention"; input = $view.task } → attention
+  port kernel.invoke { query = "nr.liveDecision"; input = $attention } → decision
+  let fields = at($decision.children, 2)
+  let record = at($fields.children, 2)
+  let quote = at($record.children, 1)
+  assert and(eq($record.tag, "details"), eq($quote.children, list($long)))
+    otherwise "Collapse a long answer while keeping every character available."
+  let result = true
+
+process test.notebook.plan-change-approval:
+  let prior = { id = "model"; change = "Create the model."; check = "Verify the model." }
+  let target = { id = "sessions"; title = "Review access"; change = "Check one role."; check = "Verify one session."; dependsOn = list("model") }
+  let head = { revision = 1; hash = "original-plan"; original = "original-receipt"; plan = { steps = list($prior, $target); assumptions = list("Keep project access separate.") } }
+  let plan = { head = $head }
+  let actor = { id = "owner" }
+  let request = { nonce = "approve-operation" }
+  let proposal = { step = "sessions"; base = $head.hash; work = "Check both roles."; check = "Verify separate sessions." }
+  let change = { id = "change-first"; hash = "proposal-hash"; proposal = $proposal; receipt = null }
+  let fields = { plan = $head.hash; proposal = $change.hash }
+  port kernel.invoke { query = "nr.approvePlanChange"; input = $change } → accepted
+  let revised = at($accepted.head.plan.steps, 1)
+  assert and(eq($accepted.head.revision, 2), eq($accepted.head.original, $head.original), eq($accepted.change.receipt.original, $head.original))
+    otherwise "Approval advances the project plan and retains the original receipt coordinate."
+  assert and(eq(at($accepted.head.plan.steps, 0), $prior), eq($revised.dependsOn, $target.dependsOn), eq($revised.change, $proposal.work), eq($revised.check, $proposal.check))
+    otherwise "Apply only the proposed work and check to the selected step."
+  let rejected = false
+  try:
+    let plan = { head = $accepted.head }
+    port kernel.invoke { query = "nr.approvePlanChange"; input = $change } → _
+  catch fault:
+    let rejected = includes($fault.message, "STALE")
+  assert $rejected
+    otherwise "Reject a pending change against a superseded plan."
+  let rejected = false
+  try:
+    let fields = { plan = $head.hash; proposal = "forged-hash" }
+    port kernel.invoke { query = "nr.approvePlanChange"; input = $change } → _
+  catch fault:
+    let rejected = includes($fault.message, "STALE")
+  assert $rejected
+    otherwise "Reject a mismatched proposal coordinate."
+  let result = true
+
+process test.notebook.implementation-attachment:
+  let view = { history = list() }
+  let sourcePlan = { steps = list({ title = "Review access"; change = "Separate sessions."; check = "Refuse another team." }) }
+  let receipt = { plan = "approved-plan"; reviewer = "owner"; operation = "approved-operation"; sha256 = "approved-receipt"; revision = 7 }
+  let task = { objective = "Plan team access"; candidate = { hash = $receipt.plan; plan = $sourcePlan }; approval = $receipt }
+  let tasks = list({ id = "primary"; task = $task })
+  let plan = { head = { hash = $receipt.plan; revision = 1 }; changes = list() }
+  port kernel.invoke { query = "nr.implementationSource"; input = "primary" } → approval
+  assert and(eq($approval.plan, $sourcePlan), eq($approval.receipt, $receipt), eq($approval.revision, 1))
+    otherwise "Attach the exact approved plan, revision and full receipt."
+  let review = { id = "implementation-primary-approved-plan"; approval = $approval }
+  let reviews = list($review)
+  port kernel.invoke { query = "nr.projectQueue"; input = $tasks } → queue
+  assert and(eq($queue.first.id, "primary"), eq($queue.first.href, "/?task=primary&work=1"), eq($queue.first.attention.next, "review-implementation"))
+    otherwise "The implementation decision stays on the task."
+  let plan = { head = { hash = "new-plan"; revision = 2 }; changes = list() }
+  port kernel.invoke { query = "nr.projectQueue"; input = $tasks } → newer
+  assert not($newer.first)
+    otherwise "An earlier project review leaves the decision queue after a new plan is approved."
+  let result = true

@@ -1,0 +1,46 @@
+{
+ "protocol":"temple/surface-process-module/1",
+ "queries":{
+  "broadcast.plan":[
+   {"let":"policy","value":"$eventInput.project.policy"},
+   {"port":"number.compare","args":{"left":["count","$eventInput.projections"],"right":"$policy.maxShots"},"into":"shotLimit"},
+   {"assert":["and",["not",["eq","$shotLimit",1]],["not",["eq",["count","$eventInput.projections"],0]]],"message":"AIR-P001: Supply one to maxShots explicit Encounter projections."},
+   {"fold":"$eventInput.projections","as":"projection","accumulator":"state","initial":{"shots":["list"],"time":0,"index":0,"previousClip":"","previousOut":-1},"steps":[
+    {"let":"v","value":"$projection.output.values"},
+    {"let":"clip","value":["at","$v","C.clip"]},
+    {"assert":["includes","$eventInput.project.sources","$clip"],"message":"AIR-P002: Clip is outside the declared source set."},
+    {"let":"media","value":["filter","$eventInput.media","m",["eq","$m.id","$clip"]]},
+    {"assert":["eq",["count","$media"],1],"message":"AIR-P003: Clip requires exactly one media observation."},
+    {"let":"media","value":["at","$media",0]},
+    {"assert":["includes","$policy.layouts",["at","$v","C.layout"]],"message":"AIR-P004: Unknown layout."},
+    {"port":"record.get","args":{"record":"$eventInput.graphics.layouts","key":["at","$v","C.layout"]},"into":"scene"},
+    {"assert":["not",["eq","$scene",null]],"message":"AIR-P013: Selected layout has no authored graphics recipe."},
+    {"assert":["includes","$policy.transitions",["at","$v","C.transition"]],"message":"AIR-P005: Unknown transition."},
+    {"assert":["includes","$policy.tracking",["at","$v","C.tracking"]],"message":"AIR-P006: Unknown tracking treatment."},
+    {"port":"text.matches","args":{"value":["at","$v","C.in"],"pattern":"^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,3})?$"},"into":"startValid"},
+    {"port":"text.matches","args":{"value":["at","$v","C.duration"],"pattern":"^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,3})?$"},"into":"durationValid"},
+    {"assert":["and","$startValid","$durationValid"],"message":"AIR-P007: In and duration must be finite unsigned decimal seconds; no expressions."},
+    {"port":"json.parse","args":{"text":["at","$v","C.in"]},"into":"start"},
+    {"port":"json.parse","args":{"text":["at","$v","C.duration"]},"into":"duration"},
+    {"port":"number.grid","args":{"value":"$start","rate":"$eventInput.project.fps"},"into":"startGrid"},
+    {"port":"number.grid","args":{"value":"$duration","rate":"$eventInput.project.fps"},"into":"durationGrid"},
+    {"assert":["and","$startGrid.exact","$durationGrid.exact"],"message":"AIR-P008: In and duration must lie on the declared frame grid."},
+    {"port":"number.compare","args":{"left":"$duration","right":"$policy.minShotDuration"},"into":"minDuration"},
+    {"port":"number.compare","args":{"left":"$duration","right":"$policy.maxShotDuration"},"into":"maxDuration"},
+    {"assert":["and",["not",["eq","$minDuration",-1]],["not",["eq","$maxDuration",1]]],"message":"AIR-P009: Shot duration is outside the project limits."},
+    {"port":"number.compare","args":{"left":["add","$start","$duration"],"right":"$media.duration"},"into":"endLimit"},
+    {"assert":["not",["eq","$endLimit",1]],"message":"AIR-P010: Shot extends beyond the observed source duration."},
+    {"port":"number.compare","args":{"left":["count",["at","$v","C.title"]],"right":"$policy.maxTitleLength"},"into":"titleLimit"},
+    {"port":"number.compare","args":{"left":["count",["at","$v","C.caption"]],"right":"$policy.maxCaptionLength"},"into":"captionLimit"},
+    {"assert":["and",["not",["eq","$titleLimit",1]],["not",["eq","$captionLimit",1]],["not",["eq",["at","$v","C.title"],""]]],"message":"AIR-P011: Title/caption exceeds the explicit graphics text budget or title is empty."},
+    {"let":"shot","value":{"id":"$projection.source","view":"$projection.view","index":"$state.index","clip":"$clip","sourceHash":"$media.sha256","in":"$start","duration":"$duration","inFrame":"$startGrid.index","frames":"$durationGrid.index","timelineIn":"$state.time","timelineOut":["add","$state.time","$durationGrid.index"],"audioContinuous":["and",["eq","$clip","$state.previousClip"],["eq","$startGrid.index","$state.previousOut"]],"title":["at","$v","C.title"],"caption":["at","$v","C.caption"],"reason":["at","$v","C.reason"],"layout":["at","$v","C.layout"],"transition":["at","$v","C.transition"],"tracking":["at","$v","C.tracking"]}},
+    {"port":"record.put","args":{"record":"$shot","key":"scene","value":"$scene"},"into":"shot"},
+    {"let":"next","value":{"shots":["append","$state.shots",["list","$shot"]],"time":["add","$state.time","$durationGrid.index"],"index":["add","$state.index",1],"previousClip":"$clip","previousOut":["add","$startGrid.index","$durationGrid.index"]}}
+   ],"yield":"$next","into":"composition"},
+   {"port":"number.grid","args":{"value":"$policy.maxDuration","rate":"$eventInput.project.fps"},"into":"maxFrames"},
+   {"port":"number.compare","args":{"left":"$composition.time","right":"$maxFrames.index"},"into":"totalLimit"},
+   {"assert":["not",["eq","$totalLimit",1]],"message":"AIR-P012: Composition exceeds the project duration budget."},
+   {"let":"result","value":{"protocol":"church-on-air/render-plan/1","title":"$eventInput.project.title","fps":"$eventInput.project.fps","width":"$eventInput.project.width","height":"$eventInput.project.height","palette":"$eventInput.project.palette","policy":"$policy","frames":"$composition.time","shots":"$composition.shots","intent":{"reason":"$eventInput.project.reason","target":"$eventInput.project.target","goal":"$eventInput.project.goal"}}}
+  ]
+ }
+}

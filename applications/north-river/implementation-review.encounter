@@ -1,0 +1,182 @@
+process-module "temple/surface-process-module/1"
+
+process nr.implementationReviews:
+  fold $eventInput.documents as document; reviews starts list():
+    port text.indexOf { value = $document.path; search = "implementation-reviews/"; from = 0 } → prefix
+    let next = $reviews
+    when eq($prefix, 0):
+      port rel.decode { text = $document.text; kind = "NorthRiverImplementationReview" } → review
+      let next = append($reviews, list($review))
+    yield $next → reviews
+  let result = $reviews
+
+process nr.implementationForm:
+  let source = $eventInput
+  let fields = map(list(list("source", $source.id), list("plan", $source.plan), list("receipt", $source.operation)), "pair",
+    { tag = "input"; attrs = { type = "hidden"; name = at($pair, 0); value = at($pair, 1) }; children = list() })
+  port kernel.invoke { query = "nr.projectPlanForm"; input = { action = "approve-start-implementation"; fields = $fields; button = "Approve and start"; primary = true } } → form
+  let implementation = concat("implementation-", $source.id, "-", $source.plan)
+  port record.put { record = $form.attrs; key = "action"; value = concat("/project?implementation=", $implementation) } → attrs
+  port record.put { record = $form; key = "attrs"; value = $attrs } → result
+
+process nr.implementationSource:
+  let id = $eventInput
+  let result = null
+  when eq($id, "project"):
+    let head = $plan.head
+    let change = at(filter($plan.changes, "item", and($item.receipt, eq($item.receipt.plan, $head.hash))), 0)
+    when $change:
+      let result = { source = "project"; title = $project.title; revision = $head.revision; revisionLabel = "Project plan revision"; plan = $head.plan; hash = $head.hash; receipt = $change.receipt; receiptHref = concat("/project?change=", $change.id, "#next-decision") }
+  when not(eq($id, "project")):
+    let item = at(filter($tasks, "item", eq($item.id, $id)), 0)
+    let task = at($item, "task")
+    when and($task.approval, eq($task.approval.plan, $task.candidate.hash)):
+      assert or(not(eq($id, "primary")), eq($task.approval.plan, $plan.head.hash))
+        otherwise "STALE: Open the current approved revision from the Project Plan tab."
+      let revision = if(eq($id, "primary"), $plan.head.revision, $task.approval.revision)
+      let label = if(eq($id, "primary"), "Project plan revision", "Approved task revision")
+      let result = { source = $id; title = $task.objective; revision = $revision; revisionLabel = $label; plan = $task.candidate.plan; hash = $task.approval.plan; receipt = $task.approval; receiptHref = concat("/?task=", $id, "#approval-record") }
+
+process nr.approveStartImplementation:
+  port kernel.invoke { query = "nr.implementationSource"; input = $fields.source } → source
+  assert and($source, eq($fields.plan, $source.hash), eq($fields.receipt, $source.receipt.operation))
+    otherwise "STALE: Use the exact approved plan and receipt."
+  let id = concat("implementation-", $source.source, "-", $source.hash)
+  let result = at(filter($reviews, "review", eq($review.id, $id)), 0)
+  when or(not($result), not(at($result, "state"))):
+    let result = { id = $id; approval = $source; openedBy = $actor.id; state = "queued"; start = { operation = $request.nonce; approver = $actor.id; base = $base } }
+    port rel.encode { value = $result; kind = "NorthRiverImplementationReview" } → bytes
+    let documents = list({ path = concat("implementation-reviews/", $id, ".rel"); text = $bytes })
+    port kernel.invoke { query = "nr.persist"; input = { documents = $documents; notice = "Implementation queued."; target = $id; goal = "Approve and queue implementation" } } → _
+
+process nr.implementationAttention:
+  let state = at($eventInput, "state")
+  let result = { kind = "decision"; label = "Implementation approval ready"; next = "review-implementation" }
+  when eq($state, "queued"):
+    let result = { kind = "working"; label = "Implementation queued"; next = "wait" }
+  when eq($state, "running"):
+    let result = { kind = "working"; label = "Implementation in progress"; next = "wait" }
+  when eq($state, "review"):
+    port kernel.invoke { query = "nr.roundTripState"; input = $eventInput } → linked
+    let result = if($linked.open, { kind = "decision"; label = "Investigation needs a finding"; next = "investigate-implementation" },
+      { kind = "decision"; label = "Implementation ready for review"; next = "review-implementation" })
+  when eq($state, "blocked"):
+    let result = { kind = "critical"; label = "Implementation blocked"; next = "review-implementation" }
+  when eq($state, "returned"):
+    let result = { kind = "critical"; label = "Draft returned"; next = "review-implementation" }
+  when eq($state, "accepted"):
+    let handoff = at($eventInput, "handoff")
+    let assigned = and(eq(at($handoff, "state"), "ready"), eq(at($handoff, "owner"), at($actor, "id")))
+    let result = if($assigned, { kind = "decision"; label = "Handoff ready to acknowledge"; next = "acknowledge-handoff" },
+      { kind = "checked"; label = "Draft accepted"; next = "complete" })
+
+process nr.implementationWorkerRequest:
+  let notice = ""
+  let status = "refused"
+  let job = null
+  let reply = { status = $status; notice = "This identity has no implementation worker grant." }
+  when eq($actor.role, "implementation-worker"):
+    port kernel.invoke { query = "nr.implementationReviews"; input = $snapshot } → reviews
+    port kernel.invoke { query = "nr.projectLoad"; input = $snapshot } → project
+    port kernel.invoke { query = "nr.projectPlan"; input = $project } → plan
+    port kernel.invoke { query = "nr.tasks"; input = $snapshot } → tasks
+    let status = "ok"
+    fold $tasks as item; available starts list():
+      port kernel.invoke { query = "nr.currentImplementation"; input = { taskId = $item.id; taskPlan = at($item.task.approval, "plan"); head = at(at($plan, "head"), "hash"); reviews = $reviews } } → offered
+      let runner = at($offered, "runner")
+      let availableToActor = or(not($runner), eq($runner, $actor.id))
+      let active = and($availableToActor, includes(list("queued", "running"), at($offered, "state")))
+      yield if($active, append($available, list($offered)), $available) → available
+    let active = append(filter($available, "item", eq($item.state, "running")), filter($available, "item", eq($item.state, "queued")))
+    let job = null
+    when count($active):
+      let job = at($active, 0)
+    when eq($request.method, "POST"):
+      try:
+        port scalar.read { text = $fields.base } → base
+        assert eq($base, $snapshot.revision)
+          otherwise "STALE: Read the implementation queue again."
+        let job = at(filter($reviews, "item", eq($item.id, $fields.id)), 0)
+        assert and($job, eq($fields.run, $job.start.operation), some($available, "item", eq($item.id, $job.id)))
+          otherwise "STALE: Read the current implementation run again."
+        let source = $job.approval.source
+        let active = $source
+        when eq($source, "project"):
+          let active = "primary"
+        let jobTask = at(filter($tasks, "item", eq($item.id, $active)), 0)
+        port kernel.invoke { query = "nr.implementationForTask"; input = $active } → offered
+        assert and($jobTask, eq(at($offered, "id"), $job.id))
+          otherwise "The approved plan has been superseded."
+        let next = $job
+        let notice = "Implementation already claimed."
+        let goal = "Record the implementation step"
+        when eq($fields.action, "progress"):
+          assert and(eq($job.state, "running"), eq(at($job, "runner"), $actor.id))
+            otherwise "Only a running implementation can report activity."
+          port kernel.invoke { query = "mw.text"; input = { value = $fields.message; required = true; maximum = 300 } } → _
+          let message = $fields.message
+          port record.put { record = $job; key = "progress"; value = $message } → next
+          let notice = $message
+          let goal = "Record implementation activity"
+        when eq($fields.action, "claim"):
+          assert includes(list("queued", "running"), at($job, "state"))
+            otherwise "This implementation job is finished."
+          when or(eq($job.state, "queued"), not(at($job, "runner"))):
+            port record.put { record = $job; key = "state"; value = "running" } → next
+            port record.put { record = $next; key = "runner"; value = $actor.id } → next
+            let notice = "Implementation in progress."
+        when eq($fields.action, "finish"):
+          assert and(eq($job.state, "running"), eq(at($job, "runner"), $actor.id), includes(list("review", "blocked"), $fields.state))
+            otherwise "Only a running implementation can report a result."
+          port number.calculate { operation = "lessEqual"; values = list(count($fields.summary), 1500) } → summaryBound
+          port number.calculate { operation = "lessEqual"; values = list(count($fields.diff), 12000) } → diffBound
+          port number.calculate { operation = "lessEqual"; values = list(count($fields.checks), 2500) } → checksBound
+          port number.calculate { operation = "lessEqual"; values = list(count($fields.reason), 1500) } → reasonBound
+          port number.calculate { operation = "lessEqual"; values = list(count($fields.next), 600) } → nextBound
+          assert and(count($fields.summary), $summaryBound, $diffBound, $checksBound, $reasonBound, $nextBound)
+            otherwise "Invalid implementation result."
+          assert or(eq($fields.state, "blocked"), and(count($fields.diff), count($fields.checks)))
+            otherwise "A review needs a diff and check evidence."
+          port record.put { record = $job; key = "state"; value = $fields.state } → next
+          port record.put { record = $next; key = "result"; value = { summary = $fields.summary; diff = $fields.diff; checks = $fields.checks; reason = $fields.reason; next = $fields.next } } → next
+          let notice = if(eq($fields.state, "review"), "Implementation ready for review.", "Implementation blocked.")
+        assert includes(list("claim", "progress", "finish"), $fields.action)
+          otherwise "Unknown implementation action."
+        when not(eq($job, $next)):
+          port rel.encode { value = $next; kind = "NorthRiverImplementationReview" } → bytes
+          port kernel.invoke { query = "nr.persist"; input = { documents = list({ path = concat("implementation-reviews/", $job.id, ".rel"); text = $bytes }); notice = $notice; target = $job.id; goal = $goal } } → _
+        let job = $next
+      catch fault:
+        let status = "refused"
+        let notice = $fault.message
+    port storage.snapshot {} → latest
+    let reply = { status = $status; notice = $notice; job = $job; csrf = $request.csrf; revision = $latest.revision }
+  port rel.encode { value = $reply; kind = "NorthRiverImplementationWorker" } → text
+  let result = { session = $session; text = $text }
+
+process nr.implementationActivity:
+  let query = $eventInput
+  let matches = filter($query.history, "entry", and(or(not($query.id), eq($entry.target, $query.id)), includes(list("Open the implementation review", "Approve and queue implementation", "Record implementation activity", "Record the implementation step", "Record the implementation decision", "open-investigation", "return-investigation", "accept-implementation", "acknowledge-handoff"), $entry.goal)))
+  fold $matches as event; activity starts list():
+    port number.calculate { operation = "greater"; values = list($event.revision, $query.after) } → newer
+    let frame = { sequence = $event.revision; kind = "implementation-activity"; text = $event.description; review = $event.target; operation = $event.operationId; action = $event.goal }
+    yield if($newer, append(list($frame), $activity), $activity) → activity
+  let result = $activity
+
+process nr.implementationSocket:
+  let request = $eventInput
+  let snapshot = $request.snapshot
+  let actor = $request.operator
+  port kernel.invoke { query = "nr.implementationReviews"; input = $snapshot } → reviews
+  let id = at($request.fields, "implementation")
+  let review = at(filter($reviews, "entry", eq($entry.id, $id)), 0)
+  let result = null
+  when $review:
+    port kernel.invoke { query = "nr.tasks"; input = $snapshot } → tasks
+    let taskId = if(eq($review.approval.source, "project"), "primary", $review.approval.source)
+    let selected = at(filter($tasks, "item", eq($item.id, $taskId)), 0)
+    let task = at($selected, "task")
+    port kernel.invoke { query = "nr.roundTripInspect"; input = { review = $review; task = $taskId; owner = $task.owner } } → work
+    when $work:
+      port storage.history {} → history
+      port kernel.invoke { query = "nr.implementationActivity"; input = { id = $id; history = $history; after = $request.after } } → result

@@ -1,0 +1,33 @@
+process nr.sickPage:
+  let view = $eventInput
+  let content = list()
+  let minutesInput = { tag = "input"; attrs = { name = "minutes"; type = "number"; min = 1; required = true }; children = list() }
+  let minutes = { tag = "label"; attrs = {}; children = list("Sick-leave minutes", $minutesInput) }
+  let revised = { tag = "label"; attrs = {}; children = list("New approved minutes", $minutesInput) }
+  when and($view.employee, count($view.managers)):
+    let options = map($view.managers, "manager", { tag = "option"; attrs = { value = $manager.id }; children = list($manager.id) })
+    let date = { tag = "label"; attrs = {}; children = list("Sick-leave date",
+      { tag = "input"; attrs = { name = "date"; type = "date"; required = true }; children = list() }) }
+    let recipient = { tag = "label"; attrs = {}; children = list("Recipient manager",
+      { tag = "select"; attrs = { name = "manager"; "aria-label" = "Recipient manager" }; children = $options }) }
+    port kernel.invoke { query = "nr.sickForm"; input = { action = "notify-sick"; button = "Notify management"; fields = list($date, $minutes, $recipient) } } → form
+    let content = list($form)
+  fold $view.entries as entry; listing starts list():
+    let id = { tag = "input"; attrs = { name = "entry"; type = "hidden"; value = $entry.id }; children = list() }
+    let form = null
+    when and(eq($view.role, "manager"), not($entry.approved)):
+      port kernel.invoke { query = "nr.sickForm"; input = { action = "approve-sick"; button = "Approve sick leave"; fields = list($id) } } → form
+    when and(eq($view.role, "manager"), $entry.approved, not($entry.reduction)):
+      port kernel.invoke { query = "nr.sickForm"; input = { action = "adjust-sick"; button = "Adjust approved minutes"; fields = list($id, $revised) } } → form
+    when and($view.employee, $entry.reduction):
+      port kernel.invoke { query = "nr.sickForm"; input = { action = "approve-reduction"; button = "Approve reduction"; fields = list($id) } } → form
+    let status = if($entry.approved, concat($entry.minutes, " approved minutes"), concat($entry.requested, " minutes awaiting management approval"))
+    let pending = if($entry.reduction, concat("Reduction to ", $entry.reduction, " minutes awaiting employee approval"), "")
+    let item = { tag = "li"; attrs = {}; children = list({ tag = "p"; attrs = {}; children = list(concat($entry.employee, " · ", $entry.date, " · ", $status)) },
+      { tag = "p"; attrs = {}; children = list($pending) }, $form) }
+    yield append($listing, list($item)) → listing
+  fold $view.entries as entry; total starts 0:
+    yield add($total, $entry.minutes) → total
+  let content = append($content, list({ tag = "p"; attrs = {}; children = list(concat("Approved sick-leave minutes: ", $total)) },
+    { tag = "ul"; attrs = {}; children = $listing }))
+  port kernel.invoke { query = "work.page"; input = { page = { title = "Sick leave"; summary = "Notices and approved minutes"; content = $content }; notice = $notice; error = $error } } → result

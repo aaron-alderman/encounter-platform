@@ -1,0 +1,298 @@
+process-module "temple/surface-process-module/1"
+
+process app.newSession:
+  let result = {}
+
+process nr.load:
+  let snapshot = $eventInput
+  let result = { project = ""; owner = ""; agent = ""; objective = ""; phase = "empty"; candidate = null; previous = null; answer = null; approval = null }
+  when not(eq($snapshot.revision, 0)):
+    let records = filter($snapshot.documents, "document", eq($document.path, "task.rel"))
+    assert eq(count($records), 1)
+      otherwise "TASK: The task record is missing."
+    let document = at($records, 0)
+    port rel.decode { text = $document.text; kind = "NorthRiverTask" } → result
+
+process nr.reference:
+  port application.data {} → result
+
+process nr.taskOpen:
+  let task = $eventInput
+  port kernel.invoke { query = "mw.text"; input = { value = $fields.objective; required = true; maximum = 2000 } } → _
+  port text.matches { value = $fields.agent; pattern = "^[A-Za-z][A-Za-z0-9_.-]{0,63}$" } → validAgent
+  assert and($validAgent, not(eq($fields.agent, $actor.id)))
+    otherwise "AUTHORITY: Assign a separate proposer identity."
+  port record.put { record = $task; key = "agent"; value = $fields.agent } → next
+  port record.put { record = $next; key = "objective"; value = $fields.objective } → next
+  port record.put { record = $next; key = "phase"; value = "requested" } → result
+
+process nr.change:
+  let action = $fields.action
+  let importing = includes(list("upload-csv", "preview-import", "approve-import"), $action)
+  when $importing:
+    call nr.importChange
+  when eq($action, "start-live"):
+    call nr.liveStart
+  when and(not($importing), not(eq($action, "start-live"))):
+    call nr.planChange
+
+process nr.planChange:
+  let action = $fields.action
+  let next = $task
+  let notice = ""
+  when eq($actor.role, "author"):
+    assert or(eq($task.phase, "empty"), eq($task.owner, $actor.id))
+      otherwise "AUTHORITY: Only the task owner can change this task."
+    assert includes(list("create-project", "create-task", "answer", "approve"), $action)
+      otherwise "AUTHORITY: Use an offered human task action."
+    when eq($action, "create-project"):
+      assert eq($task.phase, "empty")
+        otherwise "TASK: The project already exists."
+      port kernel.invoke { query = "mw.text"; input = { value = $fields.project; required = true; maximum = 120 } } → _
+      port record.put { record = $next; key = "project"; value = $fields.project } → next
+      port record.put { record = $next; key = "owner"; value = $actor.id } → next
+      port record.put { record = $next; key = "phase"; value = "project" } → next
+      let notice = "Project created."
+    when eq($action, "create-task"):
+      assert eq($task.phase, "project")
+        otherwise "TASK: Create the project before opening its first task."
+      port kernel.invoke { query = "nr.taskOpen"; input = $next } → next
+      let notice = "Task created and assigned to the proposer."
+    when eq($action, "answer"):
+      assert and(eq($task.phase, "question"), eq($fields.candidate, $task.candidate.hash))
+        otherwise "QUESTION: Reopen the current candidate before answering."
+      port kernel.invoke { query = "mw.text"; input = { value = $fields.answer; required = true; maximum = 900 } } → _
+      let answer = { text = $fields.answer; actor = $actor.id; candidate = $task.candidate.hash; revision = add($base, 1) }
+      port record.put { record = $next; key = "answer"; value = $answer } → next
+      port record.put { record = $next; key = "phase"; value = "answered" } → next
+      let run = at($task, "run")
+      when $run:
+        port kernel.invoke { query = "nr.liveResume"; input = $run } → resumed
+        port record.put { record = $next; key = "run"; value = $resumed } → next
+      let notice = "Answer saved. Waiting for the proposer to revise the plan."
+    when eq($action, "approve"):
+      assert and(eq($task.phase, "review"), eq($fields.candidate, $task.candidate.hash))
+        otherwise "REVIEW: Open the exact current candidate before approving."
+      let decision = { outcome = "plan-approved"; reviewer = $actor.id; plan = $task.candidate.hash; answerRevision = $task.answer.revision; evidence = $task.candidate.plan.evidence; basis = $task.candidate.basis; base = $base; revision = add($base, 1); operation = $request.nonce }
+      port rel.encode { value = $decision; kind = "NorthRiverPlanDecision" } → decisionBytes
+      port digest.sha256 { text = $decisionBytes } → decisionHash
+      port record.put { record = $decision; key = "sha256"; value = $decisionHash } → receipt
+      port record.put { record = $next; key = "approval"; value = $receipt } → next
+      port record.put { record = $next; key = "phase"; value = "approved" } → next
+      let run = at($task, "run")
+      when $run:
+        port record.put { record = $run; key = "status"; value = "approved" } → run
+        port kernel.invoke { query = "nr.liveEvent"; input = { run = $run; kind = "plan-approved"; text = "The owner approved the exact plan." } } → run
+        port record.put { record = $next; key = "run"; value = $run } → next
+      let notice = "This plan is now the task’s agreed direction."
+  when eq($actor.role, "proposer"):
+    assert and(eq($task.agent, $actor.id), eq($action, "propose"), includes(list("requested", "answered"), $task.phase))
+      otherwise "AUTHORITY: This run can only propose a plan for its assigned task at the current stage."
+    assert eq($fields.basis, $request.basis)
+      otherwise "BASIS: Refresh the task context before proposing."
+    port rel.decode { text = $fields.plan; kind = "NorthRiverPlan" } → candidatePlan
+    port kernel.invoke { query = "nr.plan"; input = $candidatePlan } → plan
+    let review = { project = $task.project; objective = $task.objective; agent = $actor.id; basis = $request.basis; answer = $task.answer; plan = $plan; base = $base }
+    port kernel.invoke { query = "nr.hashPlan"; input = $review } → hash
+    let candidate = { plan = $plan; hash = $hash; actor = $actor.id; basis = $request.basis; base = $base }
+    port record.put { record = $next; key = "previous"; value = $task.candidate } → next
+    port record.put { record = $next; key = "candidate"; value = $candidate } → next
+    port record.put { record = $next; key = "phase"; value = if($task.answer, "review", "question") } → next
+    let notice = if($task.answer, "Revised plan ready for human review.", "Plan proposed with one blocking question.")
+  let result = { task = $next; notice = $notice }
+
+process app.request:
+  let request = $eventInput
+  let actor = at($request, "operator")
+  let fields = $request.fields
+  let snapshot = $request.snapshot
+  let session = $request.session
+  port kernel.invoke { query = "nr.load"; input = $snapshot } → task
+  let entrySurface = or(eq($request.path, "/timesheet"), and(eq($request.path, "/"), includes(list("employee", "manager"), $actor.role)))
+  when $entrySurface:
+    port kernel.invoke { query = "nr.timeRequest"; input = null } → result
+  let reportSurface = eq($request.path, "/report")
+  when $reportSurface:
+    port kernel.invoke { query = "nr.reportRequest"; input = null } → result
+  let approvalSurface = includes(list("/approval", "/review-evidence"), $request.path)
+  when $approvalSurface:
+    port kernel.invoke { query = "nr.releaseRequest"; input = null } → result
+  let projectSurface = eq($request.path, "/project")
+  when $projectSurface:
+    call nr.projectRequest
+  let workerSurface = eq($request.path, "/implementation-worker")
+  when $workerSurface:
+    call nr.implementationWorkerRequest
+  when not(or($entrySurface, $reportSurface, $approvalSurface, $projectSurface, $workerSurface)):
+    call nr.taskRequest
+
+process nr.taskRequest:
+  let id = at($fields, "task")
+  let selected = { id = "primary"; path = "task.rel"; task = $task }
+  when $id:
+    port kernel.invoke { query = "nr.tasks"; input = $snapshot } → tasks
+    let selected = at(filter($tasks, "item", eq($item.id, if(eq($id, "1"), "primary", $id))), 0)
+    when not($selected):
+      port storage.history {} → history
+      let created = at(filter($history, "event", and(eq(concat("", $event.revision), $id), eq($event.goal, "Record the task step"), includes($event.description, "Task added."))), 0)
+      when $created:
+        let selected = at(filter($tasks, "item", eq($item.id, $created.target)), 0)
+  let primary = eq(at($selected, "id"), "primary")
+  let task = at($selected, "task")
+  let human = and($selected, eq($request.path, "/"), eq($actor.role, "author"), or(eq(at($task, "phase"), "empty"), eq(at($task, "owner"), $actor.id)))
+  when eq(at($fields, "travel"), "1"):
+    call nr.travelRequest
+  when not(eq(at($fields, "travel"), "1")):
+    call nr.taskWork
+
+process nr.taskWork:
+  let agent = and($selected, eq($request.path, "/agent"), eq($actor.role, "proposer"), eq(at($task, "agent"), $actor.id))
+  let notice = ""
+  let error = false
+  let reference = null
+  let workInterface = and(eq($request.path, "/"), eq(at($fields, "work-interface"), "1"))
+  let recipient = false
+  when and(eq($request.path, "/"), $selected, eq($actor.role, "proposer"),
+    or($workInterface, eq(at($fields, "work"), "1"), eq(at($fields, "action"), "acknowledge-handoff"))):
+    port kernel.invoke { query = "nr.handoffRecipient"; input = $task } → assigned
+    when eq($actor.id, $assigned):
+      port kernel.invoke { query = "nr.load"; input = $snapshot } → task
+      port kernel.invoke { query = "nr.projectLoad"; input = $snapshot } → project
+      port kernel.invoke { query = "nr.projectPlan"; input = $project } → plan
+      port kernel.invoke { query = "nr.implementationForTask"; input = $selected.id } → candidate
+      let task = $selected.task
+      let recipient = and(eq(at($candidate, "state"), "accepted"), eq(at(at($candidate, "handoff"), "owner"), $actor.id))
+  let workAgent = and($workInterface, $recipient)
+  let roundTripAction = includes(list("open-investigation", "return-investigation", "accept-implementation", "acknowledge-handoff"), $fields.action)
+  let implementationAction = or($roundTripAction, includes(list("return-implementation", "retry-implementation", "stage-review-comment", "discard-review-comment"), $fields.action))
+  when and(or($human, $workAgent, $recipient), $implementationAction, eq($request.method, "POST"), or(not($workInterface), $roundTripAction)):
+    try:
+      port scalar.read { text = $fields.base } → base
+      port kernel.invoke { query = "nr.load"; input = $snapshot } → primaryTask
+      port kernel.invoke { query = "nr.projectLoad"; input = $snapshot } → project
+      let task = $primaryTask
+      port kernel.invoke { query = "nr.projectPlan"; input = $project } → plan
+      port kernel.invoke { query = "nr.implementationForTask"; input = $selected.id } → review
+      let task = $selected.task
+      when $roundTripAction:
+        port kernel.invoke { query = "nr.roundTripAct"; input = $review } → notice
+      when not($roundTripAction):
+        assert $human
+          otherwise "AUTHORITY: Only the review owner can use this action."
+        assert eq($base, $snapshot.revision)
+          otherwise "STALE: Reopen the task to review the current revision."
+        port kernel.invoke { query = "nr.implementationDecision"; input = { review = $review } } → notice
+    catch fault:
+      let notice = $fault.message
+      let error = true
+    port storage.snapshot {} → snapshot
+  when and(or($human, $agent), not($implementationAction), not($workInterface)):
+    port kernel.invoke { query = "nr.reference"; input = null } → reference
+    when eq($request.method, "POST"):
+      try:
+        port scalar.read { text = $fields.base } → base
+        let imported = at($task, "import")
+        let retry = false
+        when and($human, eq($fields.action, "approve-import"), eq($task.phase, "imported")):
+          let retry = and(eq($fields.preview, $imported.receipt.preview), eq($base, $imported.receipt.base))
+        when $retry:
+          let notice = "This import was already committed. Its original receipt is shown."
+        when not($retry):
+          let planning = includes(list("start-live", "answer", "approve", "propose"), $fields.action)
+          assert or($primary, $planning)
+            otherwise "TASK: This task supports planning and plan approval."
+          when and($planning, not(eq($base, $snapshot.revision))):
+            port storage.snapshot { revision = $base } → shown
+            let before = filter($shown.documents, "document", eq($document.path, $selected.path))
+            let current = filter($snapshot.documents, "document", eq($document.path, $selected.path))
+            assert and(count($before), eq($before, $current))
+              otherwise "STALE: Reopen the task to review the current revision."
+            let base = $snapshot.revision
+          assert eq($base, $snapshot.revision)
+            otherwise "STALE: Reopen the task to review the current revision."
+          port kernel.invoke { query = "nr.change"; input = null } → change
+          port rel.encode { value = $change.task; kind = "NorthRiverTask" } → state
+          let documents = list({ path = $selected.path; text = $state })
+          when eq($fields.action, "create-project"):
+            port rel.encode { value = { id = "north-river"; title = $change.task.project; owner = $actor.id }; kind = "NorthRiverProject" } → project
+            let documents = append($documents, list({ path = "project.rel"; text = $project }))
+          port kernel.invoke { query = "nr.persist"; input = { documents = $documents; notice = $change.notice; target = if($primary, $change.task.project, $selected.id); goal = "Record the task step" } } → _
+          let notice = $change.notice
+      catch fault:
+        let notice = $fault.message
+        let error = true
+      port storage.snapshot {} → snapshot
+      let saved = at(filter($snapshot.documents, "document", eq($document.path, $selected.path)), 0)
+      when $saved:
+        port rel.decode { text = $saved.text; kind = "NorthRiverTask" } → task
+  when and($human, not($workInterface)):
+    port kernel.invoke { query = "nr.page"; input = { task = $task; taskId = $selected.id; primary = $primary; revision = $snapshot.revision; csrf = $request.csrf; reference = $reference; notice = $notice; error = $error; liveModel = eq(at($request, "liveModel"), true) } } → html
+    let result = { session = $session; html = $html }
+  when and(or($human, $recipient), not($workInterface)):
+    when and($task.approval, not(eq(at($fields, "planning"), "1")), or(eq($request.method, "GET"), $implementationAction)):
+      let title = $task.objective
+      port kernel.invoke { query = "nr.load"; input = $snapshot } → task
+      port kernel.invoke { query = "nr.projectLoad"; input = $snapshot } → project
+      port kernel.invoke { query = "nr.projectPlan"; input = $project } → plan
+      let task = $selected.task
+      port kernel.invoke { query = "nr.implementationForTask"; input = $selected.id } → review
+      let live = eq(at($request, "liveModel"), true)
+      let firstReview = not(at($review, "state"))
+      let requestedReview = or(eq(at($fields, "work"), "1"), at($fields, "pane"))
+      let pinned = at($fields, "plan")
+      let superseded = and($review, $live, $requestedReview, $pinned, not(eq($pinned, $review.approval.hash)))
+      when $superseded:
+        let view = { task = $task; taskId = $selected.id; notice = "This approval has been superseded. Open the current revision in the Project Plan tab."; error = true }
+        port kernel.invoke { query = "nr.approvedNotebookV1"; input = $view } → html
+        let result = { session = $session; html = $html }
+      when and($review, not($superseded), or(not($firstReview), $requestedReview)):
+        port storage.history {} → history
+        let view = { csrf = $request.csrf; revision = $snapshot.revision; history = $history; notice = $notice; error = $error }
+        port kernel.invoke { query = "nr.implementationBoard"; input = { review = $review; view = $view; taskId = $selected.id; title = $title; project = $project.title; current = true; live = $live } } → html
+        let result = { session = $session; html = $html }
+  when $agent:
+    let imported = at($task, "import")
+    let attachment = if(eq($task.phase, "import-uploaded"), $imported.upload, null)
+    let grants = list("read-assigned-task")
+    when includes(list("requested", "answered"), $task.phase):
+      let grants = append($grants, list("propose-plan"))
+    when $attachment:
+      let grants = append($grants, list("read-import-attachment", "propose-import-mapping"))
+    let agentTask = $task
+    when $imported:
+      port record.put { record = $task; key = "import"; value = null } → agentTask
+    let reply = { status = if($error, "refused", "ok"); notice = $notice; csrf = $request.csrf; revision = $snapshot.revision; basis = $request.basis; task = $agentTask; reference = $reference; grants = $grants; attachment = $attachment }
+    port rel.encode { value = $reply; kind = "NorthRiverAgentContext" } → text
+    let result = { session = $session; text = $text }
+  when not(or($human, $agent, $recipient)):
+    port rel.encode { value = { status = "refused"; notice = "AUTHORITY: This identity has no grant for this task surface." }; kind = "NorthRiverAgentContext" } → text
+    let result = { session = $session; text = $text }
+
+  when $workInterface:
+    when and(eq($request.method, "POST"), not($roundTripAction)):
+      let notice = "This is not an implementation command."
+      let error = true
+    let work = null
+    when or($human, $workAgent):
+      port kernel.invoke { query = "nr.load"; input = $snapshot } → task
+      port kernel.invoke { query = "nr.projectLoad"; input = $snapshot } → project
+      port kernel.invoke { query = "nr.projectPlan"; input = $project } → plan
+      port kernel.invoke { query = "nr.implementationForTask"; input = $selected.id } → work
+      let task = $selected.task
+    port kernel.invoke { query = "nr.roundTripReply"; input = $work } → reply
+    port rel.encode { value = $reply; kind = "EncounterWorkReply" } → text
+    let result = { session = $session; text = $text }
+
+process nr.persist:
+  let change = $eventInput
+  let paths = map($change.documents, "document", $document.path)
+  let documents = append(filter($snapshot.documents, "document", not(includes($paths, $document.path))), $change.documents)
+  let operation = if(at($change, "operation"), $change.operation, $request.nonce)
+  try:
+    port storage.cas { base = $base; operationId = $operation; profile = $request.profile; basis = $request.basis; documents = $documents; reason = $change.notice; target = $change.target; goal = $change.goal; source = $actor.id; description = $change.notice } → result
+  catch fault:
+    assert not(at($change, "operation"))
+      otherwise "SAVE: The command could not be recorded. Reopen the current view."
+    port storage.operation { operationId = $operation } → result
+    assert $result
+      otherwise "SAVE: The change could not be recorded. Reopen the current view."

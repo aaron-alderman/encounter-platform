@@ -50,3 +50,16 @@ contracts. North River can use the same tool with its explicit declaration path.
 - Use disposable stores and free loopback ports for verification. Keep application state, private datasets, generated releases and test evidence outside the source history.
 
 The baseline review, exact source manifest, transport diffs and verification receipts remain in the aaron-dev workspace receipt store.
+
+## Standalone variants
+
+The [Portfolio](applications/encounter-portfolio-standalone/products/PORTFOLIO.md) and
+[Work Boards](applications/encounter-work-boards-standalone/README.md) standalone
+packages retain their own foundation and manifests. The regular Platform release
+selects the integrated packages. Native Portfolio tests use the Encounter server
+runtime and a separate executable built with its `test-faults` feature.
+
+The [Claimipedia research archive](research/claimipedia/MIGRATION.md) retains its
+original layout. The [Sourcery Platform seed](variants/sourcery-platform-seed/README.md)
+records the initial package boundaries. Media application source is under
+`applications/` with production notes under `media/`.

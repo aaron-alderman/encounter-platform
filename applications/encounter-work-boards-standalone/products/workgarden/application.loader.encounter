@@ -1,0 +1,41 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    sections = list(
+      {
+        subject = "application";
+        stateProfile = "encounter/workgarden/1";
+        module = list(
+          "source/products/shared/work-items.encounter",
+          "source/products/shared/work-ui.encounter",
+          "source/products/workgarden/application.encounter",
+          "algebra/html/html.escape.encounter",
+          "algebra/html/html.cssText.encounter",
+          "algebra/html/html.serialize.encounter"
+        );
+        entry = list(
+          "app.newSession",
+          "app.request",
+          "ui.styles"
+        );
+        grant = list(
+          "kernel.invoke",
+          "rel.encode",
+          "rel.decode",
+          "scalar.read",
+          "storage.cas",
+          "storage.operation",
+          "storage.snapshot",
+          "text.matches",
+          "text.join",
+          "text.replaceAll",
+          "text.trim",
+          "value.describe",
+          "value.string",
+          "value.type",
+          "record.entries"
+        )
+      }
+    )
+  }

@@ -1,0 +1,21 @@
+process-module "temple/surface-process-module/1"
+
+process loader.declaration:
+  let result = {
+    sections = list(
+      {
+        subject = "application";
+        stateProfile = "encounter/north-river-workflow-test/1";
+        module = "north-river/test/workflow.encounter";
+        entry = list(
+          "cli.main",
+          "test.workflow.cross-task-run"
+        );
+        grant = list(
+          "kernel.invoke",
+          "rel.decode",
+          "record.entries"
+        )
+      }
+    )
+  }

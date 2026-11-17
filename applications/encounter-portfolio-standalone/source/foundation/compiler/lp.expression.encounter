@@ -1,0 +1,145 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lp.expression:
+  let i = at($eventInput, "i")
+  let pointer = at($eventInput, "pointer")
+  let depth = at($eventInput, "depth")
+  let origins = at($eventInput, "origins")
+  let begin = at($lpTokens, $i)
+  let v = at(at($lpTokens, $i), "text")
+  when not(includes(range(65), add($depth, 1))):
+    port kernel.invoke {
+      query = "lp.fail";
+      input = {
+        code = "PROC-TEXT-LIMIT";
+        summary = "Expression depth exceeds 64.";
+        token = at($lpTokens, $i)
+      }
+    } → unused
+  let done = false
+  let value = null
+  when eq($v, "["):
+    let i = add($i, 1)
+    port kernel.invoke { query = "lp.take"; input = { i = $i; expected = "]" } } → i
+    let value = []
+    let done = true
+  when eq($v, "{"):
+    let i = add($i, 1)
+    port kernel.invoke {
+      query = "lp.fields";
+      input = {
+        i = $i;
+        pointer = $pointer;
+        depth = $depth;
+        origins = $origins;
+        entries = list();
+        keys = list()
+      }
+    } → parsed
+    let i = at($parsed, "i")
+    let origins = at($parsed, "origins")
+    let value = at($parsed, "value")
+    let done = true
+  port text.matches { value = $v; pattern = "^\"" } → quoted
+  when and(not($done), $quoted):
+    port kernel.invoke { query = "lp.decode"; input = { token = $begin } } → value
+    port text.slice { value = $value; start = 0; end = 1 } → first
+    when not(not(eq($first, at($lpPolicy, "referenceSigil")))):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-STRING";
+          summary = "Quoted leading-dollar data has no literal encoding in this profile.";
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let i = add($i, 1)
+    let done = true
+  port text.matches { value = $v; pattern = "^\\$" } → reference
+  when and(not($done), $reference):
+    port text.slice { value = $v; start = 1; end = count($v) } → name
+    port kernel.invoke { query = "lp.name"; input = { text = $name; qualified = true; token = $begin } } → name
+    let value = $v
+    let i = add($i, 1)
+    let done = true
+  port text.matches { value = $v; pattern = "^(?:-?[0-9]|true$|false$|null$)" } → scalar
+  when and(not($done), $scalar):
+    port kernel.invoke { query = "lp.decode"; input = { token = $begin } } → value
+    port value.describe { value = $value } → description
+    when not(
+      or(
+        at($description, "finite"),
+        at($description, "null"),
+        eq(at($description, "type"), "boolean")
+      )
+    ):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-LEX";
+          summary = "Finite scalar required.";
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let i = add($i, 1)
+    let done = true
+  when not($done):
+    when not(includes(at($lpPolicy, "operators"), $v)):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-SYNTAX";
+          summary = "Unknown expression or operator.";
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let op = $v
+    let i = add($i, 1)
+    when not(eq(at(at($lpTokens, $i), "text"), "(")):
+      port kernel.invoke {
+        query = "lp.fail";
+        input = {
+          code = "PROC-TEXT-SYNTAX";
+          summary = concat("Expected ", "(", ".");
+          token = at($lpTokens, $i)
+        }
+      } → unused
+    let i = add($i, 1)
+    port kernel.invoke {
+      query = "lp.arguments";
+      input = {
+        i = $i;
+        pointer = $pointer;
+        depth = $depth;
+        origins = $origins;
+        args = list();
+        op = $op
+      }
+    } → parsed
+    let i = at($parsed, "i")
+    let origins = at($parsed, "origins")
+    let value = at($parsed, "value")
+    port kernel.invoke {
+      query = "lp.origin";
+      input = {
+        pointer = concat($pointer, "/0");
+        kind = "operator";
+        start = at($begin, "start");
+        end = at($begin, "end");
+        token = $begin
+      }
+    } → origin
+    let origins = append($origins, list($origin))
+  port kernel.invoke {
+    query = "lp.origin";
+    input = {
+      pointer = $pointer;
+      kind = "expression";
+      start = at($begin, "start");
+      end = at(at($lpTokens, add($i, -1)), "end");
+      token = $begin
+    }
+  } → origin
+  let origins = append($origins, list($origin))
+  let result = { i = $i; value = $value; origins = $origins }

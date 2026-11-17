@@ -1,0 +1,45 @@
+process-module "temple/surface-process-module/1"
+
+process test.fixture:
+  let result = {
+    profile = "encounter/notebook/1"; screen = "approved-task"; project = "North River"; title = "Notify management of sick leave";
+    reference = "Task #1"; revision = "Approved task revision 7"; status = "Plan approved"; body = "Review the approved plan.";
+    action = { href = "/?task=primary&work=1"; replan = "/project?new=1&from=primary" };
+    widgets = list({ kind = "plan"; lines = list("Notify the manager.") }, { kind = "receipt"; lines = list("Approved plan: fixture") });
+    notice = ""; error = false
+  }
+
+process test.notebook-v1.admits-catalogue:
+  port kernel.invoke { query = "test.fixture"; input = null } → book
+  port kernel.invoke { query = "notebook.v1.render"; input = $book } → html
+  assert and(includes($html, "encounter/notebook/1"), includes($html, "Continue"), includes($html, "Approval receipt"))
+    otherwise "Render the admitted Notebook composition."
+  let result = true
+
+process test.notebook-v1.refuses-local-styles:
+  port kernel.invoke { query = "test.fixture"; input = null } → book
+  port record.put { record = $book; key = "style"; value = "display:none" } → local
+  let result = false
+  try:
+    port kernel.invoke { query = "notebook.v1.render"; input = $local } → _
+  catch fault:
+    let result = includes($fault.message, "Local styles and markup are refused.")
+
+process test.notebook-v1.refuses-widget-styles:
+  port kernel.invoke { query = "test.fixture"; input = null } → book
+  port record.put { record = at($book.widgets, 0); key = "css"; value = "color:red" } → widget
+  port record.put { record = $book; key = "widgets"; value = list($widget, at($book.widgets, 1)) } → local
+  let result = false
+  try:
+    port kernel.invoke { query = "notebook.v1.render"; input = $local } → _
+  catch fault:
+    let result = includes($fault.message, "Local styles and markup are refused.")
+
+process test.notebook-v1.refuses-unregistered-widget:
+  port kernel.invoke { query = "test.fixture"; input = null } → book
+  port record.put { record = $book; key = "widgets"; value = list({ kind = "custom-card"; lines = list("An unknown widget.") }, at($book.widgets, 1)) } → unknown
+  let result = false
+  try:
+    port kernel.invoke { query = "notebook.v1.render"; input = $unknown } → _
+  catch fault:
+    let result = includes($fault.message, "Unregistered widget or slot.")

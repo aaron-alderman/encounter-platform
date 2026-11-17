@@ -1,0 +1,511 @@
+{
+  "protocol": "temple/derived-expression-definitions/1",
+  "referenceSigil": "$",
+  "sourceRefs": [
+    "@sourcerytech/expression-algebra:operations/let.mjs",
+    "@sourcerytech/expression-algebra:operations/fold.mjs",
+    "@sourcerytech/expression-algebra:operations/raise.mjs",
+    "claimipedia-core:components/process-interpreter/src/surface-process-state-operators.mjs",
+    "claimipedia-core:components/process-interpreter/src/surface-process-collection-operators.mjs"
+  ],
+  "scope": "Lowering laws for admitted dense JSON arrays and string-valued REL facts. Core membership and equality semantics remain native. Non-array map/filter/some/every inputs refuse.",
+  "statementFields": {
+    "programmes": [
+      "steps",
+      "then",
+      "try",
+      "catch"
+    ],
+    "expressions": [
+      "value",
+      "assert",
+      "when",
+      "each",
+      "fold",
+      "initial",
+      "yield",
+      "args"
+    ]
+  },
+  "operators": {
+    "record": {
+      "arity": 1,
+      "body": {
+        "arg": 0
+      }
+    },
+    "not": {
+      "arity": 1,
+      "body": [
+        "if",
+        {
+          "arg": 0
+        },
+        false,
+        true
+      ]
+    },
+    "has": {
+      "arity": 3,
+      "body": [
+        "includes",
+        [
+          "objects",
+          {
+            "arg": 0
+          },
+          {
+            "arg": 1
+          }
+        ],
+        {
+          "arg": 2
+        }
+      ]
+    },
+    "map": {
+      "arity": 3,
+      "body": [
+        "if",
+        [
+          "isArray",
+          {
+            "arg": 0
+          }
+        ],
+        [
+          "fold",
+          {
+            "arg": 0
+          },
+          {
+            "arg": 1
+          },
+          {
+            "bind": "result"
+          },
+          [
+            "list"
+          ],
+          [
+            "append",
+            {
+              "ref": "result"
+            },
+            [
+              "list",
+              {
+                "arg": 2
+              }
+            ]
+          ]
+        ],
+        [
+          "raise",
+          "map requires an array"
+        ]
+      ]
+    },
+    "filter": {
+      "arity": 3,
+      "body": [
+        "if",
+        [
+          "isArray",
+          {
+            "arg": 0
+          }
+        ],
+        [
+          "fold",
+          {
+            "arg": 0
+          },
+          {
+            "arg": 1
+          },
+          {
+            "bind": "result"
+          },
+          [
+            "list"
+          ],
+          [
+            "if",
+            {
+              "arg": 2
+            },
+            [
+              "append",
+              {
+                "ref": "result"
+              },
+              [
+                "list",
+                {
+                  "refArg": 1
+                }
+              ]
+            ],
+            {
+              "ref": "result"
+            }
+          ]
+        ],
+        [
+          "raise",
+          "filter requires an array"
+        ]
+      ]
+    },
+    "some": {
+      "arity": 3,
+      "body": [
+        "if",
+        [
+          "isArray",
+          {
+            "arg": 0
+          }
+        ],
+        [
+          "fold",
+          {
+            "arg": 0
+          },
+          {
+            "arg": 1
+          },
+          {
+            "bind": "result"
+          },
+          false,
+          [
+            "if",
+            {
+              "ref": "result"
+            },
+            true,
+            [
+              "if",
+              {
+                "arg": 2
+              },
+              true,
+              false
+            ]
+          ]
+        ],
+        [
+          "raise",
+          "some requires an array"
+        ]
+      ]
+    },
+    "every": {
+      "arity": 3,
+      "body": [
+        "if",
+        [
+          "isArray",
+          {
+            "arg": 0
+          }
+        ],
+        [
+          "fold",
+          {
+            "arg": 0
+          },
+          {
+            "arg": 1
+          },
+          {
+            "bind": "result"
+          },
+          true,
+          [
+            "if",
+            {
+              "ref": "result"
+            },
+            [
+              "if",
+              {
+                "arg": 2
+              },
+              true,
+              false
+            ],
+            false
+          ]
+        ],
+        [
+          "raise",
+          "every requires an array"
+        ]
+      ]
+    },
+    "one": {
+      "arity": 2,
+      "body": [
+        "let",
+        {
+          "bind": "found"
+        },
+        [
+          "objects",
+          {
+            "arg": 0
+          },
+          {
+            "arg": 1
+          }
+        ],
+        [
+          "if",
+          [
+            "eq",
+            [
+              "count",
+              {
+                "ref": "found"
+              }
+            ],
+            1
+          ],
+          [
+            "at",
+            {
+              "ref": "found"
+            },
+            0
+          ],
+          [
+            "raise",
+            [
+              "concat",
+              "Fact cardinality: ",
+              {
+                "arg": 0
+              },
+              ".",
+              {
+                "arg": 1
+              }
+            ]
+          ]
+        ]
+      ]
+    },
+    "optional": {
+      "arity": 2,
+      "body": [
+        "let",
+        {
+          "bind": "found"
+        },
+        [
+          "objects",
+          {
+            "arg": 0
+          },
+          {
+            "arg": 1
+          }
+        ],
+        [
+          "if",
+          [
+            "eq",
+            [
+              "count",
+              {
+                "ref": "found"
+              }
+            ],
+            0
+          ],
+          null,
+          [
+            "if",
+            [
+              "eq",
+              [
+                "count",
+                {
+                  "ref": "found"
+                }
+              ],
+              1
+            ],
+            [
+              "at",
+              {
+                "ref": "found"
+              },
+              0
+            ],
+            [
+              "raise",
+              [
+                "concat",
+                "Fact cardinality: ",
+                {
+                  "arg": 0
+                },
+                ".",
+                {
+                  "arg": 1
+                }
+              ]
+            ]
+          ]
+        ]
+      ]
+    },
+    "and": {
+      "minimumArity": 0,
+      "body": {
+        "foldArgs": {
+          "initial": true,
+          "item": "test",
+          "accumulator": "rest",
+          "body": [
+            "if",
+            {
+              "term": "test"
+            },
+            {
+              "term": "rest"
+            },
+            false
+          ]
+        }
+      }
+    },
+    "or": {
+      "minimumArity": 0,
+      "body": [
+        "fold",
+        {
+          "arguments": true
+        },
+        {
+          "bind": "value"
+        },
+        {
+          "bind": "result"
+        },
+        null,
+        [
+          "if",
+          {
+            "ref": "result"
+          },
+          {
+            "ref": "result"
+          },
+          [
+            "if",
+            {
+              "ref": "value"
+            },
+            {
+              "ref": "value"
+            },
+            null
+          ]
+        ]
+      ]
+    },
+    "objects": {
+      "arity": 2,
+      "body": [
+        "let",
+        {
+          "bind": "indexed"
+        },
+        [
+          "at",
+          [
+            "at",
+            [
+              "at",
+              "$factIndex",
+              "objects"
+            ],
+            {
+              "arg": 0
+            }
+          ],
+          {
+            "arg": 1
+          }
+        ],
+        [
+          "if",
+          {
+            "ref": "indexed"
+          },
+          [
+            "append",
+            {
+              "ref": "indexed"
+            },
+            [
+              "list"
+            ]
+          ],
+          [
+            "list"
+          ]
+        ]
+      ]
+    },
+    "subjects": {
+      "arity": 2,
+      "body": [
+        "let",
+        {
+          "bind": "indexed"
+        },
+        [
+          "at",
+          [
+            "at",
+            [
+              "at",
+              "$factIndex",
+              "subjects"
+            ],
+            {
+              "arg": 0
+            }
+          ],
+          {
+            "arg": 1
+          }
+        ],
+        [
+          "if",
+          {
+            "ref": "indexed"
+          },
+          [
+            "append",
+            {
+              "ref": "indexed"
+            },
+            [
+              "list"
+            ]
+          ],
+          [
+            "list"
+          ]
+        ]
+      ]
+    }
+  }
+}

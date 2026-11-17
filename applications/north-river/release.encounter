@@ -1,0 +1,141 @@
+process-module "temple/surface-process-module/1"
+
+process nr.releaseLoad:
+  let saved = filter($snapshot.documents, "document", eq($document.path, "release.rel"))
+  let result = { evidence = null; receipt = null }
+  when count($saved):
+    assert eq(count($saved), 1)
+      otherwise "REVIEW: Ambiguous release evidence."
+    let document = at($saved, 0)
+    port rel.decode { text = $document.text; kind = "NorthRiverRelease" } → result
+
+process nr.releaseContext:
+  port reflection.image {} → identity
+  assert $identity
+    otherwise "REVIEW: Open a pinned compiled image to review this demo."
+  let inputs = filter($snapshot.documents, "document", includes(list("task.rel", "timesheet.rel"), $document.path))
+  port rel.encode { value = $inputs; kind = "NorthRiverVerificationSnapshot" } → data
+  port digest.sha256 { text = $data } → hash
+  let result = { image = $identity; data = $hash; plan = $task.approval.plan; import = $task.import.receipt.sha256 }
+
+process nr.releaseEvidence:
+  port rel.decode { text = $fields.evidence; kind = "NorthRiverBrowserEvidence" } → submitted
+  port kernel.invoke { query = "mw.exact"; input = { value = $submitted; keys = list("context", "revision", "suite", "cases") } } → _
+  assert and(eq($submitted.context, $coordinates), eq($submitted.revision, $snapshot.revision))
+    otherwise "EVIDENCE: Verify this exact running image and data revision."
+  assert eq($submitted.suite, "north-river/browser/1")
+    otherwise "EVIDENCE: Use the North River browser verification suite."
+  port kernel.invoke { query = "nr.sequence"; input = { value = $submitted.cases; limit = 4 } } → _
+  assert eq(count($submitted.cases), count($trace))
+    otherwise "EVIDENCE: Every reviewed behavior needs a browser result."
+  each $trace as row:
+    let matching = filter($submitted.cases, "case", eq($case.id, $row.id))
+    assert eq(count($matching), 1)
+      otherwise "EVIDENCE: Supply one browser result for each reviewed behavior."
+    let observed = at($matching, 0)
+    port kernel.invoke { query = "mw.exact"; input = { value = $observed; keys = list("id", "passed", "observed") } } → _
+    assert eq($observed.passed, true)
+      otherwise "EVIDENCE: A required browser check did not pass."
+    port kernel.invoke { query = "mw.text"; input = { value = $observed.observed; required = true; maximum = 1800 } } → _
+  let evidence = { verification = $submitted; verifier = $actor.id }
+  port rel.encode { value = $evidence; kind = "NorthRiverReviewedEvidence" } → canonical
+  port digest.sha256 { text = $canonical } → hash
+  let result = { evidence = { value = $evidence; sha256 = $hash }; receipt = null }
+
+process nr.releaseComplete:
+  each $task.candidate.plan.assumptions as assumption:
+    assert some($trace, "row", includes($row.assumptions, $assumption.id))
+      otherwise "EVIDENCE: An approved assumption has no reviewed correspondence."
+  each $trace as row:
+    port reflection.image { path = $row.source } → file
+    assert $file
+      otherwise "EVIDENCE: A reviewed source file is missing from the image."
+    each $row.processes as process:
+      port reflection.image { path = $process.path } → owner
+      assert $owner
+        otherwise "EVIDENCE: A compiled process source owner is missing."
+      port text.indexOf { value = $owner.text; search = concat("process ", $process.name, ":"); from = 0 } → definition
+      port reflection.image { process = $process.name } → instructions
+      assert and(not(eq($definition, -1)), count($instructions))
+        otherwise "EVIDENCE: A required compiled process or its reviewed definition is missing."
+    each $row.assumptions as id:
+      assert some($task.candidate.plan.assumptions, "item", eq($item.id, $id))
+        otherwise "EVIDENCE: A required approved assumption is missing."
+  let result = true
+
+process nr.releaseApprove:
+  assert and($release.evidence, not($release.receipt))
+    otherwise "REVIEW: A current verification result is required."
+  let evidence = $release.evidence
+  assert and(eq($fields.evidence, $evidence.sha256), eq($evidence.value.verification.context, $coordinates))
+    otherwise "REVIEW: The image, permission configuration or evidence has changed."
+  port kernel.invoke { query = "nr.releaseComplete"; input = null } → _
+  let decision = {
+    outcome = "approved-private-demo"; approver = $actor.id; time = $request.now;
+    image = $coordinates.image.sha256; runtime = $coordinates.image.runtimeSha256;
+    programme = $coordinates.image.programmeSha256; evidence = $evidence.sha256;
+    plan = $coordinates.plan; import = $coordinates.import; data = $coordinates.data;
+    verifiedRevision = $evidence.value.verification.revision; operation = $request.nonce;
+    base = $base; revision = add($base, 1)
+  }
+  port rel.encode { value = $decision; kind = "NorthRiverDemoDecision" } → canonical
+  port digest.sha256 { text = $canonical } → hash
+  port record.put { record = $decision; key = "sha256"; value = $hash } → receipt
+  let result = { evidence = $evidence; receipt = $receipt }
+
+process nr.releaseRequest:
+  let owner = and(eq($request.path, "/approval"), eq($actor.role, "author"), eq($actor.id, $task.owner))
+  let verifier = and(eq($request.path, "/review-evidence"), eq($actor.role, "verifier"))
+  let notice = ""
+  let error = false
+  let coordinates = null
+  let trace = list()
+  let release = { evidence = null; receipt = null }
+  try:
+    assert or($owner, $verifier)
+      otherwise "ACCESS: This account cannot use the image approval surface."
+    assert eq($task.phase, "imported")
+      otherwise "REVIEW: Approve employee import before reviewing the demo image."
+    port kernel.invoke { query = "nr.releaseContext"; input = null } → coordinates
+    port application.data { name = "review-map" } → trace
+    port kernel.invoke { query = "nr.releaseLoad"; input = null } → release
+    when eq($request.method, "POST"):
+      port scalar.read { text = $fields.base } → base
+      let retry = false
+      when and($owner, eq($fields.action, "approve-demo"), $release.receipt):
+        let retry = and(eq($fields.evidence, $release.receipt.evidence), eq($base, $release.receipt.base), eq($coordinates.image, $release.evidence.value.verification.context.image))
+      when $retry:
+        let notice = "This approval was already recorded. Its original receipt is shown."
+      when not($retry):
+        assert eq($base, $snapshot.revision)
+          otherwise "STALE: Reopen the current image review."
+        let changed = null
+        when $verifier:
+          assert eq($fields.action, "record-evidence")
+            otherwise "ACCESS: A verifier can submit evidence but cannot approve the image."
+          when $release.receipt:
+            assert not(eq($coordinates.image, $release.evidence.value.verification.context.image))
+              otherwise "REVIEW: Evidence for this approved image is already retained."
+          port kernel.invoke { query = "nr.releaseComplete"; input = null } → _
+          port kernel.invoke { query = "nr.releaseEvidence"; input = null } → changed
+          let notice = "Browser verification recorded."
+        when $owner:
+          assert eq($fields.action, "approve-demo")
+            otherwise "Choose the demo image approval."
+          port kernel.invoke { query = "nr.releaseApprove"; input = null } → changed
+          let notice = "This exact image is approved for the private North River demo."
+        port rel.encode { value = $changed; kind = "NorthRiverRelease" } → stored
+        let documents = append(filter($snapshot.documents, "document", not(eq($document.path, "release.rel"))), list({ path = "release.rel"; text = $stored }))
+        port kernel.invoke { query = "nr.persist"; input = { documents = $documents; notice = $notice; target = $coordinates.image.sha256; goal = "Record demo image review" } } → _
+        let release = $changed
+        port storage.snapshot {} → snapshot
+  catch fault:
+    let notice = $fault.message
+    let error = true
+  when $owner:
+    port kernel.invoke { query = "nr.releasePage"; input = { task = $task; coordinates = $coordinates; trace = $trace; release = $release; fields = $fields; revision = $snapshot.revision; csrf = $request.csrf; notice = $notice; error = $error } } → html
+    let result = { html = $html; session = $session }
+  when not($owner):
+    let reply = { status = if($error, "refused", "ok"); notice = $notice; coordinates = $coordinates; revision = $snapshot.revision; csrf = if($verifier, $request.csrf, ""); release = $release }
+    port rel.encode { value = $reply; kind = "NorthRiverVerificationContext" } → text
+    let result = { text = $text; session = $session }

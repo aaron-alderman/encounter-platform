@@ -1,0 +1,20 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process lower.model:
+  let original = $input
+  port record.entries { value = $input.queries } → queries
+  fold $queries as query; built starts { value = list(); context = $context }:
+    let context = $built.context
+    let input = at($query, 1)
+    fold list(null) as callFrame; frameResult starts null:
+      call lower.programme
+      yield $result → result
+    yield {
+    value = append($built.value, list(list(at($query, 0), $result.value)));
+    context = $result.context
+  } → built
+  port record.fromEntries { entries = $built.value } → queries
+  port record.entries { value = $original } → entries
+  port record.fromEntries { entries = append($entries, list(list("queries", $queries))) } → value
+  let result = { value = $value; context = $built.context }

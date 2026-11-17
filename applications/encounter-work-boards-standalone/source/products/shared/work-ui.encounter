@@ -1,0 +1,39 @@
+process-module "temple/surface-process-module/1"
+
+# Shared page and form projections.
+
+process work.form:
+  let spec = $eventInput
+  let hidden = { _csrf = $spec.csrf; base = $spec.revision; action = $spec.action }
+  port record.entries { value = $hidden } → coordinates
+  let fields = map($coordinates, "entry", { tag = "input"; attrs = { type = "hidden"; name = at($entry, 0); value = at($entry, 1) }; children = list() })
+  let children = append($fields, $spec.fields)
+  let result = { tag = "form"; attrs = { method = "post"; action = "/"; class = $spec.style }; children = append($children, list({ tag = "button"; attrs = { type = "submit" }; children = list($spec.button) })) }
+
+process work.addForm:
+  let board = $eventInput
+  let inputField = { tag = "label"; attrs = {}; children = list("New work item", { tag = "input"; attrs = { name = "title"; required = true; maxlength = 500 }; children = list() }) }
+  port kernel.invoke { query = "work.form"; input = { csrf = $board.csrf; revision = $board.revision; action = "add"; fields = list($inputField); button = "Add work item"; style = "entry" } } → result
+
+process work.page:
+  let view = $eventInput
+  let head = { tag = "head"; attrs = {}; children = list({ tag = "meta"; attrs = { charset = "utf-8" }; children = list() }, { tag = "meta"; attrs = { name = "viewport"; content = "width=device-width, initial-scale=1" }; children = list() }, { tag = "title"; attrs = {}; children = list($view.page.title) }, { tag = "link"; attrs = { rel = "stylesheet"; href = "/styles.css" }; children = list() }) }
+  let heading = { tag = "header"; attrs = {}; children = list({ tag = "h1"; attrs = {}; children = list($view.page.title) }, { tag = "p"; attrs = {}; children = list($view.page.summary) }) }
+  let feedback = { tag = "p"; attrs = { class = if($view.error, "feedback error", "feedback"); role = if($view.error, "alert", "status") }; children = list($view.notice) }
+  let main = { tag = "main"; attrs = {}; children = append(list($heading, $feedback), $view.page.content) }
+  let input = { tag = "html"; attrs = { lang = "en" }; children = list($head, { tag = "body"; attrs = {}; children = list($main) }) }
+  call html.serialize
+  let result = concat("<!doctype html>", $result)
+
+process ui.styles:
+  let result = concat(
+    ":root{font:16px/1.5 system-ui,sans-serif;color:#192d36;background:#f3f7f6}",
+    "*{box-sizing:border-box}body{margin:0}main{max-width:70rem;margin:auto;padding:clamp(1rem,4vw,3rem)}",
+    "header{border-bottom:2px solid #1b685b;padding-bottom:1rem}h1,h2,h3,p{margin:0 0 .65rem}h1{font-size:clamp(2rem,5vw,3.4rem)}",
+    "section,article{min-width:0}section{margin-block:1.2rem}ul{padding:0;list-style:none}li,article{background:white;border:1px solid #b8cdc7;border-radius:.65rem;padding:1rem;margin-block:.6rem;overflow-wrap:anywhere}",
+    "label{display:grid;gap:.25rem;font-weight:600;min-width:0}input,select,button{font:inherit;min-width:0;padding:.45rem .7rem;border-radius:.4rem;border:1px solid #547269}input,select{color:inherit;background:white;width:100%}",
+    "button{background:#1b685b;color:white;border-color:#1b685b;cursor:pointer}button:hover{background:#164f45}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #955713;outline-offset:3px}",
+    "form{display:flex;align-items:end;gap:.6rem;flex-wrap:wrap;margin-block:.5rem}form.entry label{flex:1 1 16rem}form.inline label{flex:1 1 9rem}.feedback:empty{display:none}.feedback{margin-block:1rem;padding:.65rem;background:#e0f0e9}.error{background:#fbe6e4;color:#712722}",
+    ".board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}.board section{margin:0}.quiet{color:#435953}.done{border-left:.3rem solid #1b685b}",
+    "@media(max-width:48rem){.board{grid-template-columns:1fr}form.entry button{width:100%}}"
+  )

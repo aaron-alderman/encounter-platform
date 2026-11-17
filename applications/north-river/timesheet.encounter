@@ -1,0 +1,88 @@
+process-module "temple/surface-process-module/1"
+
+process nr.timeEmployee:
+  let result = null
+  when and(eq($task.phase, "imported"), eq($actor.role, "employee")):
+    let registry = $task.import
+    let links = filter($registry.links, "link", eq($link.accountRef, $actor.id))
+    when eq(count($links), 1):
+      let link = at($links, 0)
+      let employees = filter($registry.employees, "employee", eq($employee.id, $link.employee))
+      when eq(count($employees), 1):
+        let result = at($employees, 0)
+
+process nr.timeLoad:
+  let documents = $eventInput
+  let saved = filter($documents, "document", eq($document.path, "timesheet.rel"))
+  let result = list()
+  when count($saved):
+    assert eq(count($saved), 1)
+      otherwise "TIMESHEET: Ambiguous saved entries."
+    let document = at($saved, 0)
+    port rel.decode { text = $document.text; kind = "NorthRiverTimeEntries" } → result
+
+process nr.timeSelect:
+  let matches = filter($mine, "entry", eq($entry.id, $eventInput))
+  assert eq(count($matches), 1)
+    otherwise "ACCESS: This entry is unavailable to your account."
+  let result = at($matches, 0)
+
+process nr.timeChange:
+  assert eq($fields.employee, $employee.id)
+    otherwise "ACCESS: You can only save time for your assigned employee."
+  assert includes(list("add-time", "edit-time"), $fields.action)
+    otherwise "Choose an offered timesheet action."
+  let id = $request.nonce
+  when eq($fields.action, "edit-time"):
+    port kernel.invoke { query = "nr.timeSelect"; input = $fields.entry } → existing
+    let id = $existing.id
+  port kernel.invoke { query = "timesheet.date"; input = $fields.date } → date
+  port scalar.read { text = $fields.minutes } → minutes
+  port value.type { value = $minutes } → type
+  assert eq($type, "number")
+    otherwise "Enter positive whole minutes."
+  port number.calculate { operation = "floor"; values = list($minutes) } → whole
+  port number.calculate { operation = "lessEqual"; values = list($minutes, 9007199254740991) } → bounded
+  port number.calculate { operation = "greater"; values = list($minutes, 0) } → positive
+  assert and(eq($minutes, $whole), $bounded, $positive)
+    otherwise "Enter positive whole minutes."
+  let entry = { id = $id; employee = $employee.id; date = $date; minutes = $minutes }
+  let next = $entries
+  when eq($fields.action, "add-time"):
+    let next = append($entries, list($entry))
+  when eq($fields.action, "edit-time"):
+    let next = map($entries, "item", if(and(eq($item.id, $id), eq($item.employee, $employee.id)), $entry, $item))
+  let result = $next
+
+process nr.timeRequest:
+  let notice = ""
+  let error = false
+  let entry = null
+  let mine = list()
+  let role = at($actor, "role")
+  port kernel.invoke { query = "nr.timeEmployee"; input = null } → employee
+  when $employee:
+    port kernel.invoke { query = "nr.timeLoad"; input = $snapshot.documents } → entries
+    let mine = filter($entries, "item", eq($item.employee, $employee.id))
+  try:
+    when eq($request.method, "POST"):
+      assert $employee
+        otherwise "ACCESS: This account cannot save employee time."
+      port scalar.read { text = $fields.base } → base
+      assert eq($base, $snapshot.revision)
+        otherwise "STALE: Reopen the timesheet before saving."
+      port kernel.invoke { query = "nr.timeChange"; input = null } → next
+      port rel.encode { value = $next; kind = "NorthRiverTimeEntries" } → saved
+      let documents = append(filter($snapshot.documents, "document", not(eq($document.path, "timesheet.rel"))), list({ path = "timesheet.rel"; text = $saved }))
+      let notice = if(eq($fields.action, "add-time"), "Time entry saved.", "Time entry corrected.")
+      port kernel.invoke { query = "nr.persist"; input = { documents = $documents; notice = $notice; target = $employee.id; goal = "Record employee time" } } → _
+      port storage.snapshot {} → snapshot
+      port kernel.invoke { query = "nr.timeLoad"; input = $snapshot.documents } → entries
+      let mine = filter($entries, "item", eq($item.employee, $employee.id))
+    when and(eq($request.method, "GET"), not(eq(at($fields, "entry"), at({}, "absent")))):
+      port kernel.invoke { query = "nr.timeSelect"; input = $fields.entry } → entry
+  catch fault:
+    let notice = $fault.message
+    let error = true
+  port kernel.invoke { query = "nr.timePage"; input = { project = $task.project; active = eq($task.phase, "imported"); csrf = $request.csrf; revision = $snapshot.revision; account = at($actor, "id"); role = $role; employee = $employee; mine = $mine; entry = $entry; notice = $notice; error = $error } } → html
+  let result = { html = $html; session = $session }

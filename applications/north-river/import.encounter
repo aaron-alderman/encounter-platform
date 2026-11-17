@@ -1,0 +1,197 @@
+process-module "temple/surface-process-module/1"
+
+process nr.preview:
+  let spec = $eventInput
+  let parsed = list()
+  let issues = list()
+  let rows = list()
+  try:
+    port csv.read { text = $spec.file.text } → parsed
+    assert not(eq(at($parsed, 1), at({}, "absent")))
+      otherwise "CSV: A header and at least one employee row are required."
+    let first = at($parsed, 0)
+    let header = $first.cells
+    assert and(eq(count($header), 3), every($spec.mapping, "column", includes($header, $column)))
+      otherwise "CSV: The header must contain exactly employee_id, display_name and account_ref."
+    let indexed = map(list(0, 1, 2), "index", { name = at($header, $index); index = $index })
+    let order = map($spec.mapping, "column", at(filter($indexed, "item", eq($item.name, $column)), 0))
+    fold filter($parsed, "row", not(eq($row.line, 1))) as row; rows starts list():
+      let raw = map($order, "column", at($row.cells, $column.index))
+      let problems = list()
+      let employee = null
+      let link = null
+      when not(eq(count($row.cells), 3)):
+        let problems = list("Expected three cells.")
+      when eq(count($row.cells), 3):
+        port text.trim { value = at($raw, 0) } → employeeId
+        port text.trim { value = at($raw, 1) } → displayName
+        port text.trim { value = at($raw, 2) } → accountRef
+        port text.matches { value = $employeeId; pattern = "^[A-Za-z][A-Za-z0-9_.-]{0,63}$" } → validEmployee
+        port text.matches { value = $accountRef; pattern = "^[A-Za-z][A-Za-z0-9_.-]{0,63}$" } → validAccount
+        port text.indexOf { value = $accountRef; search = "demo-"; from = 0 } → demoPrefix
+        when not($validEmployee):
+          let problems = append($problems, list("Employee ID is required and must be a portable identifier."))
+        port number.calculate { operation = "lessEqual"; values = list(count($displayName), 120) } → nameBound
+        when not(and(count($displayName), $nameBound)):
+          let problems = append($problems, list("Display name is required and must fit 120 characters."))
+        when not(and($validAccount, eq($demoPrefix, 0), not(eq($accountRef, "demo-")))):
+          let problems = append($problems, list("Account reference must be a demo identifier beginning with demo-."))
+        let employee = { id = $employeeId; displayName = $displayName }
+        let link = { accountRef = $accountRef; employee = $employeeId }
+      yield append($rows, list({ line = $row.line; cells = $row.cells; employee = $employee; link = $link; problems = $problems })) → rows
+  catch fault:
+    let issues = list($fault.message)
+  let ready = filter($rows, "row", $row.employee)
+  fold $rows as row; checked starts list():
+    let problems = $row.problems
+    when $row.employee:
+      let employeeMatches = filter($ready, "other", eq($row.employee.id, $other.employee.id))
+      let linkMatches = filter($ready, "other", eq($row.link.accountRef, $other.link.accountRef))
+      when not(eq(count($employeeMatches), 1)):
+        let problems = append($problems, list("Duplicate employee ID."))
+      when not(eq(count($linkMatches), 1)):
+        let problems = append($problems, list("Duplicate demo account reference."))
+    port record.put { record = $row; key = "problems"; value = $problems } → validated
+    yield append($checked, list($validated)) → checked
+  let valid = and(eq(count($issues), 0), count($checked), every($checked, "row", eq(count($row.problems), 0)))
+  let result = { approvedPlan = $spec.plan; destination = $spec.destination; basis = $spec.basis; revision = $spec.revision; filename = $spec.file.filename; fileHash = $spec.file.sha256; mapping = $spec.mapping; proposer = $spec.proposer; rows = $checked; issues = $issues; valid = $valid }
+
+process nr.importChange:
+  let action = $fields.action
+  let current = at($task, "import")
+  let next = $task
+  let notice = ""
+  assert not(at($task, "run"))
+    otherwise "IMPORT: The live-run demo ends at plan approval."
+  assert $task.approval
+    otherwise "IMPORT: Approve the timesheet plan first."
+  when eq($action, "upload-csv"):
+    assert and(eq($actor.role, "author"), includes(list("approved", "import-uploaded", "import-review"), $task.phase))
+      otherwise "AUTHORITY: Only the owner can attach a file before import."
+    let file = at($request, "upload")
+    assert $file
+      otherwise "IMPORT: Attach a nonempty UTF-8 CSV file."
+    assert and(eq($file.field, "csv"), count($file.text))
+      otherwise "IMPORT: Attach a nonempty UTF-8 CSV file."
+    port digest.sha256 { text = $file.text } → hash
+    let upload = { filename = $file.filename; text = $file.text; sha256 = $hash; revision = add($base, 1) }
+    port record.put { record = $next; key = "import"; value = { upload = $upload; preview = null; receipt = null; employees = list(); links = list() } } → next
+    port record.put { record = $next; key = "phase"; value = "import-uploaded" } → next
+    let notice = "CSV attached. Waiting for the assigned proposer to prepare the mapping."
+  when eq($action, "preview-import"):
+    assert and(eq($actor.role, "proposer"), eq($actor.id, $task.agent), eq($task.phase, "import-uploaded"))
+      otherwise "AUTHORITY: Only the assigned proposer can prepare the attached CSV."
+    assert and(eq($fields.basis, $request.basis), eq($fields.file, $current.upload.sha256))
+      otherwise "IMPORT: Refresh the attached file and basis."
+    let mapping = list($fields.employee, $fields.name, $fields.account)
+    assert eq($mapping, list("employee_id", "display_name", "account_ref"))
+      otherwise "IMPORT: The mapping must match the approved create-only profile."
+    let spec = { plan = $task.approval.plan; destination = concat($task.project, " · Demo"); basis = $request.basis; revision = add($base, 1); file = $current.upload; mapping = $mapping; proposer = $actor.id }
+    port kernel.invoke { query = "nr.preview"; input = $spec } → preview
+    port rel.encode { value = $preview; kind = "NorthRiverImportPreview" } → encoded
+    port digest.sha256 { text = $encoded } → hash
+    port record.put { record = $current; key = "preview"; value = { hash = $hash; value = $preview } } → change
+    port record.put { record = $next; key = "import"; value = $change } → next
+    port record.put { record = $next; key = "phase"; value = "import-review" } → next
+    let notice = if($preview.valid, "Employee import ready for human review.", "CSV validation blocked the entire batch.")
+  when eq($action, "approve-import"):
+    assert and(eq($actor.role, "author"), eq($task.phase, "import-review"), eq($fields.preview, $current.preview.hash), eq($current.preview.value.revision, $base), eq($current.preview.value.basis, $request.basis))
+      otherwise "IMPORT: Review the exact current preview before approving."
+    let preview = $current.preview.value
+    assert and($preview.valid, eq(count($current.employees), 0), eq(count($current.links), 0), eq($preview.approvedPlan, $task.approval.plan), eq($preview.fileHash, $current.upload.sha256))
+      otherwise "IMPORT: The batch is blocked or the destination has changed."
+    let employees = map($preview.rows, "row", $row.employee)
+    let links = map($preview.rows, "row", $row.link)
+    let records = map($preview.rows, "row", { line = $row.line; employee = $row.employee.id; accountRef = $row.link.accountRef })
+    let decision = { outcome = "employees-imported"; approver = $actor.id; time = $request.now; operation = $request.nonce; approvedPlan = $preview.approvedPlan; preview = $current.preview.hash; fileHash = $preview.fileHash; mapping = $preview.mapping; validation = "passed"; destination = $preview.destination; base = $base; revision = add($base, 1); records = $records }
+    port rel.encode { value = $decision; kind = "NorthRiverImportDecision" } → encoded
+    port digest.sha256 { text = $encoded } → hash
+    port record.put { record = $decision; key = "sha256"; value = $hash } → receipt
+    port record.put { record = $current; key = "employees"; value = $employees } → change
+    port record.put { record = $change; key = "links"; value = $links } → change
+    port record.put { record = $change; key = "receipt"; value = $receipt } → change
+    port record.put { record = $next; key = "import"; value = $change } → next
+    port record.put { record = $next; key = "phase"; value = "imported" } → next
+    let notice = concat("Imported ", count($employees), " employees and ", count($links), " demo account links.")
+  let result = { task = $next; notice = $notice }
+
+process nr.importView:
+  let view = $eventInput
+  let task = $view.task
+  let current = at($task, "import")
+  let content = list(
+    { tag = "h2"; attrs = {}; children = list("Employee CSV import") },
+    { tag = "p"; attrs = {}; children = list(concat("Destination: ", $task.project, " · Demo · Task revision ", $view.revision)) },
+    { tag = "p"; attrs = {}; children = list("Create-only. One blocked row prevents all writes. Demo links do not grant login access.") }
+  )
+  when not(eq($task.phase, "imported")):
+    let hidden = map(list(list("_csrf", $view.csrf), list("base", $view.revision), list("action", "upload-csv")), "pair", { tag = "input"; attrs = { type = "hidden"; name = at($pair, 0); value = at($pair, 1) }; children = list() })
+    let file = { tag = "label"; attrs = {}; children = list("Employee CSV", { tag = "input"; attrs = { type = "file"; name = "csv"; accept = ".csv,text/csv"; required = true }; children = list() }) }
+    let form = { tag = "form"; attrs = { method = "post"; action = "/"; enctype = "multipart/form-data"; class = "entry" }; children = append($hidden, list($file, { tag = "button"; attrs = { type = "submit" }; children = list("Attach employee CSV") })) }
+    let content = append($content, list($form))
+  when $current:
+    let content = append($content, list({ tag = "p"; attrs = {}; children = list(concat("File: ", $current.upload.filename, " · SHA-256: ", $current.upload.sha256)) }))
+  when eq($task.phase, "import-uploaded"):
+    let content = append($content, list({ tag = "p"; attrs = {}; children = list("Waiting for the assigned proposer to prepare the mapping.") }))
+  when at($current, "preview"):
+    let preview = $current.preview.value
+    let content = append($content, list(
+      { tag = "h3"; attrs = {}; children = list("Import preview") },
+      { tag = "p"; attrs = {}; children = list(concat("Approved plan: ", $preview.approvedPlan, " · Preview: ", $current.preview.hash, " · Mapped by ", $preview.proposer)) },
+      { tag = "p"; attrs = {}; children = list("employee_id → Employee.id · display_name → Employee.displayName · account_ref → DemoAccountLink.accountRef, linked by Employee.id") },
+      { tag = "p"; attrs = {}; children = list("Surrounding whitespace is trimmed. Original cells are shown in file order.") }
+    ))
+    let issues = map($preview.issues, "issue", { tag = "p"; attrs = {}; children = list($issue) })
+    let content = append($content, $issues)
+    fold $preview.rows as row; rows starts list():
+      let status = if(count($row.problems), "Blocked", if($current.receipt, "Imported", "Ready"))
+      let cells = map($row.cells, "cell", { tag = "li"; attrs = {}; children = list({ tag = "pre"; attrs = {}; children = list($cell) }) })
+      let details = list(
+        { tag = "summary"; attrs = {}; children = list(concat("CSV line ", $row.line, " · ", if($row.employee, $row.employee.id, "Invalid row"), " · ", $status)) },
+        { tag = "p"; attrs = {}; children = list("Original cells") },
+        { tag = "ol"; attrs = {}; children = $cells }
+      )
+      when $row.employee:
+        let details = append($details, list(
+          { tag = "p"; attrs = {}; children = list(concat("Employee: ", $row.employee.id, " · ", $row.employee.displayName)) },
+          { tag = "p"; attrs = {}; children = list(concat("Demo reference only: ", $row.link.accountRef, " → ", $row.link.employee)) }
+        ))
+      let problems = map($row.problems, "problem", { tag = "p"; attrs = {}; children = list($problem) })
+      let detail = { tag = "details"; attrs = { id = concat("csv-line-", $row.line); open = true }; children = append($details, $problems) }
+      yield append($rows, list({ tag = "li"; attrs = {}; children = list($detail) })) → rows
+    let content = append($content, list({ tag = "ol"; attrs = { "aria-label" = "CSV rows" }; children = $rows }))
+    when not($preview.valid):
+      let content = append($content, list({ tag = "p"; attrs = { role = "alert" }; children = list("Batch blocked. 0 records will be written.") }))
+    when and($preview.valid, eq($task.phase, "import-review")):
+      let coordinate = { tag = "input"; attrs = { type = "hidden"; name = "preview"; value = $current.preview.hash }; children = list() }
+      let button = concat("Approve import of ", count($preview.rows), " employees and ", count($preview.rows), " demo links")
+      port kernel.invoke { query = "nr.form"; input = { action = "approve-import"; fields = list($coordinate); button = $button } } → form
+      let content = append($content, list($form))
+  when at($current, "receipt"):
+    port kernel.invoke { query = "nr.importReceipt"; input = $current } → receipt
+    let content = append($content, list($receipt))
+  let result = { tag = "section"; attrs = { "aria-label" = "Employee CSV import" }; children = $content }
+
+process nr.importReceipt:
+  let saved = $eventInput
+  let receipt = $saved.receipt
+  port storage.operation { operationId = $receipt.operation } → commit
+  port text.join { values = $receipt.mapping; separator = ", " } → mapping
+  let links = map($saved.links, "link", { tag = "li"; attrs = {}; children = list(concat($link.accountRef, " → ", $link.employee, " · Demo reference only")) })
+  fold $saved.employees as employee; employees starts list():
+    let origin = at(filter($receipt.records, "record", eq($record.employee, $employee.id)), 0)
+    let row = { tag = "li"; attrs = {}; children = list(concat($employee.id, " · ", $employee.displayName, " · "), { tag = "a"; attrs = { href = concat("#csv-line-", $origin.line) }; children = list(concat("CSV line ", $origin.line)) }) }
+    yield append($employees, list($row)) → employees
+  let result = { tag = "section"; attrs = { "aria-label" = "Import receipt" }; children = list(
+    { tag = "h3"; attrs = {}; children = list("Import receipt") },
+    { tag = "p"; attrs = {}; children = list(concat("Imported ", count($saved.employees), " employees and ", count($saved.links), " demo account links.")) },
+    { tag = "p"; attrs = {}; children = list(concat("Approved by ", $receipt.approver, " · Decision time (UTC epoch ms): ", $receipt.time, " · Operation: ", $receipt.operation)) },
+    { tag = "p"; attrs = {}; children = list(concat("Destination: ", $receipt.destination, " · Revision ", $receipt.base, " → ", $receipt.revision, " · Validation: ", $receipt.validation)) },
+    { tag = "p"; attrs = {}; children = list(concat("CSV SHA-256: ", $receipt.fileHash, " · Approved plan: ", $receipt.approvedPlan, " · Preview: ", $receipt.preview)) },
+    { tag = "p"; attrs = {}; children = list(concat("Decision SHA-256: ", $receipt.sha256, " · Committed change SHA-256: ", $commit.sourceHash)) },
+    { tag = "p"; attrs = {}; children = list(concat("Approved mapping: ", $mapping, " → employee ID, display name, demo account reference")) },
+    { tag = "h4"; attrs = {}; children = list("Employee records") },
+    { tag = "ul"; attrs = { "aria-label" = "Imported employee records" }; children = $employees },
+    { tag = "h4"; attrs = {}; children = list("Demo account link records") },
+    { tag = "ul"; attrs = { "aria-label" = "Imported demo account links" }; children = $links }
+  ) }

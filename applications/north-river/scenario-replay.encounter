@@ -1,0 +1,83 @@
+process-module "temple/surface-process-module/1"
+
+process nr.scenarioEvidence:
+  let coordinate = $eventInput
+  port application.data { name = "scenario-evidence" } → packets
+  let matches = filter($packets, "packet", and(eq($packet.draft, $coordinate.draft), eq($packet.image, $coordinate.image), eq($packet.plan, $coordinate.plan)))
+  let result = null
+  when eq(count($matches), 1):
+    let result = at($matches, 0)
+
+process nr.scenarioStep:
+  let trace = $eventInput
+  let coordinate = at($fields, "step")
+  let step = at(filter($trace.steps, "step", eq(concat("", $step.id), $coordinate)), 0)
+  let result = if(eq($coordinate, at({}, "absent")), at($trace.steps, 0), $step)
+
+process nr.scenarioState:
+  let record = $eventInput
+  let result = if($record.exists, concat($record.requested, " requested · ", $record.approved, " approved · ", if($record.pending, concat($record.pending, " pending"), "no pending reduction")), "No notice")
+
+process nr.scenarioView:
+  let spec = $eventInput
+  let trace = $spec.trace
+  let selected = at($fields, "scenario")
+  let pinned = not(eq($selected, at({}, "absent")))
+  port application.data { name = "scenario-stages" } → stages
+  let matches = filter($stages, "stage", and(eq($stage.task, $spec.task), eq($stage.attempt, $spec.attempt),
+    eq($stage.draft, $trace.draft), eq($stage.plan, $trace.plan), eq($stage.image, $trace.image)))
+  let stage = if(eq(count($matches), 1), at($matches, 0), null)
+  let result = list({ tag = "p"; attrs = { role = "status" }; children = list("Scenario evidence unavailable for this draft.") })
+  when $trace:
+    let result = list({ tag = "p"; attrs = { role = "status" }; children = list("Scenario step unavailable for this run.") })
+  when and($pinned, not(eq($selected, $stage.scenario))):
+    let result = list({ tag = "p"; attrs = { role = "status" }; children = list("Scenario run unavailable for this draft and attempt.") })
+  when and($spec.step, or(not($pinned), eq($selected, $stage.scenario))):
+    port kernel.invoke { query = "nr.scenarioDetail"; input = { trace = $trace; step = $spec.step; url = $spec.url; stage = $stage } } → result
+
+process nr.scenarioDetail:
+  let spec = $eventInput
+  let trace = $spec.trace
+  let step = $spec.step
+  let stage = $spec.stage
+  let route = concat($spec.url, "&view=scenario", if($stage, concat("&scenario=", $stage.scenario), ""))
+  let launch = { tag = "p"; attrs = { role = "status" }; children = list("Staged app unavailable. No verified stage binding for this step.") }
+  when and($stage, $step.passed):
+    let binding = at(filter($stage.steps, "item", and(eq($item.id, $step.id), eq($item.route, $step.screen.route),
+      eq($item.actor, $step.actor), eq($item.revision, $step.revision))), 0)
+    when $binding:
+      let launch = { tag = "a"; attrs = { class = "nr-ed-launch"; href = concat("/stage-", $stage.scenario, "-", $step.id, $binding.route) };
+        children = list("Open in staged app") }
+  let previous = at(filter($trace.steps, "row", eq($row.id, add($step.id, -1))), 0)
+  let next = at(filter($trace.steps, "row", eq($row.id, add($step.id, 1))), 0)
+  let nav = { tag = "nav"; attrs = { class = "nr-ed-scenario-nav"; "aria-label" = "Scenario steps" }; children = map($trace.steps, "row", {
+    tag = "a"; attrs = { href = concat($route, "&step=", $row.id); "aria-label" = concat("Step ", $row.id, " · ", $row.title); "aria-current" = if(eq($row.id, $step.id), "step", null) }; children = list($row.id) }) }
+  port kernel.invoke { query = "nr.scenarioState"; input = $step.expected.record } → expected
+  port kernel.invoke { query = "nr.scenarioState"; input = $step.observed.record } → observed
+  let body = map(list(list("Command", $step.expected.outcome, $step.observed.outcome), list("Notice", $expected, $observed)), "row",
+    { tag = "tr"; attrs = {}; children = list({ tag = "th"; attrs = { scope = "row" }; children = list(at($row, 0)) },
+      { tag = "td"; attrs = {}; children = list(at($row, 1)) }, { tag = "td"; attrs = {}; children = list(at($row, 2)) }) })
+  port kernel.invoke { query = "notebook.presentation.emphasis"; input = if($step.passed, "positive", "negative") } → emphasis
+  let outcome = { tag = $emphasis.tag; attrs = { class = $emphasis.class }; children = list(if($step.passed, "Passed", "Check failed")) }
+  let result = list(
+    { tag = "p"; attrs = { class = "nr-ed-muted" }; children = list(concat("Generated stage replay · Step ", $step.id, " of ", count($trace.steps))) },
+    { tag = "h2"; attrs = {}; children = list($trace.title) },
+    $nav,
+    { tag = "h3"; attrs = {}; children = list($step.title) },
+    $launch,
+    { tag = "p"; attrs = {}; children = list($step.actor, " · ", $step.screen.route, if($step.minutes, concat(" · ", $step.minutes, " min input"), ""), " · ", $outcome) },
+    { tag = "table"; attrs = { "aria-label" = "Expected and observed" }; children = list(
+      { tag = "thead"; attrs = {}; children = list({ tag = "tr"; attrs = {}; children = map(list("Check", "Expected", "Observed"), "label",
+        { tag = "th"; attrs = { scope = "col" }; children = list($label) }) }) },
+      { tag = "tbody"; attrs = {}; children = $body }) },
+    if($step.diagnostic, { tag = "p"; attrs = { class = "nr-ed-muted" }; children = list($step.diagnostic) }, null),
+    { tag = "details"; attrs = { class = "nr-ed-stage-screen" }; children = list(
+      { tag = "summary"; attrs = {}; children = list("Stage receipt") },
+      { tag = "p"; attrs = {}; children = list(concat("Stage revision ", $step.revision), if($step.receipt, concat(" · ", $step.receipt), " · No commit")) },
+      { tag = "a"; attrs = { href = concat($spec.url, "&pane=plan") }; children = list("Approved plan and check") }) },
+    { tag = "nav"; attrs = { class = "nr-ed-scenario-nav"; "aria-label" = "Replay navigation" }; children = list(
+      if($previous, { tag = "a"; attrs = { href = concat($route, "&step=", $previous.id) }; children = list("Previous step") }, null),
+      if($next, { tag = "a"; attrs = { href = concat($route, "&step=", $next.id) }; children = list("Next step") },
+        { tag = "a"; attrs = { href = $route }; children = list("Restart replay") }),
+      { tag = "a"; attrs = { href = concat($spec.url, "&item=", $step.item, "&view=code&step=", $step.id, if($stage, concat("&scenario=", $stage.scenario), "")) }; children = list("Encounter source") }) })
+

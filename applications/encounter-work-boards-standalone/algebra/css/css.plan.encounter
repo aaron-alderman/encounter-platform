@@ -1,0 +1,67 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process css.plan:
+  let cssRuleIds = subjects("isa", "StyleRule")
+  let cssOrderEntries = map($cssRuleIds, "cssRule", list(one($cssRule, "order"), $cssRule))
+  port record.fromEntries { entries = $cssOrderEntries } → cssOrder
+  port record.entries { value = $cssOrder } → cssOrders
+  assert eq(count($cssOrders), count($cssRuleIds))
+    otherwise "ENCOUNTER-CSS-001: Each style rule needs its own order. Keep the orders unique from 1 to the number of rules."
+  fold range(count($cssRuleIds)) as cssPosition; cssRulePlans starts list():
+    let cssRule = at($cssOrder, concat($cssPosition))
+    assert $cssRule
+      otherwise "ENCOUNTER-CSS-002: Style rule orders need to cover 1 to the number of rules. Correct the missing position."
+    yield append(
+    $cssRulePlans,
+    list(
+      {
+        id = $cssRule;
+        selector = one($cssRule, "selector");
+        context = or(optional($cssRule, "context"), or(null, null));
+        declarations = map(
+          objects($cssRule, "declaration"),
+          "cssDeclaration",
+          {
+            id = $cssDeclaration;
+            property = one($cssDeclaration, "property");
+            value = if(
+              eq(
+                add(
+                  count(objects($cssDeclaration, "value")),
+                  count(objects($cssDeclaration, "valueToken"))
+                ),
+                1
+              ),
+              if(
+                optional($cssDeclaration, "valueToken"),
+                concat("var(--", one(one($cssDeclaration, "valueToken"), "name"), ")"),
+                one($cssDeclaration, "value")
+              ),
+              raise(
+                concat(
+                  "ENCOUNTER-CSS-003: ",
+                  $cssDeclaration,
+                  " needs exactly one value or token reference. Correct that declaration’s source."
+                )
+              )
+            )
+          }
+        )
+      }
+    )
+  ) → cssRulePlans
+  let cssPlan = {
+    imports = map(
+      subjects("isa", "FontImport"),
+      "cssFont",
+      { id = $cssFont; statement = one($cssFont, "statement") }
+    );
+    tokens = map(
+      objects("presentation.perthEncounter", "token"),
+      "cssToken",
+      { id = $cssToken; name = one($cssToken, "name"); value = one($cssToken, "cssValue") }
+    );
+    rules = $cssRulePlans
+  }
+  let result = $cssPlan

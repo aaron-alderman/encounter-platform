@@ -1,0 +1,29 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process css.renderPlan:
+  let imports = fold($cssPlan.imports, "cssFont", "imports", "", concat($imports, $cssFont.statement))
+  let tokens = fold(
+    $cssPlan.tokens,
+    "cssToken",
+    "tokens",
+    "",
+    concat($tokens, "--", $cssToken.name, ":", $cssToken.value, ";")
+  )
+  fold $cssPlan.rules as cssRule; rules starts "":
+    let declarations = fold(
+      $cssRule.declarations,
+      "cssDeclaration",
+      "declarations",
+      "",
+      concat($declarations, $cssDeclaration.property, ":", $cssDeclaration.value, ";")
+    )
+    let ruleText = concat($cssRule.selector, "{", $declarations, "}")
+    yield concat(
+    $rules,
+    if($cssRule.context, concat("@media", $cssRule.context, "{", $ruleText, "}"), $ruleText)
+  ) → rules
+  let css = concat($imports, ":root{", $tokens, "}", $rules)
+  assert includes($css, ":focus-visible")
+    otherwise "Visible focus rule missing"
+  let result = $css

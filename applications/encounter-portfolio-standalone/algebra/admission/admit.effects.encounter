@@ -1,0 +1,8 @@
+process-module "temple/surface-process-module/1"
+profile "encounter/reconstituted-source/1"
+
+process admit.effects:
+  let visited = list($target.entry)
+  let programme = at($target.queries, $target.entry)
+  call admit.effects.programme
+  let result = { ok = true }

@@ -1,0 +1,55 @@
+process-module "temple/surface-process-module/1"
+
+process nr.notebookV1:
+  let spec = $eventInput
+  let approval = $spec.approval
+  let steps = map($approval.plan.steps, "step", concat($step.title, " · ", $step.change, " Check: ", $step.check))
+  port kernel.invoke { query = "nr.notebookReceiptLines"; input = $approval } → receiptLines
+  let project = $spec.project
+  let view = $spec.view
+  let approved = eq($spec.screen, "approved-task")
+  port kernel.invoke { query = "nr.taskNumber"; input = { id = $spec.taskId; history = $spec.history } } → number
+  let reference = if($number, concat("Task #", $number), "Task")
+  port kernel.invoke { query = "notebook.v1.render"; input = {
+    profile = "encounter/notebook/1"; screen = $spec.screen; project = $project; title = $spec.title; reference = $reference;
+    revision = concat($approval.revisionLabel, " ", $approval.revision);
+    status = if($approved, "Plan approved · Receipt saved", "Implementation approval ready");
+    body = if($approved, "Continue to review implementation against the exact approved plan.", "Review the approved steps and their checks. Approve and start queues implementation against this revision.");
+    action = $spec.action; widgets = list({ kind = "plan"; lines = $steps }, { kind = "receipt"; lines = $receiptLines }); notice = $view.notice; error = $view.error
+  } } → result
+
+process nr.notebookReceiptLines:
+  let approval = $eventInput
+  let receipt = $approval.receipt
+  let receiptLines = list(
+    concat("Approved by ", $receipt.reviewer),
+    concat($approval.revisionLabel, " ", $approval.revision),
+    concat("Approved plan: ", $approval.hash),
+    concat("Approval operation: ", $receipt.operation)
+  )
+  when at($receipt, "sha256"):
+    port storage.operation { operationId = $receipt.operation } → commit
+    let receiptLines = append($receiptLines, list(concat("Answer revision: ", $receipt.answerRevision),
+      concat("Evidence: ", $receipt.evidence), concat("Decision SHA-256: ", $receipt.sha256), concat("Committed task SHA-256: ", $commit.sourceHash)))
+  when at($receipt, "proposal"):
+    let receiptLines = append($receiptLines, list(concat("Previous plan: ", $receipt.previous),
+      concat("Approved proposal: ", $receipt.proposal), concat("Original approval SHA-256: ", $receipt.original)))
+  let result = $receiptLines
+
+process nr.approvedNotebookV1:
+  let view = $eventInput
+  let task = $view.task
+  let approval = { plan = $task.candidate.plan; hash = $task.approval.plan; receipt = $task.approval; revisionLabel = "Approved task revision"; revision = $task.approval.revision }
+  port storage.history {} → history
+  let action = { href = concat("/?task=", $view.taskId, "&work=1&plan=", $task.approval.plan); replan = concat("/project?new=1&from=", $view.taskId) }
+  port kernel.invoke { query = "nr.notebookV1"; input = { screen = "approved-task"; taskId = $view.taskId; title = $task.objective;
+    project = $task.project; history = $history; view = $view; approval = $approval; action = $action } } → result
+
+process nr.implementationNotebookV1:
+  let spec = $eventInput
+  let review = $spec.review
+  let view = $spec.view
+  let action = { href = concat("/project?implementation=", $review.id); csrf = $view.csrf; base = $view.revision;
+    source = $review.approval.source; plan = $review.approval.hash; receipt = $review.approval.receipt.operation }
+  port kernel.invoke { query = "nr.notebookV1"; input = { screen = "implementation-review"; taskId = $spec.taskId;
+    title = $spec.title; project = $spec.project; history = $view.history; view = $view; approval = $review.approval; action = $action } } → result

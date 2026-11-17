@@ -1,0 +1,8 @@
+{
+  "name": "@sourcerytech/sourcery-kernel",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Inert package boundary for the minimal imperative Sourcery kernel"
+}
+

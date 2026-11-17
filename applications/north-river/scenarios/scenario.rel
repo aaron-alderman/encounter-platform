@@ -1,0 +1,8 @@
+("application", "stateProfile", "encounter/scenario-generation/1")
+("application", "module", "scenario.encounter")
+("application", "entry", "cli.main")
+("application", "grant", "rel.decode")
+("application", "grant", "rel.encode")
+("application", "grant", "number.calculate")
+("application", "grant", "kernel.invoke")
+

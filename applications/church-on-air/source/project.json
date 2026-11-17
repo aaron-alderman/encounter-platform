@@ -1,0 +1,15 @@
+{
+  "id": "church-on-air-v2",
+  "title": "CHURCH ON AIR",
+  "subtitle": "A local church. An open invitation.",
+  "fps": 25,
+  "width": 960,
+  "height": 720,
+  "reason": "Give the invitation the exuberance of a late-night 1990s broadcast, then make room for worship.",
+  "target": "Five author-supplied X videos; original picture and church audio.",
+  "goal": "A musically paced, asymmetric broadcast composition and an inspectable local production tool.",
+  "palette": {"ink":"#0b0820","violet":"#5127a5","cyan":"#52f9db","yellow":"#ffef66","pink":"#ff6dce"},
+  "sources": ["2118035556764684571", "2118033330834997550", "2112164997589774488", "2106759066815225895", "2048307680318750886"],
+  "policy": {"layouts":["card","split","hero","full"],"transitions":["cut","push","iris","venetian","spin"],"tracking":["soft","burst","heavy"],"maxShots":24,"maxDuration":180,"maxShotDuration":60,"minShotDuration":1,"maxTitleLength":48,"maxCaptionLength":140,"transitionSeconds":0.48,"audioEdgeFadeSeconds":0.12},
+  "boundaries": ["Local composition and source proposals; no publication or platform admission.","Tempo and onset candidates are observations, not lyric or bar transcription.","Temple executes existing Encounter compilation and the new broadcast planning algebra. FFmpeg and Pillow supply declared media mechanisms.","The local production surface is a new video application, not the discarded Encounter Mainframe or a completed general authoring environment."]
+}

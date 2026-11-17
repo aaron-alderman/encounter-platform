@@ -1,0 +1,52 @@
+process-module "temple/surface-process-module/1"
+
+process portfolio.field:
+  let field = $eventInput.field
+  let labelId = if(at($field, "labelId"), $field.labelId, $eventInput.labelId)
+  let caption = { tag = "span"; attrs = { id = $labelId }; children = list($field.label) }
+  let control = { tag = "input"; attrs = { name = $field.name; "aria-labelledby" = $labelId; required = at($field, "required"); value = at($field, "value"); type = $field.type; maxlength = at($field, "maxlength"); min = at($field, "min"); max = at($field, "max"); step = at($field, "step") }; children = list() }
+  when eq($field.type, "select"):
+    let options = map($field.options, "option", { tag = "option"; attrs = { value = $option.value; selected = eq($option.value, at($field, "value")) }; children = list($option.label) })
+    let control = { tag = "select"; attrs = { name = $field.name; required = at($field, "required"); "aria-labelledby" = $labelId }; children = $options }
+  when eq($field.type, "textarea"):
+    let control = { tag = "textarea"; attrs = { name = $field.name; "aria-labelledby" = $labelId; required = at($field, "required"); maxlength = at($field, "maxlength"); rows = 3 }; children = list(at($field, "value")) }
+  let result = { tag = "label"; attrs = {}; children = list($caption, $control) }
+
+process portfolio.form:
+  let spec = $eventInput
+  fold $spec.inputs as field; controls starts list():
+    let labelId = concat("field-", $spec.action, "-", at($spec, "target"), "-", $field.name)
+    port kernel.invoke { query = "portfolio.field"; input = { field = $field; labelId = $labelId } } → control
+    yield append($controls, list($control)) → controls
+  let fields = $controls
+  when at($spec, "target"):
+    let hidden = { tag = "input"; attrs = { type = "hidden"; name = "target"; value = $spec.target }; children = list() }
+    let fields = append($fields, list($hidden))
+  port kernel.invoke { query = "work.form"; input = { csrf = $spec.screen.csrf; revision = $spec.screen.revision; action = $spec.action; fields = $fields; button = $spec.button; style = "entry" } } → result
+
+process portfolio.section:
+  let section = $eventInput
+  let result = { tag = "section"; attrs = {}; children = append(list({ tag = "h2"; attrs = {}; children = list($section.title) }), $section.content) }
+
+process portfolio.text:
+  let candidate = $eventInput.text
+  port text.trim { value = if($candidate, $candidate, "") } → result
+  let minimum = if(at($eventInput, "optional"), 0, 1)
+  port text.matches { value = $result; pattern = concat("^[\\s\\S]{", $minimum, ",", $eventInput.limit, "}$") } → valid
+  assert $valid
+    otherwise "Enter text within the field’s character limit."
+
+process portfolio.number:
+  let spec = $eventInput
+  port text.matches { value = if($spec.text, $spec.text, ""); pattern = if($spec.integer, "^[0-9]{1,9}$", "^[0-9]{1,9}([.][0-9]{1,4})?$") } → valid
+  assert $valid
+    otherwise "Enter a number in the displayed range."
+  port scalar.read { text = $spec.text } → result
+  port number.calculate { operation = "greaterEqual"; values = list($result, $spec.min) } → above
+  port number.calculate { operation = "lessEqual"; values = list($result, $spec.max) } → below
+  assert and($above, $below)
+    otherwise "Enter a number in the displayed range."
+
+process portfolio.recent:
+  port number.calculate { operation = "min"; values = list(count($eventInput.rows), $eventInput.limit) } → end
+  let result = map(range($end), "index", at($eventInput.rows, add($index, -1)))

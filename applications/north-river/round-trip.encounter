@@ -1,0 +1,170 @@
+process-module "temple/surface-process-module/1"
+
+process nr.handoffRecipient:
+  let task = $eventInput
+  let agent = at($task, "agent")
+  let result = if($agent, $agent, $task.owner)
+  when $agent:
+    port text.indexOf { value = $agent; search = "ollama-"; from = 0 } → model
+    when eq($model, 0):
+      let result = "north-river-agent"
+
+process nr.roundTripInspect:
+  let scope = $eventInput
+  let review = $scope.review
+  port kernel.invoke { query = "nr.roundTripState"; input = $review } → state
+  let owner = and(eq($actor.role, "author"), eq($actor.id, $scope.owner))
+  let recipient = and(eq($actor.role, "proposer"), eq($actor.id, at($state.handoff, "owner")))
+  let result = null
+  when and($review, or($owner, $recipient)):
+    let moves = list()
+    when and($owner, eq(at($review, "state"), "review")):
+      let moves = if($state.open, list("return-investigation"), list("open-investigation", "accept-implementation"))
+    when and(or($owner, $recipient), eq(at($state.handoff, "owner"), $actor.id), eq(at($state.handoff, "state"), "ready")):
+      let moves = append($moves, list("acknowledge-handoff"))
+    let diff = at(at($review, "result"), "diff")
+    let draft = null
+    when $diff:
+      port digest.sha256 { text = $diff } → draft
+    let result = { task = $scope.task; review = $review.id; state = if(at($review, "state"), $review.state, null); revision = $snapshot.revision;
+      draft = $draft; approval = $review.approval; investigations = $state.current; waitingOn = if($state.open, $state.open.id, null);
+      handoff = if($state.handoff, $state.handoff, null); moves = $moves }
+
+process nr.roundTripAct:
+  let review = $eventInput
+  let action = $fields.action
+  port kernel.invoke { query = "nr.roundTripInspect"; input = { review = $review; task = $selected.id; owner = $task.owner } } → work
+  assert and($work, eq($fields.implementation, $work.review))
+    otherwise "STALE: Reopen the task’s current implementation."
+  let token = if(at($fields, "operation"), $fields.operation, $request.nonce)
+  port text.matches { value = concat("o", $token); pattern = "^[A-Za-z][A-Za-z0-9_.-]{0,63}$" } → valid
+  assert $valid
+    otherwise "OPERATION: Use a stable operation ID of up to 63 letters, numbers, dots, dashes or underscores."
+  port digest.sha256 { text = concat("north-river-round-trip/", $actor.id, "/", $token) } → operation
+  port rel.encode { kind = "NorthRiverWorkCommand"; value = { action = $action; base = $base; review = $work.review;
+    item = if(at($fields, "review-item"), at($fields, "review-item"), null); investigation = if(at($fields, "investigation"), $fields.investigation, null);
+    question = if(at($fields, "question"), $fields.question, null); finding = if(at($fields, "finding"), $fields.finding, null) } } → command
+  port digest.sha256 { text = $command } → fingerprint
+  let retained = at($review, "roundTripReceipts")
+  let receipts = if($retained, $retained, list())
+  let prior = at(filter($receipts, "entry", eq($entry.operation, $operation)), 0)
+  let result = null
+  when $prior:
+    assert eq($prior.fingerprint, $fingerprint)
+      otherwise "OPERATION: This ID already identifies a different command."
+    let result = $prior.notice
+  when not($prior):
+    port storage.operation { operationId = $operation } → elsewhere
+    assert not($elsewhere)
+      otherwise "OPERATION: This ID already identifies another command."
+    assert eq($base, $snapshot.revision)
+      otherwise "STALE: Reopen the task to review the current revision."
+    assert not(and($work.waitingOn, eq($action, "accept-implementation")))
+      otherwise "WAITING: Return the linked investigation before accepting this draft."
+    assert includes($work.moves, $action)
+      otherwise "This action is unavailable to this actor in the current state."
+    port kernel.invoke { query = "nr.roundTripState"; input = $review } → state
+    let notice = ""
+    let next = $review
+    when eq($action, "open-investigation"):
+      assert and($work.draft, not(at($state.current, 19)), not(at($state.investigations, 59)))
+        otherwise "REVIEW: This draft cannot hold another investigation."
+      port text.trim { value = if(at($fields, "question"), $fields.question, "") } → question
+      port kernel.invoke { query = "mw.text"; input = { value = $question; required = true; maximum = 500 } } → _
+      port kernel.invoke { query = "nr.reviewCommentContext"; input = { review = $review; task = $selected.id; draft = $work.draft;
+        coordinates = { "review-item" = at($fields, "review-item") } } } → context
+      let investigation = { id = concat("investigation-", $operation); number = add($snapshot.revision, 1); state = "open"; owner = $actor.id;
+        review = $review.id; run = $review.start.operation; draft = $work.draft; plan = $review.approval.hash; approval = $review.approval.receipt.operation;
+        question = $question; subject = if(at($context, "subject"), $context.subject, null); opened = $operation }
+      port record.put { record = $review; key = "investigations"; value = append($state.investigations, list($investigation)) } → next
+      let notice = concat("Opened investigation #", $investigation.number, ". The implementation review is waiting.")
+    when eq($action, "return-investigation"):
+      assert and($state.open, eq($fields.investigation, $state.open.id), eq($state.open.owner, $actor.id),
+        eq($state.open.draft, $work.draft), eq($state.open.plan, $review.approval.hash))
+        otherwise "STALE: Open the investigation for this exact draft."
+      port text.trim { value = if(at($fields, "finding"), $fields.finding, "") } → finding
+      port kernel.invoke { query = "mw.text"; input = { value = $finding; required = true; maximum = 1200 } } → _
+      port record.put { record = $state.open; key = "state"; value = "returned" } → finished
+      port record.put { record = $finished; key = "finding"; value = { text = $finding; actor = $actor.id; operation = $operation } } → finished
+      port record.put { record = $review; key = "investigations"; value = map($state.investigations, "entry", if(eq($entry.id, $finished.id), $finished, $entry)) } → next
+      let notice = concat("Finding from investigation #", $finished.number, " attached. The same draft is ready for review.")
+    when eq($action, "accept-implementation"):
+      port kernel.invoke { query = "nr.handoffRecipient"; input = $task } → recipient
+      let handoff = { id = concat("handoff-", $operation); number = add($snapshot.revision, 1); state = "ready"; owner = $recipient;
+        review = $review.id; draft = $work.draft; plan = $review.approval.hash; approval = $review.approval.receipt.operation; acceptance = $operation;
+        findings = map(filter($state.current, "entry", eq($entry.state, "returned")), "entry", $entry.finding.operation) }
+      port record.put { record = $review; key = "handoff"; value = $handoff } → next
+      let notice = concat("Draft accepted for handoff #", $handoff.number, ". Next owner is ", $recipient, ".")
+    when eq($action, "acknowledge-handoff"):
+      port record.put { record = $state.handoff; key = "state"; value = "acknowledged" } → handoff
+      port record.put { record = $handoff; key = "acknowledgement"; value = { actor = $actor.id; operation = $operation } } → handoff
+      port record.put { record = $review; key = "handoff"; value = $handoff } → next
+      let notice = concat("Handoff #", $handoff.number, " acknowledged.")
+    let receipt = { operation = $operation; fingerprint = $fingerprint; action = $action; notice = $notice;
+      revision = add($snapshot.revision, 1); actor = $actor.id }
+    port record.put { record = $next; key = "roundTripReceipts"; value = append($receipts, list($receipt)) } → next
+    when eq($action, "accept-implementation"):
+      port kernel.invoke { query = "nr.implementationDecision"; input = { review = $next; operation = $operation; notice = $notice } } → result
+    when not(eq($action, "accept-implementation")):
+      port rel.encode { value = $next; kind = "NorthRiverImplementationReview" } → text
+      port kernel.invoke { query = "nr.persist"; input = { documents = list({ path = concat("implementation-reviews/", $review.id, ".rel"); text = $text });
+        notice = $notice; target = $review.id; goal = $action; operation = $operation } } → _
+      let result = $notice
+
+process nr.roundTripReply:
+  let review = $eventInput
+  port kernel.invoke { query = "nr.roundTripInspect"; input = { review = $review; task = $selected.id; owner = $task.owner } } → work
+  let status = if(and($work, not($error)), "ok", "refused")
+  let result = { status = $status; notice = if($work, $notice, "This identity has no access to this implementation review."); work = $work }
+  when $work:
+    let cursor = at($fields, "after")
+    let events = list()
+    when $cursor:
+      try:
+        port text.matches { value = $cursor; pattern = "^[0-9]{1,9}$" } → valid
+        assert $valid
+          otherwise "Use a non-negative revision cursor."
+        port scalar.read { text = $cursor } → after
+        port storage.history {} → history
+        port kernel.invoke { query = "nr.implementationActivity"; input = { id = $work.review; history = $history; after = $after } } → events
+      catch fault:
+        let status = "refused"
+        let notice = $fault.message
+    let receipt = null
+    when and(eq($request.method, "POST"), eq($status, "ok")):
+      let token = if(at($fields, "operation"), $fields.operation, $request.nonce)
+      port digest.sha256 { text = concat("north-river-round-trip/", $actor.id, "/", $token) } → operation
+      let receipts = at($review, "roundTripReceipts")
+      when $receipts:
+        let found = at(filter($receipts, "entry", eq($entry.operation, $operation)), 0)
+        let receipt = if($found, $found, null)
+    let result = { status = $status; notice = $notice; work = $work; events = $events; receipt = $receipt; csrf = $request.csrf }
+
+process nr.assignedHandoffs:
+  let scope = $eventInput
+  let items = $scope.tasks
+  fold $items as item; assigned starts list():
+    port kernel.invoke { query = "nr.currentImplementation"; input = { taskId = $item.id; taskPlan = at($item.task.approval, "plan");
+      head = at(at($plan, "head"), "hash"); reviews = $reviews } } → review
+    let handoff = at($review, "handoff")
+    let next = $assigned
+    port kernel.invoke { query = "nr.handoffRecipient"; input = $item.task } → recipient
+    when and(eq(at($handoff, "owner"), $actor.id), or($scope.closed, eq(at($handoff, "state"), "ready")), eq($recipient, $actor.id)):
+      let next = append($assigned, list({ task = $item.id; title = $item.task.objective; handoff = $handoff; href = concat("/?task=", $item.id, "&work=1") }))
+    yield $next → assigned
+  let result = $assigned
+
+process nr.handoffQueueEvents:
+  let after = $eventInput
+  port kernel.invoke { query = "nr.load"; input = $snapshot } → task
+  port kernel.invoke { query = "nr.projectLoad"; input = $snapshot } → project
+  port kernel.invoke { query = "nr.projectPlan"; input = $project } → plan
+  port kernel.invoke { query = "nr.tasks"; input = $snapshot } → tasks
+  port kernel.invoke { query = "nr.implementationReviews"; input = $snapshot } → reviews
+  port kernel.invoke { query = "nr.assignedHandoffs"; input = { tasks = $tasks; closed = true } } → assigned
+  port storage.history {} → history
+  let operations = map($assigned, "entry", $entry.handoff.acceptance)
+  let acknowledged = filter($assigned, "entry", eq($entry.handoff.state, "acknowledged"))
+  let operations = append($operations, map($acknowledged, "entry", $entry.handoff.acknowledgement.operation))
+  let history = filter($history, "entry", includes($operations, $entry.operationId))
+  port kernel.invoke { query = "nr.implementationActivity"; input = { id = null; history = $history; after = $after } } → result

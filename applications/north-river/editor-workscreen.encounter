@@ -1,0 +1,566 @@
+process-module "temple/surface-process-module/1"
+
+process nr.editorTable:
+  let rows = $eventInput.items
+  fold $rows as row; changes starts list():
+    let position = add(count($changes), 1)
+    let current = eq($row.id, $item.id)
+    let entry = { tag = "li"; attrs = {}; children = list(
+      { tag = "a"; attrs = { href = concat($url, "&item=", $row.id, "&view=", $tableView, "#selected-change");
+        id = if($current, "current-change-row", null); "aria-current" = if($current, "true", null) }; children = list(
+        { tag = "span"; attrs = { class = "nr-ed-step-number"; "aria-hidden" = "true" }; children = list($position) },
+        { tag = "span"; attrs = { class = "nr-ed-change-caption" }; children = list(
+          { tag = "strong"; attrs = {}; children = list($row.label) },
+          { tag = "small"; attrs = {}; children = list($row.kind) }) }) }
+    ) }
+    yield append($changes, list($entry)) → changes
+  let result = { tag = "nav"; attrs = { class = "nr-ed-change-index"; id = "editor-changes"; "aria-label" = "Changes" }; children = list(
+    { tag = "h2"; attrs = {}; children = list("Changes") },
+    { tag = "ol"; attrs = { class = "nr-ed-change-list" }; children = $changes }) }
+
+process nr.editorFlow:
+  let evidence = $eventInput
+  let levels = distinct(map($evidence.items, "row", $row.level))
+  fold $levels as level; groups starts list():
+    let entries = filter($evidence.items, "row", eq($row.level, $level))
+    let nodes = map($entries, "row", { tag = "li"; attrs = { class = "nr-ed-node" }; children = list(
+      { tag = "a"; attrs = { href = concat($url, "&item=", $row.id, "&view=flow#selected-change");
+        id = if(eq($row.id, $item.id), "current-change-row", null);
+        "aria-current" = if(eq($row.id, $item.id), "true", null) }; children = list(
+        { tag = "strong"; attrs = {}; children = list($row.label) },
+        { tag = "small"; attrs = {}; children = list($row.role) }) },
+      if(count($row.parents), { tag = "div"; attrs = { class = "nr-ed-edge" }; children = list(
+        { tag = "span"; attrs = {}; children = list("Follows") },
+        { tag = "ul"; attrs = {}; children = map(filter($evidence.items, "parent", includes($row.parents, $parent.id)), "parent",
+          { tag = "li"; attrs = {}; children = list({ tag = "a"; attrs = { href = concat($url, "&item=", $parent.id, "&view=flow#selected-change") }; children = list($parent.label) }) }) }) }, null)
+    ) })
+    let stage = { tag = "li"; attrs = { class = "nr-ed-level" }; children = list(
+      { tag = "h3"; attrs = {}; children = list(concat("Stage ", $level),
+        if(not(eq(count($entries), 1)), { tag = "span"; attrs = {}; children = list(concat(count($entries), " changes")) }, null)) },
+      { tag = "ul"; attrs = { class = "nr-ed-nodes" }; children = $nodes }) }
+    yield append($groups, list($stage)) → groups
+  let result = { tag = "section"; attrs = { class = "nr-ed-flow-panel"; "aria-label" = "Approval flow" }; children = list(
+    { tag = "h2"; attrs = {}; children = list("Approval flow") },
+    { tag = "ol"; attrs = { class = "nr-ed-flow" }; children = $groups }) }
+
+process nr.editorData:
+  let table = $eventInput
+  let heads = map($table.headings, "label", { tag = "th"; attrs = { scope = "col" }; children = list($label) })
+  let rows = map($table.rows, "row", { tag = "tr"; attrs = {}; children = map($row, "value", { tag = "td"; attrs = {}; children = list($value) }) })
+  let result = list({ tag = "p"; attrs = { class = "nr-ed-muted" }; children = list("Sample data for this preview.",
+    if(count($rows), { tag = "span"; attrs = { class = "nr-ed-data-scroll-hint" }; children = list(" Scroll sideways for more columns.") }, null)) },
+    if(count($rows), { tag = "div"; attrs = { class = "nr-ed-data-grid"; role = "region"; "aria-label" = "Sample data"; tabindex = "0" }; children = list(
+      { tag = "table"; attrs = {}; children = list(
+        { tag = "thead"; attrs = {}; children = list({ tag = "tr"; attrs = {}; children = $heads }) },
+        { tag = "tbody"; attrs = {}; children = $rows }) }) },
+      { tag = "p"; attrs = {}; children = list(if(at($table, "empty"), $table.empty, "No sample records attached.")) }))
+
+
+process nr.codeHelp:
+  let help = $eventInput
+  port record.entries { value = $help } → entries
+  fold $entries as entry; terms starts list():
+    let pair = list(
+      { tag = "dt"; attrs = {}; children = list({ tag = "code"; attrs = {}; children = list(at($entry, 0)) }) },
+      { tag = "dd"; attrs = {}; children = list(at($entry, 1)) }
+    )
+    yield append($terms, $pair) → terms
+  let result = { tag = "details"; attrs = { class = "nr-code-help" }; children = list(
+    { tag = "summary"; attrs = {}; children = list("Encounter keyword help") },
+    { tag = "dl"; attrs = {}; children = $terms }) }
+
+process nr.codeLine:
+  let row = $eventInput
+  port text.split { value = $row.text; pattern = "(\"[^\"\\\\]*(?:\\\\.[^\"\\\\]*)*\"|#[^\\r\\n]*|\\$[A-Za-z_][\\w.-]*|-?[0-9]+(?:\\.[0-9]+)?|[A-Za-z_][\\w.-]*)" } → tokens
+  fold $tokens as token; children starts list():
+    let next = $children
+    when count($token):
+      port kernel.invoke { query = "semantic.syntax"; input = list({ text = $token; start = 0; end = count($token) }) } → spans
+      let kind = at(at($spans, 0), "kind")
+      let help = if(eq($kind, "keyword"), at($row.help, $token), null)
+      let node = $token
+      when $kind:
+        let node = { tag = if($help, "abbr", "span"); attrs = { class = concat("nr-token-", $kind); title = $help }; children = list($token) }
+      let next = append($children, list($node))
+    yield $next → children
+  let result = { tag = "div"; attrs = { class = "nr-source-line"; id = $row.anchor;
+    "data-change-line" = if($row.highlight, "true", null) }; children = list(
+    { tag = "span"; attrs = { class = "nr-source-gutter"; "aria-hidden" = "true" }; children = list($row.line) },
+    { tag = "code"; attrs = {}; children = $children }) }
+
+process nr.editorCode:
+  let span = $eventInput
+  let textLines = map($span.lines, "line", fold($line, "token", "text", "", concat($text, $token.text)))
+  port text.join { values = $textLines; separator = "\n" } → presented
+  port digest.sha256 { text = $presented } → digest
+  assert and(eq($presented, $span.text), eq($digest, $span.lexemeSha256))
+    otherwise "SOURCE: The recorded excerpt does not match the draft reference."
+  port kernel.invoke { query = "semantic.keywordHelp"; input = null } → help
+  port kernel.invoke { query = "nr.codeHelp"; input = $help } → glossary
+  fold $textLines as text; listing starts { line = $span.line; rows = list() }:
+    port kernel.invoke { query = "nr.codeLine"; input = { text = $text; line = $listing.line; help = $help; highlight = eq($listing.line, $span.line) } } → row
+    yield { line = add($listing.line, 1); rows = append($listing.rows, list($row)) } → listing
+  port kernel.invoke { query = "notebook.presentation.coordinate"; input = $span } → coordinate
+  let result = list(
+    { tag = "p"; attrs = { class = "nr-ed-source-ref" }; children = list($span.process, " · ", $coordinate) },
+    $glossary,
+    { tag = "div"; attrs = { class = "nr-source-buffer"; tabindex = 0; role = "region"; "aria-label" = "Pinned source excerpt" }; children = $listing.rows })
+
+process nr.editorSourceWorkspace:
+  let spec = $eventInput
+  let image = $spec.image
+  let span = $spec.span
+  let file = $spec.file
+  let result = null
+  when $file:
+    port digest.sha256 { text = $file.text } → digest
+    assert eq($digest, $span.fileSha256)
+      otherwise "SOURCE: The retained file differs from the reviewed image."
+    port text.split { value = $file.text; pattern = "\\n" } → lines
+    fold $span.lines as source; highlight starts { next = $span.line; numbers = list() }:
+      yield { next = add($highlight.next, 1); numbers = append($highlight.numbers, list($highlight.next)) } → highlight
+    port kernel.invoke { query = "semantic.keywordHelp"; input = null } → help
+    port kernel.invoke { query = "nr.codeHelp"; input = $help } → glossary
+    fold $lines as line; listing starts { next = 1; rows = list() }:
+      port kernel.invoke { query = "nr.codeLine"; input = { text = $line; line = $listing.next; help = $help;
+        anchor = concat("source-line-", $listing.next); highlight = includes($highlight.numbers, $listing.next) } } → row
+      yield { next = add($listing.next, 1); rows = append($listing.rows, list($row)) } → listing
+    let files = map(list(
+      { path = $spec.item.source.path; href = concat($spec.url, "#source-line-", $spec.item.source.line) },
+      { path = $spec.item.surface.path; href = concat($spec.url, "&owner=surface#source-line-", $spec.item.surface.line) }
+    ), "entry", { tag = "li"; attrs = {}; children = list(
+      { tag = "a"; attrs = { href = $entry.href; "aria-current" = if(eq($entry.path, $file.path), "page", null) }; children = list($entry.path) }) })
+    let result = { tag = "section"; attrs = { class = "nr-source-workspace"; "data-presentation" = "source-workspace"; "aria-label" = "Source workspace" }; children = list(
+      { tag = "header"; attrs = { class = "nr-source-header" }; children = list(
+        { tag = "h2"; attrs = {}; children = list("Source workspace") },
+        { tag = "a"; attrs = { href = $spec.back }; children = list("Back to Source") }) },
+      { tag = "div"; attrs = { class = "nr-source-layout" }; children = list(
+        { tag = "nav"; attrs = { class = "nr-source-files"; "aria-label" = "Application files" }; children = list(
+          { tag = "h3"; attrs = {}; children = list("Application files") },
+          { tag = "p"; attrs = {}; children = list($spec.application) },
+          { tag = "ul"; attrs = {}; children = $files }) },
+        { tag = "article"; attrs = { class = "nr-source-document"; "aria-label" = $file.path }; children = list(
+          { tag = "h3"; attrs = { class = "nr-source-tab" }; children = list($file.path) },
+          { tag = "p"; attrs = { class = "nr-source-location" }; children = list(
+            $spec.item.label, " · ", $span.process, " · ",
+            { tag = "a"; attrs = { href = concat("#source-line-", $span.line) }; children = list(concat("Go to line ", $span.line)) }) },
+          $glossary,
+          { tag = "div"; attrs = { class = "nr-source-buffer"; tabindex = 0; role = "region"; "aria-label" = "Read-only file contents" }; children = $listing.rows },
+          { tag = "footer"; attrs = { class = "nr-source-status" }; children = list("Read-only · Reviewed image ", $image) }) }) }) }
+
+process nr.handoffInspector:
+  let spec = $eventInput
+  let approval = $spec.review.approval
+  port kernel.invoke { query = "nr.notebookReceiptLines"; input = $approval } → receipt
+  let identity = list(concat("Draft SHA-256: ", $spec.evidence.diff), concat("Draft image SHA-256: ", $spec.evidence.image.sha256))
+  let changes = map($spec.evidence.items, "item", concat($item.label, " · ", $item.detail))
+  let steps = map($approval.plan.steps, "step", { heading = $step.title; lines = list($step.change, concat("Check: ", $step.check)) })
+  let sections = append(list(
+    { heading = "Approval receipt"; lines = $receipt },
+    { heading = "Draft for handoff"; lines = $identity },
+    { heading = "Changes in this draft"; lines = $changes },
+    { heading = concat("Approved plan · Revision ", $approval.revision); lines = list() }
+  ), $steps)
+  let handoff = at($spec.review, "handoff")
+  when $handoff:
+    let acknowledgement = at($handoff, "acknowledgement")
+    let lines = list(concat("Recipient: ", $handoff.owner), concat("Acceptance operation: ", $handoff.acceptance))
+    when $acknowledgement:
+      let lines = append($lines, list(concat("Acknowledged by ", $acknowledgement.actor), concat("Acknowledgement operation: ", $acknowledgement.operation)))
+    let sections = append(list({ heading = concat("Handoff #", $handoff.number, " receipt"); lines = $lines }), $sections)
+  port kernel.invoke { query = "notebook.v1.inspector"; input = { kind = "approval-context"; sections = $sections } } → result
+
+process nr.editorWorkscreen:
+  let pane = eq(at($fields, "view"), "preview-comments")
+  when $pane:
+    port kernel.invoke { query = "nr.previewComments"; input = $eventInput } → result
+  when not($pane):
+    port kernel.invoke { query = "nr.editorWorkscreenDocument"; input = $eventInput } → result
+
+process nr.previewComments:
+  let spec = $eventInput
+  let review = $spec.review
+  let view = $spec.view
+  let url = $spec.url
+  let route = at($fields, "review-route")
+  let scenario = at($fields, "scenario")
+  let step = at($fields, "step")
+  let name = if($scenario, "review-item", if(eq($route, "/report"), "review-section", "review-entry"))
+  let selected = if(at($fields, "review-context"), at($fields, "review-context"), at($fields, $name))
+  let locationNote = null
+  let form = null
+  let notice = $view.notice
+  let error = $view.error
+  let rows = list()
+  try:
+    let baseContext = { "review-route" = $route; scenario = $scenario; step = $step }
+    assert $route
+      otherwise "Open comments from the preview screen you want to review."
+    port kernel.invoke { query = "nr.reviewCommentContext"; input = { review = $review; task = $spec.taskId;
+      draft = $spec.evidence.diff; coordinates = $baseContext } } → location
+    let kind = $location.kind
+    let options = list(
+      { tag = "option"; attrs = { value = "" }; children = list("This screen") },
+      { tag = "option"; attrs = { value = "app"; selected = eq($selected, "app") }; children = list("Whole app") })
+    when $scenario:
+      let options = append($options, map($spec.evidence.items, "item", {
+        tag = "option"; attrs = { value = $item.id; selected = eq($selected, $item.id) }; children = list($item.label) }))
+    when and(not($scenario), eq($route, "/timesheet")):
+      port application.data { name = "review-preview" } → preview
+      let options = append($options, map($preview.entries, "entry", {
+        tag = "option"; attrs = { value = $entry.id; selected = eq($selected, $entry.id) };
+        children = list(concat($entry.date, " · ", $entry.minutes, " min")) }))
+    when and(not($scenario), eq($route, "/report")):
+      port kernel.invoke { query = "nr.previewReviewSections"; input = $route } → sections
+      let options = append($options, map($sections, "section", {
+        tag = "option"; attrs = { value = $section.id; selected = eq($selected, $section.id) }; children = list($section.label) }))
+    port kernel.invoke { query = "nr.commentLocation"; input = $location } → label
+    let locationNote = { tag = "p"; attrs = { class = "nr-preview-location" }; children = list($label) }
+    let comments = if(at($review, "decision"), at($review.decision, "subpackets"), at($review, "comments"))
+    let comments = if($comments, $comments, list())
+    let matching = filter($comments, "comment", or(
+      and(eq(at($comment.context, "kind"), "app"), eq(at($comment.context, "draft"), $spec.evidence.diff)),
+      and(eq(at($comment.context, "kind"), $kind), eq(at($comment.context, "route"), $route),
+        eq(at($comment.context, "scenario"), at($location, "scenario")), eq(at($comment.context, "step"), at($location, "step")))))
+    fold $matching as comment; entries starts list():
+      port kernel.invoke { query = "nr.commentLocation"; input = $comment.context } → context
+      port kernel.invoke { query = "nr.commentPreviewTarget"; input = $comment.context } → target
+      yield append($entries, list({ tag = "li"; attrs = { "data-preview-comment-context" = $target }; children = list(
+        { tag = "p"; attrs = {}; children = list($comment.text) },
+        { tag = "small"; attrs = {}; children = list($context) }) })) → entries
+    when count($entries):
+      let rows = append($rows, list({ tag = "ol"; attrs = { "aria-label" = "Preview comments" }; children = $entries }))
+    when and($spec.current, eq($review.state, "review")):
+      let fields = list(
+        { tag = "input"; attrs = { type = "hidden"; name = "view"; value = "preview-comments" }; children = list() },
+        { tag = "input"; attrs = { type = "hidden"; name = "work"; value = "1" }; children = list() },
+        { tag = "input"; attrs = { type = "hidden"; name = "review-route"; value = $route }; children = list() })
+      when $scenario:
+        let fields = append($fields, list(
+          { tag = "input"; attrs = { type = "hidden"; name = "scenario"; value = $scenario }; children = list() },
+          { tag = "input"; attrs = { type = "hidden"; name = "step"; value = $step }; children = list() }))
+      let selector = { tag = "label"; attrs = {}; children = list("Context",
+        { tag = "select"; attrs = { name = "review-context"; "aria-label" = "Context" }; children = $options }) }
+      let text = { tag = "label"; attrs = {}; children = list("Comment",
+        { tag = "textarea"; attrs = { name = "review-note"; required = true; maxlength = 300; rows = 4 };
+          children = list(if($error, at($fields, "review-note"), "")) }) }
+      port kernel.invoke { query = "nr.boardForm"; input = { action = "stage-review-comment"; task = $spec.taskId;
+        fields = append($fields, list($selector, $text)); button = "Stage comment"; primary = true; url = $url } } → form
+    when not(and($spec.current, eq($review.state, "review"))):
+      let rows = append($rows, list({ tag = "p"; attrs = {}; children = list("This review is closed to new comments.") }))
+  catch fault:
+    let notice = $fault.message
+    let error = true
+  let panel = { tag = "section"; attrs = { class = "nr-preview-comments"; "aria-label" = "Preview comments" }; children = append(list($locationNote, $form), $rows) }
+  port kernel.invoke { query = "work.page"; input = { page = { title = "Context comments"; summary = ""; content = list($panel) };
+    notice = $notice; error = $error } } → result
+
+process nr.editorWorkscreenDocument:
+  let spec = $eventInput
+  let review = $spec.review
+  let view = $spec.view
+  let url = $spec.url
+  let evidence = $spec.evidence
+  port kernel.invoke { query = "nr.scenarioEvidence"; input = { draft = $evidence.diff; image = $evidence.image.sha256; plan = $review.approval.hash } } → trace
+  let step = null
+  when and($trace, or(eq(at($fields, "view"), "scenario"), at($fields, "scenario"))):
+    port kernel.invoke { query = "nr.scenarioStep"; input = $trace } → step
+  let wanted = if($step, $step.item, at($fields, "item"))
+  let item = at(filter($evidence.items, "entry", eq($entry.id, $wanted)), 0)
+  let item = if($item, $item, at(filter($evidence.items, "entry", eq($entry.id, $evidence.defaultItem)), 0))
+  let selection = concat($url, "&item=", $item.id)
+  let mode = at($fields, "view")
+  let mode = if(includes(list("flow", "data", "code", "ide", "decision", "comments", "scenario"), $mode), $mode, "overview")
+  let tableView = if(includes(list("flow", "data", "code"), $mode), $mode, "overview")
+  let dataScene = at(filter($evidence.scenes, "entry", eq($entry.id, $item.dataScene)), 0)
+  port kernel.invoke { query = "nr.editorTable"; input = $evidence } → table
+  let content = list()
+  when eq($mode, "data"):
+    port kernel.invoke { query = "nr.editorData"; input = $dataScene.table } → content
+  when eq($mode, "scenario"):
+    port kernel.invoke { query = "nr.scenarioView"; input = { trace = $trace; step = $step; url = $url; task = $spec.taskId; attempt = $review.start.operation } } → content
+  let views = list(list("overview", "changes"), list("flow", "flow"), list("data", "data"), list("code", "source"))
+  when $trace:
+    let views = append($views, list(list("scenario", "scenario")))
+  fold $views as tab; tabs starts list():
+    let id = at($tab, 0)
+    port kernel.invoke { query = "notebook.presentation.view"; input = at($tab, 1) } → tabSpec
+    let link = { tag = "a"; attrs = { href = concat($selection, "&view=", $id); "data-evidence-role" = $tabSpec.role;
+      "aria-current" = if(eq(if(eq($mode, "ide"), "code", if(eq($mode, "decision"), "overview", $mode)), $id), "page", null) }; children = list($tabSpec.label) }
+    yield append($tabs, list($link)) → tabs
+  let prerequisites = filter($evidence.items, "parent", includes($item.parents, $parent.id))
+  let properties = list(
+    { tag = "dt"; attrs = {}; children = list("Change type") },
+    { tag = "dd"; attrs = {}; children = list($item.kind) },
+    { tag = "dt"; attrs = {}; children = list("Actor") },
+    { tag = "dd"; attrs = {}; children = list($item.role) })
+  when count($prerequisites):
+    let links = map($prerequisites, "parent", { tag = "li"; attrs = {}; children = list(
+      { tag = "a"; attrs = { href = concat($url, "&item=", $parent.id, "&view=", $tableView, "#selected-change") }; children = list($parent.label) }) })
+    let properties = append($properties, list(
+      { tag = "dt"; attrs = {}; children = list("Follows") },
+      { tag = "dd"; attrs = {}; children = list({ tag = "ul"; attrs = {}; children = $links }) }))
+  let inspector = { tag = "section"; attrs = { class = "nr-ed-inspect nr-change-document"; id = "selected-change"; tabindex = "-1"; "aria-label" = "Selected change" }; children = list(
+    { tag = "header"; attrs = { class = "nr-change-header" }; children = list(
+      { tag = "span"; attrs = { class = "nb1-book"; "aria-hidden" = "true" }; children = list("N") },
+      { tag = "h2"; attrs = {}; children = list($item.label) }) },
+    { tag = "div"; attrs = { class = "nr-change-body" }; children = append(list(
+      { tag = "dl"; attrs = { class = "decision-properties" }; children = $properties },
+      { tag = "fieldset"; attrs = { class = "decision-fields" }; children = list(
+        { tag = "legend"; attrs = {}; children = list("Change details") },
+        { tag = "p"; attrs = {}; children = list($item.detail) }) },
+      if(includes(list("overview", "flow"), $mode),
+        { tag = "a"; attrs = { class = "nr-change-return"; href = "#current-change-row" };
+          children = list(if(eq($mode, "flow"), "Back to Flow", "Back to Changes")) }, null)), $content) }) }
+  let source = null
+  when includes(list("code", "ide"), $mode):
+    let run = at($fields, "scenario")
+    let replay = if($step, concat("&step=", $step.id, if($run, concat("&scenario=", $run), "")), "")
+    let codeUrl = concat($selection, "&view=code", $replay)
+    let owner = at($fields, "owner")
+    let span = if(eq($owner, "surface"), $item.surface, $item.source)
+    let image = $evidence.image.sha256
+    port application.data { name = "review-source-files" } → retained
+    let file = at(filter($retained, "entry", and(eq($entry.image, $image), eq($entry.path, $span.path), eq($entry.sha256, $span.fileSha256))), 0)
+    let ideUrl = concat($selection, "&view=ide", $replay)
+    let ownerQuery = if(eq($owner, "surface"), "&owner=surface", "")
+    let ideLink = concat($ideUrl, $ownerQuery, "#source-line-", $span.line)
+    port kernel.invoke { query = "nr.editorCode"; input = $span } → code
+    let source = { tag = "section"; attrs = { class = "nr-ed-panel nr-ed-source"; "aria-label" = "Encounter source" }; children = append(list(
+      { tag = "h2"; attrs = {}; children = list("Encounter source") },
+      { tag = "p"; attrs = { class = "nr-ed-source-ref" }; children = list(concat("Compiled process · Step ", $item.node.order)) },
+      { tag = "nav"; attrs = { "aria-label" = "Source owner" }; children = list(
+        { tag = "a"; attrs = { href = $codeUrl; "aria-current" = if(not(eq($owner, "surface")), "page", null) }; children = list("Process") },
+        { tag = "a"; attrs = { href = concat($codeUrl, "&owner=surface"); "aria-current" = if(eq($owner, "surface"), "page", null) }; children = list("Screen control") },
+        if($step, { tag = "a"; attrs = { href = concat($url, "&view=scenario", $replay) }; children = list("Back to Scenario") }, null)) },
+      if($file, { tag = "p"; attrs = {}; children = list({ tag = "a"; attrs = { class = "project-decision-action"; href = $ideLink }; children = list("Open in Source workspace") }) }, null)), $code) }
+    when and(eq($mode, "ide"), $file):
+      let application = if(at($task, "project"), $task.project, $evidence.reflection.root)
+      port kernel.invoke { query = "nr.editorSourceWorkspace"; input = { file = $file; image = $image; span = $span; item = $item;
+        url = $ideUrl; back = concat($codeUrl, $ownerQuery); application = $application } } → source
+  let actions = list($spec.action)
+  let note = null
+  let decision = at($review, "decision")
+  let comments = if($decision, at($decision, "subpackets"), at($review, "comments"))
+  port kernel.invoke { query = "nr.roundTripState"; input = $review } → linked
+  port kernel.invoke { query = "nr.roundTripInspect"; input = { review = $review; task = $spec.taskId; owner = $task.owner } } → work
+  let moves = if($work, $work.moves, list())
+  let investigating = and(or(not(eq(at($fields, "action"), "return-investigation")), $view.error),
+    or(at($fields, "investigation"), eq(at($fields, "view"), "investigate")))
+  let reviewing = and($spec.current, includes($moves, "accept-implementation"))
+  let related = list()
+  when $linked.open:
+    let actions = list({ tag = "a"; attrs = { href = concat($selection, "&investigation=", $linked.open.id) };
+      children = list("Open investigation #", $linked.open.number) })
+    let related = list({ tag = "p"; attrs = {}; children = list("Waiting for a finding · ", $linked.open.question) })
+  when and($linked.handoff, eq($review.state, "accepted")):
+    let related = list(
+      { tag = "p"; attrs = {}; children = list($linked.handoff.owner, if(eq($linked.handoff.state, "ready"), " · Awaiting acknowledgement", " · Acknowledged")) },
+      { tag = "a"; attrs = { href = "#handoff-approval" }; children = list("Handoff #", $linked.handoff.number, " receipt") })
+    when and($spec.current, includes($moves, "acknowledge-handoff")):
+      port kernel.invoke { query = "nr.boardForm"; input = { action = "acknowledge-handoff"; task = $spec.taskId;
+        fields = list(); button = "Acknowledge handoff"; primary = true; url = $selection } } → acknowledge
+      let actions = list($acknowledge)
+  let findings = map(filter($linked.current, "entry", eq($entry.state, "returned")), "entry",
+    { tag = "a"; attrs = { href = concat($selection, "&investigation=", $entry.id) }; children = list("Finding #", $entry.number) })
+  let related = append($related, $findings)
+  let unavailable = null
+  when and($reviewing, at($fields, "scenario")):
+    try:
+      port kernel.invoke { query = "nr.reviewCommentContext"; input = { review = $review; task = $spec.taskId;
+        draft = $evidence.diff; coordinates = $fields } } → _
+    catch fault:
+      let reviewing = false
+      let actions = list()
+      let unavailable = { tag = "p"; attrs = { role = "status" }; children = list($fault.message) }
+  when $reviewing:
+    port kernel.invoke { query = "nr.boardForm"; input = { action = "accept-implementation"; task = $spec.taskId; fields = list(); button = if(count($comments), "Accept with comments", "Accept for handoff"); primary = not(includes(list("comments", "decision"), $mode)); url = $selection } } → accept
+    let actions = list($accept,
+      { tag = "a"; attrs = { href = concat($selection, "&view=comments") }; children = list("Review comments", if(count($comments), concat(" (", count($comments), ")"), "")) },
+      { tag = "a"; attrs = { href = concat($selection, "&view=decision"); class = "nr-ed-request" }; children = list("Request changes") },
+      { tag = "a"; attrs = { href = concat($selection, "&view=investigate") }; children = list("Open investigation") })
+  when or(includes(list("comments", "decision"), $mode), and($decision, count($comments))):
+    port kernel.invoke { query = "nr.editorComments"; input = { review = $review; evidence = $evidence; task = $spec.taskId;
+      item = $item; selection = $selection; mode = $mode; comments = $comments; reviewing = $reviewing; decision = $decision } } → note
+  let prior = at($decision, "subject")
+  let priorLink = if($prior, { tag = "a"; attrs = { href = concat($url, "&item=", $prior.id) }; children = list($prior.label) }, null)
+  let technical = map(filter($spec.links, "entry", not(includes(list("surface", "flow", "plan"), $entry.id))), "entry",
+    { tag = "a"; attrs = { href = concat($selection, "&pane=", $entry.id) }; children = list($entry.label) })
+  port text.slice { value = $evidence.image.sha256; start = 0; end = 10 } → imageShort
+  let provenance = { tag = "details"; attrs = { class = "nr-ed-provenance" }; children = list(
+    { tag = "summary"; attrs = {}; children = list(concat("Draft fingerprint · ", $imageShort, "…")) },
+    { tag = "p"; attrs = {}; children = list("Image SHA-256 ", { tag = "code"; attrs = {}; children = list($evidence.image.sha256) }) }) }
+  port kernel.invoke { query = "notebook.presentation.caption"; input = { title = $spec.title; section = "Implementation review" } } → caption
+  port kernel.invoke { query = "notebook.v1.titlebar"; input = $caption.section } → titlebar
+  let pathbar = { tag = "nav"; attrs = { class = "nb1-path"; "aria-label" = "Task navigation" }; children = list(
+    { tag = "a"; attrs = { href = "/project" }; children = list("Project home") }, " › ",
+    { tag = "a"; attrs = { href = concat("/?task=", $spec.taskId, "&planning=1") }; children = list("Task plan") }, { tag = "span"; attrs = { class = "nr-ed-path-current" }; children = list("› Implementation review") }) }
+  let tone = if(includes(list("blocked", "returned"), $review.state), "critical", if(eq($review.state, "accepted"), "saved", "decision"))
+  port kernel.invoke { query = "nr.handoffInspector"; input = $spec } → handoff
+  let planLink = { tag = "a"; attrs = { href = "#handoff-approval" }; children = list(concat("Plan revision ", $review.approval.revision, " and receipt")) }
+  let scope = null
+  when $reviewing:
+    let changeCount = count($evidence.items)
+    let changeLabel = if(eq($changeCount, 1), "1 listed change", concat($changeCount, " listed changes"))
+    let commentLabel = if(count($comments), concat(" and ", count($comments), if(eq(count($comments), 1), " staged comment", " staged comments")), "")
+    let scope = { tag = "p"; attrs = { class = "nr-ed-handoff-scope" }; children = list(
+      "Accepting covers the whole draft, including ", $changeLabel, $commentLabel, ". Source stays unchanged."
+    ) }
+  let status = if($linked.open, "Waiting on investigation", if(eq($review.state, "review"), "Decision needed", $spec.status))
+  let title = if(includes($moves, "acknowledge-handoff"), "Receive implementation", if($linked.handoff, "Implementation handed off", "Review implementation"))
+  port kernel.invoke { query = "sourcery.presentation.decision"; input = {
+    attrs = { class = "decision-form"; id = "current-decision"; tabindex = -1; "data-tone" = $tone;
+      "data-presentation" = "vb6"; "aria-label" = "Current decision" };
+    title = $title; legend = "Next step";
+    properties = list({ label = "Status"; value = $status; status = true },
+      { label = "Plan"; value = $planLink });
+    body = list($scope, if(count($related), { tag = "div"; attrs = { class = "nb1-actions" }; children = $related }, null),
+      if($prior, { tag = "p"; attrs = { class = "nr-ed-muted" }; children = list("Changes requested for ", $priorLink, ". ", $decision.note) }, null));
+    commands = $actions
+  } } → checkpoint
+  when $investigating:
+    port kernel.invoke { query = "nr.investigationView"; input = { linked = $linked; review = $review; selection = $selection;
+      item = $item; current = $spec.current; taskId = $spec.taskId } } → checkpoint
+  let reviewContent = $inspector
+  when eq($mode, "overview"):
+    let reviewContent = { tag = "div"; attrs = { class = "nr-ed-change-layout" }; children = list($table, $inspector) }
+  when eq($mode, "flow"):
+    port kernel.invoke { query = "nr.editorFlow"; input = $evidence } → flow
+    let reviewContent = { tag = "div"; attrs = { class = "nr-ed-flow-layout" }; children = list($flow, $inspector) }
+  when includes(list("code", "ide"), $mode):
+    let reviewContent = $source
+  let docket = { tag = "details"; attrs = { class = "decision-inspector"; id = "editor-evidence" }; children = list(
+    { tag = "summary"; attrs = {}; children = list("Evidence docket") },
+    { tag = "a"; attrs = { href = "#handoff-approval" }; children = list("Approved plan and receipt") },
+    { tag = "nav"; attrs = { "aria-label" = "Technical evidence" }; children = $technical }, $provenance) }
+  let travel = null
+  when and($spec.current, eq($review.state, "review"), eq($actor.role, "author"), eq($actor.id, $task.owner)):
+    let travel = { tag = "a"; attrs = { href = concat("../workspace/mobile?pilot=", $spec.taskId) }; children = list("Take this review on a trip") }
+  let document = { tag = "div"; attrs = { class = "nb1-paper nr-ed-paper decision-workspace" }; children = list(
+    { tag = "header"; attrs = {}; children = list(
+      { tag = "p"; attrs = { class = "nb1-label" }; children = list("Implementation checkpoint") },
+      { tag = "h1"; attrs = { id = "implementation-results" }; children = list($spec.title) }) },
+    if(or($investigating, includes(list("comments", "decision", "scenario"), $mode)), $checkpoint, null),
+    $travel, $unavailable, if($investigating, null, $note),
+    if($investigating, null, $reviewContent),
+    if(includes(list("overview", "flow", "data", "code"), $mode), $checkpoint, null),
+    if(eq($mode, "ide"), null, $docket)) }
+  let board = { tag = "div"; attrs = { class = "nr-editor nb1 nb1-editor"; "data-view" = $mode;
+    "data-encounter-events" = if(and($review.state, $spec.live), concat("/encounter-events?implementation=", $review.id), null);
+    "data-rendered" = $view.revision }; children = list(
+    $titlebar, $pathbar,
+    { tag = "nav"; attrs = { class = "nb1-tabs"; "aria-label" = "Review views" }; children = $tabs },
+    $document,
+    $handoff,
+    if(and($review.state, $spec.live), { tag = "script"; attrs = { src = "/encounter-events.js"; defer = true }; children = list() }, null)) }
+  port kernel.invoke { query = "work.page"; input = { page = { title = $spec.title; summary = "Editor review"; content = list($board) }; notice = if($view.error, $view.notice, ""); error = $view.error } } → result
+
+
+process nr.editorComments:
+  let spec = $eventInput
+  let packet = if($spec.comments, $spec.comments, list())
+  let url = concat($spec.selection, "&view=", $spec.mode)
+  let form = null
+  let warning = null
+  let context = null
+  let formFields = list(
+    { tag = "input"; attrs = { type = "hidden"; name = "view"; value = $spec.mode }; children = list() },
+    { tag = "input"; attrs = { type = "hidden"; name = "item"; value = $spec.item.id }; children = list() })
+  when $spec.reviewing:
+    let route = at($fields, "review-route")
+    let scenario = at($fields, "scenario")
+    let coordinates = { "review-item" = $spec.item.id; "review-route" = $route; scenario = $scenario; step = at($fields, "step") }
+    when and($route, not($scenario)):
+      let coordinates = { "review-route" = $route; "review-entry" = at($fields, "review-entry") }
+    try:
+      port kernel.invoke { query = "nr.reviewCommentContext"; input = { review = $spec.review; task = $spec.task;
+        draft = $spec.evidence.diff; coordinates = $coordinates } } → context
+      let knownRoute = at($context, "route")
+      let knownScenario = at($context, "scenario")
+      let knownEntry = at($context, "entry")
+      let url = concat($url, if($knownRoute, concat("&review-route=", $knownRoute), ""),
+        if($knownScenario, concat("&scenario=", $knownScenario, "&step=", $context.step), ""),
+        if($knownEntry, concat("&review-entry=", $knownEntry), ""))
+      let formFields = append($formFields, list({ tag = "input"; attrs = { type = "hidden"; name = "review-item"; value = at(at($context, "subject"), "id") }; children = list() }))
+      when $knownRoute:
+        let formFields = append($formFields, list({ tag = "input"; attrs = { type = "hidden"; name = "review-route"; value = $knownRoute }; children = list() }))
+      when $knownEntry:
+        let formFields = append($formFields, list({ tag = "input"; attrs = { type = "hidden"; name = "review-entry"; value = $knownEntry }; children = list() }))
+      when $knownScenario:
+        let formFields = append($formFields, list(
+          { tag = "input"; attrs = { type = "hidden"; name = "scenario"; value = $knownScenario }; children = list() },
+          { tag = "input"; attrs = { type = "hidden"; name = "step"; value = $context.step }; children = list() }))
+      let returning = eq($spec.mode, "decision")
+      let subject = at($context, "subject")
+      let label = if($returning, if(count($packet), "Additional change request (optional)", "Change request"), "Comment")
+      let reason = { tag = "label"; attrs = {}; children = list($label,
+        { tag = "textarea"; attrs = { name = "review-note"; required = or(not($returning), not(count($packet))); maxlength = 300; rows = 3 }; children = list() }) }
+      port kernel.invoke { query = "nr.boardForm"; input = { action = if($returning, "return-implementation", "stage-review-comment");
+        task = $spec.task; fields = append($formFields, list($reason)); button = if($returning, "Send change requests", "Stage comment"); primary = true; url = $url } } → form
+    catch fault:
+      let warning = { tag = "p"; attrs = { role = "status" }; children = list($fault.message) }
+  fold $packet as comment; rows starts list():
+    let remove = null
+    let travel = null
+    when $spec.reviewing:
+      let field = { tag = "input"; attrs = { type = "hidden"; name = "comment-id"; value = $comment.id }; children = list() }
+      port kernel.invoke { query = "nr.boardForm"; input = { action = "discard-review-comment"; task = $spec.task; fields = append($formFields, list($field)); button = "Remove staged comment"; url = $url } } → remove
+    when and($spec.reviewing, eq($actor.role, "author"), eq($actor.id, $task.owner)):
+      let travel = { tag = "a"; attrs = { href = concat("../workspace/mobile?pilot=", $spec.task, "&comment=", $comment.id) }; children = list("Edit this draft on a trip") }
+    port kernel.invoke { query = "nr.commentLocation"; input = $comment.context } → location
+    port kernel.invoke { query = "nr.commentPreviewLink"; input = { context = $comment.context; task = $spec.task } } → link
+    let row = { tag = "li"; attrs = {}; children = list(
+      { tag = "p"; attrs = {}; children = list($comment.text) },
+      { tag = "small"; attrs = {}; children = list($location) },
+      if($link, { tag = "p"; attrs = {}; children = list(
+        { tag = "a"; attrs = { href = $link }; children = list("Open in preview") }) }, null), $travel, $remove) }
+    yield append($rows, list($row)) → rows
+  let title = if(eq($spec.mode, "decision"), "Request changes", if($spec.decision, "Review packet", "Staged comments"))
+  port kernel.invoke { query = "nr.commentLocation"; input = $context } → location
+  port kernel.invoke { query = "sourcery.presentation.decision"; input = {
+    attrs = { class = "decision-form"; "data-presentation" = "vb6"; "aria-label" = $title };
+    title = $title; properties = if($context, list({ label = "Location"; value = $location }), list());
+    legend = if($spec.reviewing, "Review notes", "Recorded notes");
+    body = list(if(count($rows), { tag = "ol"; attrs = {}; children = $rows }, null), $warning, $form);
+    commands = list()
+  } } → result
+
+process nr.commentLocation:
+  let context = $eventInput
+  let subject = at($context, "subject")
+  let result = if($subject, $subject.label, "Draft review")
+  when eq(at($context, "kind"), "app"):
+    let result = "Whole app"
+  when eq(at($context, "kind"), "preview"):
+    let result = concat(if(eq($context.route, "/report"), "Read-only Timesheet report", "Read-only Timesheet preview"), if(at($context, "date"), concat(" · ", $context.date, " · ", $context.minutes, " minutes"), ""),
+      if(at($context, "reportSectionLabel"), concat(" · ", $context.reportSectionLabel), ""))
+  when eq(at($context, "kind"), "scenario"):
+    let screen = if(eq($context.route, "/timesheet"), "Timesheet", if(eq($context.route, "/report"), "Timesheet report", "Sick leave"))
+    let actor = if(eq($context.actor, "employee"), "Affected employee",
+      if(eq($context.actor, "recipient-manager"), "Recipient manager", if(eq($context.actor, "unrelated-manager"), "Unrelated manager", "Unrelated employee")))
+    let result = concat("Scenario step ", $context.step, " · ", $screen, " · ", $actor,
+      if($subject, concat(" · ", $subject.label), ""))
+
+
+process nr.commentPreviewLink:
+  let spec = $eventInput
+  let context = $spec.context
+  let kind = at($context, "kind")
+  let route = at($context, "route")
+  let result = null
+  when eq($kind, "app"):
+    let result = concat("/timesheet-preview/timesheet?review-task=", $spec.task, "&context=app")
+  when and(eq($kind, "scenario"), includes(list("/sick-leave", "/timesheet", "/report"), $route), $context.scenario, $context.step):
+    port kernel.invoke { query = "nr.commentPreviewTarget"; input = $context } → target
+    let result = concat("/stage-", $context.scenario, "-", $context.step, $route, "?context=", $target)
+  when and(eq($kind, "preview"), includes(list("/timesheet", "/report"), $route)):
+    let mount = if(eq($route, "/report"), "/report-preview", "/timesheet-preview")
+    port kernel.invoke { query = "nr.commentPreviewTarget"; input = $context } → target
+    let result = concat($mount, $route, "?review-task=", $spec.task, "&context=", $target)
+
+
+process nr.commentPreviewTarget:
+  let context = $eventInput
+  let target = if(eq(at($context, "kind"), "scenario"), at(at($context, "subject"), "id"),
+    if(eq(at($context, "route"), "/report"), at($context, "reportSection"), at($context, "entry")))
+  let result = if(eq(at($context, "kind"), "app"), "app", if($target, $target, "screen"))

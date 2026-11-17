@@ -1,0 +1,112 @@
+process-module "temple/surface-process-module/1"
+
+process product.empty:
+  let result = { claims = list() }
+
+process desktop.version:
+  let input = $eventInput
+  port kernel.invoke { query = "portfolio.text"; input = { text = $input.fields.statement; limit = 1200 } } → statement
+  port kernel.invoke { query = "portfolio.text"; input = { text = $input.fields.scope; limit = 400 } } → scope
+  let result = { number = $input.number; statement = $statement; scope = $scope; status = "Active"; evidence = $input.evidence; note = $input.note }
+
+process product.change:
+  let command = $eventInput
+  let fields = $command.fields
+  let claims = $command.state.claims
+  let id = $command.id
+  let notice = "Claim recorded."
+  assert includes(list("create", "revise", "evidence", "withdraw"), $fields.action)
+    otherwise "Choose a claim action."
+  when eq($fields.action, "create"):
+    port kernel.invoke { query = "desktop.version"; input = { fields = $fields; number = 1; evidence = list(); note = "Initial statement" } } → version
+    let claims = append(list({ id = $id; versions = list($version) }), $claims)
+  when not(eq($fields.action, "create")):
+    let id = $fields.target
+    let claim = at(filter($claims, "claim", eq($claim.id, $id)), 0)
+    assert $claim
+      otherwise "Choose a saved claim."
+    let current = at($claim.versions, 0)
+    assert eq($current.status, "Active")
+      otherwise "A withdrawn claim retains its history."
+    let number = add($current.number, 1)
+    let version = $current
+    when eq($fields.action, "revise"):
+      port kernel.invoke { query = "portfolio.text"; input = { text = $fields.note; limit = 500 } } → note
+      port kernel.invoke { query = "desktop.version"; input = { fields = $fields; number = $number; evidence = $current.evidence; note = $note } } → version
+      let notice = "Claim revision saved."
+    when eq($fields.action, "evidence"):
+      assert includes(list("Supports", "Challenges", "Context"), $fields.polarity)
+        otherwise "Choose how the evidence relates to the claim."
+      port kernel.invoke { query = "portfolio.text"; input = { text = $fields.reference; limit = 400 } } → reference
+      port kernel.invoke { query = "portfolio.text"; input = { text = $fields.note; limit = 500 } } → note
+      let evidence = { reference = $reference; polarity = $fields.polarity; note = $note }
+      let version = { number = $number; statement = $current.statement; scope = $current.scope; status = $current.status; evidence = append($current.evidence, list($evidence)); note = "Evidence recorded" }
+      let notice = "Evidence added in a new version."
+    when eq($fields.action, "withdraw"):
+      port kernel.invoke { query = "portfolio.text"; input = { text = $fields.note; limit = 500 } } → note
+      let version = { number = $number; statement = $current.statement; scope = $current.scope; status = "Withdrawn"; evidence = $current.evidence; note = $note }
+      let notice = "Claim withdrawn. Earlier versions are retained."
+    let updated = { id = $id; versions = append(list($version), $claim.versions) }
+    let claims = map($claims, "claim", if(eq($claim.id, $id), $updated, $claim))
+  let result = { state = { claims = $claims }; target = $id; notice = $notice }
+
+process desktop.fields:
+  let current = $eventInput
+  let result = list(
+    { name = "statement"; label = "Claim statement"; type = "textarea"; maxlength = 1200; required = true; value = at($current, "statement") },
+    { name = "scope"; label = "Scope"; type = "text"; maxlength = 400; required = true; value = at($current, "scope") }
+  )
+
+process desktop.history:
+  let version = $eventInput
+  let evidence = map($version.evidence, "reference", { tag = "li"; attrs = {}; children = list(concat($reference.polarity, " · ", $reference.reference, " · ", $reference.note)) })
+  let result = { tag = "li"; attrs = {}; children = list(
+    { tag = "strong"; attrs = {}; children = list(concat("Version ", $version.number, " · ", $version.status)) },
+    { tag = "p"; attrs = {}; children = list($version.statement) },
+    { tag = "p"; attrs = {}; children = list(concat("Scope: ", $version.scope)) },
+    { tag = "p"; attrs = {}; children = list($version.note) },
+    { tag = "ul"; attrs = {}; children = $evidence }
+  ) }
+
+process desktop.card:
+  let card = $eventInput
+  let claim = $card.claim
+  let current = at($claim.versions, 0)
+  let controls = list()
+  when eq($current.status, "Active"):
+    port kernel.invoke { query = "desktop.fields"; input = $current } → inputs
+    let inputs = append($inputs, list({ name = "note"; label = "Revision reason"; type = "text"; maxlength = 500; required = true }))
+    port kernel.invoke { query = "portfolio.form"; input = { screen = $card.screen; inputs = $inputs; action = "revise"; target = $claim.id; button = "Save revision" } } → revise
+    let relations = map(list("Supports", "Challenges", "Context"), "relation", { value = $relation; label = $relation })
+    let inputs = list(
+      { name = "reference"; label = "Evidence reference"; type = "text"; maxlength = 400; required = true },
+      { name = "polarity"; label = "Evidence relation"; labelId = concat("desktop-evidence-", $claim.id); type = "select"; options = $relations },
+      { name = "note"; label = "Evidence note"; type = "textarea"; maxlength = 500; required = true }
+    )
+    port kernel.invoke { query = "portfolio.form"; input = { screen = $card.screen; inputs = $inputs; action = "evidence"; target = $claim.id; button = "Add evidence" } } → addEvidence
+    let reason = { name = "note"; label = "Withdrawal reason"; type = "text"; maxlength = 500; required = true }
+    port kernel.invoke { query = "portfolio.form"; input = { screen = $card.screen; inputs = list($reason); action = "withdraw"; target = $claim.id; button = "Withdraw claim" } } → withdraw
+    let controls = list({ tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list("Edit, add evidence or withdraw") }, $revise, $addEvidence, $withdraw) })
+  fold $claim.versions as version; history starts list():
+    port kernel.invoke { query = "desktop.history"; input = $version } → row
+    yield append($history, list($row)) → history
+  let heading = concat("claim-", $claim.id)
+  let result = { tag = "article"; attrs = { "aria-labelledby" = $heading }; children = append(list(
+    { tag = "h3"; attrs = { id = $heading }; children = list($current.statement) },
+    { tag = "p"; attrs = {}; children = list(concat("Scope: ", $current.scope, " · ", $current.status)) },
+    { tag = "details"; attrs = {}; children = list({ tag = "summary"; attrs = {}; children = list("Claim history") }, { tag = "ol"; attrs = {}; children = $history }) }
+  ), $controls) }
+
+process product.view:
+  let screen = $eventInput
+  port kernel.invoke { query = "desktop.fields"; input = {} } → inputs
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = $inputs; action = "create"; button = "Record claim" } } → form
+  fold $screen.state.claims as claim; cards starts list():
+    port kernel.invoke { query = "desktop.card"; input = { screen = $screen; claim = $claim } } → card
+    yield append($cards, list($card)) → cards
+  port rel.encode { value = $screen.state; kind = "ClaimHistoryExport" } → exportText
+  let exported = { tag = "details"; attrs = {}; children = list(
+    { tag = "summary"; attrs = {}; children = list("Export complete history as REL") },
+    { tag = "label"; attrs = {}; children = list({ tag = "span"; attrs = { id = "rel-export-label" }; children = list("Copyable REL") }, { tag = "textarea"; attrs = { "aria-labelledby" = "rel-export-label"; readonly = true; rows = 12; cols = 72 }; children = list($exportText) }) }
+  ) }
+  let result = { title = "Sourcery Desktop"; summary = "Private browser workspace for claims, evidence, revisions and withdrawal history."; content = append(list($form, $exported), $cards) }

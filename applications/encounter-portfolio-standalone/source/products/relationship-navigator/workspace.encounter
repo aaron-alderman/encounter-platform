@@ -1,0 +1,82 @@
+process-module "temple/surface-process-module/1"
+
+process relationship.code:
+  let code = $eventInput
+  let result = { tag = "label"; attrs = {}; children = list($code.label, { tag = "input"; attrs = { readonly = true; value = $code.value }; children = list() }) }
+
+process relationship.entry:
+  let screen = $eventInput
+  let inputs = list(
+    { name = "name"; label = "Process name"; type = "text"; maxlength = 120; required = true },
+    { name = "aim"; label = "Repair aim"; type = "textarea"; maxlength = 800; required = true }
+  )
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = $inputs; action = "create"; button = "Open repair process" } } → create
+  let code = { name = "code"; label = "Access or invitation code"; type = "text"; maxlength = 64; required = true }
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = list($code); action = "join"; button = "Enter with code" } } → join
+  let result = list($create, $join)
+
+process relationship.offer:
+  let view = $eventInput
+  let offer = $view.offer
+  let controls = list()
+  when and(eq($view.status, "Open"), eq($offer.status, "Offered"), not(eq($offer.actor, $view.actor))):
+    port kernel.invoke { query = "portfolio.form"; input = { screen = $view.screen; action = "accept"; inputs = list(); target = $offer.id; button = "Accept offer" } } → accept
+    port kernel.invoke { query = "portfolio.form"; input = { screen = $view.screen; action = "decline"; inputs = list(); target = $offer.id; button = "Decline offer" } } → decline
+    let controls = list($accept, $decline)
+  let result = { tag = "li"; attrs = {}; children = append(list(
+    { tag = "p"; attrs = {}; children = list(concat("Participant ", $offer.actor, " · ", $offer.status)) },
+    { tag = "p"; attrs = {}; children = list($offer.note) }
+  ), $controls) }
+
+process relationship.workspace:
+  let view = $eventInput
+  let screen = $view.screen
+  let entry = $view.entry
+  let actor = $screen.session.actor
+  let notice = if(eq($entry.status, "Open"), "Open for shared offers.", concat($entry.status, " by Participant ", $entry.pauseBy, "."))
+  let info = list({ tag = "h2"; attrs = {}; children = list($entry.name) }, { tag = "p"; attrs = {}; children = list($entry.aim) }, { tag = "p"; attrs = {}; children = list(concat("You are Participant ", $actor, ". ", $notice)) })
+  when at($screen.session, "code"):
+    port kernel.invoke { query = "relationship.code"; input = { label = "Your recovery code"; value = $screen.session.code } } → code
+    let info = append($info, list({ tag = "p"; attrs = {}; children = list("Keep your recovery code. It is required to reopen this participant’s view after signing out or restarting.") }, $code))
+  when and(at($screen.session, "invitation"), $entry.invitation):
+    port kernel.invoke { query = "relationship.code"; input = { label = "One-time invitation for Participant B"; value = $screen.session.invitation } } → code
+    let info = append($info, list($code))
+  let account = { name = "text"; label = "Your private account"; type = "textarea"; maxlength = 1600; required = true }
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = list($account); action = "reflect"; button = "Save private account" } } → reflect
+  let notes = map(at($entry.accounts, $actor), "note", { tag = "li"; attrs = {}; children = list($note) })
+  port kernel.invoke { query = "portfolio.section"; input = { title = "Private account"; content = list($reflect, { tag = "ul"; attrs = {}; children = $notes }) } } → privateView
+  fold $entry.offers as offer; offers starts list():
+    port kernel.invoke { query = "relationship.offer"; input = { offer = $offer; actor = $actor; status = $entry.status; screen = $screen } } → row
+    yield append($offers, list($row)) → offers
+  let shared = list({ tag = "ul"; attrs = {}; children = $offers })
+  when and(eq($entry.status, "Open"), $entry.access.B):
+    let message = { name = "text"; label = "Shared offer"; type = "textarea"; maxlength = 1000; required = true }
+    port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = list($message); action = "offer"; button = "Make shared offer" } } → form
+    let shared = append(list($form), $shared)
+  port kernel.invoke { query = "portfolio.section"; input = { title = "Shared offers"; content = $shared } } → sharedView
+  let controls = list()
+  when eq($entry.status, "Open"):
+    port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = list(); action = "pause"; button = "Pause process" } } → pause
+    let controls = append($controls, list($pause))
+  when eq($entry.status, "Paused"):
+    when includes($entry.returnVotes, $actor):
+      let controls = append($controls, list({ tag = "p"; attrs = {}; children = list("Awaiting the other participant’s consent to return.") }))
+    when not(includes($entry.returnVotes, $actor)):
+      port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = list(); action = "return"; button = "Consent to return" } } → consent
+      let controls = append($controls, list($consent))
+  when not(eq($entry.status, "Safety pause")):
+    port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = list(); action = "safety"; button = "Set safety pause" } } → safety
+    let controls = append($controls, list($safety))
+  port kernel.invoke { query = "portfolio.form"; input = { screen = $screen; inputs = list(); action = "leave"; button = "Sign out of process" } } → leave
+  let result = append($info, append(list($privateView, $sharedView), append($controls, list($leave))))
+
+process product.view:
+  let screen = $eventInput
+  let id = at($screen.session, "processId")
+  let entry = at(filter($screen.state.processes, "entry", eq($entry.id, $id)), 0)
+  let content = list()
+  when $entry:
+    port kernel.invoke { query = "relationship.workspace"; input = { screen = $screen; entry = $entry } } → content
+  when not($entry):
+    port kernel.invoke { query = "relationship.entry"; input = $screen } → content
+  let result = { title = "Relationship Navigator"; summary = "Keep each account private, share only deliberate offers, and pause or return by consent."; content = $content }
