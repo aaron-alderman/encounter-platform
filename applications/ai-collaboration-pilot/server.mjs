@@ -77,8 +77,14 @@ label,textarea,select{display:block;margin:.45rem 0}textarea{box-sizing:border-b
 button,select{font:inherit;padding:.4rem .65rem}button{background:#244933;color:#fff;border:1px solid #244933}
 article h2{margin:0;font-size:1.1rem}article p{white-space:pre-wrap;overflow-wrap:anywhere}
 </style><main><p>Signed in as ${escape(person)}</p><h1>Working together with AI</h1>
-<p>What would make AI useful to us on a real piece of shared work?</p>
-<p>Start with one thing you want to achieve together. Describe what you can contribute, what context you need from the other person, and what a good outcome would look like.</p>
+<section aria-labelledby="starting-brief"><h2 id="starting-brief">Starting brief</h2>
+<p>Pick one real piece of work and use it to try a way of working together with AI.</p>
+<ol>
+<li><strong>Start with intent.</strong> Each share what you want to achieve, why it matters, and what would be enough to take the next step.</li>
+<li><strong>Name the handoff.</strong> Say whether you’re offering a contribution, asking a question, requesting a decision, or reflecting on what happened. Agree on what you need back and from whom.</li>
+<li><strong>Give enough context to act.</strong> Include the bigger picture, what could change the answer, and where to find more detail. If the work changed direction, explain why.</li>
+</ol>
+<p>Ask AI to pull your contributions together and surface what’s missing. Check its summary together, then record a decision, a question, or one thing to improve next time.</p></section>
 <form method="post" action="${route}"><label for="kind">Contribution type</label>
 <select id="kind" name="kind"><option>Contribution</option><option>Question</option><option>Decision</option><option>Reflection</option></select>
 <label for="body">Share with the project</label><textarea id="body" name="body" rows="5" maxlength="5000" required></textarea>
