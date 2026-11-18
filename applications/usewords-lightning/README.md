@@ -1,5 +1,11 @@
 # Usewords — for what matters
 
+The private AppDev pilot uses the same matter, proposal, review, and replay
+processes through a server-rendered two-person workspace. It uses the
+existing AppDev membership boundary and a private SQLite receipt store.
+See the [hosted pilot](platform/README.md#hosted-appdev-pilot) for its scope
+and verification.
+
 Usewords is a collaborative workbench for giving structure to what matters.
 AI helps people articulate, explore and work with a matter; resolution is one
 possible outcome. A clearer question, an acknowledged uncertainty, a faithful

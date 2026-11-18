@@ -1,5 +1,45 @@
 # Live platform connection: pending capability
 
+## Hosted AppDev pilot
+
+The private `/usewords/` route is served by the AI collaboration pilot.
+The browser edition and the external Temple worker described below retain
+their separate execution and persistence boundaries.
+
+- Sign in through Sourcery Workspace and select **Usewords** under **Apps**.
+- The pilot opens one shared matter. Both participants can propose issues,
+  positions, or options. A participant reviews the other person's proposal
+  before its exact revision can be applied.
+- **Draft suggestions with AI** sends the accepted shared matter to the
+  configured local Ollama model through the existing Usewords brief and
+  response checks. Only the requester sees the draft until they propose a
+  suggestion. Proposed items still go through independent review.
+- The receiver verifies identity on every request and rechecks it before
+  writes. SQLite commits the receipt and retry record together. A stale
+  form is shown the current matter. The hosted board has the existing
+  Usewords limits of twelve proposals and forty-eight events.
+
+The source closure needs `applications/usewords-lightning/`,
+`applications/encounter-libraries/`, and the pilot source in the same
+release checkout. Set the pilot's private `usewords` configuration to
+an absolute `adapter` path to `platform/hosted.cjs`, a separate absolute
+SQLite `database` path, and a `model` object with `model` and `digest`.
+Use the existing workspace observer and two-member allowlist. Preserve
+the participant binding and the compiled policy when re-opening an
+existing matter. Keep configuration and both databases outside Git.
+
+Proxy the exact `/usewords/` route on AppDev to the existing private
+pilot listener, forwarding cookies and origin. Allow at least 120 seconds
+for the response. The workspace launcher becomes visible to project
+members when the private configuration includes `usewords`.
+
+From this directory, run `node --test platform/hosted.test.cjs` with Node
+24. Set `USEWORDS_TEST_MODEL` to an installed local model tag to exercise
+the real AI draft and proposal path. The test uses synthetic identities
+and a disposable matter database.
+
+## Temple worker connection
+
 The requested live connection is **not active**. The existing Usewords workspace remains local. The connected Temple worker `sqlite-sourcery-mcp-live-interaction-v5` exposes a fixed captured Claimipedia read surface with application admission false. Its development lanes are not product workspaces or browser-facing application persistence. No application generation was activated, Site deployed, hostname attached or DNS changed.
 
 `live-observation.json` records the actual connected host/catalogue and sanitized Site observations. The named development lane was opened for inspection and closed with its head unchanged; it does not hold a copy of the Usewords workspace.

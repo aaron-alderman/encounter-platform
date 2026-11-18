@@ -1,0 +1,90 @@
+process-module "temple/surface-process-module/1"
+profile "usewords/process/1"
+
+process hosted.initial:
+  port kernel.invoke { query = "mw.create"; input = $eventInput } → board
+  port kernel.invoke { query = "cw.receipt"; input = $board } → result
+
+process hosted.command:
+  let input = $eventInput
+  let form = $input.form
+  let board = $input.board
+  let matter = $board.head.document.matter.id
+  let result = { action = $form.action; expectedBoardRevision = $board.revision; id = at($form, "proposal"); contentHash = at($form, "contentHash") }
+  when includes(list("approve", "request-changes"), $form.action):
+    let result = { action = "review"; expectedBoardRevision = $board.revision; id = $form.proposal; contentHash = $form.contentHash; decision = $form.action; comment = $form.comment }
+  when eq($form.action, "propose"):
+    let item = { id = $input.operation; kind = $form.kind; title = $form.title; body = $form.body; issue = if(eq($form.kind, "issue"), null, at($form, "issue")); voice = if(eq($form.kind, "position"), at($form, "voice"), null) }
+    let change = { kind = "matter-item"; matterId = $matter; item = $item; origin = { kind = "participant"; label = $input.actor; briefHash = null; sourceHash = null }; baseRevision = $board.head.revision }
+    let result = { action = "propose"; expectedBoardRevision = $board.revision; id = $input.operation; title = $item.title; change = $change }
+  when eq($form.action, "propose-ai"):
+    assert eq($board.head.documentHash, $input.draft.brief.request.sourceHash)
+      otherwise "Hosted matter changed since the AI brief. Create a fresh brief."
+    port kernel.invoke { query = "mw.suggestionChange"; input = { state = $board.head; id = $form.suggestion; package = $input.draft; run = $input.draft.run } } → change
+    let result = { action = "propose"; expectedBoardRevision = $board.revision; id = $input.operation; title = $change.item.title; change = $change }
+
+process hosted.form:
+  let form = $eventInput
+  let result = { tag = "form"; attrs = { method = "post"; action = "/usewords/" }; children = append(list(
+    { tag = "input"; attrs = { type = "hidden"; name = "head"; value = $form.head } },
+    { tag = "input"; attrs = { type = "hidden"; name = "operation"; value = $form.operation } }
+  ), $form.children) }
+
+process hosted.page:
+  let view = $eventInput
+  let board = $view.board
+  let matter = $board.head.document.matter
+  let issues = filter($matter.items, "record", eq($record.item.kind, "issue"))
+  let committed = map($matter.items, "record", { tag = "li"; children = list(
+    { tag = "strong"; children = list($record.item.title) },
+    { tag = "p"; children = list($record.standing, " · ", $record.item.body) }
+  ) })
+  let suggestions = list()
+  when $view.draft:
+    let suggestions = map($view.draft.response.items, "item", { tag = "li"; children = list(
+      { tag = "strong"; children = list($item.title) }, { tag = "p"; children = list($item.body) },
+      { tag = "form"; attrs = { method = "post"; action = "/usewords/" }; children = list(
+        { tag = "input"; attrs = { type = "hidden"; name = "head"; value = $view.head } },
+        { tag = "input"; attrs = { type = "hidden"; name = "operation"; value = $view.operation } },
+        { tag = "input"; attrs = { type = "hidden"; name = "suggestion"; value = $item.id } },
+        { tag = "button"; attrs = { name = "action"; value = "propose-ai" }; children = list("Propose this suggestion") }
+      ) }
+    ) })
+  let proposals = map($board.proposals, "p", { tag = "article"; children = list(
+    { tag = "h3"; children = list($p.content.title) },
+    { tag = "p"; children = list(at($view.names, $p.content.author), " · ", $p.status) },
+    { tag = "p"; children = list($p.content.change.item.body) },
+    { tag = "ul"; children = map($p.reviews, "r", { tag = "li"; children = list(at($view.names, $r.actor), " · ", $r.decision, " · ", $r.comment) }) },
+    if(eq($p.status, "open"), { tag = "form"; attrs = { method = "post"; action = "/usewords/" }; children = list(
+      { tag = "input"; attrs = { type = "hidden"; name = "head"; value = $view.head } },
+      { tag = "input"; attrs = { type = "hidden"; name = "operation"; value = $view.operation } },
+      { tag = "input"; attrs = { type = "hidden"; name = "proposal"; value = $p.id } },
+      { tag = "input"; attrs = { type = "hidden"; name = "contentHash"; value = $p.contentHash } },
+      if(not(eq($p.content.author, $view.actor)), { tag = "label"; children = list("Review comment", { tag = "textarea"; attrs = { name = "comment"; maxlength = "1000" } }) }, null),
+      if(not(eq($p.content.author, $view.actor)), { tag = "button"; attrs = { name = "action"; value = "approve" }; children = list("Approve") }, null),
+      if(not(eq($p.content.author, $view.actor)), { tag = "button"; attrs = { name = "action"; value = "request-changes" }; children = list("Request changes") }, null),
+      if(and(count(filter($p.reviews, "r", eq($r.decision, "approve"))), not(count(filter($p.reviews, "r", eq($r.decision, "request-changes"))))), { tag = "button"; attrs = { name = "action"; value = "accept" }; children = list("Apply reviewed proposal") }, null)
+    ) }, null)
+  ) })
+  port kernel.invoke { query = "hosted.form"; input = { head = $view.head; operation = $view.operation; children = list(
+    { tag = "label"; children = list("Kind", { tag = "select"; attrs = { name = "kind" }; children = list({ tag = "option"; attrs = { value = "issue" }; children = list("Issue") }, { tag = "option"; attrs = { value = "position" }; children = list("Position") }, { tag = "option"; attrs = { value = "option" }; children = list("Option") }) }) },
+    { tag = "label"; children = list("Title", { tag = "input"; attrs = { name = "title"; maxlength = "160"; required = true } }) },
+    { tag = "label"; children = list("What should we consider?", { tag = "textarea"; attrs = { name = "body"; maxlength = "2400"; required = true } }) },
+    { tag = "label"; children = list("Related issue for a position or option", { tag = "select"; attrs = { name = "issue" }; children = append(list({ tag = "option"; attrs = { value = "" }; children = list("Choose an issue") }), map($issues, "r", { tag = "option"; attrs = { value = $r.item.id }; children = list($r.item.title) })) }) },
+    { tag = "label"; children = list("Perspective for a position", { tag = "input"; attrs = { name = "voice"; maxlength = "120" } }) },
+    { tag = "button"; attrs = { name = "action"; value = "propose" }; children = list("Share proposal") }
+  ) } } → contribution
+  port kernel.invoke { query = "hosted.form"; input = { head = $view.head; operation = $view.operation; children = list(
+    { tag = "button"; attrs = { name = "action"; value = "ai" }; children = list("Draft suggestions with AI") }
+  ) } } → ai
+  let input = { tag = "main"; children = list(
+    { tag = "p"; children = list("Usewords · ", $view.name) }, { tag = "h1"; children = list($matter.title) }, { tag = "p"; children = list($matter.description) },
+    if($view.notice, { tag = "p"; attrs = { role = "status" }; children = list($view.notice) }, null),
+    { tag = "h2"; children = list("Shared matter") }, { tag = "ul"; children = $committed },
+    { tag = "h2"; children = list("Propose a contribution") }, $contribution,
+    { tag = "h2"; children = list("Proposals and reviews") }, { tag = "section"; children = $proposals },
+    { tag = "h2"; children = list("AI suggestions") },
+    { tag = "p"; children = list("AI receives the accepted shared matter. Review suggestions before proposing one to your collaborator.") }, $ai,
+    { tag = "ul"; children = $suggestions }
+  ) }
+  call html.serialize

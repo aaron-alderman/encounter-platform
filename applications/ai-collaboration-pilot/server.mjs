@@ -1,11 +1,15 @@
 import { createServer, request as httpRequest } from 'node:http';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { DatabaseSync } from 'node:sqlite';
 
 const config = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const route = '/ai-collaboration/';
+const usewordsRoute = '/usewords/';
 const workspaceLinksRoute = '/workspace/private-app-links.js';
+const require = createRequire(import.meta.url);
+let hostedMatter;
 const cookie = '__Host-encounter_' + createHash('sha256').update('/identity-management').digest('hex');
 const db = new DatabaseSync(config.database);
 db.exec(`CREATE TABLE IF NOT EXISTS entries (
@@ -49,7 +53,7 @@ async function member(request) {
     lookup.end();
   });
   if (typeof user?.email !== 'string' || typeof user.id !== 'string' || !user.id || !(user.remainingSeconds > 0)) return null;
-  return Object.hasOwn(config.members, user.email) ? config.members[user.email] : null;
+  return Object.hasOwn(config.members, user.email) ? { email: user.email, name: config.members[user.email] } : null;
 }
 
 function send(response, status, body, type = 'text/plain; charset=utf-8') {
@@ -127,12 +131,24 @@ createServer(async (request, response) => {
   try {
     const workspaceLinks = request.url === workspaceLinksRoute && request.method === 'GET';
     const project = request.url === route && ['GET', 'POST'].includes(request.method);
-    if (!project && !workspaceLinks) return send(response, 404, 'Not found');
-    const person = await member(request);
-    if (!person) return send(response, 404, 'Not found');
+    const usewords = config.usewords && request.url === usewordsRoute && ['GET', 'POST'].includes(request.method);
+    if (!project && !workspaceLinks && !usewords) return send(response, 404, 'Not found');
+    const signedIn = await member(request);
+    if (!signedIn) return send(response, 404, 'Not found');
+    const person = signedIn.name;
     if (workspaceLinks) {
       const script = readFileSync(new URL('./workspace-link.js', import.meta.url), 'utf8');
-      return send(response, 200, script, 'text/javascript; charset=utf-8');
+      return send(response, 200, script.replace('/* USEWORDS_ENABLED */ false', config.usewords ? 'true' : 'false'), 'text/javascript; charset=utf-8');
+    }
+    if (usewords) {
+      if (!hostedMatter) {
+        const { createHostedMatter } = require(config.usewords.adapter);
+        hostedMatter = createHostedMatter({ ...config.usewords, origin: config.origin }, config.members)
+          .catch(error => { hostedMatter = undefined; throw error; });
+      }
+      const handle = await hostedMatter;
+      return await handle({ request, response, signedIn, recheck: () => member(request), readForm: form,
+        send: (status, body, type) => send(response, status, body, type) });
     }
     if (request.method === 'GET') return send(response, 200, page(person, entries.all()), 'text/html; charset=utf-8');
     if (request.headers.origin !== config.origin) return send(response, 403, 'Request refused');
@@ -141,7 +157,7 @@ createServer(async (request, response) => {
     if (fields.get('action') === 'synthesize') {
       const draft = await synthesize(entries.all());
       if (!draft) return send(response, 400, 'Share a contribution before asking for a synthesis');
-      if (await member(request) !== person) return send(response, 404, 'Not found');
+      if ((await member(request))?.email !== signedIn.email) return send(response, 404, 'Not found');
       insert.run('AI draft requested by ' + person, 'AI draft', draft);
     } else {
       const kind = fields.get('kind');
