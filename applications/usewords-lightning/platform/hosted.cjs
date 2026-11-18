@@ -26,6 +26,7 @@ async function createHostedMatter(config, members) {
     CREATE TABLE IF NOT EXISTS matter (id INTEGER PRIMARY KEY CHECK(id=1), receipt TEXT NOT NULL, head TEXT NOT NULL, binding TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS operation (principal TEXT NOT NULL, id TEXT NOT NULL, request TEXT NOT NULL, PRIMARY KEY(principal,id));
     CREATE TABLE IF NOT EXISTS draft (principal TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS pilot_context (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
   `);
   const binding = hash({ trustedMembers, programHash, receiverHash });
   const get = db.prepare('SELECT receipt, head, binding FROM matter WHERE id=1');
@@ -44,6 +45,8 @@ async function createHostedMatter(config, members) {
   const save = db.prepare('UPDATE matter SET receipt=?,head=? WHERE id=1 AND head=?');
   const getDraft = db.prepare('SELECT value FROM draft WHERE principal=?');
   const saveDraft = db.prepare('INSERT INTO draft VALUES (?,?) ON CONFLICT(principal) DO UPDATE SET value=excluded.value');
+  const context = db.prepare('SELECT value FROM pilot_context WHERE id=1').get();
+  const styles = await run('hosted.styles', {});
 
   function current() {
     const row = get.get();
@@ -67,22 +70,15 @@ async function createHostedMatter(config, members) {
     const markup = await run('hosted.page', {
       board, draft: draft?.brief.request.sourceHash === board.head.documentHash ? draft : null,
       head: slot.head, operation: 'op_' + randomBytes(10).toString('hex'), names, actor: member.actor, name: member.name, notice,
+      context: context ? JSON.parse(context.value) : null,
     });
-    send(status, `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Usewords · Working together with AI</title><style>
-body{font:1rem/1.5 system-ui,sans-serif;background:#faf7f0;color:#202720;margin:0}
-main{width:min(46rem,calc(100% - 2rem));margin:3rem auto}h1{font-size:clamp(2rem,5vw,3rem);line-height:1.12}
-p{white-space:pre-wrap;overflow-wrap:anywhere}article,form{background:#fff;border:1px solid #ced4c8;padding:1rem;margin:.8rem 0}
-article form{padding:0;border:0}label{display:block;margin:.6rem 0}input,textarea,select,button{font:inherit}
-textarea,input:not([type=hidden]),select{display:block;max-width:100%;box-sizing:border-box}
-textarea{width:100%;min-height:4rem}button{background:#244933;color:white;padding:.4rem .65rem;margin-right:.4rem}
-[role=status]{border-left:.25rem solid #976322;padding-left:.8rem}
-</style>${markup}</html>`, 'text/html; charset=utf-8');
+    send(status, markup, 'text/html; charset=utf-8');
   }
 
   return async ({ request, response, signedIn, recheck, readForm, send }) => {
     const member = actors.find(actor => actor.principal === signedIn.email);
     if (!member) return send(404, 'Not found');
+    if (request.method === 'GET' && request.url === '/usewords/style.css') return send(200, styles, 'text/css; charset=utf-8');
     if (request.method === 'GET') return render(member, send);
     if (request.method !== 'POST' || request.headers.origin !== config.origin) return send(403, 'Request refused');
     if (request.headers['content-type'] !== 'application/x-www-form-urlencoded') return send(415, 'Expected form data');

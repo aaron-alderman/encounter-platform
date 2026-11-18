@@ -28,10 +28,37 @@ Use the existing workspace observer and two-member allowlist. Preserve
 the participant binding and the compiled policy when re-opening an
 existing matter. Keep configuration and both databases outside Git.
 
-Proxy the exact `/usewords/` route on AppDev to the existing private
-pilot listener, forwarding cookies and origin. Allow at least 120 seconds
-for the response. The workspace launcher becomes visible to project
-members when the private configuration includes `usewords`.
+Proxy the exact `/usewords/` and `/usewords/style.css` routes on AppDev
+to the existing private listener, forwarding cookies and origin. Allow
+at least 120 seconds for the matter response. Page markup and styles
+are generated from `hosted.encounter` with the existing Usewords
+renderers.
+
+For the Home launcher, use an Nginx auth subrequest to the transport route
+`/_appdev-private-usewords`. Keep this route internal and forward the
+workspace cookie. Only a member response carries `X-Usewords-Visible: yes`.
+For that response, replace the existing Home Usewords preview link
+`http://usewords.localhost:24220/` with `/usewords/` and show **Usewords**
+as the card title. Other workspace sessions keep their normal catalogue.
+Keep the personalized Home response private and uncached.
+
+### Import the former collaboration pilot
+
+Stop the transport and make a consistent backup of the Usewords store.
+From the new source checkout run `node platform/import-pilot.cjs` with
+the absolute path to the private configuration as its only argument.
+The configuration must still refer to the previous Usewords adapter and
+the original pilot store. The import checks the prior binding, preserves
+all pilot dates and attribution, and records the context and new binding
+in one transaction. When no collaboration events exist and the imported
+material fits the matter description, it also becomes the recorded
+starting context for AI. Existing reviewed boards keep their receipts and
+display the import alongside them.
+
+Point the private adapter setting to the new `platform/hosted.cjs`, install
+the new pilot transport, and start the service. The original pilot database
+is a private archive. The old bookmark redirects signed-in members to
+Usewords, and new work enters through the shared Usewords matter.
 
 From this directory, run `node --test platform/hosted.test.cjs` with Node
 24. Set `USEWORDS_TEST_MODEL` to an installed local model tag to exercise

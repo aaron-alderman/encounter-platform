@@ -50,7 +50,8 @@ async function loadHostedRuntime() {
     model, entry, input: { ...data.bindings, data, eventInput },
     ports, nested, limit: manifest.budget,
   })).value;
-  return { run, programHash: runtime.identity, receiverHash: digest(JSON.stringify(hosted)) };
+  const receiver = ['pr.prepare', 'hosted.initial', 'hosted.command'].map(name => [name, queries[name]]);
+  return { run, programHash: runtime.identity, receiverHash: digest(JSON.stringify(receiver)) };
 }
 
 module.exports = { loadHostedRuntime };

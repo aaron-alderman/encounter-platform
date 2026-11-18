@@ -5,6 +5,26 @@ process hosted.initial:
   port kernel.invoke { query = "mw.create"; input = $eventInput } → board
   port kernel.invoke { query = "cw.receipt"; input = $board } → result
 
+process hosted.startingBrief:
+  let result = {
+    intro = "Pick one real piece of work and use it to try a way of working together with AI.";
+    entries = list(
+      { title = "Start with intent."; detail = "Each share what you want to achieve, why it matters, and what would be enough to take the next step." },
+      { title = "Name the handoff."; detail = "Say whether you’re offering a contribution, asking a question, requesting a decision, or reflecting on what happened. Agree on what you need back and from whom." },
+      { title = "Give enough context to act."; detail = "Include the bigger picture, what could change the answer, and where to find more detail. If the work changed direction, explain why." }
+    );
+    next = "Ask AI to pull your contributions together and surface what’s missing. Check its summary together, then record a decision, a question, or one thing to improve next time."
+  }
+
+process hosted.importDescription:
+  let archive = $eventInput
+  fold $archive.brief.entries as entry; body starts concat("Starting brief\n", $archive.brief.intro):
+    yield concat($body, "\n\n", $entry.title, " ", $entry.detail) → body
+  let introduction = concat($body, "\n\n", $archive.brief.next)
+  fold $archive.entries as entry; history starts "":
+    yield concat($history, "\n\n", $entry.kind, " by ", $entry.author, " (", $entry.created, " UTC), pilot entry #", $entry.id, "\n", $entry.body) → history
+  let result = if(count($archive.entries), concat($introduction, "\n\nImported pilot history", $history), $introduction)
+
 process hosted.command:
   let input = $eventInput
   let form = $input.form
@@ -34,6 +54,20 @@ process hosted.page:
   let view = $eventInput
   let board = $view.board
   let matter = $board.head.document.matter
+  let context = $view.context
+  let contextPanel = { tag = "section"; attrs = { class = "panel" }; children = list(
+    { tag = "h2"; children = list("Matter context") }, { tag = "p"; children = list($matter.description) }
+  ) }
+  when $context:
+    let contextPanel = { tag = "section"; attrs = { class = "panel context" }; children = list(
+      { tag = "h2"; children = list("Starting brief") }, { tag = "p"; children = list($context.brief.intro) },
+      { tag = "ol"; children = map($context.brief.entries, "entry", { tag = "li"; children = list({ tag = "strong"; children = list($entry.title) }, " ", $entry.detail) }) },
+      { tag = "p"; children = list($context.brief.next) },
+      if(count($context.entries), { tag = "details"; attrs = { open = true }; children = append(list({ tag = "summary"; children = list("Pilot history (", count($context.entries), ")") }), map($context.entries, "entry", { tag = "article"; children = list(
+        { tag = "p"; attrs = { class = "meta" }; children = list($entry.kind, " · ", $entry.author, " · ", $entry.created, " UTC · #", $entry.id) },
+        { tag = "p"; children = list($entry.body) }
+      ) })) }, null)
+    ) }
   let issues = filter($matter.items, "record", eq($record.item.kind, "issue"))
   let committed = map($matter.items, "record", { tag = "li"; children = list(
     { tag = "strong"; children = list($record.item.title) },
@@ -77,14 +111,68 @@ process hosted.page:
   port kernel.invoke { query = "hosted.form"; input = { head = $view.head; operation = $view.operation; children = list(
     { tag = "button"; attrs = { name = "action"; value = "ai" }; children = list("Draft suggestions with AI") }
   ) } } → ai
-  let input = { tag = "main"; children = list(
-    { tag = "p"; children = list("Usewords · ", $view.name) }, { tag = "h1"; children = list($matter.title) }, { tag = "p"; children = list($matter.description) },
+  let content = { tag = "main"; children = list(
+    { tag = "header"; attrs = { class = "hero" }; children = list(
+      { tag = "p"; attrs = { class = "meta" }; children = list("Usewords / Shared matter") },
+      { tag = "h1"; children = list($matter.title) },
+      { tag = "p"; attrs = { class = "meta" }; children = list("Signed in as ", $view.name) }
+    ) },
     if($view.notice, { tag = "p"; attrs = { role = "status" }; children = list($view.notice) }, null),
-    { tag = "h2"; children = list("Shared matter") }, { tag = "ul"; children = $committed },
-    { tag = "h2"; children = list("Propose a contribution") }, $contribution,
-    { tag = "h2"; children = list("Proposals and reviews") }, { tag = "section"; children = $proposals },
-    { tag = "h2"; children = list("AI suggestions") },
-    { tag = "p"; children = list("AI receives the accepted shared matter. Review suggestions before proposing one to your collaborator.") }, $ai,
-    { tag = "ul"; children = $suggestions }
+    { tag = "div"; attrs = { class = "layout" }; children = list($contextPanel,
+      { tag = "div"; attrs = { class = "flow" }; children = list(
+        { tag = "section"; attrs = { class = "panel" }; children = list(
+          { tag = "h2"; children = list("Shared matter") },
+          if(count($committed), { tag = "ul"; children = $committed }, { tag = "p"; children = list("Reviewed contributions appear here when you apply them.") }),
+          { tag = "details"; children = list({ tag = "summary"; children = list("Propose a contribution") }, $contribution) }
+        ) },
+        { tag = "section"; attrs = { class = "panel" }; children = append(list({ tag = "h2"; children = list("Proposals and reviews") }), if(count($proposals), $proposals, list({ tag = "p"; children = list("Shared proposals are ready for the other person to review here.") }))) },
+        { tag = "section"; attrs = { class = "panel" }; children = list(
+          { tag = "h2"; children = list("AI suggestions") },
+          { tag = "p"; children = list("AI receives the accepted shared matter. Review suggestions before proposing one to your collaborator.") }, $ai,
+          { tag = "ul"; children = $suggestions }
+        ) }
+      ) }
+    ) }
+  ) }
+  let input = { tag = "html"; attrs = { lang = "en" }; children = list(
+    { tag = "head"; children = list({ tag = "meta"; attrs = { charset = "utf-8" } }, { tag = "meta"; attrs = { name = "viewport"; content = "width=device-width, initial-scale=1" } },
+      { tag = "title"; children = list("Usewords · ", $matter.title) }, { tag = "link"; attrs = { rel = "stylesheet"; href = "/usewords/style.css" } }) },
+    { tag = "body"; children = list($content) }
   ) }
   call html.serialize
+  let result = concat("<!doctype html>", $result)
+
+process hosted.styles:
+  let rules = list(
+    { selector = ":root"; values = { color = "#252d28"; background = "#f4f2ec"; "font-family" = "Georgia, serif"; "line-height" = "1.6"; "color-scheme" = "light" } },
+    { selector = "*"; values = { "box-sizing" = "border-box" } },
+    { selector = "body"; values = { margin = "0" } },
+    { selector = "main"; values = { width = "min(74rem, calc(100% - 2rem))"; margin = "clamp(2rem, 7vw, 5rem) auto" } },
+    { selector = ".hero"; values = { "border-bottom" = "1px solid #c8cbc1"; margin = "0 0 2rem"; "padding-bottom" = "1.4rem" } },
+    { selector = ".layout"; values = { display = "grid"; "grid-template-columns" = "repeat(auto-fit, minmax(min(100%, 25rem), 1fr))"; gap = "1.25rem"; "align-items" = "start" } },
+    { selector = ".flow"; values = { display = "grid"; gap = "1.25rem"; "min-width" = "0" } },
+    { selector = ".panel"; values = { background = "#fffdf7"; border = "1px solid #d6d9cd"; "border-radius" = "1.25rem"; padding = "clamp(1rem, 3.2vw, 1.9rem)"; "min-width" = "0" } },
+    { selector = ".context"; values = { background = "#e9eee1" } },
+    { selector = "h1, h2, h3"; values = { margin = "0 0 .6rem"; "line-height" = "1.12"; "font-weight" = "normal" } },
+    { selector = "h1"; values = { "font-size" = "clamp(2.1rem, 6vw, 4.25rem)"; "letter-spacing" = "-.035em" } },
+    { selector = "h2"; values = { "font-size" = "1.55rem" } },
+    { selector = "p"; values = { margin = ".35rem 0 .8rem"; "white-space" = "pre-wrap"; "overflow-wrap" = "anywhere" } },
+    { selector = ".meta"; values = { "font-family" = "system-ui, sans-serif"; "font-size" = ".8rem"; color = "#465348" } },
+    { selector = "ol, ul"; values = { "padding-inline-start" = "1.35rem" } },
+    { selector = "li, label"; values = { "margin-bottom" = ".65rem" } },
+    { selector = "details"; values = { "border-top" = "1px solid #c8cbc1"; "padding-top" = ".75rem" } },
+    { selector = "article"; values = { "border-top" = "1px solid #d6d9cd"; "padding-top" = ".8rem" } },
+    { selector = "summary"; values = { cursor = "pointer"; "font-weight" = "bold"; color = "#234d3c" } },
+    { selector = "form"; values = { "margin-top" = ".8rem" } },
+    { selector = "label, input, select, textarea"; values = { display = "block"; "max-width" = "100%" } },
+    { selector = "input, select, textarea, button"; values = { font = "inherit"; "border-radius" = ".5rem"; border = "1px solid #a4afa3"; padding = ".45rem .65rem"; background = "#fffdf7"; color = "inherit" } },
+    { selector = "textarea"; values = { width = "100%"; "min-height" = "5.5rem" } },
+    { selector = "button"; values = { cursor = "pointer"; background = "#234d3c"; color = "#fffdf7"; border = "1px solid #234d3c"; margin = ".3rem .35rem .15rem 0" } },
+    { selector = ":focus-visible"; values = { outline = "2px solid #8b4d27"; "outline-offset" = "3px" } },
+    { selector = "[role=status]"; values = { "border-left" = ".25rem solid #8b4d27"; "padding-left" = ".9rem" } }
+  )
+  fold $rules as rule; styleRules starts list():
+    port record.entries { value = $rule.values } → pairs
+    let declarations = map($pairs, "pair", { name = at($pair, 0); value = at($pair, 1) })
+    yield append($styleRules, list({ selector = $rule.selector; declarations = $declarations })) → styleRules
+  call uw.styleRules
