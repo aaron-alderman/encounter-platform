@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 const config = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const route = '/ai-collaboration/';
+const workspaceLinksRoute = '/workspace/private-app-links.js';
 const cookie = '__Host-encounter_' + createHash('sha256').update('/identity-management').digest('hex');
 const db = new DatabaseSync(config.database);
 db.exec(`CREATE TABLE IF NOT EXISTS entries (
@@ -118,9 +119,15 @@ async function synthesize(rows) {
 
 createServer(async (request, response) => {
   try {
-    if (request.url !== route || !['GET', 'POST'].includes(request.method)) return send(response, 404, 'Not found');
+    const workspaceLinks = request.url === workspaceLinksRoute && request.method === 'GET';
+    const project = request.url === route && ['GET', 'POST'].includes(request.method);
+    if (!project && !workspaceLinks) return send(response, 404, 'Not found');
     const person = await member(request);
     if (!person) return send(response, 404, 'Not found');
+    if (workspaceLinks) {
+      const script = readFileSync(new URL('./workspace-link.js', import.meta.url), 'utf8');
+      return send(response, 200, script, 'text/javascript; charset=utf-8');
+    }
     if (request.method === 'GET') return send(response, 200, page(person, entries.all()), 'text/html; charset=utf-8');
     if (request.headers.origin !== config.origin) return send(response, 403, 'Request refused');
     if (request.headers['content-type'] !== 'application/x-www-form-urlencoded') return send(response, 415, 'Expected form data');
