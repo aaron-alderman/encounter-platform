@@ -6,11 +6,12 @@ import { createRequire } from 'node:module';
 const config = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const route = '/ai-collaboration/';
 const usewordsRoute = '/usewords/';
+const signInReturn = '/encounter-pilot/open-usewords';
 const launcherRoute = '/_appdev-private-usewords';
 const require = createRequire(import.meta.url);
 let hostedMatter;
 const cookie = '__Host-encounter_' + createHash('sha256').update('/identity-management').digest('hex');
-async function member(request) {
+async function workspaceSession(request) {
   const tokens = (request.headers.cookie ?? '').split(';').map(part => part.trim())
     .filter(part => part.startsWith(cookie + '=')).map(part => part.slice(cookie.length + 1));
   if (tokens.length !== 1 || !/^[A-Za-z0-9_-]{1,128}$/.test(tokens[0])) return null;
@@ -22,7 +23,8 @@ async function member(request) {
     }, reply => {
       if (reply.statusCode !== 200) {
         reply.resume();
-        resolve(null);
+        if (reply.statusCode === 401) resolve(null);
+        else reject(new Error('Workspace session check failed'));
         return;
       }
       let body = '';
@@ -40,7 +42,17 @@ async function member(request) {
     lookup.end();
   });
   if (typeof user?.email !== 'string' || typeof user.id !== 'string' || !user.id || !(user.remainingSeconds > 0)) return null;
-  return Object.hasOwn(config.members, user.email) ? { email: user.email, name: config.members[user.email] } : null;
+  return user;
+}
+
+function member(user) {
+  return user && Object.hasOwn(config.members, user.email)
+    ? { email: user.email, name: config.members[user.email] }
+    : null;
+}
+
+function redirect(response, destination) {
+  response.writeHead(303, { Location: destination, 'Cache-Control': 'private, no-store' }).end();
 }
 
 function send(response, status, body, type = 'text/plain; charset=utf-8') {
@@ -71,27 +83,29 @@ createServer(async (request, response) => {
     const project = request.url === usewordsRoute && ['GET', 'POST'].includes(request.method);
     const styles = request.url === '/usewords/style.css' && request.method === 'GET';
     const launcher = request.url === launcherRoute && request.method === 'GET';
-    const formerProject = request.url === route && request.method === 'GET';
-    if (!config.usewords || (!project && !styles && !launcher && !formerProject)) {
+    const bookmark = [route, signInReturn].includes(request.url) && request.method === 'GET';
+    if (!config.usewords || (!project && !styles && !launcher && !bookmark)) {
       return send(response, 404, 'Not found');
     }
-    const signedIn = await member(request);
+    const user = await workspaceSession(request);
+    const signedIn = member(user);
     if (launcher) {
       const headers = { 'Cache-Control': 'private, no-store' };
       if (signedIn) headers['X-Usewords-Visible'] = 'yes';
       return response.writeHead(204, headers).end();
     }
-    if (!signedIn) return send(response, 404, 'Not found');
-    if (formerProject) {
-      return response.writeHead(303, { Location: usewordsRoute, 'Cache-Control': 'private, no-store' }).end();
+    if (!user && request.method === 'GET' && (project || bookmark)) {
+      return redirect(response, '/identity-management/?' + new URLSearchParams({ 'workspace-return': signInReturn }));
     }
+    if (!signedIn) return send(response, 404, 'Not found');
+    if (bookmark) return redirect(response, usewordsRoute);
     if (!hostedMatter) {
       const { createHostedMatter } = require(config.usewords.adapter);
       hostedMatter = createHostedMatter({ ...config.usewords, origin: config.origin }, config.members)
         .catch(error => { hostedMatter = undefined; throw error; });
     }
     const handle = await hostedMatter;
-    return await handle({ request, response, signedIn, recheck: () => member(request), readForm: form,
+    return await handle({ request, response, signedIn, recheck: async () => member(await workspaceSession(request)), readForm: form,
       send: (status, body, type) => send(response, status, body, type) });
   } catch {
     send(response, 503, 'The request could not be completed. Please try again.');

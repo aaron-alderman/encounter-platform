@@ -34,6 +34,12 @@ at least 120 seconds for the matter response. Page markup and styles
 are generated from `hosted.encounter` with the existing Usewords
 renderers.
 
+Proxy the exact `/encounter-pilot/open-usewords` path to the same
+listener. Signed-out visits to the matter or its former bookmark enter
+the standard Workspace sign-in. The return path is accepted by the
+existing Workspace gateway and redirects members to `/usewords/`.
+The member check applies to the return path, page, and stylesheet.
+
 For the Home launcher, use an Nginx auth subrequest to the transport route
 `/_appdev-private-usewords`. Keep this route internal and forward the
 workspace cookie. Only a member response carries `X-Usewords-Visible: yes`.
@@ -57,8 +63,8 @@ display the import alongside them.
 
 Point the private adapter setting to the new `platform/hosted.cjs`, install
 the new pilot transport, and start the service. The original pilot database
-is a private archive. The old bookmark redirects signed-in members to
-Usewords, and new work enters through the shared Usewords matter.
+is a private archive. The old bookmark leads members to the shared
+Usewords matter through the same sign-in and access boundary.
 
 From this directory, run `node --test platform/hosted.test.cjs` with Node
 24. Set `USEWORDS_TEST_MODEL` to an installed local model tag to exercise

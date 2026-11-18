@@ -58,7 +58,7 @@ test('two authenticated participants share and review one durable Usewords matte
     server = spawn(process.execPath, [pilot, configPath], { stdio: ['ignore', 'ignore', 'inherit'] });
     for (let index = 0; index < 50; index++) {
       const value = await request().catch(() => null);
-      if (value?.status === 404) return;
+      if (value?.status === 303) return;
       await wait(100);
     }
     throw new Error('Usewords listener did not start');
@@ -73,10 +73,21 @@ test('two authenticated participants share and review one durable Usewords matte
 
   try {
     await start();
-    for (const identity of [undefined, 'other']) {
-      const refused = await request(identity);
-      assert.equal(refused.status, 404);
-      assert.equal(await refused.text(), 'Not found');
+    const signedOut = await request();
+    assert.equal(signedOut.status, 303);
+    const signIn = new URL(signedOut.headers.get('location'), origin);
+    assert.equal(signIn.pathname, '/identity-management/');
+    assert.equal(signIn.searchParams.get('workspace-return'), '/encounter-pilot/open-usewords');
+    const refused = await request('other');
+    assert.equal(refused.status, 404);
+    assert.equal(await refused.text(), 'Not found');
+    assert.equal((await request(undefined, { action: 'propose' })).status, 404);
+    for (const identity of ['one', 'two', 'other']) {
+      const returned = await fetch(origin + signIn.searchParams.get('workspace-return'), {
+        headers: { cookie: cookie + '=' + identity }, redirect: 'manual',
+      });
+      assert.equal(returned.status, identity === 'other' ? 404 : 303);
+      if (identity !== 'other') assert.equal(returned.headers.get('location'), '/usewords/');
     }
     const one = await page('one');
     const old = await page('two');
